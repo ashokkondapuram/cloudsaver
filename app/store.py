@@ -71,7 +71,7 @@ class PostgresStore:
             role = db.execute('SELECT rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = current_user').fetchone()
             if any(role):
                 raise ValueError('Application database role must not be superuser or BYPASSRLS')
-            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings', 'gitops_requests') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
+            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings', 'gitops_requests', 'delivery_events', 'delivery_audit', 'delivery_dispatchers') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
                 raise ValueError('Application database role must not own storage tables or inherit their owner role')
             table = db.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'public.scans'::regclass").fetchone()
             if not table or not all(table):

@@ -9,11 +9,13 @@ x-environment: &environment
   CLOUDSAVER_SCHEDULED_SCANS: ${CLOUDSAVER_SCHEDULED_SCANS:-false}
   CLOUDSAVER_SCAN_INTERVAL_SECONDS: ${CLOUDSAVER_SCAN_INTERVAL_SECONDS:-3600}
   CLOUDSAVER_AUTOMATED_ALERTS: ${CLOUDSAVER_AUTOMATED_ALERTS:-false}
+  CLOUDSAVER_DELIVERY_ENABLED: ${CLOUDSAVER_DELIVERY_ENABLED:-false}
+  CLOUDSAVER_NOTIFICATION_TARGETS: ${CLOUDSAVER_NOTIFICATION_TARGETS:-[]}
   NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,postgres,redis
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:0.7.0
+  image: cloudsaver-python:0.7.1
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -23,8 +25,11 @@ x-service: &service
   tmpfs: [/tmp]
   environment: *environment
 
+x-delivery-environment: &delivery-environment
+  CLOUDSAVER_WEBHOOK_PRIMARY: ${CLOUDSAVER_WEBHOOK_PRIMARY:-}
+
 x-worker-environment: &worker-environment
-  <<: *environment
+  <<: [*environment, *delivery-environment]
   CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
   REDIS_URL: redis://redis:6379/1
   AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
@@ -82,7 +87,7 @@ services:
     <<: *service
     command: [uvicorn, services.scanner:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
     environment:
-      <<: *environment
+      <<: [*environment, *delivery-environment]
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
       CLOUDSAVER_CREDENTIAL_PROVIDER: ${CLOUDSAVER_CREDENTIAL_PROVIDER:-env}
@@ -125,7 +130,6 @@ services:
     command: [uvicorn, services.notification:create_app, --factory, --host, 0.0.0.0, --port, '8004']
     environment:
       <<: *environment
-      CLOUDSAVER_NOTIFICATION_WEBHOOK: ${CLOUDSAVER_NOTIFICATION_WEBHOOK:-}
     depends_on:
       scanner-service: {condition: service_healthy}
   web-dashboard:
@@ -143,6 +147,16 @@ services:
     <<: *service
     profiles: [scheduled]
     command: [celery, -A, workers.tasks:celery_app, worker, --loglevel=WARNING, --concurrency=1]
+    environment: *worker-environment
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  delivery-dispatcher:
+    <<: *service
+    profiles: [scheduled, delivery]
+    restart: on-failure
+    stop_grace_period: 45s
+    command: [python, -m, workers.dispatcher]
     environment: *worker-environment
     depends_on:
       migrate: {condition: service_completed_successfully}

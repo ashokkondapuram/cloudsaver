@@ -12,7 +12,7 @@ from app.config import Settings
 
 def service(title, settings=None, identity_validator=None):
     settings = settings or Settings.load()
-    app = FastAPI(title=title, version='0.7.0')
+    app = FastAPI(title=title, version='0.7.1')
     from app.auth import tenant_dependency
     tenant = tenant_dependency(settings, identity_validator)
 
@@ -47,7 +47,7 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
             response = await client.request(method, base + path, params=params, json=json,
                                             headers={'Authorization': authorization})
         if response.status_code >= 400:
-            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 422, 429, 501, 503) else 502
+            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 413, 422, 429, 501, 503) else 502
             raise HTTPException(status, 'Upstream service could not complete the request')
         if response.is_redirect:
             raise HTTPException(502, 'Unexpected upstream redirect')

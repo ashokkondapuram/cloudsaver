@@ -1,11 +1,38 @@
-# CloudSaver v0.7.0
+# CloudSaver v0.7.1
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release implements the GitOps/CI milestone from the Drive roadmap and builds on
-the latest GitHub production-dashboard changes (076c96f).
+release adds durable scheduling/integration delivery to the GitOps/CI milestone
+from the Drive roadmap. Production deployment still requires the acceptance
+checks in TEST_REPORT.md; feature coverage alone is not production readiness.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.7.1: operational reliability
+
+- PostgreSQL transactional delivery intent: scheduled job reservation and broker
+  handoff cannot split across a database commit; scan completion and notification
+  intent commit together. Redis message-loss recovery reuses the durable job ID.
+- Concurrent dispatchers use skip-locked row claims, expiring leases, fenced
+  completion, eight automatic attempts, bounded jitter/backoff and dead letters.
+  Broker messages must match a committed job/subscription selection.
+- Explicit tenant-bound Slack / Teams integrations, aggregate-only messages,
+  endpoint fingerprints and secret-free operational responses. The legacy global
+  webhook switch is no longer used. Both manual and automatic messages use the
+  durable queue; HTTP 202 means queued, not sent.
+- Operational APIs/dashboard: state-filtered delivery history, keyset pagination,
+  last dispatcher poll/success/error timestamps, oldest due backlog and append-only
+  runtime audit history. Admin-only notification replay requires duplicate-risk
+  acknowledgment and is capped at three replays.
+- Pinned, read-only GitHub Actions gates for backend fault tests, dependency audit,
+  production build and browser workflows; weekly dependency update review.
+- Frontend security maintenance: Next.js 16, React 19 and Tailwind CSS 4; the old
+  Tailwind/PostCSS build chain is removed. See TEST_REPORT.md for audit evidence.
+
+Delivery stays disabled until explicitly configured. Read [the deployment and
+failure runbook](docs/DELIVERY.md) before enabling schedules or integrations.
+This provides at-least-once delivery, not exactly-once notifications, a production
+SLO, immutable external audit storage or completed cloud-provider acceptance.
 
 ## New in v0.7.0
 
@@ -134,11 +161,13 @@ The existing-subscription portal/upgrade experience remains future work.
 
 Scheduled scans stay disabled by default. Explicitly provision/activate intended
 subscriptions with scripts/provision_tenants.py, verify a persisted paid plan,
-set CLOUDSAVER_SCHEDULED_SCANS=true and use
+set CLOUDSAVER_SCHEDULED_SCANS=true and CLOUDSAVER_DELIVERY_ENABLED=true and use
 `docker compose --profile scheduled up -d`. Keep one Beat scheduler operationally;
 transactional reservations also prevent duplicate schedules in the paid interval.
-Automatic notifications stay disabled in Compose pending a durable transactional
-outbox and delivery auditing. The inherited in-memory outbox is a test foundation.
+Automatic notifications remain opt-in. Configure explicit per-tenant targets and
+set CLOUDSAVER_AUTOMATED_ALERTS=true only after accepting delivery behavior. The
+production worker uses the PostgreSQL outbox; historical in-memory test helpers
+are not connected to production delivery. See docs/DELIVERY.md.
 
 ## API and verification
 
@@ -146,8 +175,8 @@ All /api/v1 routes require bearer authentication except the Stripe webhook, whic
 requires a valid raw-body signature. /healthz is public. Core routes are me,
 scans, scans/{id}, analytics, billing/entitlements, billing/checkout,
 billing/webhook, notifications/{scan_id}, and scan-owned remediation /
-remediation-terraform POST exports. Analytics/notifications need the service
-stack; they are not provided by the standalone scanner API.
+remediation-terraform POST exports. Analytics needs the service stack; notification enqueue and operational routes
+are also available on the standalone scanner when PostgreSQL is configured.
 
 v0.6 authenticated routes: GET providers, POST scans/multi-cloud with only a
 providers array, and GET trends?days=30&scan_id=UUID. The original POST scans

@@ -165,4 +165,4 @@ def workspace_response(workspace, mode):
         'allowed_scan_frequencies': tier.allowed_scan_frequencies,
         'can_dispatch_automated_alerts': tier.can_dispatch_automated_alerts,
         'retention_days': tier.retention_days,
-    } | workspace_operations()
+    } | workspace_operations(workspace['tenant_id'])

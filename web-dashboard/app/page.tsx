@@ -5,6 +5,7 @@ import {ColumnDef,flexRender,getCoreRowModel,getSortedRowModel,SortingState,useR
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {Button} from '../components/ui/button';
 import {GitOpsPanel,PlanPolicyPanel} from '../components/GitOpsPanel';
+import {ReliabilityPanel} from '../components/ReliabilityPanel';
 
 type CostAttribution={
   monthly_waste_usd:number|null;
@@ -453,6 +454,7 @@ export default function Dashboard(){
         <a className="active" href="#overview"><span>◫</span>Overview</a>
         <a href="#findings"><span>▤</span>Resource findings</a>
         <a href="#operations"><span>⚙</span>Billing & operations</a>
+        <a href="#reliability"><span>◈</span>Delivery reliability</a>
         <a href="#history"><span>↺</span>Scan history</a>
         <a href="#policy-checks"><span>✓</span>Plan guardrails</a>
         <a href="#gitops"><span>↗</span>GitOps reviews</a>
@@ -461,7 +463,7 @@ export default function Dashboard(){
         <div className="shield">✓</div>
         <strong>Read-only by design</strong>
         <p>Declarative Terraform & Bash exports. Zero automatic destruction.</p>
-        <div className="version">DEVELOPMENT RELEASE <span>v0.7.0</span></div>
+        <div className="version">DEVELOPMENT RELEASE <span>v0.7.1</span></div>
       </div>
     </aside>
 
@@ -599,6 +601,7 @@ export default function Dashboard(){
             {canAdmin&&<Button onClick={run} className="primary" disabled={!!busy}>Run first scan</Button>}
           </section>}
 
+          <ReliabilityPanel token={key} canAdmin={!!canAdmin}/>
           <PlanPolicyPanel token={key}/>
           <GitOpsPanel key={scan?.scan_id||'no-scan'} token={key} scan={scan} canPublish={!!canAdmin&&!!workspace.can_export_terraform}/>
 

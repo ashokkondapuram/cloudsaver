@@ -1,4 +1,4 @@
-# CloudSaver roadmap after v0.7.0
+# CloudSaver roadmap after v0.7.1
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
@@ -19,19 +19,27 @@ budget checks, operator-approved GitHub App draft-PR review packages and durable
 request idempotency/leases/history. The latest production-only dashboard commit
 076c96f is retained; historical synthetic snapshots cannot become live evidence.
 
+## v0.7.1 operational foundation
+
+Transactional PostgreSQL scan dispatch/notification intents, leased dispatcher,
+bounded retry/dead-letter handling, broker-loss reconciliation, durable job-envelope
+validation, explicit tenant integrations, runtime append-only delivery audit and
+operator history/replay are implemented. Next.js/Tailwind security maintenance
+replaces the inherited frontend dependency chain. See TEST_REPORT.md for executed
+fault tests and acceptance limits; this is not a production certification.
+
 ## Finish v0.6 acceptance and the operational foundation
 
 1. Accept AWS profiles/STS, GCP APIs/IAM/Monitoring, cluster metric sampling,
    Entra tokens, Stripe test-mode events and Terraform against authorized test
-   systems. Complete browser QA. Remediate inherited dependency advisories with
-   a planned compatible frontend upgrade.
+   systems. Complete browser QA. Continuously recheck dependency advisories after the v0.7.1 frontend upgrade.
 2. Add exact GCP Billing Catalog SKU/currency/period attribution and customer
    billing reconciliation. Unsupported cases stay unknown. Add OpenCost/Kubecost
    allocation and evidence-based namespace/DaemonSet audits.
-3. Add PostgreSQL transactional outbox/leased dispatcher, broker restart/failover
-   acceptance, durable multi-cloud jobs, idempotency, progress, lifecycle history
-   and cooperative cancellation. Preserve the synchronous API deliberately.
-   Keep automatic alerts disabled until delivery audit/retry behavior is accepted.
+3. Accept the implemented PostgreSQL outbox/dispatcher in a staging deployment:
+   broker outage/restart, process termination, webhook ambiguity, throughput and
+   alerting. Add durable multi-cloud jobs, progress and cooperative cancellation.
+   Preserve the synchronous API deliberately; automatic alerts remain opt-in.
 4. Implement browser PKCE/consent callbacks with single-use state/nonce, memberships
    and explicit cloud-scope authorization. Finish billing portal, retention, audit,
    restore drills, deployment/HTTPS, observability and load/fault tests.

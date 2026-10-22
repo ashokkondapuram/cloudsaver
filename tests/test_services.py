@@ -93,25 +93,18 @@ def test_notification_owner_lookup_before_send(tmp_path, monkeypatch):
     assert seen[0].url.host == 'scanner-service'
 
 
-def test_notification_sends_only_aggregate_message(tmp_path, monkeypatch):
-    monkeypatch.setenv('CLOUDSAVER_NOTIFICATION_WEBHOOK', 'https://hooks.slack.com/services/test/test/test')
+def test_notification_commits_intent_through_scanner_without_direct_webhook_io(tmp_path):
     seen = []
-
     def handler(request):
         seen.append(request)
-        if request.url.host == 'scanner-service':
-            return httpx.Response(200, json={'mode': 'azure', 'total_items_found': 2, 'subscriptions_scanned': 1,
-                                             'findings': [{'resource_name': 'private-vm'}]})
-        assert request.url.host == 'hooks.slack.com'
-        assert 'authorization' not in request.headers
-        assert b'private-vm' not in request.content
-        return httpx.Response(200, text='ok')
-
-    client = TestClient(notification(configuration(tmp_path), httpx.MockTransport(handler)))
-    response = client.post('/api/v1/notifications/44444444-4444-4444-8444-444444444444',
-                           headers={'Authorization': 'Bearer ' + KEY})
-    assert response.status_code == 200
-    assert len(seen) == 2
+        assert request.url.host == 'scanner-service'
+        assert request.method == 'POST'
+        assert request.headers['authorization'] == 'Bearer ' + KEY
+        return httpx.Response(202,json={'status':'queued','delivery_ids':['test-id']})
+    client = TestClient(notification(configuration(tmp_path),httpx.MockTransport(handler)))
+    response = client.post('/api/v1/notifications/44444444-4444-4444-8444-444444444444',headers={'Authorization':'Bearer '+KEY})
+    assert response.status_code == 202 and response.json()['status']=='queued'
+    assert len(seen)==1
 
 
 def test_public_billing_route_preserves_signed_bytes_without_workspace_key(tmp_path):

@@ -301,7 +301,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0006_gitops_requests',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_delivery_outbox',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -310,8 +310,283 @@ def test_scheduler_reservation_throttles_concurrent_publishers(database):
     a = workspace()
     store.save(a['tenant_id'],scan(a),workspace=a)
     repository = JobRepository(app)
-    assert repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
-    assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
+    assert repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400,a['subscription_ids'])
+    assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400,a['subscription_ids'])
+
+
+@pytest.fixture
+def delivery(database):
+    from app.delivery_config import Target
+    from database.delivery import DeliveryRepository
+    _,url,store=database
+    tenant=workspace()
+    snapshot=scan(tenant)
+    store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    target=Target('finops',tenant['tenant_id'],'slack','https://hooks.slack.com/services/T/B/private-token')
+    repository=DeliveryRepository(url)
+    event=repository.enqueue_notification(tenant['tenant_id'],snapshot,(target,))[0]
+    return repository,tenant,snapshot,target,event
+
+
+def test_delivery_rls_fk_audit_append_only_and_public_redaction(delivery,database):
+    repository,a,snapshot,target,event=delivery
+    _,url,_=database
+    other=workspace()
+    assert repository.get(other['tenant_id'],event) is None
+    assert repository.history(other['tenant_id'],event) is None
+    assert repository.list(other['tenant_id'])==[]
+    public=repository.get(a['tenant_id'],event)
+    assert 'private-token' not in str(public) and 'payload' not in public and 'target_fingerprint' not in public
+    with psycopg.connect(url) as db:
+        for table in ('delivery_events','delivery_audit','delivery_dispatchers'):
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+        context(db,a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute('UPDATE delivery_audit SET actor=%s WHERE tenant_id=%s',('forged',a['tenant_id']))
+        db.rollback()
+        context(db,a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute('DELETE FROM delivery_audit WHERE tenant_id=%s',(a['tenant_id'],))
+        db.rollback()
+        context(db,other['tenant_id'])
+        from database.delivery import enqueue
+        with pytest.raises(errors.ForeignKeyViolation):
+            enqueue(db,other['tenant_id'],'notification',scan_id=snapshot['scan_id'],target=target,payload={})
+
+
+def test_delivery_dedupe_survives_restart_and_stale_completion_is_fenced(delivery):
+    from database.delivery import DeliveryRepository
+    repository,a,snapshot,target,event_id=delivery
+    restarted=DeliveryRepository(repository.url)
+    assert restarted.enqueue_notification(a['tenant_id'],snapshot,(target,))==[event_id]
+    assert len(restarted.history(a['tenant_id'],event_id)['items'])==1
+    first=repository.claim(a['tenant_id'],['notification'])
+    assert restarted.claim(a['tenant_id'],['notification']) is None
+    with repository.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE delivery_events SET lease_until=clock_timestamp()-interval '1 second' WHERE id=%s",(event_id,))
+    assert not repository.finish(a['tenant_id'],first,outcome='delivered')
+    second=restarted.claim(a['tenant_id'],['notification'])
+    assert second['lease_token']!=first['lease_token'] and second['attempts']==2
+    assert not repository.finish(a['tenant_id'],first,outcome='delivered')
+    assert restarted.finish(a['tenant_id'],second,outcome='delivered')
+    assert repository.get(a['tenant_id'],event_id)['status']=='delivered'
+    assert repository.claim(a['tenant_id'],['notification']) is None
+
+
+def test_concurrent_dispatchers_claim_distinct_rows(delivery):
+    from concurrent.futures import ThreadPoolExecutor
+    from app.delivery_config import Target
+    repository,a,snapshot,target,_=delivery
+    another=Target('second',a['tenant_id'],'slack',target.url)
+    repository.enqueue_notification(a['tenant_id'],snapshot,(another,))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results=list(pool.map(lambda _:repository.claim(a['tenant_id'],['notification']),range(4)))
+    claimed=[r for r in results if r]
+    assert len(claimed)==len({r['id'] for r in claimed})==2
+
+
+def test_dead_letter_budget_bounded_replay_and_audit_pagination(delivery):
+    from database.delivery import DeliveryConflict
+    repository,a,_,_,event_id=delivery
+    for attempt in range(8):
+        current=repository.claim(a['tenant_id'],['notification'])
+        assert current['attempts']==attempt+1
+        repository.finish(a['tenant_id'],current,outcome='retry',error_code='provider_unavailable',retry_after=30)
+        with repository.transaction(a['tenant_id']) as db:
+            db.execute('UPDATE delivery_events SET next_attempt_at=clock_timestamp() WHERE id=%s',(event_id,))
+    assert repository.get(a['tenant_id'],event_id)['status']=='dead_letter'
+    assert repository.claim(a['tenant_id'],['notification']) is None
+    ids=[]
+    cursor=None
+    while True:
+        page=repository.history(a['tenant_id'],event_id,3,cursor)
+        ids.extend(r['id'] for r in page['items'])
+        cursor=page['next_cursor']
+        if not cursor:
+            break
+    assert len(ids)==len(set(ids))==17
+    for count in range(1,4):
+        replay=repository.replay(a['tenant_id'],event_id,'principal:test')
+        assert replay['replay_count']==count and replay['attempts']==0
+        claimed=repository.claim(a['tenant_id'],['notification'])
+        repository.finish(a['tenant_id'],claimed,outcome='dead_letter',error_code='provider_rejected')
+    with pytest.raises(DeliveryConflict):
+        repository.replay(a['tenant_id'],event_id,'principal:test')
+
+
+def test_scheduler_and_completion_outbox_are_atomic(database,monkeypatch):
+    from workers.storage import JobRepository
+    from database.delivery import DeliveryRepository
+    from app.delivery_config import Target
+    import database.delivery as outbox
+    _,url,store=database
+    a=workspace()
+    store.save(a['tenant_id'],scan(a),workspace=a)
+    jobs,deliveries=JobRepository(url),DeliveryRepository(url)
+    job_id=str(uuid4())
+    original=outbox.enqueue
+    def failure(*args,**kwargs):
+        raise RuntimeError('simulated transactional insertion failure')
+    with monkeypatch.context() as patch:
+        patch.setattr(outbox,'enqueue',failure)
+        with pytest.raises(RuntimeError):
+            jobs.reserve_scheduled_job(a['tenant_id'],job_id,3600,a['subscription_ids'])
+    assert jobs.get_job(a['tenant_id'],job_id) is None
+    assert deliveries.list(a['tenant_id'])==[]
+    assert jobs.reserve_scheduled_job(a['tenant_id'],job_id,3600,a['subscription_ids'])
+    assert jobs.verify_delivery(a['tenant_id'],job_id,a['subscription_ids'])
+    assert not jobs.verify_delivery(a['tenant_id'],job_id,[str(uuid4())])
+    assert not jobs.verify_delivery(str(uuid4()),job_id,a['subscription_ids'])
+    assert not jobs.verify_delivery(a['tenant_id'],str(uuid4()),a['subscription_ids'])
+    assert len(deliveries.list(a['tenant_id']))==1
+    with store.connection(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    token=str(uuid4())
+    jobs.start_job(a['tenant_id'],job_id,token)
+    result=scan(a)
+    target=Target('finops',a['tenant_id'],'slack','https://hooks.slack.com/services/T/B/test')
+    with monkeypatch.context() as patch:
+        patch.setattr(outbox,'enqueue',failure)
+        with pytest.raises(RuntimeError):
+            jobs.complete_job(a['tenant_id'],job_id,result,a['subscription_ids'],token=token,notification_targets=(target,))
+    assert store.get(a['tenant_id'],result['scan_id']) is None
+    assert jobs.get_job(a['tenant_id'],job_id)['status']=='running'
+    jobs.complete_job(a['tenant_id'],job_id,result,a['subscription_ids'],token=token,notification_targets=(target,))
+    events=deliveries.list(a['tenant_id'])
+    assert {(e['kind'],e['status']) for e in events}=={('scan','delivered'),('notification','pending')}
+    assert jobs.get_job(a['tenant_id'],job_id)['status']=='completed'
+    jobs.complete_job(a['tenant_id'],job_id,result,a['subscription_ids'],token=token,notification_targets=(target,))
+    assert len(deliveries.list(a['tenant_id']))==2
+
+
+def test_lost_broker_message_republished_with_same_task_id(database):
+    import json
+    import redis
+    from celery import Celery
+    from workers.storage import JobRepository
+    from database.delivery import DeliveryRepository
+    from workers.dispatcher import dispatch_one
+    import httpx
+    redis_url=os.getenv('CLOUDSAVER_TEST_REDIS_URL')
+    if not redis_url:
+        pytest.skip('Disposable Redis required')
+    _,url,store=database
+    a=workspace()
+    store.save(a['tenant_id'],scan(a),workspace=a)
+    jobs,deliveries=JobRepository(url),DeliveryRepository(url)
+    job_id=str(uuid4())
+    jobs.reserve_scheduled_job(a['tenant_id'],job_id,3600,a['subscription_ids'])
+    queue='cloudsaver-fault-'+uuid4().hex
+    app=Celery('delivery-fault-test',broker=redis_url)
+    broker=redis.Redis.from_url(redis_url)
+    def publish(tid,subscriptions,id):
+        app.send_task('workers.tasks.execute_subscription_scan',args=[tid,subscriptions],task_id=id,queue=queue,retry=False)
+    try:
+        with httpx.Client() as client:
+            dispatch_one(deliveries,a['tenant_id'],targets=(),publish_scan=publish,client=client,kinds=['scan'])
+            assert json.loads(broker.lindex(queue,0))['headers']['id']==job_id
+            # Simulate loss of the accepted broker message. DB retains intent.
+            broker.delete(queue)
+            assert jobs.get_job(a['tenant_id'],job_id)['status']=='queued'
+            with deliveries.transaction(a['tenant_id']) as db:
+                db.execute('UPDATE delivery_events SET next_attempt_at=clock_timestamp() WHERE tenant_id=%s',(a['tenant_id'],))
+            assert deliveries.reconcile(a['tenant_id'])==1
+            dispatch_one(deliveries,a['tenant_id'],targets=(),publish_scan=publish,client=client,kinds=['scan'])
+            assert json.loads(broker.lindex(queue,0))['headers']['id']==job_id
+            assert deliveries.list(a['tenant_id'])[0]['attempts']==2
+    finally:
+        broker.delete(queue,'_kombu.binding.'+queue)
+        broker.close()
+        app.close()
+
+
+def test_reconcile_stale_worker_and_exhausted_dispatch_are_visible(database):
+    from workers.storage import JobRepository
+    from database.delivery import DeliveryRepository
+    _,url,store=database
+    a=workspace()
+    store.save(a['tenant_id'],scan(a),workspace=a)
+    jobs,deliveries=JobRepository(url),DeliveryRepository(url)
+    job_id=str(uuid4())
+    jobs.reserve_scheduled_job(a['tenant_id'],job_id,3600,a['subscription_ids'])
+    event=deliveries.claim(a['tenant_id'],['scan'])
+    deliveries.finish(a['tenant_id'],event,outcome='published')
+    token=str(uuid4())
+    jobs.start_job(a['tenant_id'],job_id,token)
+    with deliveries.transaction(a['tenant_id']) as db:
+        db.execute('UPDATE delivery_events SET next_attempt_at=clock_timestamp() WHERE id=%s',(event['id'],))
+    deliveries.reconcile(a['tenant_id'])
+    assert jobs.get_job(a['tenant_id'],job_id)['status']=='running'
+    with deliveries.transaction(a['tenant_id']) as db:
+        db.execute('UPDATE delivery_events SET next_attempt_at=clock_timestamp() WHERE id=%s',(event['id'],))
+        db.execute("UPDATE scan_jobs SET updated_at=clock_timestamp()-interval '16 minutes' WHERE id=%s",(job_id,))
+    deliveries.reconcile(a['tenant_id'])
+    assert jobs.get_job(a['tenant_id'],job_id)['status']=='queued'
+    assert deliveries.get(a['tenant_id'],event['id'])['status']=='pending'
+    with pytest.raises(ValueError,match='Stale'):
+        jobs.complete_job(a['tenant_id'],job_id,scan(a),a['subscription_ids'],token=token)
+
+
+def test_delivery_api_owned_dedupe_and_explicit_retry(delivery,database,monkeypatch):
+    import hashlib
+    repository,a,snapshot,target,event=delivery
+    _,url,_=database
+    key='private-workspace-key'
+    a.update(api_key_sha256=hashlib.sha256(key.encode()).hexdigest(),plan_tier='GROWTH')
+    monkeypatch.setenv('CLOUDSAVER_DELIVERY_ENABLED','true')
+    settings=Settings('azure','',(a,),url)
+    with TestClient(create_app(settings,delivery_targets=(target,))) as client:
+        headers={'Authorization':'Bearer '+key,'X-Tenant-ID':str(uuid4())}
+        base='/api/v1/operations/deliveries/'+event
+        assert client.get('/api/v1/operations/reliability').status_code==401
+        summary=client.get('/api/v1/operations/reliability',headers=headers)
+        assert summary.status_code==200 and 'private-token' not in summary.text
+        assert client.post('/api/v1/notifications/'+snapshot['scan_id'],headers=headers).json()['delivery_ids']==[event]
+        assert client.post('/api/v1/notifications/'+str(uuid4()),headers=headers).status_code==404
+        assert client.get('/api/v1/operations/deliveries?limit=101',headers=headers).status_code==422
+        assert client.get(base+'/audit',headers=headers).json()['items'][0]['action']=='enqueued'
+        assert client.get('/api/v1/operations/deliveries/'+str(uuid4())+'/audit',headers=headers).status_code==404
+        assert client.post(base+'/retry',json={'acknowledge_duplicate_risk':True},headers=headers).status_code==409
+        current=repository.claim(a['tenant_id'],['notification'])
+        repository.finish(a['tenant_id'],current,outcome='dead_letter',error_code='provider_rejected')
+        assert client.post(base+'/retry',json={'acknowledge_duplicate_risk':False},headers=headers).status_code==422
+        assert client.post(base+'/retry',json={'acknowledge_duplicate_risk':'true'},headers=headers).status_code==422
+        assert client.post(base+'/retry',json={'acknowledge_duplicate_risk':True},headers=headers).status_code==202
+        audit_result=client.get(base+'/audit',headers=headers)
+        assert 'private-workspace-key' not in audit_result.text
+        assert any(row['action']=='replay_requested' and row['actor'].startswith('principal:') for row in audit_result.json()['items'])
+        monkeypatch.setenv('CLOUDSAVER_DELIVERY_ENABLED','false')
+        assert client.post('/api/v1/notifications/'+snapshot['scan_id'],headers=headers).status_code==503
+
+
+def test_dispatcher_heartbeat_is_tenant_scoped(delivery):
+    repository,a,_,_,_=delivery
+    assert repository.summary(a['tenant_id'])['dispatcher'] is None
+    repository.heartbeat(a['tenant_id'],True)
+    result=repository.summary(a['tenant_id'])['dispatcher']
+    assert result['last_poll_at'] and result['last_success_at'] and not result['last_error_at']
+    repository.heartbeat(a['tenant_id'],False)
+    result=repository.summary(a['tenant_id'])['dispatcher']
+    assert result['last_error_at'] and result['last_success_at']
+    assert repository.summary(str(uuid4()))['dispatcher'] is None
+
+
+def test_delivery_list_pagination_and_foreign_cursors(delivery):
+    from app.delivery_config import Target
+    from database.delivery import DeliveryConflict
+    repository,a,snapshot,target,_=delivery
+    for i in range(4):
+        repository.enqueue_notification(a['tenant_id'],snapshot,(Target('target-'+str(i),a['tenant_id'],'slack',target.url),))
+    page=repository.page(a['tenant_id'],2,'pending')
+    assert len(page['items'])==2 and page['next_cursor']
+    second=repository.page(a['tenant_id'],2,'pending',page['next_cursor'])
+    third=repository.page(a['tenant_id'],2,'pending',second['next_cursor'])
+    assert len({r['id'] for r in page['items']+second['items']+third['items']})==5
+    assert third['next_cursor'] is None
+    with pytest.raises(DeliveryConflict):
+        repository.page(str(uuid4()),2,None,page['next_cursor'])
 
 
 def test_gitops_requests_rls_foreign_keys_and_durable_fencing(database):
@@ -402,3 +677,71 @@ def test_upgrade_each_release_lineage_preserves_history(database,starting_revisi
     finally:
         with psycopg.connect(privileged,autocommit=True) as admin:
             admin.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(name)))
+
+
+def test_reconciliation_skips_locked_job_and_exhaustion_fences_lost_worker(database):
+    from workers.storage import JobRepository
+    from database.delivery import DeliveryRepository
+    _,url,store=database
+    a=workspace();store.save(a['tenant_id'],scan(a),workspace=a)
+    jobs,deliveries=JobRepository(url),DeliveryRepository(url)
+    job_id=str(uuid4());jobs.reserve_scheduled_job(a['tenant_id'],job_id,3600,a['subscription_ids'])
+    event=deliveries.claim(a['tenant_id'],['scan']);deliveries.finish(a['tenant_id'],event,outcome='published')
+    with deliveries.transaction(a['tenant_id']) as db:
+        db.execute('UPDATE delivery_events SET attempts=8,next_attempt_at=clock_timestamp() WHERE id=%s',(event['id'],))
+    with jobs.transaction(a['tenant_id']) as held:
+        held.execute('SELECT 1 FROM scan_jobs WHERE id=%s FOR UPDATE',(job_id,))
+        deliveries.reconcile(a['tenant_id'])
+        assert deliveries.get(a['tenant_id'],event['id'])['status']=='published'
+    deliveries.reconcile(a['tenant_id'])
+    assert deliveries.get(a['tenant_id'],event['id'])['status']=='dead_letter'
+    assert jobs.get_job(a['tenant_id'],job_id)['status']=='failed'
+
+
+def test_multiple_notification_targets_project_queued_failed_and_sent_accurately(database):
+    from workers.storage import JobRepository
+    from database.delivery import DeliveryRepository
+    from app.delivery_config import Target
+    _,url,store=database
+    a=workspace();store.save(a['tenant_id'],scan(a),workspace=a)
+    with store.connection(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    jobs,deliveries=JobRepository(url),DeliveryRepository(url)
+    job_id,token=str(uuid4()),str(uuid4())
+    jobs.queue_job(a['tenant_id'],job_id);jobs.start_job(a['tenant_id'],job_id,token)
+    targets=tuple(Target(name,a['tenant_id'],'slack','https://hooks.slack.com/services/T/B/test') for name in ('first','second'))
+    jobs.complete_job(a['tenant_id'],job_id,scan(a),a['subscription_ids'],token=token,notification_targets=targets)
+    def state():
+        with deliveries.transaction(a['tenant_id']) as db:
+            return db.execute('SELECT notification_status FROM scan_jobs WHERE id=%s',(job_id,)).fetchone()[0]
+    first=deliveries.claim(a['tenant_id'],['notification'])
+    deliveries.finish(a['tenant_id'],first,outcome='delivered')
+    assert state()=='queued'
+    second=deliveries.claim(a['tenant_id'],['notification'])
+    deliveries.finish(a['tenant_id'],second,outcome='dead_letter',error_code='provider_rejected')
+    assert state()=='failed'
+    deliveries.replay(a['tenant_id'],second['id'],'principal:test')
+    assert state()=='queued'
+    second=deliveries.claim(a['tenant_id'],['notification'])
+    deliveries.finish(a['tenant_id'],second,outcome='delivered')
+    assert state()=='sent'
+
+
+def test_delivery_downgrade_upgrade_preserves_scans_and_restores_forced_rls(database):
+    owner,url,store=database
+    a=workspace();snapshot=scan(a);store.save(a['tenant_id'],snapshot,workspace=a)
+    from workers.storage import JobRepository
+    jobs=JobRepository(url);job_id=str(uuid4());jobs.queue_job(a['tenant_id'],job_id)
+    with jobs.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE scan_jobs SET notification_status='queued' WHERE id=%s",(job_id,))
+    env=os.environ.copy();env['CLOUDSAVER_MIGRATION_URL']=owner
+    subprocess.run([sys.executable,'-m','alembic','downgrade','0006_gitops_requests'],cwd=ROOT,env=env,check=True,capture_output=True)
+    with psycopg.connect(url) as db:
+        context(db,a['tenant_id'])
+        assert db.execute('SELECT notification_status FROM scan_jobs WHERE id=%s',(job_id,)).fetchone()[0]=='failed'
+        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='scan_jobs'::regclass").fetchone()==(True,True)
+    migrate(owner,'head')
+    assert store.get(a['tenant_id'],snapshot['scan_id'])==snapshot
+    from database.delivery import DeliveryRepository
+    assert DeliveryRepository(url).list(a['tenant_id'])==[]

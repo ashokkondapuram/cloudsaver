@@ -114,8 +114,9 @@ class ScanJob(Base):
         ForeignKeyConstraint(['tenant_id'], ['tenants.tenant_id'], name='fk_scan_jobs_tenant', ondelete='RESTRICT'),
         ForeignKeyConstraint(['scan_id','tenant_id'], ['scans.id','scans.tenant_id'], name='fk_scan_jobs_scan_owner', ondelete='RESTRICT'),
         CheckConstraint("status IN ('queued','running','completed','failed')", name='ck_scan_jobs_status'),
-        CheckConstraint("notification_status IN ('not_requested','sent','failed')", name='ck_scan_jobs_notification'),
+        CheckConstraint("notification_status IN ('not_requested','queued','sent','failed')", name='ck_scan_jobs_notification'),
         CheckConstraint('attempts >= 0', name='ck_scan_jobs_attempts'),
+        UniqueConstraint('id','tenant_id',name='uq_scan_job_owner'),
         Index('ix_scan_jobs_tenant_created', 'tenant_id', 'created_at'),
     )
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -184,3 +185,58 @@ class GitOpsRequest(Base):
     result: Mapped[dict | None] = mapped_column(JSONB,nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+
+
+class DeliveryEvent(Base):
+    __tablename__ = 'delivery_events'
+    __table_args__ = (
+        UniqueConstraint('id','tenant_id'), UniqueConstraint('tenant_id','dedupe_key'),
+        ForeignKeyConstraint(['job_id','tenant_id'],['scan_jobs.id','scan_jobs.tenant_id'],ondelete='RESTRICT'),
+        ForeignKeyConstraint(['scan_id','tenant_id'],['scans.id','scans.tenant_id'],ondelete='RESTRICT'),
+        CheckConstraint("kind IN ('scan','notification')"),
+        CheckConstraint("status IN ('pending','leased','published','delivered','dead_letter')"),
+        CheckConstraint('attempts BETWEEN 0 AND 8'),CheckConstraint('replay_count BETWEEN 0 AND 3'),
+        CheckConstraint('octet_length(payload::text) <= 16000'),
+        CheckConstraint("(kind='scan' AND job_id IS NOT NULL AND scan_id IS NULL AND target_id IS NULL AND target_fingerprint IS NULL) OR (kind='notification' AND scan_id IS NOT NULL AND target_id IS NOT NULL AND target_fingerprint IS NOT NULL)"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),nullable=False)
+    kind: Mapped[str] = mapped_column(String(16),nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(64),nullable=False)
+    job_id: Mapped[UUID|None] = mapped_column(PGUUID(as_uuid=True))
+    scan_id: Mapped[UUID|None] = mapped_column(PGUUID(as_uuid=True))
+    target_id: Mapped[str|None] = mapped_column(String(40))
+    target_fingerprint: Mapped[str|None] = mapped_column(String(64))
+    payload: Mapped[dict] = mapped_column(JSONB,nullable=False)
+    status: Mapped[str] = mapped_column(String(16),nullable=False,server_default='pending')
+    attempts: Mapped[int] = mapped_column(Integer,nullable=False,server_default='0')
+    replay_count: Mapped[int] = mapped_column(Integer,nullable=False,server_default='0')
+    lease_token: Mapped[UUID|None] = mapped_column(PGUUID(as_uuid=True))
+    lease_until: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    error_code: Mapped[str|None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+
+
+class DeliveryAudit(Base):
+    __tablename__ = 'delivery_audit'
+    __table_args__ = (ForeignKeyConstraint(['event_id','tenant_id'],['delivery_events.id','delivery_events.tenant_id'],ondelete='RESTRICT'),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),nullable=False)
+    action: Mapped[str] = mapped_column(String(32),nullable=False)
+    actor: Mapped[str] = mapped_column(String(80),nullable=False)
+    status: Mapped[str] = mapped_column(String(16),nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer,nullable=False)
+    error_code: Mapped[str|None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+
+
+class DeliveryDispatcher(Base):
+    __tablename__ = 'delivery_dispatchers'
+    __table_args__ = (ForeignKeyConstraint(['tenant_id'],['tenants.tenant_id'],ondelete='RESTRICT'),)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    last_poll_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False)
+    last_success_at: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+    last_error_at: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))

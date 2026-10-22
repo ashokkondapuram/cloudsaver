@@ -119,6 +119,30 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def terraform_policy(request:Request,row=Depends(allowed),authorization:str=Header()):
         return await gitops_post('/api/v1/policies/terraform/evaluate',request,authorization)
 
+    @app.get('/api/v1/operations/reliability')
+    async def reliability(row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/operations/reliability',authorization)
+
+    @app.get('/api/v1/operations/deliveries')
+    async def deliveries(row=Depends(allowed),authorization:str=Header(),limit:int=Query(50,ge=1,le=100),status:str|None=Query(None,pattern='^(pending|leased|published|delivered|dead_letter)$'),before:UUID|None=None):
+        params={'limit':limit}
+        if status:
+            params['status']=status
+        if before:
+            params['before']=str(before)
+        return await forward('GET','scanner','/api/v1/operations/deliveries',authorization,params)
+
+    @app.get('/api/v1/operations/deliveries/{event_id}/audit')
+    async def delivery_audit(event_id:UUID,row=Depends(allowed),authorization:str=Header(),limit:int=Query(50,ge=1,le=100),before:UUID|None=None):
+        params={'limit':limit}
+        if before:
+            params['before']=str(before)
+        return await forward('GET','scanner',f'/api/v1/operations/deliveries/{event_id}/audit',authorization,params)
+
+    @app.post('/api/v1/operations/deliveries/{event_id}/retry',status_code=202)
+    async def delivery_retry(event_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post(f'/api/v1/operations/deliveries/{event_id}/retry',request,authorization)
+
     @app.get('/api/v1/trends')
     async def trends(row=Depends(allowed), authorization: str = Header(), days: int = Query(30, ge=1, le=365), scan_id: UUID | None = None):
         params = {'days': days}
@@ -157,7 +181,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def cancel_scan(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'scanner', f'/api/v1/scans/{scan_id}/cancel', authorization)
 
-    @app.post('/api/v1/notifications/{scan_id}')
+    @app.post('/api/v1/notifications/{scan_id}',status_code=202)
     async def notify(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'notification', f'/api/v1/notifications/{scan_id}', authorization)
 

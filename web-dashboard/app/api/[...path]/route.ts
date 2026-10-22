@@ -3,7 +3,7 @@ export const dynamic='force-dynamic';
 async function proxy(request:NextRequest,{params}:{params:Promise<{path:string[]}>}){
   const {path}=await params;
   const resource=path.join('/');
-  if(!/^v1\/(me|providers|trends|policies\/terraform\/evaluate|gitops\/(?:targets|preview|requests(?:\/[a-fA-F0-9-]+)?)|auth\/consent-url|billing\/(?:entitlements|checkout)|scans(?:\/[a-zA-Z0-9-]+(?:\/(?:remediation|remediation-terraform|cancel))?)?)$/.test(resource))return NextResponse.json({detail:'API route not found'},{status:404});
+  if(!/^v1\/(me|providers|trends|operations\/(?:reliability|deliveries(?:\/[a-fA-F0-9-]+\/(?:audit|retry))?)|policies\/terraform\/evaluate|gitops\/(?:targets|preview|requests(?:\/[a-fA-F0-9-]+)?)|auth\/consent-url|billing\/(?:entitlements|checkout)|scans(?:\/[a-zA-Z0-9-]+(?:\/(?:remediation|remediation-terraform|cancel))?)?)$/.test(resource))return NextResponse.json({detail:'API route not found'},{status:404});
   let body:Uint8Array|undefined;
   if(request.method==='POST'){
     const reader=request.body?.getReader();

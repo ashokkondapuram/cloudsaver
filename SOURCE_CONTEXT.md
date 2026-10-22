@@ -1,5 +1,12 @@
 # Source context
 
+## v0.7.1 reliability continuation
+
+Builds on published v0.7.0 commit 9e2020d. The user prioritized production
+reliability, security and integrations. This revision implements the roadmap's
+transactional-outbox foundation with explicit evidence and bounded operational
+contracts; it does not relabel the overall platform as production-ready.
+
 ## v0.7.0 latest GitHub continuation
 
 Fetched and fast-forwarded to remote main 076c96f on 2026-10-22 while the GitOps

@@ -23,28 +23,12 @@ def create_app(settings=None, transport=None):
     app, settings, tenant = service('notification-service', settings)
     scanner = internal_url('SCANNER_SERVICE_URL', 'http://scanner-service:8002')
 
-    @app.post('/api/v1/notifications/{scan_id}')
+    @app.post('/api/v1/notifications/{scan_id}',status_code=202)
     async def notify(scan_id: UUID, row=Depends(tenant), authorization: str = Header()):
         from app.auth import require_workspace_role, Role
         require_workspace_role(row, Role.TENANT_ADMIN)
-        # Lookup ownership before considering a send, even when notifications are disabled.
-        scan = await upstream('GET', scanner, f'/api/v1/scans/{scan_id}', authorization, transport=transport)
-        configured = os.getenv('CLOUDSAVER_NOTIFICATION_WEBHOOK', '')
-        if not configured:
-            raise HTTPException(503, 'Notifications are not configured')
-        try:
-            destination = webhook_url(configured)
-        except ValueError:
-            raise HTTPException(503, 'Notification destination configuration is invalid') from None
-        message = f"CloudSaver {scan['mode']} scan completed: {scan['total_items_found']} review findings across {scan['subscriptions_scanned']} subscriptions."
-        # Deliberately omit resource names, addresses, subscription IDs and credentials.
-        try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=False, transport=transport) as client:
-                response = await client.post(destination, json={'text': message})
-            if response.status_code < 200 or response.status_code >= 300:
-                raise HTTPException(502, 'Notification provider did not accept the message')
-        except httpx.HTTPError:
-            raise HTTPException(502, 'Notification provider unavailable') from None
-        return {'status': 'sent', 'scan_id': str(scan_id)}
+        # Scanner validates ownership and commits the durable delivery intent.
+        # This service no longer makes unaudited direct webhook requests.
+        return await upstream('POST', scanner, f'/api/v1/notifications/{scan_id}', authorization, transport=transport)
 
     return app

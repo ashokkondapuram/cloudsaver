@@ -1,4 +1,4 @@
-# CloudSaver v0.7.0 status
+# CloudSaver v0.7.1 status
 
 This release follows the advanced roadmap found in Drive's root (v0.6.0–v1.0.0).
 The v0.5.0 package was reviewed and selected features were ported into the
@@ -16,9 +16,9 @@ live-to-demo fallbacks were excluded. TEST_REPORT.md records executed evidence.
 | Database | Atomic normalized Azure/cloud findings and snapshots, restricted role, forced RLS, migration upgrades | Production restore drill and independent review |
 | Identity | Strict signed Entra delegated tokens and explicit roles | Live Entra acceptance, browser PKCE/consent, membership onboarding |
 | Billing | Trusted SDK Checkout and durable verified webhooks, persisted entitlements | Stripe test-mode acceptance, portal/upgrades, invoice UX |
-| Scheduling | Existing opt-in Azure Celery worker, Redis heartbeat, durable fencing/cadence | Publish outbox, replay/failover, multi-cloud scheduling and interactive jobs |
-| Notifications | Existing explicit aggregate webhook path; automatic alerts disabled | Reliable delivery outbox, audited ITSM integration/provider acceptance |
-| Dashboard | Provider selection/filtering, evidence, trend chart, exports and roles | Browser accessibility/visual QA, interactive sign-in, inherited dependency advisories |
+| Scheduling | Opt-in Azure worker, atomic dispatch outbox, matching broker envelope, broker-loss reconciliation, Redis heartbeat and durable fencing/cadence | Staging chaos/load acceptance, multi-cloud scheduling and interactive jobs |
+| Notifications | Tenant-bound Slack/Teams, atomic notification intent, leases, bounded retries, dead letters and admin replay; opt-in dispatcher | Real webhook acceptance, ITSM adapters, rate/retention policy |
+| Dashboard | Evidence/trends/exports/roles plus operational queue, audit and replay; Next.js 16/Tailwind 4 security maintenance | Browser accessibility/visual QA, interactive sign-in, continuous dependency review |
 | Plan policies | Offline CLI/Action and bounded API, supported attachment checks, deletion/tag policies, optional Infracost budget | Real Terraform/Infracost corpus acceptance, more module/instance relationships, native OPA integration and CI provenance |
 | GitOps | GitHub App repository allowlist, import-only draft PRs, deterministic packages, durable idempotency/leases/history | Live App acceptance, native OAuth onboarding, GitLab/Bitbucket, destructive approval workflows |
 | Later roadmap | Advanced roadmap and limits recorded | AI anomalies, tags/showback, autonomous approvals, deployment/compliance |
@@ -29,7 +29,7 @@ This release does not report synthetic dispatches, cancellation, production
 readiness, SOC 2 certification or Gemini review.
 
 Interactive scans are synchronous; completed scans cannot be cancelled. There is
-no reliable automatic alert-delivery guarantee. All live AWS/GCP/Kubernetes dollar
+no exactly-once alert delivery or human-receipt guarantee. All live AWS/GCP/Kubernetes dollar
 and net savings estimates remain unknown. A resource no longer observed is not
 proof of remediation. See docs/CLOUD_SOURCES.md for exact scope/telemetry rules.
 

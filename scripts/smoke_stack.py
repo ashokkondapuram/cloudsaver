@@ -79,6 +79,12 @@ with httpx.Client(timeout=60, trust_env=False) as client:
     history = client.get(dashboard + '/api/v1/gitops/requests',headers=headers)
     history.raise_for_status()
     assert isinstance(history.json(),list)
+    reliability = client.get(dashboard + '/api/v1/operations/reliability',headers=headers)
+    reliability.raise_for_status()
+    assert reliability.json()['available'] is True
+    deliveries = client.get(dashboard + '/api/v1/operations/deliveries',headers=headers)
+    deliveries.raise_for_status()
+    assert isinstance(deliveries.json()['items'],list)
     invalid = client.post(dashboard + '/api/v1/policies/terraform/evaluate',headers=headers,
                           json={'plan':{'format_version':'unsupported','variables':{'secret':'do-not-echo'}}})
     assert invalid.status_code == 422 and 'do-not-echo' not in invalid.text

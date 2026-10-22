@@ -31,11 +31,13 @@ class Repository:
         self.jobs, self.scans = {}, {}
         self.attempted_scans = []
         self.fail_completion = False
+        self.deliveries = []
 
     def plan_tier(self, tenant_id):
         return 'ENTERPRISE'
 
-    def reserve_scheduled_job(self, tenant_id, job_id, minimum):
+    def reserve_scheduled_job(self, tenant_id, job_id, minimum, subscription_ids):
+        self.deliveries.append((job_id,list(subscription_ids)))
         self.queue_job(tenant_id, job_id)
         return True
 
@@ -65,12 +67,15 @@ class Repository:
         if job['status'] not in ('completed', 'failed'):
             job.update(status='failed' if final else 'queued', error_code=error_code)
 
-    def complete_job(self, tenant_id, job_id, scan, subscriptions, *, token):
+    def complete_job(self, tenant_id, job_id, scan, subscriptions, *, token, notification_targets=()):
         self.attempted_scans.append(deepcopy(scan))
         if not set(subscriptions) <= set(self.active) or self.fail_completion:
             raise RuntimeError('Transaction could not commit')
         self.scans[scan['scan_id']] = deepcopy(scan)
         self.jobs[job_id].update(status='completed', scan_id=scan['scan_id'])
+        if notification_targets:
+            self.deliveries.append((scan['scan_id'],notification_targets))
+            self.jobs[job_id]['notification_status']='queued'
 
     def mark_notification(self, tenant_id, job_id, status):
         self.jobs[job_id]['notification_status'] = status
@@ -119,15 +124,13 @@ def test_database_revocation_prevents_queued_job_from_scanning():
 def test_completed_job_redelivery_does_not_scan_or_notify_twice():
     repository, lease = Repository(), Lease()
     job_id = str(uuid4())
-    notices = []
     result = tasks.run_scan_job(settings(), TENANT, [SUB], job_id, repository, lease,
-                                scanner=lambda _: [finding()], notifier=lambda scan: notices.append(scan))
+                                scanner=lambda _: [finding()], notification_targets=('test-target',))
     repeated = tasks.run_scan_job(settings(), TENANT, [SUB], job_id, repository, Lease(),
-                                  scanner=lambda _: pytest.fail('Duplicate scan'),
-                                  notifier=lambda _: pytest.fail('Duplicate notification'))
+                                  scanner=lambda _: pytest.fail('Duplicate scan'), notification_targets=('test-target',))
     assert result == repeated
-    assert len(repository.scans) == len(notices) == 1
-    assert repository.jobs[job_id]['notification_status'] == 'sent'
+    assert len(repository.scans) == len(repository.deliveries) == 1
+    assert repository.jobs[job_id]['notification_status'] == 'queued'
     assert lease.released
 
 
@@ -186,15 +189,13 @@ def test_scanner_cannot_expand_subscription_scope():
     assert not repository.scans
 
 
-def test_notification_failure_does_not_roll_back_or_rerun_scan():
+def test_notification_intent_is_part_of_completion_not_an_inline_send():
     repository, job_id = Repository(), str(uuid4())
-    def failed_notice(_):
-        raise RuntimeError('provider unavailable')
     result = tasks.run_scan_job(settings(), TENANT, [SUB], job_id, repository, Lease(),
-                                scanner=lambda _: [finding()], notifier=failed_notice)
+                                scanner=lambda _: [finding()], notification_targets=('target',))
     assert result['status'] == 'completed'
-    assert repository.jobs[job_id]['notification_status'] == 'failed'
-    assert len(repository.scans) == 1
+    assert repository.jobs[job_id]['notification_status'] == 'queued'
+    assert len(repository.deliveries) == len(repository.scans) == 1
 
 
 def test_live_estimates_require_verified_pricing_evidence():
@@ -210,11 +211,10 @@ def test_scheduler_intersects_database_activation_with_server_allowlist(monkeypa
     repository = Repository(active=[SUB, OTHER])
     monkeypatch.setenv('CLOUDSAVER_SCHEDULED_SCANS', 'true')
     monkeypatch.setattr(tasks, 'dependencies', lambda: (settings(), repository, Lease()))
-    queued = []
-    monkeypatch.setattr(tasks.execute_subscription_scan, 'apply_async', lambda **kw: queued.append(kw))
+    monkeypatch.setattr(tasks.execute_subscription_scan, 'apply_async', lambda **kw: pytest.fail('Scheduler bypassed transactional outbox'))
     assert tasks.scheduled_scan_all.run() == {'scheduled': 1, 'enabled': True}
-    assert queued[0]['args'] == [TENANT, [SUB]]
-    assert queued[0]['task_id'] in repository.jobs
+    assert repository.deliveries[0][1] == [SUB]
+    assert repository.deliveries[0][0] in repository.jobs
 
 
 def test_starter_cannot_run_scheduled_scan():
@@ -224,3 +224,18 @@ def test_starter_cannot_run_scheduled_scan():
         tasks.run_scan_job(settings(),TENANT,[SUB],str(uuid4()),repository,Lease(),
                            scanner=lambda _: pytest.fail('Starter schedule was executed'))
     assert not repository.jobs
+
+
+def test_broker_message_without_durable_envelope_cannot_create_or_fail_a_job(monkeypatch):
+    repository=Repository()
+    repository.verify_delivery=lambda *_:False
+    monkeypatch.setattr(tasks,'dependencies',lambda:(settings(),repository,Lease()))
+    monkeypatch.setattr(tasks,'run_scan_job',lambda *_args,**_kwargs:pytest.fail('Untrusted broker envelope executed'))
+    task=tasks.execute_subscription_scan
+    task.push_request(id=str(uuid4()),retries=0)
+    try:
+        with pytest.raises(RuntimeError,match='authorization failed'):
+            task.run(TENANT,[SUB])
+    finally:
+        task.pop_request()
+    assert not repository.jobs and not repository.scans

@@ -112,9 +112,9 @@ no automatic guessed backfill is performed.
 Workers remain behind the scheduled Compose profile. Only operator-activated
 subscriptions and persisted paid plans qualify. A transactional PostgreSQL
 reservation limits Growth to daily and Enterprise to hourly scheduling, even if
-two schedulers race. Publication to the Celery broker is not yet an atomic outbox
-transaction: fault recovery acceptance is still required. Keep automated alerts
-disabled pending a durable outbox and dispatcher.
+two schedulers race. In v0.7.1 reservations commit delivery intent in the same
+transaction; a separately enabled dispatcher publishes/reconciles it. Read
+DELIVERY.md before activation. Automatic alerts remain opt-in.
 
 ## v0.6.0 cloud findings upgrade
 
@@ -151,3 +151,11 @@ default. An uncertain result may already exist in GitHub; inspect history and
 retry the same key. Never force-push or delete a branch to bypass a collision.
 Historical synthetic records are projected with explicit provenance and unknown
 prices; their original stored bytes are retained and they cannot be exported.
+
+## v0.7.1 durable delivery upgrade
+
+Apply 0007_delivery_outbox as the migration owner before restarting application
+services. It adds forced-RLS delivery/audit/dispatcher tables, job ownership keys
+and the queued notification state. Current histories are retained. Read DELIVERY.md
+for the explicit global-webhook migration, pre-upgrade queued-job quarantine,
+configuration, replay limits, pause/recovery and rollback restrictions.

@@ -20,7 +20,8 @@ celery_app.conf.update(task_serializer='json', accept_content=['json'], result_s
                        timezone='UTC', enable_utc=True, task_acks_late=True,
                        task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
                        task_time_limit=600, task_soft_time_limit=570,
-                       broker_transport_options={'visibility_timeout': 900},
+                       broker_connection_timeout=5,
+                       broker_transport_options={'visibility_timeout': 900,'socket_timeout':5,'socket_connect_timeout':5,'retry_on_timeout':False},
                        result_expires=86400)
 if enabled('CLOUDSAVER_SCHEDULED_SCANS'):
     interval = int(os.getenv('CLOUDSAVER_SCAN_INTERVAL_SECONDS', '3600'))
@@ -91,7 +92,7 @@ def authorized_tenant(settings, repository, tenant_id, requested):
 
 
 def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, *,
-                 scanner=None, notifier=None, final_attempt=False):
+                 scanner=None, notification_targets=(), final_attempt=False):
     """Dependency-injected core used by Celery and behavior-based unit tests."""
     from app.scanner import scan_live
     from app.pricing import attribute_finding_cost
@@ -143,7 +144,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             total_monthly_waste_usd=round(sum(f['estimated_monthly_waste_usd'] for f in findings), 2) if known and findings else None,
         )).model_dump()
         heartbeat.ensure_owned()
-        repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token)
+        repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token, notification_targets=notification_targets)
     except TerminalJob:
         raise
     except Exception:
@@ -156,29 +157,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             lease.release(tenant_id, token)
         except Exception:
             pass
-    if notifier:
-        try:
-            notifier(scan)
-            repository.mark_notification(tenant_id, job_id, 'sent')
-        except Exception:
-            # A notification failure never causes a committed scan to rerun.
-            try:
-                repository.mark_notification(tenant_id, job_id, 'failed')
-            except Exception:
-                pass
     return dict(job_id=job_id, status='completed', scan_id=scan['scan_id'])
-
-
-def aggregate_notification(scan):
-    """Called only after commit and explicit automated-alert configuration."""
-    import httpx
-    from services.notification import webhook_url
-    destination = webhook_url(os.environ['CLOUDSAVER_NOTIFICATION_WEBHOOK'])
-    text = f"CloudSaver {scan['mode']} scan: {scan['total_items_found']} review findings across {scan['subscriptions_scanned']} subscriptions."
-    with httpx.Client(timeout=15, follow_redirects=False) as client:
-        response = client.post(destination, json={'text': text})
-    if not 200 <= response.status_code < 300:
-        raise RuntimeError('Notification provider rejected summary')
 
 
 def dependencies():
@@ -195,24 +174,30 @@ def execute_subscription_scan(self, tenant_id, subscription_ids):
     from billiard.exceptions import SoftTimeLimitExceeded
     from app.scanner import ScanError
     from azure.core.exceptions import AzureError
-    from app.keyvault import CredentialProviderError
+    from app.keyvault import CredentialError
     job_id = str(UUID(self.request.id))
     repository = None
     lease = None
+    verified = False
     try:
         settings, repository, lease = dependencies()
+        if not repository.verify_delivery(tenant_id,job_id,subscription_ids):
+            raise UnauthorizedJob('Task does not match durable delivery intent')
+        verified = True
+        from app.delivery_config import load_targets
+        targets = tuple(t for t in load_targets() if t.tenant_id == tenant_id) if enabled('CLOUDSAVER_AUTOMATED_ALERTS') else ()
         return run_scan_job(settings, tenant_id, subscription_ids, job_id, repository, lease,
-                            notifier=aggregate_notification if enabled('CLOUDSAVER_AUTOMATED_ALERTS') else None,
+                            notification_targets=targets,
                             final_attempt=self.request.retries >= self.max_retries)
     except TerminalJob:
         raise RuntimeError('Scheduled scan job is terminal') from None
     except (UnauthorizedJob, ValueError):
         # Untrusted or revoked scopes are permanent failures, never widened or retried.
         configured = {t['tenant_id'] for t in settings.tenants} if repository else set()
-        if repository and tenant_id in configured:
+        if repository and verified and tenant_id in configured:
             repository.fail_job(tenant_id, job_id, 'unauthorized_scope', True)
         raise RuntimeError('Worker subscription authorization failed') from None
-    except (JobBusy, ScanError, AzureError, CredentialProviderError, psycopg.Error, redis.RedisError, httpx.HTTPError,
+    except (JobBusy, ScanError, AzureError, CredentialError, psycopg.Error, redis.RedisError, httpx.HTTPError,
             SoftTimeLimitExceeded, TimeoutError, ConnectionError) as exc:
         if repository:
             try:
@@ -254,8 +239,8 @@ def scheduled_scan_all():
             continue
         minimum = 86400 if tier == 'GROWTH' else 3600
         job_id = str(uuid4())
-        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, minimum):
+        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, minimum, active):
             continue
-        execute_subscription_scan.apply_async(args=[tenant['tenant_id'], active], task_id=job_id)
+        # Dispatcher publishes this committed outbox intent; no broker I/O here.
         count += 1
     return {'scheduled': count, 'enabled': True}

@@ -78,6 +78,19 @@ def test_billing_admin_cannot_scan_and_workspace_key_has_no_entra_fallback(conte
                            json={'target_tier':'GROWTH','idempotency_key':'test-key-12345678'}).status_code == 503
 
 
+def test_delivery_viewer_and_billing_roles_cannot_enqueue_or_replay(context):
+    settings,validator,headers=context
+    with TestClient(create_app(settings,identity_validator=validator)) as client:
+        for role in ('Viewer','BillingAdmin'):
+            auth=headers([role])
+            assert client.get('/api/v1/operations/reliability',headers=auth).json()['available'] is False
+            assert client.post('/api/v1/notifications/'+str(uuid4()),headers=auth).status_code==403
+            assert client.post('/api/v1/operations/deliveries/'+str(uuid4())+'/retry',headers=auth,json={'acknowledge_duplicate_risk':True}).status_code==403
+        response=client.post('/api/v1/operations/deliveries/'+str(uuid4())+'/retry',headers=headers(['TenantAdmin']),json={'acknowledge_duplicate_risk':'private-do-not-echo'})
+        assert response.status_code==422 and 'private-do-not-echo' not in response.text
+        assert client.post('/api/v1/operations/deliveries/'+str(uuid4())+'/retry',headers=headers(['TenantAdmin']),content=b' '*1025).status_code==413
+
+
 def test_gateway_verifies_identity_before_forwarding(context):
     settings, validator, headers = context
     seen = []

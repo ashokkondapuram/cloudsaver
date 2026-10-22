@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v0.7.0."""
+"""Runnable CloudSaver enterprise API service v0.7.1."""
 import hashlib
 import hmac
 import logging
@@ -20,7 +20,7 @@ logger = logging.getLogger('cloudsaver')
 auth = HTTPBearer(auto_error=False)
 
 
-def create_app(settings=None, scanner=None, identity_validator=None, gitops_config=None, gitops_client=None):
+def create_app(settings=None, scanner=None, identity_validator=None, gitops_config=None, gitops_client=None, delivery_targets=None, delivery_repository=None):
     settings = settings or Settings.load()
     store = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
 
@@ -30,13 +30,16 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
         from app.keyvault import close_providers
         close_providers()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.7.0', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.7.1', lifespan=lifespan)
     locks = {t['tenant_id']: threading.Lock() for t in settings.tenants}
 
     from app.auth import tenant_dependency, require_workspace_role, Role
     current_tenant = tenant_dependency(settings, identity_validator)
     from app.gitops_api import create_router
     api.include_router(create_router(settings,store,current_tenant,config=gitops_config,client=gitops_client))
+
+    from app.delivery_api import create_router as delivery_router
+    api.include_router(delivery_router(settings,store,current_tenant,targets=delivery_targets,repository=delivery_repository))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -51,7 +54,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.7.0'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.7.1'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -278,6 +281,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.7.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.7.1</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api
