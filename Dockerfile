@@ -7,6 +7,8 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
     pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home appuser
 COPY --chown=appuser:appuser app app
+COPY --chown=appuser:appuser services services
+COPY --chown=appuser:appuser workers workers
 COPY --chown=appuser:appuser database database
 COPY --chown=appuser:appuser migrations migrations
 COPY --chown=appuser:appuser alembic.ini .

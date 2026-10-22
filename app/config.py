@@ -37,7 +37,9 @@ class Settings:
         for tenant in tenants:
             tid = str(UUID(tenant['tenant_id']))
             name = tenant['name']
-            digest = tenant['api_key_sha256']
+            digest = tenant.get('api_key_sha256', '')
+            if not digest and os.getenv('CLOUDSAVER_AUTH_MODE') == 'entra':
+                digest = hashlib.sha256(os.urandom(32)).hexdigest()
             subscriptions = [str(UUID(s)) for s in tenant['subscription_ids']]
             if not isinstance(name, str) or not name.strip() or len(name) > 120:
                 raise ValueError('Each tenant requires a name of 1–120 characters')
@@ -49,7 +51,10 @@ class Settings:
                 raise ValueError('Tenant IDs and access key hashes must be unique')
             seen_ids.add(tid)
             seen_keys.add(digest)
-            normalized.append(dict(tenant_id=tid, name=name.strip(),
-                                   subscription_ids=subscriptions, api_key_sha256=digest))
+            tier = tenant.get('plan_tier', 'STARTER')
+            if tier not in ('STARTER', 'GROWTH', 'ENTERPRISE'):
+                raise ValueError('Invalid plan tier')
+            normalized.append(dict(tenant_id=tid, name=name.strip(), subscription_ids=subscriptions,
+                                   api_key_sha256=digest, plan_tier=tier))
         database = os.getenv('CLOUDSAVER_DB', 'data/cloudsaver.sqlite3')
         return cls(mode, database, tuple(normalized), os.getenv('CLOUDSAVER_DATABASE_URL') or None)

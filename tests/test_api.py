@@ -124,3 +124,19 @@ def test_live_remediation_is_download_only(settings):
         assert response.json()['filename'].endswith('.sh')
         assert 'read -r confirmation' in response.json()['script']
         assert len(client.get('/api/v1/scans', headers=headers()).json()) == 1
+
+
+def test_api_respects_scheduled_worker_distributed_lease(settings, monkeypatch):
+    import workers.tasks
+    class BusyLease:
+        def __init__(self, _):
+            pass
+        def acquire(self, tenant_id, token):
+            return False
+    monkeypatch.setenv('CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'true')
+    monkeypatch.setattr(workers.tasks, 'RedisLease', BusyLease)
+    def never_scan(_):
+        raise AssertionError('API must not scan while worker owns lease')
+    with TestClient(create_app(settings, scanner=never_scan)) as client:
+        assert client.post('/api/v1/scans', headers=headers()).status_code == 409
+        assert client.get('/api/v1/scans', headers=headers()).json() == []

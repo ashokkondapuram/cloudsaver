@@ -1,6 +1,6 @@
 {
   "name": "cloudsaver-web-dashboard",
-  "version": "0.2.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {"dev":"next dev -H 127.0.0.1 -p 3000", "build":"next build", "start":"next start -H 0.0.0.0 -p 3000", "typecheck":"tsc --noEmit"},
   "dependencies": {"next":"^15.5.0", "react":"^19.1.0", "react-dom":"^19.1.0", "@tanstack/react-table":"^8.21.3", "@tanstack/react-virtual":"^3.13.12", "clsx":"^2.1.1", "tailwind-merge":"^3.3.0"},

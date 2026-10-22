@@ -1,6 +1,6 @@
 .PHONY: build up status logs down test test-postgres scan
 build:
-	docker compose build
+	docker compose build scanner-service web-dashboard postgres
 up:
 	docker compose up -d
 status:

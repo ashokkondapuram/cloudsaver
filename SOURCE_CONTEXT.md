@@ -1,10 +1,20 @@
 # Source context
 
-The source project is derived from the documents in this [Drive project folder](https://drive.google.com/drive/folders/11d83OQA23AclGlFmeu0Ury94FiT4yWyd).
+This continuation uses CloudSaver-v0.4.0.zip from the user-provided Drive folder:
+https://drive.google.com/drive/folders/1Y53rf0PtWkZnKSgK3NbcOlyQq49hTsKk
 
-- [README and architectural context](https://docs.google.com/document/d/148dTRhpm8DTbi5XVREB4k5KvjY71Pp19INyolPdt21Y/edit)
-- [Microservices architecture](https://docs.google.com/document/d/1D604DJEYtPv7SLFLCnXg4hqn4P1FUrb2-bQ4-7N_P1g/edit)
-- [Commercial blueprint](https://docs.google.com/document/d/1xniGvcxgB6cX2XlwK9BEagbY46QZWS-rBY2MuU4jBo0/edit)
-- Starter API, scanner and Dockerfile documents remain in that folder.
+Baseline ZIP: https://drive.google.com/file/d/1QemSiVc5nVsgL8hDAyFqTbHkaIFO-4Tf/view
+Release guide: https://docs.google.com/document/d/1qOmU188NchW0-q2L35xUj2PESO4jnfqWL6cgivCOaOo/edit
+Sprint guide: https://docs.google.com/document/d/1BLp3_pF5RxQpdm2g3wn9VkA5_RRYTk_8557rVdQwI_w/edit
 
-The native README retains the target architecture and receives a release-status and Gemini development-handoff section. The source README distinguishes working features, migration foundations and unverified production requirements. No runtime Gemini integration is included.
+The original Drive artifacts remain intact. Their README, roadmap and test report
+are archived under docs/drive-v0.4.0 as historical source, not current evidence.
+The full ZIP has 144 tests; reproducing them found two failures, despite the
+release guide describing a passing 29-test subset.
+
+This v0.4.1 continuation retains the verified GitHub v0.2.0 PostgreSQL ingestion
+and joins its migration lineage to the Drive billing/worker lineage. Applied
+revision histories are preserved. No Gemini runtime integration or external
+Gemini review is claimed.
+
+User-authorized source repository: https://github.com/ashokkondapuram/project

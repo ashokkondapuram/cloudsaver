@@ -10,22 +10,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import Settings
 
 
-def service(title, settings=None):
+def service(title, settings=None, identity_validator=None):
     settings = settings or Settings.load()
-    app = FastAPI(title=title, version='0.2.0')
-    bearer = HTTPBearer(auto_error=False)
-
-    def tenant(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-        if not credentials or credentials.scheme.lower() != 'bearer':
-            raise HTTPException(401, 'Workspace access key required', headers={'WWW-Authenticate': 'Bearer'})
-        digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-        matched = None
-        for row in settings.tenants:
-            if hmac.compare_digest(digest, row['api_key_sha256']):
-                matched = row
-        if matched is None:
-            raise HTTPException(401, 'Invalid workspace access key', headers={'WWW-Authenticate': 'Bearer'})
-        return matched
+    app = FastAPI(title=title, version='0.4.1')
+    from app.auth import tenant_dependency
+    tenant = tenant_dependency(settings, identity_validator)
 
     @app.get('/healthz')
     def health():
@@ -58,7 +47,7 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
             response = await client.request(method, base + path, params=params, json=json,
                                             headers={'Authorization': authorization})
         if response.status_code >= 400:
-            status = response.status_code if response.status_code in (401, 403, 404, 409, 422, 429) else 502
+            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 422, 429, 501, 503) else 502
             raise HTTPException(status, 'Upstream service could not complete the request')
         if response.is_redirect:
             raise HTTPException(502, 'Unexpected upstream redirect')

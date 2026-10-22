@@ -1,10 +1,12 @@
 import os
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, Query
+import httpx
+from fastapi import Depends, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from services.common import internal_url, service, upstream
-from app.schemas import RemediationRequest
+from app.schemas import RemediationRequest, BillingCheckoutRequest
 
 
 class RedisLimiter:
@@ -25,8 +27,8 @@ class RedisLimiter:
             raise HTTPException(429, 'Workspace request limit exceeded', headers={'Retry-After': '60'})
 
 
-def create_app(settings=None, limiter=None, transport=None):
-    app, settings, tenant = service('api-gateway', settings)
+def create_app(settings=None, limiter=None, transport=None, identity_validator=None):
+    app, settings, tenant = service('api-gateway', settings, identity_validator)
     limiter = limiter or RedisLimiter()
     targets = {
         'tenant': internal_url('TENANT_SERVICE_URL', 'http://tenant-service:8001'),
@@ -41,6 +43,40 @@ def create_app(settings=None, limiter=None, transport=None):
 
     async def forward(method, target, path, authorization, params=None):
         return await upstream(method, targets[target], path, authorization, params=params, transport=transport)
+
+    @app.get('/api/v1/auth/consent-url')
+    async def consent_url(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/auth/consent-url', authorization)
+
+    @app.post('/api/v1/billing/webhook')
+    async def billing_webhook(request: Request):
+        # This public endpoint authenticates by Stripe signature, not workspace bearer.
+        signature = request.headers.get('stripe-signature')
+        if not signature:
+            raise HTTPException(400, 'Stripe signature required')
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 1_048_576:
+                raise HTTPException(413, 'Webhook payload too large')
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=False, transport=transport) as client:
+                response = await client.post(targets['tenant'] + '/api/v1/billing/webhook',
+                    content=bytes(body), headers={'Stripe-Signature': signature, 'Content-Type': 'application/json'})
+            if response.status_code not in (200, 400, 413, 503):
+                raise HTTPException(502, 'Billing service could not complete the request')
+            return JSONResponse(response.json(), status_code=response.status_code)
+        except (httpx.HTTPError, ValueError):
+            raise HTTPException(502, 'Billing service unavailable') from None
+
+    @app.get('/api/v1/billing/entitlements')
+    async def billing_entitlements(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/billing/entitlements', authorization)
+
+    @app.post('/api/v1/billing/checkout')
+    async def billing_checkout(payload: BillingCheckoutRequest, row=Depends(allowed), authorization: str = Header()):
+        return await upstream('POST', targets['scanner'], '/api/v1/billing/checkout', authorization,
+                              json=payload.model_dump(), transport=transport)
 
     @app.get('/api/v1/me')
     async def me(row=Depends(allowed), authorization: str = Header()):
@@ -66,6 +102,15 @@ def create_app(settings=None, limiter=None, transport=None):
     async def remediation(scan_id: UUID, payload: RemediationRequest, row=Depends(allowed), authorization: str = Header()):
         return await upstream('POST', targets['scanner'], f'/api/v1/scans/{scan_id}/remediation',
                               authorization, json=payload.model_dump(), transport=transport)
+
+    @app.post('/api/v1/scans/{scan_id}/remediation-terraform')
+    async def remediation_terraform(scan_id: UUID, payload: RemediationRequest, row=Depends(allowed), authorization: str = Header()):
+        return await upstream('POST', targets['scanner'], f'/api/v1/scans/{scan_id}/remediation-terraform',
+                              authorization, json=payload.model_dump(), transport=transport)
+
+    @app.post('/api/v1/scans/{scan_id}/cancel')
+    async def cancel_scan(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('POST', 'scanner', f'/api/v1/scans/{scan_id}/cancel', authorization)
 
     @app.post('/api/v1/notifications/{scan_id}')
     async def notify(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):

@@ -1,39 +1,28 @@
-# CloudSaver implementation status
+# CloudSaver v0.4.1 status
 
-This release continues the v0.1.0 source ZIP in the supplied Drive folder. The
-expanded platform description is a target specification. The executable source
-and executed tests determine the status below; prose and mock responses do not
-establish a completed integration.
+The current code extends the Drive v0.4.0 ZIP. Baseline documents under
+docs/drive-v0.4.0 are historical source material, not present verification.
 
-| Capability | Current implementation and evidence |
-| --- | --- |
-| Dashboard | Next.js 15 / React 19, TanStack sorting/filtering/virtualization, CSV/JSON exports and history. Typecheck and production build pass. Browser visual/performance QA remains open. |
-| Gateway and services | Five FastAPI services, bearer authentication at each boundary, server-derived tenant scope, fixed routing and Redis rate limits. Caller-supplied X-Tenant-ID is ignored for authentication. |
-| PostgreSQL isolation | Forced RLS on snapshots and all four domain tables, restricted runtime role, transaction-local context. Tested with a real PostgreSQL 16 server and two tenants. |
-| Normalized ingestion | v0.2.0 atomically writes workspace configuration, snapshot and scan-linked findings. Invalid scope and failed writes save no partial data. Legacy snapshots remain readable without automatic backfill. |
-| Azure checks | Four paginated read-only ARG rules. SDK logic is tested with mocks. Live credentials, RBAC, latency and throttling behavior remain unverified. |
-| Enterprise identity | Entra OAuth, admin consent and membership authorization are still planned. Bootstrap workspace keys are implemented. |
-| Billing | Stripe checkout, signed webhooks, customer mapping, entitlements and event idempotency are still planned. The separate Drive billing.py returns fabricated checkout URLs and is not used by this application. |
-| Background jobs | Durable jobs, Celery, Beat, distributed locking and recovery remain planned. The separate tasks.py constructs sample findings and lacks persistent ingestion; it is not a verified live scanner. Current scans run synchronously with a process-local lock. |
-| Credential storage | Live scanning requires explicit configured Azure client credentials. The separate Key Vault starter falls back to mock credentials; it is not integrated. A fail-closed vault/certificate implementation remains planned. |
-| Cost attribution | Live values remain unknown. Demo dollars are labeled illustrative. No verified 6.2% savings, per-GB pricing, universal public-IP charge or run-rate reduction is claimed. Prices depend on SKU, region, agreement, billing period and actual meter evidence. |
-| Remediation | Generates interactive review scripts for live unattached disks/IPs. The application never deletes resources. Snapshot automation, Terraform generation, retention enforcement and simulation remain planned. A retention tag alone does not implement a 90-day retention policy. |
-| Notifications | Explicit operator-configured aggregate webhook delivery; provider calls are mocked in tests. No scheduled alerts or live sends were performed. |
-| Hosting | Local Compose development deployment. Enterprise ingress, backup drills, monitoring, commercial operation and Azure Container Apps deployment remain open. |
+| Area | Implemented | Remaining work/acceptance |
+| --- | --- | --- |
+| Identity | Signed Entra v2 delegated access tokens, strict tenant/issuer/audience/scope claims and app roles; shared service auth | Live Entra acceptance, browser PKCE sign-in, consent callbacks, memberships and onboarding |
+| Billing | Real SDK Checkout with trusted ownership/idempotency/fixed URLs; verified webhook persistence | Live Stripe acceptance, existing-subscription portal/upgrades and invoice UX |
+| Entitlements | Persisted plans, subscription/resource limits, role/Terraform/Key Vault gates, paid schedule cadence | Contract metering and retention enforcement |
+| Pricing | Exact supported retail meter evidence; unknown unsupported prices and net savings | Customer billing reconciliation, disk/VM storage models, discounts, commitments and remediation costs |
+| Exports | Live disk/IP import review declarations and interactive Bash review scripts | Target Terraform/provider acceptance, verified independent backups and separately designed deletion workflows |
+| Database | Atomic snapshot/domain writes, forced RLS, compatible lineage convergence | Restore drill and external production review |
+| Worker | Opt-in Celery, durable attempts, Redis heartbeats, stale job-token checks and transactional cadence reservations | Publish/crash recovery and Redis failover acceptance; interactive submission/progress/cancellation |
+| Outbox | Explicitly labeled, unused in-memory test foundation | Transactional PostgreSQL outbox, leased dispatcher, replay/audit and provider delivery semantics |
+| Dashboard | Built Next.js table/history/exports, truthful unknown values and role-sensitive actions | Browser visual/accessibility/performance QA and complete interactive sign-in |
+| Operations | Loopback Compose, restricted roles, migration step, PostgreSQL/Redis integration tests | Dependency remediation, ingress, monitoring, load/fault tests, deployment and backup acceptance |
 
-The supplied `SET LOCAL app.current_tenant_id = :tenant_id` example is not used:
-PostgreSQL SET does not accept that value as a regular bound SQL expression.
-The implementation uses parameterized `set_config('app.current_tenant_id', value,
-true)` inside the active transaction. The true flag makes the value local to
-that transaction; tests verify it disappears after commit and failure rollback.
+There is no at-least-once or exactly-once alert-delivery guarantee. Heartbeats
+and job tokens do not prove exactly-once execution across Redis failover and
+PostgreSQL; a newer attempt on the same durable job fences its old token.
+Dashboard scans are synchronous. In-memory cancellation/outbox demonstrations
+are not exposed as durable production features.
 
-The current layout is `app/`, `services/*.py`, `database/`, `migrations/` and
-`web-dashboard/`. It retains the existing source layout rather than introducing
-duplicate service implementations. `compose.yaml` is the canonical Compose
-file. `python test_platform.py`, `make scan`, `make test` and
-`make test-postgres` provide the requested local entrypoints. Billing checkout
-is not an implemented endpoint and the unauthenticated sample request will not
-create a payment session.
-
-Next development should implement and test Entra identity and memberships, then
-durable scan jobs, before billing or automatic remediation. See ROADMAP.md.
+Configuration accepts at most 100 subscriptions per workspace. Enterprise's tier
+constant is not an unlimited estate or latency guarantee. Retail list prices are
+estimates, not customer billing or realized savings. No zero-data-loss promise
+is made by the import review generator.

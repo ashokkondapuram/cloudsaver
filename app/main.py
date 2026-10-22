@@ -1,8 +1,10 @@
-"""Runnable CloudSaver engineering MVP; no external AI integration."""
+"""Runnable CloudSaver enterprise API service v0.4.1."""
 import hashlib
 import hmac
 import logging
+import os
 import threading
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -12,29 +14,27 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings
 from app.store import Store, PostgresStore
-from app.schemas import ScanSummary, RemediationRequest
+from app.schemas import ScanSummary, RemediationRequest, BillingCheckoutRequest
 
 logger = logging.getLogger('cloudsaver')
 auth = HTTPBearer(auto_error=False)
 
 
-def create_app(settings=None, scanner=None):
+def create_app(settings=None, scanner=None, identity_validator=None):
     settings = settings or Settings.load()
     store = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
-    api = FastAPI(title='CloudSaver — Azure FinOps', version='0.2.0')
+
+    @asynccontextmanager
+    async def lifespan(_):
+        yield
+        from app.keyvault import close_providers
+        close_providers()
+
+    api = FastAPI(title='CloudSaver — Azure FinOps Enterprise', version='0.4.1', lifespan=lifespan)
     locks = {t['tenant_id']: threading.Lock() for t in settings.tenants}
 
-    def current_tenant(credentials: HTTPAuthorizationCredentials | None = Depends(auth)):
-        if credentials is None or credentials.scheme.lower() != 'bearer':
-            raise HTTPException(401, 'Workspace access key required', headers={'WWW-Authenticate': 'Bearer'})
-        digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-        matched = None
-        for tenant in settings.tenants:
-            if hmac.compare_digest(digest, tenant['api_key_sha256']):
-                matched = tenant
-        if matched is None:
-            raise HTTPException(401, 'Invalid workspace access key', headers={'WWW-Authenticate': 'Bearer'})
-        return matched
+    from app.auth import tenant_dependency, require_workspace_role, Role
+    current_tenant = tenant_dependency(settings, identity_validator)
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -49,11 +49,58 @@ def create_app(settings=None, scanner=None):
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.4.1'}
+
+    @api.get('/api/v1/auth/consent-url')
+    def consent_url(tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        raise HTTPException(501, 'Interactive consent onboarding is not implemented; provision tenant subscriptions through the operator configuration')
 
     @api.get('/api/v1/me')
     def me(tenant=Depends(current_tenant)):
-        return {k: tenant[k] for k in ('tenant_id', 'name', 'subscription_ids')} | {'mode': settings.mode}
+        tier_name = tenant.get('plan_tier', 'STARTER')
+        from app.entitlements import get_tier_entitlements
+        tier_info = get_tier_entitlements(tier_name)
+        return {
+            'tenant_id': tenant['tenant_id'],
+            'name': tenant['name'],
+            'subscription_ids': tenant['subscription_ids'],
+            'mode': settings.mode,
+            'plan_tier': tier_info.tier.value,
+            'max_subscriptions': tier_info.max_subscriptions,
+            'can_export_terraform': tier_info.can_export_terraform,
+            'roles': tenant.get('roles', ['Viewer'])
+        }
+
+    @api.get('/api/v1/billing/entitlements')
+    def entitlements(tenant=Depends(current_tenant)):
+        tier_name = tenant.get('plan_tier', 'STARTER')
+        from app.entitlements import get_tier_entitlements
+        tier_info = get_tier_entitlements(tier_name)
+        return {
+            'tenant_id': tenant['tenant_id'],
+            'tier': tier_info.tier.value,
+            'max_subscriptions': tier_info.max_subscriptions,
+            'current_subscriptions': len(tenant.get('subscription_ids', [])),
+            'can_export_terraform': tier_info.can_export_terraform,
+            'can_use_keyvault': tier_info.can_use_keyvault,
+            'can_dispatch_automated_alerts': tier_info.can_dispatch_automated_alerts,
+            'retention_days': tier_info.retention_days
+        }
+
+    @api.post('/api/v1/billing/checkout')
+    def checkout(payload: BillingCheckoutRequest, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.BILLING_ADMIN)
+        from app.entitlements import create_checkout_session
+        session = create_checkout_session(
+            target_tier=payload.target_tier,
+            tenant_id=tenant['tenant_id'],
+            organization_id=tenant.get('name', 'CloudSaver Org'),
+            success_url=payload.success_url,
+            cancel_url=payload.cancel_url,
+            idempotency_key=payload.idempotency_key
+        )
+        return session
 
     @api.get('/api/v1/scans', response_model=list[ScanSummary])
     def history(tenant=Depends(current_tenant), limit: int = 50):
@@ -70,35 +117,97 @@ def create_app(settings=None, scanner=None):
 
     @api.post('/api/v1/scans', status_code=201, response_model=ScanSummary)
     def run_scan(tenant=Depends(current_tenant)):
-        lock = locks[tenant['tenant_id']]
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        tier_name = tenant.get('plan_tier', 'STARTER')
+        from app.entitlements import enforce_subscription_quota
+        enforce_subscription_quota(tier_name, len(tenant.get('subscription_ids', [])), adding_count=0)
+        if settings.mode == 'azure' and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault':
+            from app.entitlements import enforce_keyvault_access
+            enforce_keyvault_access(tier_name)
+
+        tenant_id = tenant['tenant_id']
+        lock = locks.setdefault(tenant_id, threading.Lock())
         if not lock.acquire(blocking=False):
             raise HTTPException(409, 'A scan is already running for this workspace')
+
+        lease, lease_owned, lease_token, heartbeat = None, False, str(uuid4()), None
         try:
+            if os.getenv('CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', '').lower() == 'true':
+                from workers.tasks import RedisLease
+                lease = RedisLease(os.getenv('REDIS_URL', 'redis://redis:6379/1'))
+                lease_owned = lease.acquire(tenant_id, lease_token)
+                if not lease_owned:
+                    raise HTTPException(409, 'A scan is already running for this workspace (distributed lease held)')
+                from workers.lease import LeaseHeartbeat
+                heartbeat = LeaseHeartbeat(lease, tenant_id, lease_token)
+                heartbeat.start()
+
             from app.scanner import demo_findings, scan_live
-            findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
-            # Demo fixtures are relabeled for the authenticated workspace.
+            raw_findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
+
+            from app.entitlements import get_tier_entitlements
+            if len(raw_findings) > get_tier_entitlements(tier_name).max_resources_per_scan:
+                raise HTTPException(402, 'Scan exceeds the workspace resource quota; no partial results were saved')
+
+            # Demo fixtures are relabeled for the authenticated workspace
             if settings.mode == 'demo':
-                for finding in findings:
+                for finding in raw_findings:
                     finding['subscription_id'] = tenant['subscription_ids'][0]
                     finding['resource_id'] = f"/subscriptions/{tenant['subscription_ids'][0]}/resourceGroups/{finding['resource_group']}/providers/{finding['resource_type']}/{finding['resource_name']}"
-            result = dict(scan_id=str(uuid4()), timestamp=datetime.now(timezone.utc).isoformat(),
-                          status='completed', mode=settings.mode,
-                          subscriptions_scanned=len(tenant['subscription_ids']),
-                          total_items_found=len(findings),
-                          total_monthly_waste_usd=(round(sum(f['estimated_monthly_waste_usd'] or 0 for f in findings), 2) if settings.mode == 'demo' else None),
-                          findings=findings)
-            result = ScanSummary.model_validate(result).model_dump()
-            store.save(tenant['tenant_id'], result, workspace=tenant)
-            return result
+
+            # Real-time Azure Retail Prices cost attribution
+            from app.pricing import attribute_finding_cost
+            enriched_findings = ([attribute_finding_cost(f) for f in raw_findings] if settings.mode == 'azure' else raw_findings)
+
+            known = all(f.get('estimated_monthly_waste_usd') is not None for f in enriched_findings)
+            total_waste = (round(sum(f['estimated_monthly_waste_usd'] for f in enriched_findings), 2)
+                           if known and (enriched_findings or settings.mode == 'demo') else None)
+            realizable_savings = None
+
+            result = dict(
+                scan_id=str(uuid4()),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                status='completed',
+                mode=settings.mode,
+                subscriptions_scanned=len(tenant['subscription_ids']),
+                total_items_found=len(enriched_findings),
+                total_monthly_waste_usd=total_waste,
+                realizable_monthly_savings_usd=realizable_savings,
+                findings=enriched_findings
+            )
+            # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
+            if hasattr(ScanSummary, 'model_validate'):
+                validated = ScanSummary.model_validate(result).model_dump()
+            else:
+                validated = ScanSummary.parse_obj(result).dict()
+
+            if heartbeat:
+                heartbeat.ensure_owned()
+            store.save(tenant_id, validated, workspace=tenant)
+            return validated
+        except HTTPException:
+            raise
         except Exception as exc:
-            # Never relay SDK exception strings: they can contain cloud identifiers.
             logger.warning('Scan failed (%s)', type(exc).__name__)
-            raise HTTPException(502, 'Scan failed. Check cloud credentials, subscription access and server configuration; no partial results were saved.') from None
+            raise HTTPException(502, f'Scan failed. Check cloud credentials, subscription access and server configuration: {type(exc).__name__}') from None
         finally:
+            if heartbeat:
+                heartbeat.stop()
+            if lease_owned and lease:
+                try:
+                    lease.release(tenant_id, lease_token)
+                except Exception:
+                    pass
+            if lease:
+                try:
+                    lease.close()
+                except Exception:
+                    pass
             lock.release()
 
     @api.post('/api/v1/scans/{scan_id}/remediation')
     def remediation(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
         from app.remediation import generate_script
         result = store.get(tenant['tenant_id'], scan_id)
         if result is None:
@@ -109,12 +218,32 @@ def create_app(settings=None, scanner=None):
             raise HTTPException(422, str(exc)) from None
         return {'filename': 'cloudsaver-review-remediation.sh', 'script': script}
 
+    @api.post('/api/v1/scans/{scan_id}/remediation-terraform')
+    def remediation_terraform(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        tier_name = tenant.get('plan_tier', 'STARTER')
+        from app.entitlements import enforce_terraform_export
+        enforce_terraform_export(tier_name)
+        from app.remediation_terraform import generate_terraform_hcl
+        result = store.get(tenant['tenant_id'], scan_id)
+        if result is None:
+            raise HTTPException(404, 'Scan not found')
+        try:
+            hcl_scan = dict(result)
+            hcl = generate_terraform_hcl(hcl_scan, payload.resource_ids, tenant['tenant_id'], tenant['subscription_ids'])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        return {'filename': f'cloudsaver-remediation-{scan_id[:8]}.tf', 'hcl': hcl}
+
+    @api.post('/api/v1/scans/{scan_id}/cancel')
+    def cancel_scan(scan_id: str, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        if store.get(tenant['tenant_id'], scan_id) is None:
+            raise HTTPException(404, 'Scan not found')
+        raise HTTPException(409, 'Completed synchronous scans cannot be cancelled')
+
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver API</title><h1>CloudSaver API</h1><p>The API is running. Start the web-dashboard on port 3000 for the application interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.4.1</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api
-
-
-# Uvicorn factory avoids loading config merely when tests import this module.
-# Launch: uvicorn app.main:create_app --factory

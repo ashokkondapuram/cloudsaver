@@ -237,3 +237,105 @@ def test_postgres_api_ownership_header_spoof_and_restart(database):
         assert client.get('/api/v1/scans/' + result['scan_id'], headers={'Authorization': 'Bearer ' + keys[1]}).status_code == 404
     with TestClient(create_app(settings)) as client:
         assert client.get('/api/v1/scans/' + result['scan_id'], headers=headers).json() == result
+
+
+def test_billing_event_changes_persisted_entitlements(database):
+    from database.billing_store import BillingStore
+    from app.auth import with_plan
+    owner, app, store = database
+    a = workspace()
+    store.save(a['tenant_id'], scan(a), workspace=a)
+    customer, subscription = 'cus_'+uuid4().hex, 'sub_'+uuid4().hex
+    with psycopg.connect(owner) as db:
+        context(db,a['tenant_id'])
+        organization = db.execute('UPDATE organizations SET stripe_customer_id=%s WHERE tenant_id=%s RETURNING id',
+                                  (customer,a['tenant_id'])).fetchone()[0]
+    event = dict(id='evt_'+uuid4().hex,type='customer.subscription.updated',created=100,
+                 data={'object':dict(id=subscription,customer=customer,created=90,status='active',
+                      items={'data':[dict(price={'id':'price_growth'},quantity=1)]})})
+    route = dict(tenant_id=a['tenant_id'],organization_id=str(organization))
+    billing = BillingStore(app)
+    assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'subscription_updated'
+    assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'duplicate'
+    settings = Settings('demo','',(a,),app)
+    assert with_plan(settings,dict(a,plan_tier='ENTERPRISE'))['plan_tier'] == 'GROWTH'
+    event['id'] = 'evt_'+uuid4().hex
+    event['created'] = 101
+    event['type'] = 'customer.subscription.deleted'
+    billing.apply_event(route,customer,event,{'price_growth':'GROWTH'})
+    assert with_plan(settings,a)['plan_tier'] == 'STARTER'
+
+
+def test_worker_fencing_and_scan_links_use_real_postgres(database):
+    from workers.storage import JobRepository
+    _,app,store = database
+    a = workspace()
+    store.save(a['tenant_id'],scan(a),workspace=a)
+    with store.connection(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    repository = JobRepository(app)
+    job_id,old,new = (str(uuid4()) for _ in range(3))
+    repository.queue_job(a['tenant_id'],job_id)
+    assert repository.start_job(a['tenant_id'],job_id,old)
+    assert repository.start_job(a['tenant_id'],job_id,new)
+    result = scan(a)
+    with pytest.raises(ValueError,match='Stale'):
+        repository.complete_job(a['tenant_id'],job_id,result,a['subscription_ids'],token=old)
+    repository.fail_job(a['tenant_id'],job_id,'stale_failure',True,token=old)
+    assert repository.get_job(a['tenant_id'],job_id)['status'] == 'running'
+    assert store.get(a['tenant_id'],result['scan_id']) is None
+    repository.complete_job(a['tenant_id'],job_id,result,a['subscription_ids'],token=new)
+    assert repository.get_job(a['tenant_id'],job_id)['status'] == 'completed'
+    with store.connection(a['tenant_id']) as db:
+        assert db.execute('SELECT count(*) FROM waste_findings WHERE scan_id=%s',(result['scan_id'],)).fetchone()[0] == 1
+    b = workspace()
+    assert repository.get_job(b['tenant_id'],job_id) is None
+
+
+def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(database):
+    owner,app,_ = database
+    with psycopg.connect(app) as db:
+        for table in ('scan_jobs','stripe_events'):
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
+    with psycopg.connect(owner) as db:
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0004_merge_hardening',)]
+
+
+def test_scheduler_reservation_throttles_concurrent_publishers(database):
+    from workers.storage import JobRepository
+    _,app,store = database
+    a = workspace()
+    store.save(a['tenant_id'],scan(a),workspace=a)
+    repository = JobRepository(app)
+    assert repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
+    assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
+
+
+@pytest.mark.parametrize('starting_revision',['0002_scan_findings','0003_scan_jobs'])
+def test_upgrade_each_release_lineage_preserves_history(database,starting_revision):
+    from sqlalchemy.engine import make_url
+    privileged = os.getenv('CLOUDSAVER_TEST_PRIVILEGED_URL')
+    if not privileged:
+        pytest.skip('Requires the disposable integration runner')
+    owner,app,_ = database
+    name = 'cloudsaver_upgrade_'+uuid4().hex
+    owner_url = make_url(owner).set(database=name).render_as_string(hide_password=False)
+    app_url = make_url(app).set(database=name).render_as_string(hide_password=False)
+    with psycopg.connect(privileged,autocommit=True) as admin:
+        admin.execute(sql.SQL('CREATE DATABASE {} OWNER cloudsaver_owner').format(sql.Identifier(name)))
+    try:
+        with psycopg.connect(owner_url) as db:
+            db.execute((ROOT/'database/001_schema.sql').read_text())
+        migrate(owner_url,starting_revision)
+        tenant,id = str(uuid4()),str(uuid4())
+        payload = {'scan_id':id,'mode':'demo','findings':[]}
+        with psycopg.connect(owner_url) as db:
+            context(db,tenant)
+            db.execute('INSERT INTO scans VALUES (%s,%s,now(),%s)',(id,tenant,Jsonb(payload)))
+        migrate(owner_url,'head')
+        assert PostgresStore(app_url).get(tenant,id) == payload
+    finally:
+        with psycopg.connect(privileged,autocommit=True) as admin:
+            admin.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(name)))

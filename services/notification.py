@@ -25,6 +25,8 @@ def create_app(settings=None, transport=None):
 
     @app.post('/api/v1/notifications/{scan_id}')
     async def notify(scan_id: UUID, row=Depends(tenant), authorization: str = Header()):
+        from app.auth import require_workspace_role, Role
+        require_workspace_role(row, Role.TENANT_ADMIN)
         # Lookup ownership before considering a send, even when notifications are disabled.
         scan = await upstream('GET', scanner, f'/api/v1/scans/{scan_id}', authorization, transport=transport)
         configured = os.getenv('CLOUDSAVER_NOTIFICATION_WEBHOOK', '')

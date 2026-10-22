@@ -5,10 +5,13 @@ x-environment: &environment
   DEMO_ACCESS_KEY: ${DEMO_ACCESS_KEY:?Set a random DEMO_ACCESS_KEY of at least 32 characters in .env}
   CLOUDSAVER_TENANTS: ${CLOUDSAVER_TENANTS:-[]}
   SCANNER_SERVICE_URL: http://scanner-service:8002
+  CLOUDSAVER_AUTH_MODE: ${CLOUDSAVER_AUTH_MODE:-workspace}
+  CLOUDSAVER_ENTRA_AUDIENCE: ${CLOUDSAVER_ENTRA_AUDIENCE:-}
   NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,postgres,redis
   no_proxy: *internal_no_proxy
 
 x-service: &service
+  image: cloudsaver-python:0.4.1
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -17,6 +20,18 @@ x-service: &service
   read_only: true
   tmpfs: [/tmp]
   environment: *environment
+
+x-worker-environment: &worker-environment
+  <<: *environment
+  CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
+  REDIS_URL: redis://redis:6379/1
+  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+  AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+  CLOUDSAVER_CREDENTIAL_PROVIDER: ${CLOUDSAVER_CREDENTIAL_PROVIDER:-env}
+  AZURE_KEYVAULT_URL: ${AZURE_KEYVAULT_URL:-}
+  AZURE_KEYVAULT_AUTH: ${AZURE_KEYVAULT_AUTH:-managed_identity}
+  CLOUDSAVER_SCHEDULED_SCANS: ${CLOUDSAVER_SCHEDULED_SCANS:-false}
+  CLOUDSAVER_AUTOMATED_ALERTS: 'false'
 
 services:
   migrate:
@@ -49,6 +64,12 @@ services:
   tenant-service:
     <<: *service
     command: [uvicorn, services.tenant:create_app, --factory, --host, 0.0.0.0, --port, '8001']
+    environment:
+      <<: *environment
+      CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CLOUDSAVER_STRIPE_CUSTOMERS: ${CLOUDSAVER_STRIPE_CUSTOMERS:-}
+      STRIPE_PRICE_TIERS: ${STRIPE_PRICE_TIERS:-}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
       interval: 15s
@@ -61,9 +82,20 @@ services:
       <<: *environment
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      CLOUDSAVER_CREDENTIAL_PROVIDER: ${CLOUDSAVER_CREDENTIAL_PROVIDER:-env}
+      AZURE_KEYVAULT_URL: ${AZURE_KEYVAULT_URL:-}
+      AZURE_KEYVAULT_AUTH: ${AZURE_KEYVAULT_AUTH:-managed_identity}
+      AZURE_KEYVAULT_MANAGED_IDENTITY_CLIENT_ID: ${AZURE_KEYVAULT_MANAGED_IDENTITY_CLIENT_ID:-}
+      REDIS_URL: redis://redis:6379/1
+      CLOUDSAVER_DISTRIBUTED_SCAN_LOCK: 'true'
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      CLOUDSAVER_BILLING_RETURN_URL: ${CLOUDSAVER_BILLING_RETURN_URL:-}
+      CLOUDSAVER_STRIPE_CUSTOMERS: ${CLOUDSAVER_STRIPE_CUSTOMERS:-}
+      STRIPE_PRICE_TIERS: ${STRIPE_PRICE_TIERS:-}
       CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
     depends_on:
       postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
@@ -94,6 +126,22 @@ services:
       no_proxy: *gateway_no_proxy
     depends_on:
       api-gateway: {condition: service_healthy}
+  scan-worker:
+    <<: *service
+    profiles: [scheduled]
+    command: [celery, -A, workers.tasks:celery_app, worker, --loglevel=WARNING, --concurrency=1]
+    environment: *worker-environment
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  scan-scheduler:
+    <<: *service
+    profiles: [scheduled]
+    command: [celery, -A, workers.tasks:celery_app, beat, --loglevel=WARNING, --schedule=/tmp/celerybeat-schedule]
+    environment: *worker-environment
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
   postgres:
     build:
       context: ./database
@@ -113,7 +161,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: [redis-server, --save, '', --appendonly, 'no', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    command: [redis-server, --save, '', --appendonly, 'yes', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes: [redis-data:/data]
     healthcheck:
       test: [CMD, redis-cli, ping]
       interval: 5s
@@ -122,3 +171,4 @@ services:
 
 volumes:
   postgres-data:
+  redis-data:

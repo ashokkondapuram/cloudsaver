@@ -55,7 +55,8 @@ def test_tenant_service_returns_no_key_hash(tmp_path):
     client = TestClient(tenant_service(configuration(tmp_path)))
     assert client.get('/api/v1/me').status_code == 401
     data = client.get('/api/v1/me', headers={'Authorization': 'Bearer ' + KEY}).json()
-    assert data == dict(tenant_id=TID, name='Test workspace', subscription_ids=[SID], mode='demo')
+    assert data['tenant_id'] == TID and data['mode'] == 'demo' and data['plan_tier'] == 'STARTER'
+    assert 'api_key_sha256' not in data
 
 
 def test_snapshot_analytics_does_not_sum_old_snapshots():
@@ -111,3 +112,26 @@ def test_notification_sends_only_aggregate_message(tmp_path, monkeypatch):
                            headers={'Authorization': 'Bearer ' + KEY})
     assert response.status_code == 200
     assert len(seen) == 2
+
+
+def test_public_billing_route_preserves_signed_bytes_without_workspace_key(tmp_path):
+    payload = b'{ "type": "test" }\n'
+    def handler(request):
+        assert request.url.path == '/api/v1/billing/webhook'
+        assert request.content == payload
+        assert request.headers['stripe-signature'] == 't=123,v1=example'
+        assert 'authorization' not in request.headers
+        return httpx.Response(200, json={'status': 'ignored'})
+    client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
+    response = client.post('/api/v1/billing/webhook', content=payload,
+                           headers={'Stripe-Signature': 't=123,v1=example'})
+    assert response.status_code == 200
+    assert client.post('/api/v1/billing/webhook', content=payload).status_code == 400
+
+
+def test_public_billing_payload_limit(tmp_path):
+    def handler(request):
+        raise AssertionError('Oversized request must not reach tenant service')
+    client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
+    assert client.post('/api/v1/billing/webhook', content=b'x' * 1_048_577,
+                       headers={'Stripe-Signature': 'any'}).status_code == 413

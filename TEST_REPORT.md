@@ -1,75 +1,115 @@
-# CloudSaver v0.2.0 verification — 2026-10-22
+# CloudSaver v0.4.1 verification — 2026-10-22
 
-This report records executed checks for the database ingestion and isolation
-milestone. No live Azure resources were read or changed, no external alerts were
-sent and no payment or public deployment was performed. Previous release evidence
-is retained in `docs/TEST_REPORT_v0.1.0.md`.
+This release continues the **actual Drive v0.4.0 ZIP**. The original full suite
+reproduced as **142 passed, 2 failed**; the guide's 29-test report was a subset.
+Failures were live empty-scan savings reported as zero and an API lease import
+referencing a nonexistent class. Both are fixed. Passing original tests also
+accepted unsigned JWTs and synthetic checkout URLs; those tests were replaced
+with behavior checks for verified identity and real/fail-closed provider paths.
 
 ## Passed
 
-- Reproduced the original suite before edits: **43 passed**.
-- `python test_platform.py --postgres --frontend`: **57 Python tests passed**, followed by successful TypeScript checking and an ordinary frontend production build. The 14 PostgreSQL cases run against a fresh disposable PostgreSQL 16.15 container, using a separate non-superuser schema owner and restricted `cloudsaver_app` role. The runner removes that container afterward.
-- PostgreSQL cases cover forced RLS and runtime role privileges, absent/unknown context, cross-tenant reads and inserts on all domain tables, forbidden tenant updates, commit/rollback context reuse, rejected foreign scan links, atomic ingestion rollback, duplicate scan rejection, repeated observations, empty scans, current subscription scope, privileged runtime rejection, runtime migration rejection, HTTP tenant-header spoofing, and application restart/history reads.
-- Online Alembic upgrade: baseline 0001, insert a legacy snapshot, upgrade to 0002 and confirm the old payload remains readable. Migration runs as the non-superuser owner. No historical snapshot is rewritten or silently backfilled.
-- `python -m compileall -q app services database migrations scripts tests test_platform.py`: passed.
-- `CLOUDSAVER_MIGRATION_URL=postgresql://postgres@localhost/cloudsaver python -m alembic upgrade head --sql`: passed offline SQL generation through 0002.
-- Dashboard `npm ci`, `npm run typecheck` and `npm run build`: passed on host Node 24.19.0 without a memory helper or compiler workaround. The old release's host limitation did not recur.
-- Docker image builds for all services and the migration job: passed. The dashboard production build also passed inside the supplied Node 22 Alpine Dockerfile, without a memory workaround.
+- `python scripts/test_postgres.py`: **209 passed**, no skips, in 8.78 seconds on
+  the final run. The harness creates/removes isolated PostgreSQL 16.15 and Redis
+  7 containers, private ephemeral credentials and separate schema-owner/runtime
+  roles. The only warning is Starlette's HTTPX TestClient deprecation.
+- Identity tests use generated RSA keys to verify real signatures and reject
+  unsigned, tampered, wrong-key, expired, future, wrong-issuer/audience/tenant,
+  missing-claim, missing-scope and privilege-inference attempts. API tests cover
+  Viewer/BillingAdmin/TenantAdmin actions and shared gateway verification.
+- Pricing tests use bounded mocked HTTP responses, assert the correct `$filter`
+  parameter, exact USD meter/unit/type/region matching and explicit resource
+  quantity, and reject ambiguous data, unsafe pagination, invalid prices and
+  provider failure. Unsupported evidence and net savings remain unknown.
+- Export tests cover authorization, matching rule/resource types, duplicate
+  selections, stable unique Terraform import labels and absence of fabricated
+  resource settings, deletion plans or automatic snapshot promises.
+- Checkout tests assert trusted customer/organization/price routing, fixed return
+  URLs and stable retry idempotency through a mocked Stripe SDK boundary.
+  Existing raw-body signature, deduplication and out-of-order webhook tests remain.
+- Real PostgreSQL tests cover forced RLS, cross-tenant reads/inserts/updates,
+  absent context, commit/rollback connection reuse, atomic normalized ingestion,
+  failed-write rollback, owned scan links, privileged runtime rejection, Stripe
+  event persistence and authoritative entitlement changes, stale worker tokens,
+  transactional schedule reservations and hidden foreign jobs.
+- Upgrade tests start separately from **0002_scan_findings** and
+  **0003_scan_jobs**, apply the merge head and verify legacy snapshots remain
+  readable. The migration graph has one head, 0004_merge_hardening. Applied prior
+  migration histories are not rewritten.
+- Real Redis tests use independent clients to verify mutual exclusion, owner-only
+  renewal/release, takeover after simulated expiry and heartbeat detection of
+  lease loss. The legacy in-memory outbox tests prove only their test foundation.
+- `python test_platform.py --postgres --frontend`: passed the then-current 206
+  tests, TypeScript checking and ordinary host Node 24 production build; the
+  final 209-test run adds migration-lineage and explicit pricing-quantity cases.
+- Final Docker image builds passed for the shared Python runtime, PostgreSQL
+  initialization image and dashboard on **Node 22 Alpine**. No Node memory helper,
+  disabled TLS verification or compiler workaround was used.
+- `python -m compileall -q app services database migrations workers scripts tests test_platform.py`: passed.
+- `CLOUDSAVER_MIGRATION_URL=postgresql://postgres@localhost/cloudsaver python -m alembic upgrade head --sql`: passed offline generation through the merge revision. Online upgrade evidence comes from the integration tests above.
 
-## Compose stack smoke — passed
+## Final Compose smoke — passed
 
-- Fresh PostgreSQL initialization completed; the owner migration job exited 0.
-- `docker compose ps --all` showed PostgreSQL, Redis, tenant, scanner and gateway healthy, with analytics, notifications and the dashboard running.
-- `python scripts/smoke_stack.py`: passed. Verified unauthenticated rejection, authenticated workspace lookup, an eight-finding demo scan, saved history, latest-snapshot analytics, dashboard HTML, dashboard proxy authorization/detail lookup and rejection of an unlisted proxy route.
-- `docker compose restart scanner-service api-gateway web-dashboard`, then `python scripts/smoke_stack.py --scan-id d3a239c2-0353-440c-a004-8b3bd81ba936`: passed. The same complete scan was returned after restart without creating another scan.
-- No remediation or notification endpoint was invoked. This is HTTP integration evidence, not browser visual QA or a live-cloud acceptance test.
+All final images started with `compose up --no-build --wait`. PostgreSQL, Redis,
+Python services and dashboard were ready; the owner migration exited 0. The
+HTTP smoke verified authentication, fixture scan creation, saved history,
+latest-snapshot analytics, dashboard HTML/proxy routing and rejection of an
+unlisted proxy route. A pre-upgrade scan,
+`c0bd4dc1-cb65-4bb8-bb39-639a33f9e7ac`, remained readable after the final service
+images were recreated. No remediation, notification or payment endpoint was
+invoked.
 
-## Compose verification environment
+## Build environment
 
-The managed environment injects an HTTPS proxy. The executed build command was:
+The managed runtime uses an HTTPS proxy and a private default umask. Dockerfiles
+accept an optional BuildKit `proxy_ca` secret; initialization files are copied
+into the PostgreSQL image with explicit read/execute modes. Compose sets both
+NO_PROXY variants for internal service hostnames. Registry credentials and TLS
+verification were preserved.
+
+The executed build used a local override supplying the combined system CA bundle:
 
 ```bash
-BUILDX_CONFIG=/workspace/scratch/buildx docker --host=unix:///var/run/docker.sock compose -f compose.yaml -f /workspace/scratch/compose-cloud.yaml up --build -d
+BUILDX_CONFIG=/workspace/scratch/buildx docker --host=unix:///var/run/docker.sock compose -f compose.yaml -f /workspace/scratch/compose-cloud.yaml build scanner-service web-dashboard postgres
+docker --host=unix:///var/run/docker.sock compose up -d --no-build --wait --wait-timeout 120
 ```
 
-The local override supplied a BuildKit secret named `proxy_ca` from the system
-combined CA bundle to each Python/Node build. `BUILDX_CONFIG` relocated buildx's
-writable state; Docker registry configuration and credentials were preserved.
-These absolute scratch paths are environment-specific and are not shipped as
-required setup paths. On an ordinary Docker host, use the README commands.
+These scratch paths are environment-specific and are not shipped as required
+setup paths. `make build` builds each distinct image once; Python services share
+one image. Unused Docker build cache was cleared after the container's VFS layers
+filled the workspace disk. The interrupted build/checks were rerun successfully.
 
-Testing caught and fixed two integration failures: host private extraction modes
-prevented PostgreSQL's user from reading bind-mounted init files; initialization
-files now live in a dedicated PostgreSQL image with explicit modes. Injected
-lowercase HTTP proxy settings also overrode uppercase NO_PROXY; Compose now sets
-both variants for internal service hosts.
+## Remaining acceptance limits
 
-## Dependency audit and remaining verification
+- No live Entra tenant, Stripe session/payment, Azure subscription scan, automatic
+  alert, Terraform apply or resource deletion was performed. SDK/crypto/mock tests
+  do not establish external RBAC, tenant onboarding, payment or cloud behavior.
+- No browser visual/accessibility/performance QA or target Terraform/provider
+  plan validation was performed. Text generation and a successful web build are
+  narrower evidence than those acceptance checks.
+- Browser PKCE sign-in, consent callbacks, memberships, interactive durable job
+  progress/cancellation, a transactional outbox, reliable notification delivery,
+  existing-subscription billing portal, deployment and restore drills remain open.
+- Redis heartbeat and per-job ownership tokens do not establish exactly-once
+  execution across Redis failover and PostgreSQL. Celery broker publication and
+  crash recovery still need fault testing; automatic alerts stay disabled.
+- `npm audit --json` on the inherited Next 15/Tailwind 3 graph reports **9
+  advisories: 6 high and 3 moderate**. The dependency graph is unchanged except
+  release-version metadata. Dependency remediation/compatibility work is required
+  before shared hosting; no production security certification is claimed.
+- Retail rates are list-price estimates, not actual customer bills or realized
+  savings. Missing data remains unknown. Disk-tier/VM-storage and actual net
+  remediation-cost models require further evidence.
 
-`npm audit --json` reports **9 advisories (6 high, 3 moderate)** in the inherited
-frontend dependency graph: braces/chokidar/micromatch/fast-glob, Next's nested
-PostCSS, and Tailwind's selector-parser/postcss-nested dependencies. The direct
-PostCSS is 8.5.31, while Next 15.5.28 pins 8.4.31 internally. The audit reports no
-straightforward available fix for the complete supported Next 15/Tailwind 3
-combination. This milestone preserves those architecture versions; dependency
-remediation and compatibility testing remain necessary before shared hosting.
+## Source and review record
 
-Live Azure permissions, scan latency at scale and throttling guarantees are not
-verified. Entra consent, memberships, Key Vault/certificate support, Stripe,
-durable jobs, real billing evidence, automatic alerting, Terraform and snapshot
-retention automation remain open in `IMPLEMENTATION_STATUS.md` and `ROADMAP.md`.
-Browser visual/accessibility/performance QA and a complete backup/restore drill
-remain outstanding. A procedure is provided in `docs/OPERATIONS.md`.
-
-One warning remains: Starlette deprecates its HTTPX TestClient integration; it
-does not fail the suite. No Gemini review is claimed.
-
-## Edited and added files
-
-- `app/main.py`, `app/store.py`, `services/common.py`: normalized transactional writes, runtime role/schema checks and release version.
-- `database/models.py`, `migrations/versions/0002_scan_findings.py`: scan model and tenant-owned finding links, unique constraints and backward-compatible upgrade.
-- `database/Dockerfile`, `database/.dockerignore`, `Dockerfile`, `Dockerfile.services`, `web-dashboard/Dockerfile`, `compose.yaml`: reliable PostgreSQL initialization, migration job, optional build CA secrets and internal proxy exclusions.
-- `tests/test_postgres.py`, `pytest.ini`, `scripts/test_postgres.py`, `scripts/smoke_stack.py`, `scripts/scan.py`, `test_platform.py`, `Makefile`: repeatable integration and operator commands.
-- `web-dashboard/package.json`, `web-dashboard/package-lock.json`: version metadata only; dependency versions are unchanged.
-- `README.md`, `ROADMAP.md`, `IMPLEMENTATION_STATUS.md`, `docs/OPERATIONS.md`, this report and the prior report archive: implementation status, migration/restore instructions and exact evidence.
-- `scripts/release.py`, `RELEASE_MANIFEST.json`: source-only package and matching checksums; local credentials, data, dependency directories and build output are excluded.
+Imported modules include explicit Key Vault providers, Stripe webhooks, billing
+storage, Celery workers and the v0.4 dashboard. The v0.2 normalized scan storage,
+forced RLS, database initialization image and operator scripts remain. New/edited
+code primarily lives in app/auth.py, app/main.py, app/entitlements.py,
+app/pricing.py, app/remediation_terraform.py, shared service authentication,
+workers/tasks.py, workers/lease.py, workers/storage.py, database/models.py, the
+merge migration, Compose and dashboard contracts. Behavior tests cover these
+changes. README, ROADMAP, IMPLEMENTATION_STATUS and SOURCE_CONTEXT distinguish
+working paths from unfinished source foundations. Historical evidence is archived
+under docs. No external Gemini review is claimed.

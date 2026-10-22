@@ -1,7 +1,6 @@
 """Read-only Azure inventory findings. A finding is a review signal, not savings."""
 from __future__ import annotations
 
-import os
 from typing import Any
 from uuid import UUID
 
@@ -114,20 +113,17 @@ def scan_live(tenant: dict) -> list[dict]:
     Service-principal RBAC scope must be verified by the operator on onboarding.
     A mid-scan error raises; no partial findings escape or get persisted as complete.
     """
-    from azure.identity import ClientSecretCredential
     from azure.mgmt.resourcegraph import ResourceGraphClient
-
-    client_id = os.getenv("AZURE_CLIENT_ID", "")
-    client_secret = os.getenv("AZURE_CLIENT_SECRET", "")
-    if not client_id or not client_secret:
-        raise ScanError("Azure credentials are not configured.")
+    from app.keyvault import CredentialError, customer_credential
     tenant_id = str(UUID(tenant["tenant_id"]))
     subscriptions = [str(UUID(s)) for s in tenant["subscription_ids"]]
     if not subscriptions:
         raise ScanError("No authorized subscriptions configured.")
-    with ClientSecretCredential(tenant_id=tenant_id, client_id=client_id,
-                                client_secret=client_secret, retry_total=3,
-                                connection_timeout=10, read_timeout=45) as credential:
+    try:
+        credential = customer_credential(tenant_id)
+    except CredentialError:
+        raise ScanError("The customer Azure credential is unavailable.") from None
+    with credential:
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
             return _findings(client, subscriptions)

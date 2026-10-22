@@ -99,3 +99,19 @@ through a local Compose build-secret override. Keep TLS verification enabled;
 the CA is never copied into image layers. The repository does not include
 session-specific certificate paths. Internal service hostnames are explicitly
 excluded from HTTP proxies through Compose NO_PROXY settings.
+
+## v0.4.1 migration convergence and scheduling
+
+The merge revision 0004_merge_hardening joins 0002_scan_findings (GitHub v0.2)
+and 0003_scan_jobs (Drive v0.4). Both upgrade paths are tested with retained
+snapshot history. The merge adds a job ownership token and tenant-owned job/scan
+link. Do not rename, delete or manually stamp prior applied revisions. Existing
+Drive installations must review any pre-existing domain data before migration;
+no automatic guessed backfill is performed.
+
+Workers remain behind the scheduled Compose profile. Only operator-activated
+subscriptions and persisted paid plans qualify. A transactional PostgreSQL
+reservation limits Growth to daily and Enterprise to hourly scheduling, even if
+two schedulers race. Publication to the Celery broker is not yet an atomic outbox
+transaction: fault recovery acceptance is still required. Keep automated alerts
+disabled pending a durable outbox and dispatcher.

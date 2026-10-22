@@ -29,6 +29,8 @@ def docker(*args):
 def main():
     name = 'cloudsaver-test-' + secrets.token_hex(6)
     password = secrets.token_hex(32)
+    redis_name = name + '-redis'
+    started = []
     with tempfile.TemporaryDirectory(prefix='cloudsaver-postgres-') as temporary:
         settings = Path(temporary) / 'postgres.env'
         settings.write_text(f'POSTGRES_PASSWORD={password}\nPOSTGRES_DB=cloudsaver_test\n')
@@ -36,6 +38,11 @@ def main():
         try:
             docker('run', '-d', '--name', name, '--env-file', str(settings),
                    '--tmpfs', '/var/lib/postgresql/data', '-p', '127.0.0.1::5432', 'postgres:16-alpine')
+            started.append(name)
+            docker('run', '-d', '--name', redis_name, '-p', '127.0.0.1::6379', 'redis:7-alpine')
+            started.append(redis_name)
+            redis_info = json.loads(docker('inspect', redis_name))[0]
+            redis_port = redis_info['NetworkSettings']['Ports']['6379/tcp'][0]['HostPort']
             info = json.loads(docker('inspect', name))[0]
             port = info['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']
             privileged = f'postgresql://postgres:{password}@127.0.0.1:{port}/cloudsaver_test'
@@ -54,12 +61,14 @@ def main():
                         raise RuntimeError('Disposable PostgreSQL did not become ready') from None
                     time.sleep(0.5)
             env = os.environ.copy()
+            env['CLOUDSAVER_TEST_REDIS_URL'] = f'redis://127.0.0.1:{redis_port}/0'
             env.update(CLOUDSAVER_TEST_OWNER_URL=privileged.replace('://postgres:', '://cloudsaver_owner:'),
                        CLOUDSAVER_TEST_APP_URL=privileged.replace('://postgres:', '://cloudsaver_app:'),
                        CLOUDSAVER_TEST_PRIVILEGED_URL=privileged)
             return subprocess.call([sys.executable, '-m', 'pytest', '-q', *sys.argv[1:]], cwd=ROOT, env=env)
         finally:
-            docker('rm', '-f', name)
+            for container in reversed(started):
+                docker('rm', '-f', container)
 
 
 if __name__ == '__main__':
