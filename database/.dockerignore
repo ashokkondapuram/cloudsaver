@@ -1,0 +1,4 @@
+*
+!Dockerfile
+!init.sh
+!001_schema.sql

@@ -1,0 +1,124 @@
+name: cloudsaver
+
+x-environment: &environment
+  CLOUDSAVER_MODE: ${CLOUDSAVER_MODE:-demo}
+  DEMO_ACCESS_KEY: ${DEMO_ACCESS_KEY:?Set a random DEMO_ACCESS_KEY of at least 32 characters in .env}
+  CLOUDSAVER_TENANTS: ${CLOUDSAVER_TENANTS:-[]}
+  SCANNER_SERVICE_URL: http://scanner-service:8002
+  NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,postgres,redis
+  no_proxy: *internal_no_proxy
+
+x-service: &service
+  build:
+    context: .
+    dockerfile: Dockerfile.services
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+  environment: *environment
+
+services:
+  migrate:
+    <<: *service
+    restart: 'no'
+    command: [python, -m, alembic, upgrade, head]
+    environment:
+      CLOUDSAVER_MIGRATION_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set URL-safe POSTGRES_PASSWORD in .env}@postgres:5432/cloudsaver
+    depends_on:
+      postgres: {condition: service_healthy}
+  api-gateway:
+    <<: *service
+    command: [uvicorn, services.gateway:create_app, --factory, --host, 0.0.0.0, --port, '8000']
+    ports: ['127.0.0.1:8000:8000']
+    environment:
+      <<: *environment
+      REDIS_URL: redis://redis:6379/0
+      TENANT_SERVICE_URL: http://tenant-service:8001
+      ANALYTICS_SERVICE_URL: http://analytics-service:8003
+      NOTIFICATION_SERVICE_URL: http://notification-service:8004
+    depends_on:
+      redis: {condition: service_healthy}
+      scanner-service: {condition: service_healthy}
+      tenant-service: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  tenant-service:
+    <<: *service
+    command: [uvicorn, services.tenant:create_app, --factory, --host, 0.0.0.0, --port, '8001']
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  scanner-service:
+    <<: *service
+    command: [uvicorn, services.scanner:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
+    environment:
+      <<: *environment
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
+    depends_on:
+      postgres: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  analytics-service:
+    <<: *service
+    command: [uvicorn, services.analytics:create_app, --factory, --host, 0.0.0.0, --port, '8003']
+    depends_on:
+      scanner-service: {condition: service_healthy}
+  notification-service:
+    <<: *service
+    command: [uvicorn, services.notification:create_app, --factory, --host, 0.0.0.0, --port, '8004']
+    environment:
+      <<: *environment
+      CLOUDSAVER_NOTIFICATION_WEBHOOK: ${CLOUDSAVER_NOTIFICATION_WEBHOOK:-}
+    depends_on:
+      scanner-service: {condition: service_healthy}
+  web-dashboard:
+    build:
+      context: ./web-dashboard
+    restart: unless-stopped
+    ports: ['127.0.0.1:3000:3000']
+    environment:
+      API_GATEWAY_URL: http://api-gateway:8000
+      NO_PROXY: &gateway_no_proxy localhost,127.0.0.1,::1,api-gateway
+      no_proxy: *gateway_no_proxy
+    depends_on:
+      api-gateway: {condition: service_healthy}
+  postgres:
+    build:
+      context: ./database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: cloudsaver
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      CLOUDSAVER_DB_PASSWORD: ${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d cloudsaver]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [redis-server, --save, '', --appendonly, 'no', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
