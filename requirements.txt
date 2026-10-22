@@ -6,7 +6,7 @@ azure-identity==1.26.0
 azure-mgmt-resourcegraph==8.0.1
 psycopg[binary]==3.3.6
 redis==6.4.0
-SQLAlchemy==2.0.55
+SQLAlchemy==2.1.5
 alembic==1.20.0
 stripe==16.0.0
 celery[redis]==5.6.3
