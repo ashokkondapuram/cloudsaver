@@ -48,6 +48,8 @@ def close_worker_credentials(**kwargs):
     # Resolve this lazily: importing tasks must not create credential clients.
     from app.keyvault import close_providers
     close_providers()
+    from database.connection import dispose
+    dispose()
 
 
 class RedisLease:
@@ -102,7 +104,8 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
     from app.entitlements import get_tier_entitlements, enforce_subscription_quota
     tier = repository.plan_tier(tenant_id)
     entitlements = get_tier_entitlements(tier)
-    if entitlements.allowed_scan_frequencies == ['manual']:
+    origin = repository.job_origin(tenant_id, job_id) if hasattr(repository, 'job_origin') else 'scheduled'
+    if origin != 'interactive' and entitlements.allowed_scan_frequencies == ['manual']:
         raise UnauthorizedJob('This workspace does not permit scheduled scans')
     enforce_subscription_quota(tier, len(subscriptions), adding_count=0)
     if settings.mode == 'azure' and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault' and not entitlements.can_use_keyvault:
@@ -137,10 +140,13 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             if sub not in tenant['subscription_ids'] or not finding['resource_id'].lower().startswith(f'/subscriptions/{sub}/'):
                 raise UnauthorizedJob('Scanner returned an unauthorized resource')
         known = all(f.get('estimated_monthly_waste_usd') is not None for f in findings)
+        from app.multi_cloud import scope_fingerprint
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
             total_items_found=len(findings), findings=findings,
+            cloud_providers=['azure'],
+            scope_fingerprint=scope_fingerprint(tenant, ['azure']),
             total_monthly_waste_usd=round(sum(f['estimated_monthly_waste_usd'] for f in findings), 2) if known and findings else None,
         )).model_dump()
         heartbeat.ensure_owned()

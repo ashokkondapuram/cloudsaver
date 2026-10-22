@@ -6,12 +6,25 @@ from fastapi import Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from services.common import internal_url, service, upstream
+from app.jobs_api import ScanSubmission
 from app.schemas import RemediationRequest, BillingCheckoutRequest, MultiCloudScanRequest
 
 
 class RedisLimiter:
-    """Atomic fixed window with a TTL: no immortal counters after crashes."""
-    SCRIPT = "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],60) end; return n"
+    """Atomic sliding window uses Redis time and bounded, expiring tenant state."""
+    SCRIPT = """
+        local t=redis.call('TIME')
+        local now=t[1]*1000+math.floor(t[2]/1000)
+        redis.call('ZREMRANGEBYSCORE',KEYS[1],'-inf',now-60000)
+        local count=redis.call('ZCARD',KEYS[1])
+        if count>=tonumber(ARGV[1]) then
+            local oldest=redis.call('ZRANGE',KEYS[1],0,0,'WITHSCORES')
+            return math.max(1,math.ceil((tonumber(oldest[2])+60000-now)/1000))
+        end
+        redis.call('ZADD',KEYS[1],now,ARGV[2])
+        redis.call('PEXPIRE',KEYS[1],60000)
+        return 0
+    """
 
     def __init__(self):
         import redis.asyncio as redis
@@ -20,16 +33,19 @@ class RedisLimiter:
 
     async def check(self, tenant_id):
         try:
-            count = await self.client.eval(self.SCRIPT, 1, 'cloudsaver:rate:' + tenant_id)
+            from uuid import uuid4
+            retry = await self.client.eval(self.SCRIPT, 1, 'cloudsaver:rate:v2:' + tenant_id, 120, str(uuid4()))
         except Exception:
             raise HTTPException(503, 'Rate limiting service unavailable') from None
-        if count > 120:
-            raise HTTPException(429, 'Workspace request limit exceeded', headers={'Retry-After': '60'})
+        if retry:
+            raise HTTPException(429, 'Workspace request limit exceeded', headers={'Retry-After': str(retry)})
 
 
 def create_app(settings=None, limiter=None, transport=None, identity_validator=None):
     app, settings, tenant = service('api-gateway', settings, identity_validator)
     limiter = limiter or RedisLimiter()
+    if hasattr(limiter, 'client'):
+        app.state.closeables = [limiter.client]
     targets = {
         'tenant': internal_url('TENANT_SERVICE_URL', 'http://tenant-service:8001'),
         'scanner': internal_url('SCANNER_SERVICE_URL', 'http://scanner-service:8002'),
@@ -154,6 +170,22 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def multi_cloud(payload: MultiCloudScanRequest, row=Depends(allowed), authorization: str = Header()):
         return await upstream('POST', targets['scanner'], '/api/v1/scans/multi-cloud', authorization,
                               json=payload.model_dump(), transport=transport)
+
+    @app.post('/api/v1/scan-jobs', status_code=202)
+    async def submit_job(payload: ScanSubmission,
+                         row=Depends(allowed), authorization: str = Header()):
+        result = await upstream('POST', targets['scanner'], '/api/v1/scan-jobs', authorization,
+                                json=payload.model_dump(mode='json'), transport=transport)
+        return JSONResponse(result, status_code=202, headers={'Location': result['poll_url'], 'Retry-After': '3'})
+
+    @app.get('/api/v1/scan-jobs')
+    async def job_history(limit: int = Query(50, ge=1, le=100), row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/scan-jobs', authorization, {'limit': limit})
+
+    @app.get('/api/v1/scan-jobs/{job_id}')
+    async def job_status(job_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        result = await forward('GET', 'scanner', f'/api/v1/scan-jobs/{job_id}', authorization)
+        return JSONResponse(result, headers={'Retry-After': '3'} if result['status'] in ('queued','running') else {})
 
     @app.post('/api/v1/scans', status_code=201)
     async def scan(row=Depends(allowed), authorization: str = Header()):

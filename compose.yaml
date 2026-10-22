@@ -1,6 +1,12 @@
 name: cloudsaver
 
 x-environment: &environment
+  CLOUDSAVER_INTERACTIVE_JOBS: ${CLOUDSAVER_INTERACTIVE_JOBS:-false}
+  CLOUDSAVER_ALLOWED_ORIGINS: ${CLOUDSAVER_ALLOWED_ORIGINS:-}
+  CLOUDSAVER_DB_POOL_SIZE: ${CLOUDSAVER_DB_POOL_SIZE:-2}
+  CLOUDSAVER_DB_MAX_OVERFLOW: ${CLOUDSAVER_DB_MAX_OVERFLOW:-3}
+  CLOUDSAVER_DB_POOL_TIMEOUT: ${CLOUDSAVER_DB_POOL_TIMEOUT:-5}
+  CLOUDSAVER_DB_POOL_RECYCLE: ${CLOUDSAVER_DB_POOL_RECYCLE:-1800}
   CLOUDSAVER_MODE: ${CLOUDSAVER_MODE:-azure}
   CLOUDSAVER_TENANTS: ${CLOUDSAVER_TENANTS:?Set CLOUDSAVER_TENANTS JSON in .env (run scripts/setup_compose.py)}
   SCANNER_SERVICE_URL: http://scanner-service:8002
@@ -15,7 +21,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:0.7.1
+  image: cloudsaver-python:0.7.2
   build:
     context: .
     dockerfile: Dockerfile.services

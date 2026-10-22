@@ -1,6 +1,11 @@
+from database.connection import connect as pooled_connect
 """Tenant-scoped durable worker state and atomic ingestion transactions."""
 from contextlib import contextmanager
 from uuid import UUID, uuid5
+
+
+class SubmissionConflict(ValueError):
+    pass
 
 
 class JobRepository:
@@ -11,7 +16,7 @@ class JobRepository:
         from app.store import PostgresStore
         PostgresStore(database_url)
         self.url = database_url
-        with psycopg.connect(self.url, connect_timeout=10) as db:
+        with pooled_connect(self.url, connect_timeout=10) as db:
             role = db.execute('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user').fetchone()
             if role[0] or role[1]:
                 raise ValueError('Worker database role must not bypass tenant isolation')
@@ -24,7 +29,7 @@ class JobRepository:
     @contextmanager
     def transaction(self, tenant_id):
         import psycopg
-        with psycopg.connect(self.url, connect_timeout=10) as db:
+        with pooled_connect(self.url, connect_timeout=10) as db:
             db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (str(UUID(tenant_id)),))
             yield db
 
@@ -65,6 +70,44 @@ class JobRepository:
         with self.transaction(tenant_id) as db:
             db.execute("INSERT INTO public.scan_jobs (id,tenant_id,status) VALUES (%s,%s,'queued') ON CONFLICT (id) DO NOTHING",
                        (job_id, tenant_id))
+
+    def submit(self, tenant_id, key, subscriptions):
+        """Idempotency, authorization, backlog bound and delivery commit together."""
+        job_id = str(uuid5(UUID(tenant_id), 'interactive-scan:' + key))
+        with self.transaction(tenant_id) as db:
+            db.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', (tenant_id,))
+            existing = db.execute("SELECT payload FROM delivery_events WHERE tenant_id=%s AND job_id=%s AND kind='scan'", (tenant_id, job_id)).fetchone()
+            if existing:
+                if existing[0] != {'subscription_ids': subscriptions, 'origin': 'interactive'}:
+                    raise SubmissionConflict('Idempotency key already belongs to another subscription selection')
+            else:
+                if not set(subscriptions) <= set(self._active(db, tenant_id)):
+                    raise SubmissionConflict('Subscriptions must be provisioned and connected before submitting jobs')
+                pending = db.execute("SELECT count(*) FROM scan_jobs WHERE tenant_id=%s AND status IN ('queued','running')", (tenant_id,)).fetchone()[0]
+                if pending >= 5:
+                    raise SubmissionConflict('Workspace already has five unfinished scan jobs')
+                db.execute("INSERT INTO scan_jobs(id,tenant_id,status) VALUES (%s,%s,'queued')", (job_id, tenant_id))
+                from database.delivery import enqueue
+                enqueue(db, tenant_id, 'scan', job_id=job_id, payload={'subscription_ids': subscriptions, 'origin': 'interactive'})
+        return self.job_status(tenant_id, job_id)
+
+    def job_origin(self, tenant_id, job_id):
+        with self.transaction(tenant_id) as db:
+            row = db.execute("SELECT payload FROM delivery_events WHERE tenant_id=%s AND job_id=%s AND kind='scan'", (tenant_id, job_id)).fetchone()
+        return row[0].get('origin', 'scheduled') if row else 'scheduled'
+
+    @staticmethod
+    def _job_public(row):
+        return dict(zip(('job_id','status','scan_id','attempts','error_code','created_at','updated_at'),
+                        (str(v) if isinstance(v, UUID) else v for v in row))) if row else None
+
+    def job_status(self, tenant_id, job_id):
+        with self.transaction(tenant_id) as db:
+            return self._job_public(db.execute('SELECT id,status,scan_id,attempts,error_code,created_at,updated_at FROM scan_jobs WHERE tenant_id=%s AND id=%s', (tenant_id, job_id)).fetchone())
+
+    def list_jobs(self, tenant_id, limit):
+        with self.transaction(tenant_id) as db:
+            return [self._job_public(row) for row in db.execute('SELECT id,status,scan_id,attempts,error_code,created_at,updated_at FROM scan_jobs WHERE tenant_id=%s ORDER BY created_at DESC,id DESC LIMIT %s', (tenant_id, limit))]
 
     def get_job(self, tenant_id, job_id):
         with self.transaction(tenant_id) as db:

@@ -1,3 +1,11 @@
+# v0.7.2 continuation
+
+The Drive UI/UX specification and Production Go-Live & Backend Hardening Guide
+were read on October 22, 2026. See docs/UI_UX.md and docs/PRODUCTION_HARDENING.md
+for source links, implemented behaviors and acceptance limits. Preserve existing
+forced RLS, live-only provenance, unknown pricing and import-only GitOps behavior.
+No real scans, payments, webhook messages or product PRs are authorized by tests.
+
 # Source context
 
 ## v0.7.1 reliability continuation

@@ -1,106 +1,41 @@
-# CloudSaver v0.7.1 verification report
+# CloudSaver v0.7.2 verification report
 
-Verified 2026-10-22. Baseline: published v0.7.0 commit 9e2020d.
+October 22, 2026. This report describes local verification, not production certification.
 
-## Delivered scope
+## Scope and sources
 
-Production reliability, security and integration foundations: PostgreSQL
-transactional scan dispatch/notification intent; tenant-bound Slack/Teams targets;
-leased concurrent delivery, retry budgets, broker-loss reconciliation and
-admin replay; append-only runtime delivery audit and operator backlog/history.
-Interactive multi-cloud scans remain synchronous. This is not a blanket claim
-that the platform is production-ready.
+- Drive [UI/UX design guide](https://docs.google.com/document/d/1ewfeSv9580SHLb1vN4OGqwX2NZ5fUmBFvsOmPNxMQeU/edit): persistent six-view workspace, observation charts, virtualized inventory, filters, review drawers, automation and settings.
+- Drive [backend hardening guide](https://docs.google.com/document/d/1SHfRfpM9nh_cWeQ6-K1FrCqxG2y2IpJSaL-oEdwykMg/edit): durable Azure scan submission/polling, existing outbox/lease reuse, PostgreSQL pools, dependency readiness, correlation/problem errors, CORS and shared sliding-window rate limiting.
+- Existing v0.7.1 features, production-only provenance, forced tenant RLS and import-only GitOps are retained. Earlier release evidence is archived in docs/TEST_REPORT_v0.7.1.md.
 
-## Executed checks
+## Backend evidence
 
-- **314 backend tests passed**, no skips, with Python 3.12 and disposable real
-  PostgreSQL 16 / Redis 7: `python scripts/test_postgres.py`.
-- Upgrade to 0007_delivery_outbox retains earlier branch/merge/cloud/GitOps scan
-  history. Runtime roles cannot own/bypass forced RLS, read foreign tenant rows,
-  update/delete delivery audit, or reference a foreign scan/job owner.
-- Scheduler reservation rolls back both job and delivery intent if enqueue fails.
-  Scan completion rolls back snapshot/findings/job when notification enqueue fails.
-  Duplicate intent survives repository restart without duplicate audit insertion.
-- Concurrent real PostgreSQL claims acquire distinct rows. Expired leases reject
-  stale completion. Eight attempts exhaust to dead letter, replay is capped at
-  three cycles and audit/list keyset pagination preserves row identities.
-- A real Celery producer publishes to disposable Redis. Deleting the accepted
-  broker message simulates message loss; reconciliation republishes the same
-  durable task ID. No cloud scanner worker is launched by this test.
-- Reconciliation defers recently running jobs, skips a concurrently locked job,
-  fences stale workers and terminalizes exhausted dispatch. A broker task without
-  a matching stored subscription envelope cannot create or fail a legitimate job.
-- Testing the actual Celery entry point found and fixed an inherited nonexistent
-  CredentialProviderError import; the actual CredentialError is now handled.
-- Multi-target notification status stays queued until all targets acknowledge,
-  becomes failed for a dead letter, returns to queued on replay and becomes sent
-  after the final acknowledgment. Individual delivery history remains authoritative.
-- HTTP mocks verify Slack plain-text blocks, Teams Adaptive Cards, 2xx/408/429/5xx
-  handling, bounded Retry-After, redirect rejection, target fingerprint mismatch,
-  redacted timeout errors and no outbound workspace bearer header. Provider bodies
-  are not read or persisted. No live webhook was contacted.
-- API tests verify Viewer/BillingAdmin denial for enqueue/replay, owned-scan lookup,
-  explicit strict acknowledgment, generic invalid-body errors and the 1 KB replay
-  limit. Target secret variables are not resolved by identity metadata services.
-- **Two Chromium browser tests passed** against the built Next.js dashboard:
-  admin audit/replay requires acknowledgment and makes one replay request; Viewer
-  has no replay controls; hostile audit text is escaped; 390px mobile layout has
-  no horizontal overflow. Browser API calls are intercepted with test-only fixtures.
-- TypeScript and production build pass on Next.js 16.4.2 / React 19.3.1 / Tailwind
-  CSS 4.3.3. Node 22 Docker build passes. The old Tailwind/PostCSS chain was
-  replaced, not hidden with audit suppression.
-- **npm audit: zero known vulnerabilities** (all dependency classes) at verification.
-  This is a registry advisory snapshot, not a security certification.
-- Python container build, pip check, compileall, Compose config validation and
-  git diff --check pass. One inherited Starlette/httpx TestClient deprecation
-  warning remains.
+`python scripts/test_postgres.py --tb=short`: **324 passed**, using fresh disposable PostgreSQL 16 and Redis 7 containers, separate owner/runtime roles and migration upgrades. Containers are removed by the runner; existing data volumes are not changed.
 
-- Running Compose stack: all eight long-running services healthy; schema migration
-  completed without replacing PostgreSQL/Redis volumes. Saved historical scan
-  97b7f025-9e24-4be1-8d13-d595913507ea remained readable. Gateway/dashboard smoke
-  verifies auth, entitlements, history, GitOps routes, invalid-plan redaction and
-  new operational routes. The smoke passed again after scanner/gateway/dashboard
-  restart. Delivery remains disabled with no targets/backlog or
-  observed dispatcher poll; no outbound work was initiated.
-- Disposable database downgrade/upgrade round-trip preserved scan history, mapped
-  queued notification state for the older schema and restored forced RLS under
-  a non-superuser migration owner. This test is not a production restore drill.
+Added checks cover concurrent idempotent submissions, conflicting key reuse, atomic job/outbox rollback, authorized/connected scopes, tenant isolation, a five-job backlog bound, HTTP 202 without scanning, poll persistence after API restart, disabled-job behavior, Starter manual worker completion, scope fingerprints, connection reuse after commit/rollback with no tenant-context leakage, row-factory restoration, atomic 120-request Redis sliding windows with tenant separation/expiry, safe problem responses, correlation propagation and explicit CORS. Existing broker-loss/retry/fencing, RLS, pricing, billing, provider, GitOps, plan validation and delivery tests remain included.
 
-## Continuous checks added
+`python -m pip check`: no broken requirements. The suite emits the upstream Starlette/httpx TestClient deprecation warning; tests still pass. No backend dependency was added for pooling: SQLAlchemy and psycopg were already present.
 
-.github/workflows/verify.yml runs the disposable DB/broker suite, frontend audit,
-typecheck/build and intercepted Chromium workflows on main pushes and pull
-requests. Actions are pinned to observed v6 commit SHAs, token permissions are
-read-only and checkout credentials are not persisted. No customer credentials are
-used. Dependabot is configured for weekly Python/npm/Action review PRs.
-Local equivalents ran; a hosted Actions result is separate evidence and is not
-claimed by this report.
+## Frontend evidence
 
-## Limits and rollout requirements
+`npm run test:e2e`: **13 passed** on Chromium against the final production build.
 
-Delivery is at least once. Timeout/crash after provider acceptance can duplicate a
-notification; 2xx is provider acknowledgment, not human receipt. Eight automatic
-attempts and three manual replay cycles are intentional limits, not indefinite
-retry or exactly-once guarantees. Scan transport attempts and worker execution
-attempts are separate budgets. Runtime roles cannot edit/delete audit, but a DB
-owner can: external immutable storage and retention/archival remain unimplemented.
+Production typechecking/build: Next.js 16.4.2 and React 19, all eight routes generated (six workspace views, proxy and not-found). Host webpack production build passes. Node 22 Alpine Docker build also passes using the normal Turbopack build and verified TLS dependency installation. `npm audit --json` reports **0 vulnerabilities** across installed dependencies.
 
-Delivery/automatic alerts/schedules remain disabled in the verification workspace.
-Live Slack/Teams acceptance, process-kill/broker-restart staging drills, sustained
-load, queue latency SLOs, external backlog alerting, HA/failover and production
-restore acceptance remain required. No live cloud scan, payment, customer
-infrastructure PR, ticket or remediation was executed. Source publication to the
-user's GitHub repository is separate from product integration acceptance.
+Coverage includes actual provider drill-down; combined provider/priority/tag filtering; 28px compact density; column controls; current-page selection; 10,000-row virtualization; evidence/cost/server-code drawers and focus restoration after virtual rows are replaced; viewer gates; command/scoped navigation; memory-only credentials; exact duplicate-key plan upload; GitOps preview/acknowledgment; explicit provider scan action; mobile layout; delivery audit/replay/XSS handling. Automated axe checks find no serious/critical violations in the tested overview, inventory, settings and drawer views. This does not replace manual assistive-technology or broad browser/device acceptance.
 
-The legacy global webhook variable no longer enables sending. Targets must be
-explicitly bound to tenants; destination rotation creates a new fingerprint.
-Old queued jobs without a stored scope envelope are not silently guessed or
-backfilled. Read docs/DELIVERY.md before activating or upgrading scheduled workers.
-The runbook covers pause, ambiguity, replay and rollback restrictions.
+All browser APIs are intercepted using explicitly labeled QA workspaces. No real cloud scan, checkout, webhook message, product PR or infrastructure mutation runs in these tests. Screenshots show interface QA fixtures, not customer observations.
 
-Browser coverage is limited to the new delivery workflow and existing stack
-smoke; it does not establish a complete visual/accessibility audit. Browser
-PKCE/consent, live Entra/Stripe/cloud/GitHub App acceptance, wider Terraform/OPA
-corpora, ITSM adapters, durable multi-cloud jobs/cancellation, billing
-reconciliation and OpenCost remain pending. No production-readiness or compliance
-certification is claimed. Earlier evidence is retained in docs/TEST_REPORT_v0.7.0.md.
+## Container and smoke evidence
+
+Both release images build successfully: `cloudsaver-python:0.7.2` and the Node 22 standalone dashboard. All eight long-running Compose services are running; configured PostgreSQL, Redis, gateway, tenant and scanner health checks pass. The existing data volumes are preserved. `scripts/smoke_stack.py` passes through the gateway and dashboard proxy, including readiness, authentication, retained scan lookup, GitOps, reliability/delivery, the new scan-job list, UUID correlation and bounded validation. No cloud scan or outbound integration is triggered.
+
+Builds preserve the session proxy configuration and CA verification. No credentials, .env files, customer snapshots, node_modules or compiled artifacts are included in the source package.
+
+## Remaining acceptance and limits
+
+- New durable interactive jobs support Azure only and remain disabled by default. Operator provisioning, connected subscriptions, a worker and delivery dispatcher are required. The browser and existing multi-cloud API continue synchronous scanning. Cancellation, detailed stage progress and multi-cloud job scheduling remain open.
+- Pool limits apply per process/DSN; a deployment connection budget and load test are required. Readiness checks database/Redis availability where required, not cloud credentials, workers, end-to-end SLOs or HA failover.
+- Authorized Azure/AWS/GCP/Kubernetes, Entra, Stripe test-mode, GitHub App and Slack/Teams acceptance is still required. Local fixtures cannot certify these integrations.
+- Billing series, non-Azure verified dollar estimates, realized savings, OpenCost allocation, browser PKCE onboarding and ITSM assignment remain unavailable. Unknown values remain unknown.
+- Production TLS, Kubernetes/HPA, backup/restore, chaos/load acceptance, secret rotation/expiry and production cutover/rollback have not been executed. Delivery remains at least once; Redis leases are not a quorum Redlock guarantee. Preserve job/outbox/audit state during incident recovery.

@@ -1,0 +1,1021 @@
+﻿CloudSaver v0.7.1 UI/UX Design System & Specification
+This document provides the exhaustive Design System, Visual Foundations, Component Specifications, and Implementation Blueprints for CloudSaver v0.7.1, an enterprise FinOps management platform.
+
+
+________________
+
+
+1. Executive Summary & Design Principles
+CloudSaver v0.7.1 transforms enterprise cloud cost visibility into automated, actionable remediation. The redesign eliminates visual clutter, reduces cognitive load, and standardizes multi-cloud governance (AWS, Azure, GCP) into a cohesive interface.
+Core Design Principles
+* Context over Density: Surface actionable savings opportunities without hiding telemetry. Deep technical data is accessible through progressive disclosure (slide-over drawers and modal layers).
+* Zero-Ambiguity Statuses: Every recommendation explicitly states its state, impact, risk tier, and provider provenance using unified color ramps and badge architecture.
+* Keyboard-First Workflows: Power users can navigate, filter, select, and remediate findings via global shortcuts and an integrated Command Palette (Cmd+K).
+* Deterministic Safety: Destructive actions or multi-cloud automated script applications require explicit confirmations, dry-run validations, and explicit visual warnings.
+
+
+________________
+
+
+2. Design System Foundations & Semantic Tokens
+Color Palette & Design Tokens
+CloudSaver uses a refined neutral scale complemented by functional brand and status tokens built for WCAG 2.1 AA compliance on light backgrounds.
+
+
+Category
+	Token Name
+	Hex Value
+	Application
+	Neutral
+	--slate-900
+	#0F172A
+	Primary text, active states, key headers
+	
+
+	--slate-700
+	#334155
+	Secondary text, standard icons
+	
+
+	--slate-500
+	#64748B
+	Muted text, disabled states, borders
+	
+
+	--slate-100
+	#F1F5F9
+	Hover states, subtle container backgrounds
+	
+
+	--slate-50
+	#F8FAFC
+	Page background, table header backgrounds
+	Brand Accent
+	--indigo-600
+	#4F46E5
+	Primary action buttons, active tab indicators
+	
+
+	--indigo-50
+	#EEF2FF
+	Selected row highlights, active badge fills
+	Success
+	--emerald-700
+	#047857
+	Completed actions, verified savings
+	
+
+	--emerald-50
+	#ECFDF5
+	Success pills, positive trend indicators
+	Warning
+	--amber-700
+	#B45309
+	High cost anomaly, pending approval, medium risk
+	
+
+	--amber-50
+	#FFFBEB
+	Warning pills, caution banners
+	Danger
+	--rose-700
+	#BE123C
+	Severe waste, critical risk, failed automations
+	
+
+	--rose-50
+	#FFF1F2
+	Critical status badges, error state containers
+	Typography Scale
+* Font Family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif
+* Monospace Family: JetBrains Mono, Fira Code, monospace (used for resource IDs, ARNs, CLI commands, and HCL code snippets)
+
+
+Level
+	Size
+	Weight
+	Line Height
+	Usage
+	Title
+	22pt
+	Bold (700)
+	1.0
+	Dashboard headers, top-level page headings
+	Heading 1
+	15pt
+	Semi-Bold (600)
+	1.15
+	Main section divisions, drawer title headers
+	Heading 2
+	13pt
+	Semi-Bold (600)
+	1.15
+	Sub-sections, card grid headers
+	Heading 3
+	11pt
+	Medium (500)
+	1.15
+	Grouping labels, modal headers, table group titles
+	Normal Text
+	10pt
+	Regular (400)
+	1.25
+	Body text, data cell values, descriptions
+	Small Text
+	9pt
+	Medium (500)
+	1.2
+	Table headers, badges, metadata, tooltips
+	Provider Badging & Status Pills
+Component Type
+	Variant / Provider
+	Background
+	Text Color
+	Border Color
+	Visual Spec
+	Provider Badge
+	AWS
+	#FFF7ED
+	#C2410C
+	#FFEDD5
+	AWS label + Orange accent mark
+	
+
+	Azure
+	#EFF6FF
+	#1D4ED8
+	#DBEAFE
+	Azure label + Blue accent mark
+	
+
+	GCP
+	#F0FDF4
+	#15803D
+	#DCFCE7
+	GCP label + Green accent mark
+	Status Pill
+	Optimized
+	#ECFDF5
+	#047857
+	#A7F3D0
+	Solid dot + "Optimized"
+	
+
+	Action Required
+	#FFF1F2
+	#BE123C
+	#FECDD3
+	Alert icon + "Action Required"
+	
+
+	In Progress
+	#EFF6FF
+	#1D4ED8
+	#BFDBFE
+	Spinner icon + "Applying"
+	
+
+	Suppressed
+	#F1F5F9
+	#475569
+	#E2E8F0
+	Muted dot + "Ignored"
+	
+
+________________
+
+
+3. Modernized Information Architecture & Navigation
+The layout follows a durable shell architecture designed for fast navigation across enterprise scopes.
+Layout Blueprint
+* Left Navigation (Sidebar): Collapsible panel (240px expanded, 64px collapsed). Contains high-level functional areas:
+   * Executive Dashboard (Overview, Spend Velocity, Unit Economics)
+   * Inventory & Findings (Data Grid, Resource Graph, Idle Assets)
+   * Automation Engine (Policies, Remediation Pipelines, Execution Logs)
+   * Cost Allocation (Tag Governance, Chargeback, Showback)
+   * Settings & Integrations (Cloud Accounts, IAM, Webhooks, ITSM Connectors)
+* Top Bar (Command & Workspace Header):
+   * Workspace Switcher: Quick-switch dropdown (e.g., Production Multi-Cloud, Staging-AWS, FinOps-Sandbox).
+   * Global Command Trigger: Cmd + K search input triggering quick actions and resource lookup.
+   * Tenant / Scope Picker: Multi-account selector with direct filter bindings.
+   * Notification Bell & User Profile: Drawer trigger for system alerts and user preference toggles.
+
+
+________________
+
+
+4. Advanced Data Grid & Inventory UX
+The core interface of CloudSaver v0.7.1 is built on a custom data grid powered by TanStack Table v8.
+Data Grid Features
+1. Multi-Dimensional Filtering System:
+   * Combinatorial filters for Cloud Provider (AWS, Azure, GCP), Resource Type (EC2, RDS, Blob Storage, K8s Pod), Risk Score (Low, Medium, High, Critical), and Tag key-value pairs.
+   * Filter chips display active state with quick dismiss buttons (×).
+2. Bulk Action Floating Toolbar:
+   * Appears fixed at the bottom-center of the screen when one or more rows are selected.
+   * Actions include: Bulk Remediation, Export CSV/JSON, Assign to Jira, and Suppress Finding.
+3. Column Customization & Density Switcher:
+   * Popover control allowing reordering, pinning (left/right), and toggling visibility of table columns.
+   * Density toggles: Compact (28px row height), Medium (36px row height), and Relaxed (48px row height).
+Findings Inventory Data Grid
+Select
+	Finding / Resource
+	Provider
+	Account / Region
+	Monthly Cost
+	Est. Savings
+	Risk Level
+	Action
+	[x]
+	i-0f94a2b8c91d01Unattached EBS Volume
+	AWS
+	prod-us-east-1acc-98420192
+	$420.00
+	$420.00
+	Low
+	Remediate
+	[x]
+	db-analytics-replicaIdle RDS Instance
+	AWS
+	prod-eu-west-1acc-98420192
+	$1,280.00
+	$950.00
+	Medium
+	Remediate
+	[ ]
+	rg-legacy-app-vmOverprovisioned VM
+	Azure
+	East US 2sub-48102-az
+	$890.00
+	$440.00
+	High
+	Review
+	[ ]
+	gcp-k8s-node-pool-2Unused Persistent Disk
+	GCP
+	us-central1-aprj-finops-core
+	$310.00
+	$310.00
+	Low
+	Remediate
+	
+
+________________
+
+
+5. Progressive Disclosure: Finding Detail Slide-Over Drawer
+Clicking any row in the Findings Data Grid opens an Exhaustive Detail Slide-Over Drawer (640px width) from the right edge, allowing engineers and FinOps specialists to evaluate findings without losing page context.+-------------------------------------------------------------------+
+
+
+|  [X] Finding Details: i-0f94a2b8c91d01              [Remediate]   |
+
+
+|  Unattached GP3 EBS Volume (3,000 GiB)                            |
+
+
+|-------------------------------------------------------------------|
+
+
+|  (o) Evidence  |  ($) Cost Breakdown  |  (<>) Code  |  (i) ITSM   |
+
+
+|-------------------------------------------------------------------|
+
+
+|                                                                   |
+
+
+|  [Tab Content Area]                                               |
+
+
+|                                                                   |
+
+
++-------------------------------------------------------------------+
+Drawer Tab Architecture
+Tab 1: Evidence & Telemetry
+* Metric Graphs: 14-day continuous telemetry for CPU Utilization (< 1% average), Disk I/O Ops (0 IOPS), and Network Throughput (< 10 KB/s total).
+* Metadata List: Volume ID, Creation Date, Last Attached EC2 Instance ID, Attachment State (detached), Encryption Status (KMS Encrypted).
+Tab 2: Cost & Waste Breakdown
+* Historical Spend: 90-day accumulated cost chart showing zero utilization cost leakage ($14.00/day).
+* Projected Annual Savings: $5,040.00/yr if deleted or snapshots created and original volume purged.
+* Risk-Adjusted Savings: Calculation incorporating snapshot retention overhead.
+Tab 3: IaC & Automation Snippets
+* Terraform (HCL) Import / Remediation:
+
+
+# Automated remediation resource modification
+
+
+resource "aws_ebs_volume" "remediated_volume" {
+
+
+  availability_zone = "us-east-1a"
+
+
+  size              = 3000
+
+
+  type              = "gp3"
+
+
+  tags = {
+
+
+    Environment = "production"
+
+
+    ManagedBy   = "CloudSaver-v0.7.1"
+
+
+    AutoCleanup = "true"
+
+
+  }
+
+
+}
+
+
+* Defensive AWS CLI Command:
+
+
+# Dry-run validation prior to deletion
+
+
+aws ec2 delete-volume \
+
+
+  --volume-id vol-0f94a2b8c91d01 \
+
+
+  --dry-run
+
+
+# Execute creation of final safety snapshot
+
+
+aws ec2 create-snapshot \
+
+
+  --volume-id vol-0f94a2b8c91d01 \
+
+
+  --description "Pre-deletion snapshot by CloudSaver v0.7.1"
+Tab 4: ITSM & Audit Trail
+* Jira / ServiceNow Integration panel:
+   * Linked Issue: FIN-4819 (Status: In Review, Assignee: Person)
+   * Audit Log: Timestamped record of scan identification, notification delivery, and auto-remediation schedule windows.
+
+
+________________
+
+
+6. FinOps Visualizations & Analytics Suite
+Spend vs. Optimization Potential (Interactive Trend Area Chart)
+A dual-area chart comparing gross cloud spend against achievable waste reduction over time. $ Spend
+
+
+  ▲
+
+
+$100k ┬───────────────────────────────────────────────── Total Spend
+
+
+      │  /\     /\      /\      /\      /\      /\
+
+
+ $75k ┼─/──\───/──\────/──\────/──\────/──\────/──\───── Target Baseline
+
+
+      │/    \ /    \  /    \  /    \  /    \  /    \
+
+
+ $50k ┼──────V────────V──────V──────V──────V──────V───── Realized Savings
+
+
+      │::::::::::::::::::::::::::::::::::::::::::::::::: Waste Reduction Zone
+
+
+ $25k ┼─────────────────────────────────────────────────
+
+
+      │
+
+
+   0  └─┴──────┴──────┴──────┴──────┴──────┴──────┴─────► Time
+
+
+       Jan 01  Jan 08  Jan 15  Jan 22  Jan 29  Feb 05
+Multi-Cloud Distribution Treemap & Savings Waterfall
+An integrated breakdown showing waste distribution across providers and sequential savings realization.MULTI-CLOUD WASTE DISTRIBUTION            SAVINGS WATERFALL MODEL
+
+
++-------------------+-----------------+  $120k ┬ ─── Gross Monthly Spend ($118.5k)
+
+
+| AWS               | Azure           |        │ █
+
+
+| Unattached Volumes| Idle App Svcs   |        │ █  ░░░ Unattached Storage (-$14.2k)
+
+
+| ($24.5k)          | ($12.1k)        |  $80k  │ █  █   ░░░ Overprovisioned Compute (-$22.1k)
+
+
+|                   |                 |        │ █  █   █   ░░░ Reserved Instance Gaps (-$18.4k)
+
+
++-------------------+-----------------+        │ █  █   █   █   ███ Net Optimized Spend ($63.8k)
+
+
+| GCP               | Kubernetes      |  $40k  │ █  █   █   █   █
+
+
+| Unused Static IPs | Oversized Pods  |        │ █  █   █   █   █
+
+
+| ($8.2k)           | ($19.0k)        |    0   └─┴──┴───┴───┴───┴───────────────────────►
+
+
++-------------------+-----------------+          Gross  Vol  Comp  RI   Net Spend
+
+
+________________
+
+
+7. Accessibility, Keyboard Navigation & Responsive Layouts
+WCAG 2.1 AA Compliance Metrics
+* Contrast Ratios: Minimum text contrast ratio of 4.5:1 for normal text and 3.0:1 for large text/ui elements. High-contrast borders (#E2E8F0) visually separate interactive panels.
+* Focus Ring Tokens: Visible focus outlines (2px ring, --indigo-600 fill offset by 2px).
+Command Palette (Cmd + K) Key Bindings
+Shortcut
+	Context
+	Target Action
+	Cmd + K or Ctrl + K
+	Global
+	Open Central Command Palette
+	G then D
+	Global
+	Navigate to Executive Dashboard
+	G then F
+	Global
+	Navigate to Findings Inventory
+	Cmd + A
+	Data Grid
+	Select all rows in current page context
+	Esc
+	Drawer / Modal
+	Close active slide-over drawer or modal dialog
+	Shift + R
+	Row Selected
+	Trigger Remediation flow for active row selection
+	
+
+________________
+
+
+8. Component Hierarchy & Next.js 15 Implementation Blueprint
+Next.js 15 File System & Component Layout
+cloudsaver-v0.7.1/
+
+
+├── app/
+
+
+│   ├── (auth)/
+
+
+│   │   └── login/
+
+
+│   ├── (dashboard)/
+
+
+│   │   ├── layout.tsx                # Shell containing Sidebar, Topbar, and Command Palette
+
+
+│   │   ├── page.tsx                  # Executive Summary Dashboard
+
+
+│   │   └── inventory/
+
+
+│   │       ├── page.tsx              # Findings Inventory Data Grid Route
+
+
+│   │       └── @drawer/              # Parallel Route for Slide-Over Drawer
+
+
+│   │           └── [id]/page.tsx
+
+
+│   ├── api/
+
+
+│   │   └── v1/
+
+
+│   │       ├── findings/route.ts
+
+
+│   │       └── remediate/route.ts
+
+
+│   ├── globals.css                   # Tailwind v4 directives & custom tokens
+
+
+│   └── layout.tsx
+
+
+├── components/
+
+
+│   ├── ui/                           # Primitives wrapped over Radix UI
+
+
+│   │   ├── button.tsx
+
+
+│   │   ├── dialog.tsx
+
+
+│   │   ├── drawer.tsx
+
+
+│   │   ├── dropdown-menu.tsx
+
+
+│   │   ├── select.tsx
+
+
+│   │   └── table.tsx
+
+
+│   ├── datagrid/                     # TanStack Table v8 implementation
+
+
+│   │   ├── data-table.tsx
+
+
+│   │   ├── data-table-toolbar.tsx
+
+
+│   │   ├── data-table-pagination.tsx
+
+
+│   │   └── columns.tsx
+
+
+│   ├── visualizations/               # Analytics Suite
+
+
+│   │   ├── spend-trend-chart.tsx
+
+
+│   │   ├── waste-treemap.tsx
+
+
+│   │   └── savings-waterfall.tsx
+
+
+│   └── drawer/                       # Detail Drawer Tabs
+
+
+│       ├── evidence-tab.tsx
+
+
+│       ├── cost-breakdown-tab.tsx
+
+
+│       ├── code-snippet-tab.tsx
+
+
+│       └── itsm-tab.tsx
+
+
+├── hooks/
+
+
+│   ├── use-command-palette.ts
+
+
+│   └── use-findings-data.ts
+
+
+├── lib/
+
+
+│   ├── tokens.ts                     # TypeScript design token mappings
+
+
+│   └── utils.ts                      # Class variance authority (CVA) helper
+
+
+└── types/
+
+
+    └── inventory.ts                  # Finding data contract interfaces
+Next.js 15 Data Grid & Slide-Over Implementation Specification
+The following React component snippet outlines the TanStack Table v8 integration with dynamic row selection, density states, and custom slide-over drawer triggers using Radix UI primitives, Lucide icons, and Sonner toast alerts."use client";
+
+
+import * as React from "react";
+
+
+import {
+
+
+  useReactTable,
+
+
+  getCoreRowModel,
+
+
+  getFilteredRowModel,
+
+
+  getPaginationRowModel,
+
+
+  getSortedRowModel,
+
+
+  flexRender,
+
+
+  ColumnDef,
+
+
+  RowSelectionState,
+
+
+} from "@tanstack/react-table";
+
+
+import { Check, ChevronRight, ShieldAlert, SlidersHorizontal, Trash2 } from "lucide-react";
+
+
+import { toast } from "sonner";
+
+
+import { Finding } from "@/types/inventory";
+
+
+interface DataGridProps {
+
+
+  columns: ColumnDef<Finding>[];
+
+
+  data: Finding[];
+
+
+  onOpenDetailDrawer: (findingId: string) => void;
+
+
+}
+
+
+export function FindingsDataGrid({ columns, data, onOpenDetailDrawer }: DataGridProps) {
+
+
+  const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
+
+
+  const [density, setDensity] = React.useState<"compact" | "medium" | "relaxed">("medium");
+
+
+  const table = useReactTable({
+
+
+    data,
+
+
+    columns,
+
+
+    state: { rowSelection },
+
+
+    onRowSelectionChange: setRowSelection,
+
+
+    getCoreRowModel: getCoreRowModel(),
+
+
+    getFilteredRowModel: getFilteredRowModel(),
+
+
+    getPaginationRowModel: getPaginationRowModel(),
+
+
+    getSortedRowModel: getSortedRowModel(),
+
+
+  });
+
+
+  const selectedRowCount = Object.keys(rowSelection).length;
+
+
+  const handleBulkRemediate = () => {
+
+
+    toast.success(`Initiated remediation for ${selectedRowCount} resource(s)`, {
+
+
+      description: "Progress can be tracked in the Automation Log tab.",
+
+
+    });
+
+
+    setRowSelection({});
+
+
+  };
+
+
+  const densityPaddingMap = {
+
+
+    compact: "py-1 px-2 text-xs",
+
+
+    medium: "py-2.5 px-3 text-xs",
+
+
+    relaxed: "py-4 px-4 text-sm",
+
+
+  };
+
+
+  return (
+
+
+    <div className="w-full space-y-4">
+
+
+      {/* Grid Toolbar & Controls */}
+
+
+      <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+
+
+        <div className="flex items-center gap-2">
+
+
+          <span className="text-sm font-semibold text-slate-900">Findings</span>
+
+
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+
+
+            {data.length} Total
+
+
+          </span>
+
+
+        </div>
+
+
+        
+
+
+        <div className="flex items-center gap-3">
+
+
+          <div className="flex items-center rounded-md border border-slate-200 bg-white p-1">
+
+
+            <button
+
+
+              onClick={() => setDensity("compact")}
+
+
+              className={`px-2 py-1 text-xs rounded ${density === "compact" ? "bg-slate-100 font-medium text-slate-900" : "text-slate-500"}`}
+
+
+            >
+
+
+              Compact
+
+
+            </button>
+
+
+            <button
+
+
+              onClick={() => setDensity("medium")}
+
+
+              className={`px-2 py-1 text-xs rounded ${density === "medium" ? "bg-slate-100 font-medium text-slate-900" : "text-slate-500"}`}
+
+
+            >
+
+
+              Medium
+
+
+            </button>
+
+
+            <button
+
+
+              onClick={() => setDensity("relaxed")}
+
+
+              className={`px-2 py-1 text-xs rounded ${density === "relaxed" ? "bg-slate-100 font-medium text-slate-900" : "text-slate-500"}`}
+
+
+            >
+
+
+              Relaxed
+
+
+            </button>
+
+
+          </div>
+
+
+        </div>
+
+
+      </div>
+
+
+      {/* Main Table Container */}
+
+
+      <div className="relative overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+
+
+        <table className="w-full text-left border-collapse">
+
+
+          <thead>
+
+
+            {table.getHeaderGroups().map((headerGroup) => (
+
+
+              <tr key={headerGroup.id} className="border-b border-slate-200 bg-slate-50/75">
+
+
+                {headerGroup.headers.map((header) => (
+
+
+                  <th key={header.id} className="px-3 py-2 text-xs font-semibold text-slate-600">
+
+
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+
+
+                  </th>
+
+
+                ))}
+
+
+              </tr>
+
+
+            ))}
+
+
+          </thead>
+
+
+          <tbody className="divide-y divide-slate-100">
+
+
+            {table.getRowModel().rows.map((row) => (
+
+
+              <tr
+
+
+                key={row.id}
+
+
+                onClick={() => onOpenDetailDrawer(row.original.id)}
+
+
+                className="cursor-pointer transition-colors hover:bg-slate-50/80 group"
+
+
+              >
+
+
+                {row.getVisibleCells().map((cell) => (
+
+
+                  <td key={cell.id} className={`${densityPaddingMap[density]} text-slate-700`}>
+
+
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+
+
+                  </td>
+
+
+                ))}
+
+
+              </tr>
+
+
+            ))}
+
+
+          </tbody>
+
+
+        </table>
+
+
+      </div>
+
+
+      {/* Floating Bulk Action Bar */}
+
+
+      {selectedRowCount > 0 && (
+
+
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 rounded-xl bg-slate-900 px-5 py-3 text-white shadow-2xl z-50 border border-slate-800 animate-in fade-in slide-in-from-bottom-4">
+
+
+          <span className="text-xs font-medium text-slate-300">
+
+
+            <span className="font-bold text-white">{selectedRowCount}</span> resource(s) selected
+
+
+          </span>
+
+
+          <div className="h-4 w-px bg-slate-700" />
+
+
+          <button
+
+
+            onClick={handleBulkRemediate}
+
+
+            className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
+
+
+          >
+
+
+            <ShieldAlert className="h-3.5 w-3.5" />
+
+
+            Remediate Selected
+
+
+          </button>
+
+
+          <button
+
+
+            onClick={() => setRowSelection({})}
+
+
+            className="text-xs text-slate-400 hover:text-white transition-colors"
+
+
+          >
+
+
+            Clear Selection
+
+
+          </button>
+
+
+        </div>
+
+
+      )}
+
+
+    </div>
+
+
+  );
+
+
+}

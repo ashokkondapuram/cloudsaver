@@ -1,3 +1,4 @@
+from database.connection import connect as pooled_connect
 """PostgreSQL transactional outbox. No database/network clients at import time."""
 import hashlib
 from contextlib import contextmanager
@@ -66,7 +67,7 @@ class DeliveryRepository:
     @contextmanager
     def transaction(self,tenant_id):
         import psycopg
-        with psycopg.connect(self.url,connect_timeout=5) as db:
+        with pooled_connect(self.url,connect_timeout=5) as db:
             db.execute("SELECT set_config('app.current_tenant_id',%s,true)",(str(UUID(tenant_id)),))
             db.execute("SET LOCAL statement_timeout='10s'")
             yield db

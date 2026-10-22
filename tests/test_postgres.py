@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg import errors, sql
@@ -675,6 +675,8 @@ def test_upgrade_each_release_lineage_preserves_history(database,starting_revisi
         migrate(owner_url,'head')
         assert PostgresStore(app_url).get(tenant,id) == payload
     finally:
+        from database.connection import dispose
+        dispose()
         with psycopg.connect(privileged,autocommit=True) as admin:
             admin.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(name)))
 
@@ -745,3 +747,120 @@ def test_delivery_downgrade_upgrade_preserves_scans_and_restores_forced_rls(data
     assert store.get(a['tenant_id'],snapshot['scan_id'])==snapshot
     from database.delivery import DeliveryRepository
     assert DeliveryRepository(url).list(a['tenant_id'])==[]
+
+
+def test_interactive_job_submission_is_atomic_idempotent_and_tenant_isolated(tenants, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from workers.storage import JobRepository, SubmissionConflict
+    from database.delivery import DeliveryRepository
+    url, _, a, b, _, _ = tenants
+    jobs = JobRepository(url)
+    with jobs.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    key = str(uuid4())
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        rows = list(pool.map(lambda _: jobs.submit(a['tenant_id'], key, a['subscription_ids']), range(4)))
+    job_id = rows[0]['job_id']
+    assert {row['job_id'] for row in rows} == {job_id}
+    assert rows[0]['status'] == 'queued'
+    assert jobs.job_status(b['tenant_id'], job_id) is None
+    assert jobs.list_jobs(b['tenant_id'], 50) == []
+    assert jobs.job_origin(a['tenant_id'], job_id) == 'interactive'
+    assert JobRepository(url).job_status(a['tenant_id'], job_id)['status'] == 'queued'
+    assert len(DeliveryRepository(url).list(a['tenant_id'])) == 1
+    with pytest.raises(SubmissionConflict, match='Idempotency'):
+        jobs.submit(a['tenant_id'], key, [str(uuid4())])
+    assert len(jobs.list_jobs(a['tenant_id'], 100)) == 1
+    # A delivery insert failure must not leave an orphan queued job.
+    monkeypatch.setattr('database.delivery.enqueue', lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError('insert failed')))
+    with pytest.raises(RuntimeError):
+        jobs.submit(a['tenant_id'], str(uuid4()), a['subscription_ids'])
+    assert len(jobs.list_jobs(a['tenant_id'], 100)) == 1
+
+
+def test_interactive_backlog_bound_and_revoked_scope(tenants):
+    from workers.storage import JobRepository, SubmissionConflict
+    url, _, a, _, _, _ = tenants
+    jobs = JobRepository(url)
+    with pytest.raises(SubmissionConflict, match='connected'):
+        jobs.submit(a['tenant_id'], str(uuid4()), a['subscription_ids'])
+    with jobs.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    for _ in range(5):
+        jobs.submit(a['tenant_id'], str(uuid4()), a['subscription_ids'])
+    with pytest.raises(SubmissionConflict, match='five unfinished'):
+        jobs.submit(a['tenant_id'], str(uuid4()), a['subscription_ids'])
+
+
+def test_starter_interactive_worker_completes_without_scheduled_entitlement(tenants):
+    from workers.storage import JobRepository
+    from workers.tasks import run_scan_job
+    from tests.test_worker import Lease
+    from tests.support import stub_scanner
+    url, store, a, b, _, _ = tenants
+    jobs = JobRepository(url)
+    with jobs.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    row = jobs.submit(a['tenant_id'], str(uuid4()), a['subscription_ids'])
+    class OwnedLease(Lease):
+        def acquire(self, tenant_id, token):
+            return True
+    settings = Settings('azure', 'unused', (a,), url)
+    result = run_scan_job(settings, a['tenant_id'], a['subscription_ids'], row['job_id'], jobs, OwnedLease(), scanner=stub_scanner)
+    assert result['status'] == 'completed'
+    snapshot = store.get(a['tenant_id'], result['scan_id'])
+    assert snapshot['cloud_providers'] == ['azure'] and snapshot['scope_fingerprint']
+    assert store.get(b['tenant_id'], result['scan_id']) is None
+    assert jobs.job_status(a['tenant_id'], row['job_id'])['scan_id'] == result['scan_id']
+
+
+def test_pooled_connections_clear_tenant_context_and_recover_after_rollback(tenants):
+    from database.connection import connect
+    from psycopg.rows import dict_row
+    url, _, a, b, _, _ = tenants
+    with connect(url) as db:
+        context(db, a['tenant_id'])
+        assert {str(row[0]) for row in db.execute('SELECT tenant_id FROM scans')} == {a['tenant_id']}
+    with pytest.raises(errors.DivisionByZero):
+        with connect(url, row_factory=dict_row) as db:
+            context(db, b['tenant_id'])
+            assert db.execute('SELECT tenant_id FROM scans').fetchone()['tenant_id'] == UUID(b['tenant_id'])
+            db.execute('SELECT 1/0')
+    with connect(url) as db:
+        assert db.execute('SELECT count(*) FROM scans').fetchone() == (0,)
+        context(db, b['tenant_id'])
+        assert {str(row[0]) for row in db.execute('SELECT tenant_id FROM scans')} == {b['tenant_id']}
+
+
+def test_interactive_http_accepts_without_scanning_and_survives_restart(tenants, monkeypatch, tmp_path):
+    import hashlib
+    from workers.storage import JobRepository
+    url, _, a, b, _, _ = tenants
+    jobs = JobRepository(url)
+    with jobs.transaction(a['tenant_id']) as db:
+        db.execute("UPDATE tenants SET connection_status='connected'")
+        db.execute('UPDATE subscriptions SET active=true')
+    configured = tuple(dict(t, api_key_sha256=hashlib.sha256(key.encode()).hexdigest()) for t, key in [(a, 'key-a'), (b, 'key-b')])
+    settings = Settings('azure', str(tmp_path / 'unused'), configured, url)
+    monkeypatch.setenv('CLOUDSAVER_INTERACTIVE_JOBS', 'true')
+    monkeypatch.setenv('CLOUDSAVER_DELIVERY_ENABLED', 'true')
+    def scanner(_):
+        pytest.fail('HTTP submission must not execute a cloud scan')
+    payload = {'subscription_ids': a['subscription_ids'], 'idempotency_key': str(uuid4())}
+    auth = {'Authorization': 'Bearer key-a'}
+    with TestClient(create_app(settings, scanner=scanner)) as client:
+        assert client.post('/api/v1/scan-jobs', json=payload).status_code == 401
+        response = client.post('/api/v1/scan-jobs', json=payload, headers=auth)
+        assert response.status_code == 202 and response.headers['retry-after'] == '3'
+        location = response.headers['location']
+        assert response.json()['status'] == 'queued' and response.json()['result_url'] is None
+        assert client.post('/api/v1/scan-jobs', json=payload, headers=auth).json()['job_id'] == response.json()['job_id']
+        assert client.get(location, headers={'Authorization': 'Bearer key-b', 'X-Tenant-ID': a['tenant_id']}).status_code == 404
+    with TestClient(create_app(settings, scanner=scanner)) as client:
+        assert client.get(location, headers=auth).json()['status'] == 'queued'
+        assert client.get('/api/v1/scan-jobs', headers=auth).json()[0]['poll_url'] == location
+        monkeypatch.setenv('CLOUDSAVER_INTERACTIVE_JOBS', 'false')
+        assert client.post('/api/v1/scan-jobs', json=payload, headers=auth).status_code == 503

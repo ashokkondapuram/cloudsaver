@@ -39,14 +39,15 @@ def notification_message(event,target):
                    'body':[{'type':'TextBlock','text':text,'wrap':True}]}}]}
 
 
-def dispatch_one(repository,tenant_id,*,targets,publish_scan,client,kinds=('scan','notification'),authorize_scan=None):
+def dispatch_one(repository,tenant_id,*,targets,publish_scan,client,kinds=('scan','notification'),authorize_scan=None,authorize_job=None):
     event=repository.claim(tenant_id,kinds)
     if not event:
         return False
     outcome,error,delay='retry','transport_unavailable',min(30*2**(event['attempts']-1),1800)+random.uniform(0,10)
     try:
         if event['kind']=='scan':
-            if authorize_scan and not authorize_scan(tenant_id,event['payload'].get('subscription_ids')):
+            if ((authorize_scan and not authorize_scan(tenant_id,event['payload'].get('subscription_ids')))
+                    or (authorize_job and not authorize_job(event))):
                 outcome,error='dead_letter','scope_revoked'
             else:
                 publish_scan(tenant_id,event['payload']['subscription_ids'],event['job_id'])
@@ -80,7 +81,7 @@ def dispatch_one(repository,tenant_id,*,targets,publish_scan,client,kinds=('scan
 
 def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,should_stop=lambda:False):
     kinds=[]
-    if os.getenv('CLOUDSAVER_SCHEDULED_SCANS','false').lower()=='true':
+    if any(os.getenv(flag,'false').lower()=='true' for flag in ('CLOUDSAVER_SCHEDULED_SCANS','CLOUDSAVER_INTERACTIVE_JOBS')):
         kinds.append('scan')
     # Explicit manual delivery does not require the automated-alerts switch.
     kinds.append('notification')
@@ -95,13 +96,19 @@ def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,sho
                 from workers.tasks import authorized_tenant
                 try:
                     authorized_tenant(settings,jobs,tid,subscriptions)
-                    return jobs.plan_tier(tid) in ('GROWTH','ENTERPRISE')
+                    return True
                 except ValueError:
                     return False
             for _ in range(limit):
                 if should_stop():
                     break
-                if not dispatch_one(repository,tenant_id,targets=targets,publish_scan=publish_scan,client=client,kinds=kinds,authorize_scan=authorize):
+                def authorize_job(event):
+                    origin = event['payload'].get('origin', 'scheduled')
+                    if origin == 'interactive':
+                        return os.getenv('CLOUDSAVER_INTERACTIVE_JOBS','false').lower() == 'true'
+                    return (os.getenv('CLOUDSAVER_SCHEDULED_SCANS','false').lower() == 'true'
+                            and jobs.plan_tier(tenant_id) in ('GROWTH','ENTERPRISE'))
+                if not dispatch_one(repository,tenant_id,targets=targets,publish_scan=publish_scan,client=client,kinds=kinds,authorize_scan=authorize,authorize_job=authorize_job):
                     break
                 processed+=1
             repository.heartbeat(tenant_id,True)

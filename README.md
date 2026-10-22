@@ -1,12 +1,30 @@
-# CloudSaver v0.7.1
+# CloudSaver v0.7.2
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release adds durable scheduling/integration delivery to the GitOps/CI milestone
-from the Drive roadmap. Production deployment still requires the acceptance
+release adds the Drive UI/UX design system and backend hardening to the durable
+scheduling/integration foundation. Production deployment still requires the acceptance
 checks in TEST_REPORT.md; feature coverage alone is not production readiness.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.7.2: workspace experience and backend hardening
+
+- Six working dashboard views, persistent responsive navigation, command search,
+  actual observation charts, provider/scope drill-down, a virtualized inventory
+  with filters/column controls/bulk CSV/JSON, and evidence/cost/code review drawers.
+- Durable interactive Azure scan submissions: HTTP 202, tenant-scoped polling,
+  restart persistence, atomic outbox dispatch, idempotency conflict protection and
+  a five-job unfinished backlog bound. Existing multi-cloud scans remain synchronous.
+- Bounded PostgreSQL connection pools with pre-ping/recycle, clean transaction
+  context on reuse, separate liveness/readiness, restricted CORS, request IDs and
+  secret-free problem responses. The authenticated gateway uses an atomic Redis
+  sliding window shared across instances.
+
+Read [backend activation and acceptance](docs/PRODUCTION_HARDENING.md) and
+[UI source mapping](docs/UI_UX.md). Async jobs are disabled by default; activate
+trusted subscriptions and run the worker and dispatcher before enabling them.
+No credentials, customer data or cloud mutation are needed for the included tests.
 
 ## New in v0.7.1: operational reliability
 

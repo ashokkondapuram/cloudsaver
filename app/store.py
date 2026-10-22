@@ -1,3 +1,4 @@
+from database.connection import connect as pooled_connect
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -67,7 +68,7 @@ class PostgresStore:
     def __init__(self, url):
         import psycopg
         self.url = url
-        with psycopg.connect(url, connect_timeout=10) as db:
+        with pooled_connect(url, connect_timeout=10) as db:
             role = db.execute('SELECT rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = current_user').fetchone()
             if any(role):
                 raise ValueError('Application database role must not be superuser or BYPASSRLS')
@@ -89,7 +90,7 @@ class PostgresStore:
     def connection(self, tenant_id):
         import psycopg
         from uuid import UUID
-        with psycopg.connect(self.url, connect_timeout=10) as db:
+        with pooled_connect(self.url, connect_timeout=10) as db:
             db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (str(UUID(tenant_id)),))
             yield db
 

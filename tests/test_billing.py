@@ -262,7 +262,7 @@ def test_billing_refuses_database_roles_that_bypass_tenant_isolation(monkeypatch
         def cursor(self):
             return Cursor()
 
-    monkeypatch.setattr(psycopg, 'connect', lambda *args, **kwargs: Connection())
+    monkeypatch.setattr('database.billing_store.pooled_connect', lambda *args, **kwargs: Connection())
     with pytest.raises(BillingProvisioningError, match='non-superuser'):
         BillingStore('postgresql://test@localhost/test').apply_event(ROUTE, 'cus_known', subscription(), TIERS)
     assert len(queries) == 1

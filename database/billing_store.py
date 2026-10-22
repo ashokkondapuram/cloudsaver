@@ -1,3 +1,4 @@
+from database.connection import connect as pooled_connect
 """Atomic Stripe event handling against tenant-scoped PostgreSQL records.
 
 This module never discovers tenant ownership from Stripe metadata. Routes are
@@ -127,7 +128,7 @@ class BillingStore:
         import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(self.database_url, row_factory=dict_row, connect_timeout=5) as connection:
+        with pooled_connect(self.database_url, row_factory=dict_row, connect_timeout=5) as connection:
             with connection.cursor() as cursor:
                 cursor.execute('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')
                 role = cursor.fetchone()

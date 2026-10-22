@@ -1,3 +1,4 @@
+from database.connection import connect as pooled_connect
 """Verify Entra v2 delegated access tokens before deriving workspace roles."""
 import hashlib
 import hmac
@@ -141,7 +142,7 @@ def with_plan(settings, workspace):
         return dict(workspace, plan_tier=configured)
     try:
         import psycopg
-        with psycopg.connect(settings.database_url, connect_timeout=5) as db:
+        with pooled_connect(settings.database_url, connect_timeout=5) as db:
             db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (workspace['tenant_id'],))
             rows = db.execute('SELECT plan_tier FROM public.organizations WHERE tenant_id=%s', (workspace['tenant_id'],)).fetchall()
             if len(rows) > 1:

@@ -51,3 +51,35 @@ def test_heartbeat_detects_lost_lease_and_redis_failure(leases,monkeypatch):
         assert b.renew(tenant,'owner-b')
     finally:
         heartbeat.stop();b.release(tenant,'owner-b')
+
+
+def test_sliding_rate_limit_is_atomic_tenant_scoped_and_expires(monkeypatch):
+    import asyncio
+    from fastapi import HTTPException
+    from services.gateway import RedisLimiter
+    url = os.getenv('CLOUDSAVER_TEST_REDIS_URL')
+    if not url:
+        pytest.skip('Requires disposable Redis integration')
+    monkeypatch.setenv('REDIS_URL', url)
+    async def exercise():
+        limiter = RedisLimiter()
+        tenant, other = str(uuid4()), str(uuid4())
+        key = 'cloudsaver:rate:v2:' + tenant
+        try:
+            results = await asyncio.gather(*(limiter.check(tenant) for _ in range(125)), return_exceptions=True)
+            rejected = [result for result in results if isinstance(result, HTTPException)]
+            assert len(rejected) == 5
+            assert all(result.status_code == 429 and 1 <= int(result.headers['Retry-After']) <= 60 for result in rejected)
+            assert await limiter.client.zcard(key) == 120
+            assert 0 < await limiter.client.ttl(key) <= 60
+            await limiter.check(other)
+            # Advance all entries outside the window without a real-time sleep.
+            now = await limiter.client.time()
+            old = now[0] * 1000 + now[1] // 1000 - 60001
+            members = await limiter.client.zrange(key, 0, -1)
+            await limiter.client.zadd(key, {member: old for member in members})
+            await limiter.check(tenant)
+            assert await limiter.client.zcard(key) == 1
+        finally:
+            await limiter.client.aclose()
+    asyncio.run(exercise())

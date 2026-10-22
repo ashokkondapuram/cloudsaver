@@ -1,4 +1,4 @@
-# CloudSaver roadmap after v0.7.1
+# CloudSaver roadmap after v0.7.2
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
@@ -27,6 +27,14 @@ validation, explicit tenant integrations, runtime append-only delivery audit and
 operator history/replay are implemented. Next.js/Tailwind security maintenance
 replaces the inherited frontend dependency chain. See TEST_REPORT.md for executed
 fault tests and acceptance limits; this is not a production certification.
+
+## v0.7.2 workspace and backend hardening
+
+Drive UI/UX spec implemented as six real routes, interactive evidence views,
+virtual inventory and review drawers. Drive production guide adapted to durable
+Azure job submission/polling, resilient bounded pools, readiness, problem responses,
+correlation, CORS and atomic shared throttling. Existing lease/outbox mechanisms are
+retained; live cloud acceptance, production deployment and cancellation remain open.
 
 ## Finish v0.6 acceptance and the operational foundation
 
