@@ -1,40 +1,47 @@
-# CloudSaver v0.4.1
+# CloudSaver v0.6.0
 
-CloudSaver reviews potential Azure resource waste with a Next.js 15 / React 19
-dashboard, five FastAPI services, PostgreSQL and Redis. This development release
-extends the v0.4.0 source found in Drive and retains the verified PostgreSQL
-isolation and normalized ingestion already pushed to GitHub.
+CloudSaver reviews cloud resource waste and container requests with a Next.js /
+React dashboard, five FastAPI services, PostgreSQL and Redis. This development
+release implements the GCP and Kubernetes milestone from the advanced roadmap
+in Drive, while preserving verified tenant isolation and Azure behavior.
 
 Source: https://github.com/ashokkondapuram/project
 
-## Changes from the Drive v0.4.0 baseline
+## Advanced features
 
-- **Verified identity:** RS256 Microsoft JWKS verification, exact issuer/audience,
-  required timestamps/subject/tenant/v2 delegated scope, and assigned CloudSaver
-  app roles. All services share an explicit authentication mode. Unknown tenants
-  are rejected; token claims never create subscriptions or paid plans.
-- **Authorization:** Viewer is read-only; TenantAdmin controls scans/exports;
-  BillingAdmin or TenantAdmin controls Checkout. Subscription/resource quotas,
-  Terraform export and Key Vault plan gates use server-owned entitlements.
-- **Evidence-based estimates:** supported hourly estimates require an exact,
-  unambiguous USD retail consumption meter. Unsupported/missing prices remain
-  unknown. Demo dollars remain illustrative fixtures. No net or realized savings
-  are inferred from a list price or invented snapshot reserve.
-- **Reviewable exports:** Terraform contains import declarations bound to the
-  authorized tenant/subscriptions, with no guessed location, storage tier or disk
-  size. It contains no deletion/snapshot plan. Bash retains interactive approval
-  and immediate state checks. The application executes neither export.
-- **Real Checkout path:** configured Stripe SDK calls use persisted customer
-  ownership, operator-controlled HTTPS return URLs and idempotency keys. Missing
-  configuration fails closed; synthetic payment URLs are removed. Existing
-  subscriptions require the operator upgrade workflow. Verified/deduplicated
-  webhook events determine persisted plans.
-- **Worker hardening:** API and Celery scans share a real Redis lease with owner
-  heartbeat/renewal. Observed lease loss stops persistence. Durable job tokens
-  reject a stale attempt after another attempt claims the same job. Transactional
-  scheduling reservations enforce daily Growth/hourly Enterprise intervals.
-- **Compatible data upgrades:** a merge migration joins both prior release
-  lineages, retaining history and atomic snapshot/finding writes.
+- Read-only **GCP** checks for unattached zonal/regional persistent disks and
+  unassigned regional external IPv4 reservations. Explicit dev/staging Cloud SQL
+  candidates require 336 consecutive hourly connection maxima equal to zero;
+  missing telemetry means unknown, not idle.
+- **Kubernetes** CPU and memory request review using 14 days of complete hourly
+  Prometheus samples. Requests must exceed nearest-rank P95 usage by more than
+  50%. Evidence includes sampling window, units and headroom recommendation.
+  CPU samples are five-minute rates; memory samples are working-set gauges.
+- **AWS** EBS/EIP/stopped-RDS ingestion carried forward from the Drive v0.5.0
+  design, with STS account verification, pagination and explicit credential
+  profiles. Provider errors never substitute demo findings.
+- Seven Azure checks, including the Drive network rule additions. Gateway review
+  checks stopped state or absence of all backend pools; one empty pool alone
+  does not establish an idle gateway. NIC/NSG signals imply no direct charge.
+- Provider selection/filtering, evidence inspection and finding trajectories.
+  Comparisons require matching mode, provider selection and scope fingerprint.
+  New/resolved observations use resource/rule identities, not count differences.
+- Import-only Terraform 1.5+ review for supported Azure/AWS/GCP findings, including
+  regional disks. AWS exports constrain account IDs. The application never
+  executes imports, deletes resources or changes workloads.
+- Atomic PostgreSQL scan and normalized finding writes with forced RLS. The new
+  cloud_findings table preserves the original Azure subscription foreign keys.
+  Existing histories and both earlier migration lineages remain upgradeable.
+
+Drive's v0.5.0 ZIP contains PostgreSQL stubs, relaxed schemas and live-to-demo AWS
+fallbacks. It was reviewed as a feature source rather than replacing the working
+storage/authentication implementation. Its configurable scheduler and ITSM
+claims are not treated as verified features here. The existing opt-in Celery
+scheduler remains Azure-only. See SOURCE_CONTEXT.md and IMPLEMENTATION_STATUS.md.
+
+Live AWS/GCP/Kubernetes prices and net savings remain unknown. GCP Billing Catalog,
+customer billing reconciliation, OpenCost allocation, idle namespace/DaemonSet
+analysis, GitOps PR automation and autonomous remediation remain roadmap work.
 
 ## Local demo
 
@@ -56,7 +63,7 @@ npm run dev
 ```
 
 Open http://127.0.0.1:3000 and enter the private workspace key printed by the
-launcher. Demo scans do not call Azure. The browser keeps credentials in memory;
+launcher. Demo scans do not call cloud or cluster APIs. The browser keeps credentials in memory;
 reload/disconnect clears them. The standalone API uses SQLite snapshot history;
 PostgreSQL supplies normalized ingestion, billing and scheduled job persistence.
 
@@ -99,10 +106,11 @@ The fake sign-in button is removed; authenticated consent-link requests return
 501. Directory consent does not grant subscription Reader RBAC: administrators
 must separately grant and verify Azure access.
 
-## Azure, Stripe and schedules
+## Cloud sources, Stripe and schedules
 
-For live scanning set CLOUDSAVER_MODE=azure, explicit authorized tenant scopes and
-credentials. The imported environment/Key Vault providers fail closed and never
+For live scanning set CLOUDSAVER_MODE=azure (the compatibility live-mode switch),
+explicit authorized tenant scopes and credentials. See docs/CLOUD_SOURCES.md for
+AWS profile, GCP ADC and Prometheus configuration. The imported environment/Key Vault providers fail closed and never
 use mock credentials. Key Vault requires Enterprise entitlement.
 
 Checkout requires STRIPE_SECRET_KEY, CLOUDSAVER_BILLING_RETURN_URL (fixed HTTPS),
@@ -129,6 +137,11 @@ scans, scans/{id}, analytics, billing/entitlements, billing/checkout,
 billing/webhook, notifications/{scan_id}, and scan-owned remediation /
 remediation-terraform POST exports. Analytics/notifications need the service
 stack; they are not provided by the standalone scanner API.
+
+New authenticated routes: GET providers, POST scans/multi-cloud with only a
+providers array, and GET trends?days=30&scan_id=UUID. The original POST scans
+remains Azure-only and retains its eight-fixture standalone demo contract. The
+multi-cloud demo contains 21 findings and performs no external requests.
 
 Dashboard scans remain synchronous. Completed synchronous scans return 409 to
 cancellation; foreign/unknown scans return 404. The UI does not report fake

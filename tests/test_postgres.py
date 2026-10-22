@@ -300,7 +300,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0004_merge_hardening',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0005_cloud_findings',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -313,7 +313,40 @@ def test_scheduler_reservation_throttles_concurrent_publishers(database):
     assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
 
 
-@pytest.mark.parametrize('starting_revision',['0002_scan_findings','0003_scan_jobs'])
+def test_multi_cloud_findings_are_atomic_and_rls_isolated(database):
+    from app.multi_cloud import demo_cloud_findings
+    _, app, store = database
+    a, b = workspace(), workspace()
+    payload = scan(a)
+    payload.update(mode='demo', cloud_providers=['aws','gcp','kubernetes'])
+    payload['findings'] = demo_cloud_findings(a, ['aws','gcp','kubernetes'])
+    payload['total_items_found'] = len(payload['findings'])
+    store.save(a['tenant_id'], payload, workspace=a)
+    assert store.get(a['tenant_id'], payload['scan_id']) == payload
+    assert store.get(b['tenant_id'], payload['scan_id']) is None
+    with psycopg.connect(app) as db:
+        assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=\'cloud_findings\'::regclass').fetchone() == (True,True)
+        assert db.execute('SELECT count(*) FROM cloud_findings').fetchone()[0] == 0
+        context(db, a['tenant_id'])
+        assert db.execute('SELECT count(*) FROM cloud_findings').fetchone()[0] == 10
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute('INSERT INTO cloud_findings SELECT %s,%s,scan_id,cloud_provider,scope_id,resource_id,rule_id,payload,observed_at FROM cloud_findings LIMIT 1', (uuid4(),b['tenant_id']))
+    broken = dict(payload, scan_id=str(uuid4()))
+    broken['findings'] = [dict(payload['findings'][0], rule_id='x'*65)]
+    # Scope validation rejects malformed rules before any transaction writes.
+    broken['total_items_found'] = 1
+    with pytest.raises(ValueError):
+        store.save(a['tenant_id'], broken, workspace=a)
+    assert store.get(a['tenant_id'], broken['scan_id']) is None
+    # A database error in the non-Azure write must also roll back the snapshot.
+    broken['findings'] = [payload['findings'][0], payload['findings'][0]]
+    broken['total_items_found'] = 2
+    with pytest.raises(errors.UniqueViolation):
+        store.save(a['tenant_id'], broken, workspace=a)
+    assert store.get(a['tenant_id'], broken['scan_id']) is None
+
+
+@pytest.mark.parametrize('starting_revision',['0002_scan_findings','0003_scan_jobs','0004_merge_hardening'])
 def test_upgrade_each_release_lineage_preserves_history(database,starting_revision):
     from sqlalchemy.engine import make_url
     privileged = os.getenv('CLOUDSAVER_TEST_PRIVILEGED_URL')

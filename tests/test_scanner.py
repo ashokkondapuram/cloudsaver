@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.scanner import ScanError, _findings, demo_findings, execute_pages
+from app.scanner import ScanError, _findings, demo_findings, execute_pages, RULES
 
 
 SUB = "00000000-0000-0000-0000-000000000001"
@@ -70,8 +70,8 @@ def test_query_failure_does_not_return_partial_findings():
 
 
 def test_live_findings_never_invent_savings():
-    findings = _findings(Client(*(page([row(str(i))]) for i in range(4))), [SUB])
-    assert len(findings) == 4
+    findings = _findings(Client(*(page([row(str(i))]) for i in range(len(RULES)))), [SUB])
+    assert len(findings) == len(RULES)
     assert all(f["estimated_monthly_waste_usd"] is None for f in findings)
     assert {f["severity"] for f in findings} == {"HIGH", "MEDIUM", "LOW"}
     assert "review signal" in findings[2]["details"]

@@ -1,5 +1,26 @@
 # Source context
 
+## v0.6.0 advanced roadmap continuation
+
+The user identified newer v0.5.0 material in Drive's root, outside the original
+project subfolder. Read on 2026-10-22:
+
+- v0.5.0 ZIP: https://drive.google.com/file/d/1VnlWKO6OmmyV_pdosEBy2IJ_Z3bPJ_-5/view
+- Guide: https://docs.google.com/document/d/1nEDmnOPZYrZVKbYUU9Qx6ARBAafObmZcGECp_Txep7s/edit
+- Advanced roadmap: https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit
+
+ZIP SHA256: 22ab8157715f096a5619136dd3c1e7357593c7f9418928bc6e2418176b0d8c73.
+The v0.5.0 archive contains 101 files and describes multi-cloud ingestion,
+scheduling, trends and ITSM. Inspection found PostgreSQL save/get/list stubs,
+AWS error-to-demo fallback, relaxed API schemas and schedule routes lacking the
+claimed production integration. The release imports useful rule/feature intent
+while retaining the verified GitHub storage, authentication and workers.
+It implements the next roadmap GCP/Kubernetes milestone with explicit limits.
+Older source artifacts remain intact. The advanced roadmap text is retained in
+docs/drive-advanced-roadmap.txt; prior executed evidence is archived separately.
+
+## Earlier continuation provenance
+
 This continuation uses CloudSaver-v0.4.0.zip from the user-provided Drive folder:
 https://drive.google.com/drive/folders/1Y53rf0PtWkZnKSgK3NbcOlyQq49hTsKk
 

@@ -1,0 +1,138 @@
+﻿CloudSaver: Advanced Features & Product Roadmap (v0.6.0 – v1.0.0)
+1. Executive Summary & Strategic Vision
+CloudSaver began as an agentless, read-only Azure waste-detection engine. With the v0.5.0 milestone, it successfully expanded into a multi-cloud FinOps governance platform encompassing AWS waste detection, background scheduling, trend analysis, Terraform 1.5+ declarative imports, and enterprise ITSM dispatching.
+
+
+The strategic vision for CloudSaver across v0.6.0 to v1.0.0 is the evolution from Waste Visibility & Detection to an Autonomous, Policy-Driven Cloud Financial Operations (FinOps) Platform. This roadmap transitions CloudSaver from manual operator review into automated, shift-left, policy-guarded cost governance that saves engineering teams hundreds of hours and guarantees cloud efficiency at enterprise scale.
+2. Platform Progression & Milestone Overview
+Release
+	Focus / Strategic Theme
+	Target Horizon
+	Key Capabilities
+	Commercial Value Wedge
+	v0.5.0 (Current)
+	Multi-Cloud Core & ITSM
+	Production
+	Azure + AWS waste rules, scheduler engine, FinOps trends, Terraform 1.5+ imports, Slack/Teams/Jira/ServiceNow dispatchers
+	Immediate cross-cloud waste visibility and multi-channel ticketing
+	v0.6.0
+	Tri-Cloud & Kubernetes FinOps
+	Next Sprint
+	Google Cloud Platform (GCP) ingestion, Kubernetes pod rightsizing (OpenCost/Kubecost), cluster cost allocation
+	True tri-cloud coverage and container workload visibility
+	v0.7.0
+	GitOps CI/CD & Automated PRs
+	Q1 Horizon
+	Automated GitHub/GitLab Pull Requests, pre-merge Terraform plan cost checks (Infracost/OPA guardrails)
+	"Shift-Left" FinOps: automated code fixes before merging
+	v0.8.0
+	AI Anomaly Detection & Rightsizing
+	Q2 Horizon
+	Time-series spend anomaly detection (Isolation Forests/Prophet), compute/storage rightsizing (gp2->gp3, ARM migration)
+	Proactive budget breach prevention and continuous workload optimization
+	v0.9.0
+	Tag Governance & Showback
+	Q3 Horizon
+	Automated tag compliance scoring, missing tag policies, showback/chargeback dashboards, unit economics
+	Finance/Engineering accountability and cost allocation
+	v1.0.0
+	Autonomous Governance & SOC 2 GA
+	Q4 Horizon
+	Autonomous scheduled remediation with multi-stage human approval gates, SOC 2 Type II audit logging, Vault credential security
+	Enterprise-grade hands-free autonomous cloud cost reduction
+	3. Deep Dive: Phase 1 — v0.6.0 Tri-Cloud Expansion & Kubernetes FinOps
+3.1 Google Cloud Platform (GCP) Waste Ingestion
+* Persistent Disk Optimization: Detection of unattached zonal and regional persistent disks (compute.googleapis.com/Disk), calculating waste via the Google Cloud Billing Catalog API.
+* Unassigned External IP Addresses: Identification of reserved static external IPv4 addresses not associated with an active compute instance or forwarding rule ($0.010/hour idle rate).
+* Idle Cloud SQL Instances: Detection of development/staging database instances with zero active network connections over 14 consecutive days.
+* Declarative Google Cloud Terraform: Extension of remediation_terraform.py to generate google_compute_disk, google_compute_address, and google_sql_database_instance import blocks.
+3.2 Kubernetes (K8s) & Container Rightsizing
+* Agentless Cluster Integration: Lightweight integration with OpenCost / Kubecost or native cluster Metrics API.
+* Resource Request vs. Actual Utilization: Identification of containers where CPU/memory requests exceed P95 actual consumption by more than 50%.
+* Idle Namespace & DaemonSet Audits: Detection of abandoned staging namespaces and unconstrained DaemonSets across cluster nodes.
+4. Deep Dive: Phase 2 — v0.7.0 GitOps CI/CD Remediation & Automated Pull Request Engine
+4.1 Automated Pull Request Generation
+* Git Provider Integration: Native OAuth app integrations for GitHub, GitLab, and Bitbucket Cloud.
+* Automated Branching & PR Creation:
+   * Automatically forks/branches the customer's infrastructure repository.
+   * Generates atomic commits containing the required Terraform 1.5+ import blocks and resource destruction definitions.
+   * Opens a Pull Request titled [CloudSaver] Clean up 4 orphaned resources (-$342.50/mo) with detailed markdown tables, pre-deletion snapshot verifications, and architectural impact notes.
+4.2 Shift-Left Cost Guardrails (CI/CD Pipeline Checks)
+* Pre-Merge Infracost & OPA Policies: CloudSaver CI/CD action that inspects terraform plan output JSON in PR pipelines.
+* Orphan Prevention Rules: Blocks PR merges that provision managed disks or public IPs without associated virtual machines or network interfaces.
+5. Deep Dive: Phase 3 — v0.8.0 AI Anomaly Detection & Dynamic Rightsizing
+5.1 Real-Time Spend Anomaly Detection
+* Time-Series ML Models: Evaluates historical daily/hourly spend telemetry using seasonal decomposition and Isolation Forest algorithms.
+* Sudden Spike Alerts: Immediately detects cost surges caused by runaway autoscaling groups, unintended egress traffic, or unclosed BigQuery/Snowflake queries.
+* Contextual Root-Cause Attribution: Correlates billing anomalies with cloud audit logs (AWS CloudTrail, Azure Activity Log) to identify the initiating user, deployment, or API key.
+5.2 Compute & Storage Modernization Engine
+* Storage Tier Modernization: Identifies legacy AWS gp2 volumes and automates migration to gp3 (yielding an immediate 20% baseline savings).
+* Architecture Upgrades: Flags x86 compute workloads suitable for migration to AWS Graviton or Azure Ampere ARM-based VM families (20–40% price-performance improvement).
+6. Deep Dive: Phase 4 — v0.9.0 Enterprise Tag Governance & Unit Economics
+6.1 Tag Compliance & Hygiene Engine
+* Mandatory Tag Policies: Enforces corporate tagging standards (Owner, CostCenter, Environment, Application, Project).
+* Tag Health Scorecard: Generates team-level compliance scores and automated Slack nudges for untagged infrastructure owners.
+* Auto-Tagging Propagation: Automatically propagates parent resource group or VPC tags down to untagged child resources.
+6.2 Showback, Chargeback & Unit Economics
+* Internal Billing Allocations: Dynamic showback reports allocating shared cloud costs (e.g. shared Kubernetes clusters, VPN gateways, core networking).
+* Unit Economics Tracking: Connects cloud spend to business KPIs (e.g. Cost per Monthly Active User, Cost per Query, Cost per Tenant) via customer-provided analytics webhooks.
+7. Deep Dive: Phase 5 — v1.0.0 Autonomous Safe Auto-Remediation & Enterprise GA
+7.1 Autonomous Remediation Engine with Multi-Stage Approval
+* Scheduled Grace Periods: Configurable "Quarantine & Purge" policy (e.g., mark resource as orphaned, notify owner, create safety snapshot, and automatically purge after 14 days if not snoozed).
+* Interactive Multi-Stage Human Approval:
+   * Slack/Teams interactive action buttons: "Approve Cleanup", "Snooze 30 Days", "Add to Whitelist".
+   * Jira/ServiceNow workflow sync: cleanups execute only when the corresponding ticket moves to the "Approved" state.
+7.2 Zero-Trust Security & Enterprise Compliance
+* SOC 2 Type II Readiness: Comprehensive tamper-proof immutable audit logging for all scans, findings, approvals, and remediation actions.
+* Zero-Trust Credential Management: Integration with HashiCorp Vault, AWS Secrets Manager, and Azure Key Vault for ephemeral cloud credential access.
+* Multi-Region High Availability: Multi-region active-passive disaster recovery deployment for Azure Container Apps and Azure PostgreSQL Flexible Server.
+8. Prioritization & Engineering RICE Matrix
+Feature Initiative
+	Reach
+	Impact
+	Confidence
+	Effort (Weeks)
+	RICE Score
+	Priority
+	GCP Multi-Cloud Ingestion
+	High (70%)
+	High (4/5)
+	High (90%)
+	2
+	12.6
+	P1
+	Automated GitOps PR Engine
+	High (80%)
+	Massive (5/5)
+	High (90%)
+	3
+	12.0
+	P1
+	Kubernetes / Container Rightsizing
+	Medium (60%)
+	High (4/5)
+	High (85%)
+	3
+	6.8
+	P2
+	AI Anomaly Detection
+	High (85%)
+	High (4/5)
+	Medium (70%)
+	4
+	5.95
+	P2
+	Tag Governance & Showback
+	Medium (50%)
+	Medium (3/5)
+	High (95%)
+	2
+	7.1
+	P2
+	Autonomous Policy Auto-Purge
+	High (75%)
+	Massive (5/5)
+	Medium (75%)
+	4
+	7.0
+	P1

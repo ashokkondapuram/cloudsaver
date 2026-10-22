@@ -41,10 +41,12 @@ class Settings:
             if not digest and os.getenv('CLOUDSAVER_AUTH_MODE') == 'entra':
                 digest = hashlib.sha256(os.urandom(32)).hexdigest()
             subscriptions = [str(UUID(s)) for s in tenant['subscription_ids']]
+            from app.cloud_scope import normalize_sources
+            sources = normalize_sources(tenant)
             if not isinstance(name, str) or not name.strip() or len(name) > 120:
                 raise ValueError('Each tenant requires a name of 1–120 characters')
-            if not subscriptions or len(subscriptions) > 100 or len(set(subscriptions)) != len(subscriptions):
-                raise ValueError('Configure 1–100 unique subscription IDs per tenant')
+            if (not subscriptions and not any(sources.values())) or len(subscriptions) > 100 or len(set(subscriptions)) != len(subscriptions):
+                raise ValueError('Configure unique subscription IDs or explicit cloud sources per tenant')
             if not re.fullmatch('[0-9a-f]{64}', digest):
                 raise ValueError('api_key_sha256 must be a lowercase SHA256 hex digest')
             if tid in seen_ids or digest in seen_keys:
@@ -56,5 +58,6 @@ class Settings:
                 raise ValueError('Invalid plan tier')
             normalized.append(dict(tenant_id=tid, name=name.strip(), subscription_ids=subscriptions,
                                    api_key_sha256=digest, plan_tier=tier))
+            normalized[-1].update(sources)
         database = os.getenv('CLOUDSAVER_DB', 'data/cloudsaver.sqlite3')
         return cls(mode, database, tuple(normalized), os.getenv('CLOUDSAVER_DATABASE_URL') or None)

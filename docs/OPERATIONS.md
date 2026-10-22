@@ -115,3 +115,25 @@ reservation limits Growth to daily and Enterprise to hourly scheduling, even if
 two schedulers race. Publication to the Celery broker is not yet an atomic outbox
 transaction: fault recovery acceptance is still required. Keep automated alerts
 disabled pending a durable outbox and dispatcher.
+
+## v0.6.0 cloud findings upgrade
+
+Back up before upgrading. Revision 0005_cloud_findings creates a separate
+normalized non-Azure finding table with forced RLS and a tenant-owned scan foreign
+key. Existing Azure subscription foreign keys and histories remain intact.
+Runtime startup rejects a missing/unprotected table or a table-owner/bypass role.
+The integration runner tests upgrades from both previous branches and the v0.4.1
+merge head. SQLite standalone scans remain supported with scope validation.
+
+Provider credential and metric deployment is documented in CLOUD_SOURCES.md.
+Workers/schedules remain Azure-only; automatic alerts remain disabled. Interactive
+multi-cloud scans share the tenant Redis lease with the existing Azure worker.
+
+```bash
+python scripts/smoke_stack.py --multi-cloud
+# After service restart, use the returned ID without creating a new scan:
+python scripts/smoke_stack.py --multi-cloud --scan-id <saved-multi-cloud-id>
+```
+
+This uses only synthetic demo data through dashboard proxy/gateway/storage.
+It never calls cloud providers, notification hooks, Stripe or remediation.

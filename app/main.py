@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v0.4.1."""
+"""Runnable CloudSaver enterprise API service v0.6.0."""
 import hashlib
 import hmac
 import logging
@@ -14,7 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings
 from app.store import Store, PostgresStore
-from app.schemas import ScanSummary, RemediationRequest, BillingCheckoutRequest
+from app.schemas import ScanSummary, RemediationRequest, BillingCheckoutRequest, MultiCloudScanRequest
 
 logger = logging.getLogger('cloudsaver')
 auth = HTTPBearer(auto_error=False)
@@ -30,7 +30,7 @@ def create_app(settings=None, scanner=None, identity_validator=None):
         from app.keyvault import close_providers
         close_providers()
 
-    api = FastAPI(title='CloudSaver — Azure FinOps Enterprise', version='0.4.1', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.6.0', lifespan=lifespan)
     locks = {t['tenant_id']: threading.Lock() for t in settings.tenants}
 
     from app.auth import tenant_dependency, require_workspace_role, Role
@@ -49,7 +49,7 @@ def create_app(settings=None, scanner=None, identity_validator=None):
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.4.1'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.6.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -58,19 +58,24 @@ def create_app(settings=None, scanner=None, identity_validator=None):
 
     @api.get('/api/v1/me')
     def me(tenant=Depends(current_tenant)):
-        tier_name = tenant.get('plan_tier', 'STARTER')
-        from app.entitlements import get_tier_entitlements
-        tier_info = get_tier_entitlements(tier_name)
-        return {
-            'tenant_id': tenant['tenant_id'],
-            'name': tenant['name'],
-            'subscription_ids': tenant['subscription_ids'],
-            'mode': settings.mode,
-            'plan_tier': tier_info.tier.value,
-            'max_subscriptions': tier_info.max_subscriptions,
-            'can_export_terraform': tier_info.can_export_terraform,
-            'roles': tenant.get('roles', ['Viewer'])
-        }
+        from app.auth import workspace_response
+        return workspace_response(tenant, settings.mode)
+
+    @api.get('/api/v1/providers')
+    def providers(tenant=Depends(current_tenant)):
+        from app.cloud_scope import configured_providers
+        return {'providers': configured_providers(tenant, demo=settings.mode == 'demo'),
+                'mode': settings.mode, 'execution': 'read_only_synchronous',
+                'kubernetes_window_days': 14, 'live_cost_support': 'exact Azure meters only; other providers unknown'}
+
+    @api.get('/api/v1/trends')
+    def trends(days: int = 30, scan_id: str | None = None, tenant=Depends(current_tenant)):
+        if not 1 <= days <= 365:
+            raise HTTPException(422, 'days must be between 1 and 365')
+        if scan_id and store.get(tenant['tenant_id'], scan_id) is None:
+            raise HTTPException(404, 'Scan not found')
+        from app.trends import calculate_trend
+        return calculate_trend(store.list(tenant['tenant_id'], 100), days=days, scan_id=scan_id)
 
     @api.get('/api/v1/billing/entitlements')
     def entitlements(tenant=Depends(current_tenant)):
@@ -117,11 +122,26 @@ def create_app(settings=None, scanner=None, identity_validator=None):
 
     @api.post('/api/v1/scans', status_code=201, response_model=ScanSummary)
     def run_scan(tenant=Depends(current_tenant)):
+        if not tenant['subscription_ids']:
+            raise HTTPException(422, 'No Azure subscriptions are configured; use the multi-cloud scan endpoint')
+        return perform_scan(tenant)
+
+    @api.post('/api/v1/scans/multi-cloud', status_code=201, response_model=ScanSummary)
+    def run_multi_cloud(payload: MultiCloudScanRequest, tenant=Depends(current_tenant)):
+        from app.cloud_scope import configured_providers
+        if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant, demo=settings.mode == 'demo')):
+            raise HTTPException(422, 'Select unique providers configured for this workspace')
+        return perform_scan(tenant, payload.providers)
+
+    def perform_scan(tenant, providers=None):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
         tier_name = tenant.get('plan_tier', 'STARTER')
         from app.entitlements import enforce_subscription_quota
-        enforce_subscription_quota(tier_name, len(tenant.get('subscription_ids', [])), adding_count=0)
-        if settings.mode == 'azure' and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault':
+        scope_count = (len(tenant.get('subscription_ids', [])) if not providers else sum(
+            len(tenant.get(key, [])) for p, key in [('azure','subscription_ids'),('aws','aws_accounts'),
+            ('gcp','gcp_projects'),('kubernetes','kubernetes_clusters')] if p in providers))
+        enforce_subscription_quota(tier_name, scope_count, adding_count=0)
+        if settings.mode == 'azure' and (providers is None or 'azure' in providers) and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault':
             from app.entitlements import enforce_keyvault_access
             enforce_keyvault_access(tier_name)
 
@@ -143,7 +163,11 @@ def create_app(settings=None, scanner=None, identity_validator=None):
                 heartbeat.start()
 
             from app.scanner import demo_findings, scan_live
-            raw_findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
+            if providers:
+                from app.multi_cloud import scan_multi_cloud
+                raw_findings = scan_multi_cloud(tenant, providers, mode=settings.mode)
+            else:
+                raw_findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
 
             from app.entitlements import get_tier_entitlements
             if len(raw_findings) > get_tier_entitlements(tier_name).max_resources_per_scan:
@@ -152,8 +176,14 @@ def create_app(settings=None, scanner=None, identity_validator=None):
             # Demo fixtures are relabeled for the authenticated workspace
             if settings.mode == 'demo':
                 for finding in raw_findings:
-                    finding['subscription_id'] = tenant['subscription_ids'][0]
-                    finding['resource_id'] = f"/subscriptions/{tenant['subscription_ids'][0]}/resourceGroups/{finding['resource_group']}/providers/{finding['resource_type']}/{finding['resource_name']}"
+                    if finding.get('cloud_provider', 'azure') == 'azure':
+                        finding['subscription_id'] = tenant['subscription_ids'][0]
+                        finding['resource_id'] = f"/subscriptions/{tenant['subscription_ids'][0]}/resourceGroups/{finding['resource_group']}/providers/{finding['resource_type']}/{finding['resource_name']}"
+
+            from app.cloud_scope import validate_finding_scope, demo_workspace
+            effective = demo_workspace(tenant) if settings.mode == 'demo' else tenant
+            for finding in raw_findings:
+                validate_finding_scope(finding, effective)
 
             # Real-time Azure Retail Prices cost attribution
             from app.pricing import attribute_finding_cost
@@ -164,12 +194,15 @@ def create_app(settings=None, scanner=None, identity_validator=None):
                            if known and (enriched_findings or settings.mode == 'demo') else None)
             realizable_savings = None
 
+            from app.multi_cloud import scope_fingerprint
             result = dict(
                 scan_id=str(uuid4()),
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 status='completed',
-                mode=settings.mode,
-                subscriptions_scanned=len(tenant['subscription_ids']),
+                mode=('multi-cloud' if providers and settings.mode != 'demo' else settings.mode),
+                cloud_providers=sorted(providers or ['azure']),
+                scope_fingerprint=scope_fingerprint(tenant, providers or ['azure'], demo=settings.mode == 'demo'),
+                subscriptions_scanned=len(tenant['subscription_ids']) if not providers or 'azure' in providers else 0,
                 total_items_found=len(enriched_findings),
                 total_monthly_waste_usd=total_waste,
                 realizable_monthly_savings_usd=realizable_savings,
@@ -224,13 +257,13 @@ def create_app(settings=None, scanner=None, identity_validator=None):
         tier_name = tenant.get('plan_tier', 'STARTER')
         from app.entitlements import enforce_terraform_export
         enforce_terraform_export(tier_name)
-        from app.remediation_terraform import generate_terraform_hcl
+        from app.remediation_terraform import generate_cloud_terraform_hcl
         result = store.get(tenant['tenant_id'], scan_id)
         if result is None:
             raise HTTPException(404, 'Scan not found')
         try:
             hcl_scan = dict(result)
-            hcl = generate_terraform_hcl(hcl_scan, payload.resource_ids, tenant['tenant_id'], tenant['subscription_ids'])
+            hcl = generate_cloud_terraform_hcl(hcl_scan, payload.resource_ids, tenant)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
         return {'filename': f'cloudsaver-remediation-{scan_id[:8]}.tf', 'hcl': hcl}
@@ -244,6 +277,6 @@ def create_app(settings=None, scanner=None, identity_validator=None):
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.4.1</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.6.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

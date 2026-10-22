@@ -92,3 +92,12 @@ def test_gateway_verifies_identity_before_forwarding(context):
         assert len(seen) == 1 and 'x-tenant-id' not in seen[0].headers
         assert client.get('/api/v1/me', headers={'Authorization':'Bearer forged.jwt.token'}).status_code == 401
         assert len(seen) == 1
+
+
+def test_new_provider_routes_preserve_role_boundaries(context):
+    settings, validator, headers = context
+    with TestClient(create_app(settings, identity_validator=validator)) as client:
+        viewer = headers(['Viewer'])
+        assert client.get('/api/v1/providers', headers=viewer).json()['providers'] == ['azure']
+        assert client.get('/api/v1/trends', headers=viewer).status_code == 200
+        assert client.post('/api/v1/scans/multi-cloud', headers=viewer, json={'providers':['azure']}).status_code == 403

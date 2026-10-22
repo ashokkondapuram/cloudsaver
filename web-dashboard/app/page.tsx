@@ -17,6 +17,9 @@ type CostAttribution={
 };
 
 type Finding={
+  cloud_provider?:string;
+  scope_id?:string;
+  evidence?:Record<string,unknown>;
   rule_id:string;
   severity:string;
   resource_name:string;
@@ -38,6 +41,7 @@ type Scan={
   total_monthly_waste_usd:number|null;
   realizable_monthly_savings_usd?:number|null;
   findings:Finding[];
+  cloud_providers?:string[];
   status:string;
 };
 
@@ -50,9 +54,16 @@ type Workspace={
   max_subscriptions?:number;
   can_export_terraform?:boolean;
   roles?:string[];
+  providers?:string[];
+  configured_scope_count?:number;
+  max_scopes_per_scan?:number;
 };
 
 const rules:Record<string,string>={
+  ORPHANED_NIC:'Orphaned network interface', ORPHANED_NSG:'Unassociated security group', IDLE_APP_GATEWAY:'Application Gateway review',
+  AWS_UNATTACHED_EBS:'Unattached EBS volume', AWS_UNASSOCIATED_EIP:'Unassociated Elastic IP', AWS_IDLE_RDS:'Stopped RDS instance',
+  GCP_UNATTACHED_DISK:'Unattached persistent disk', GCP_UNASSIGNED_ADDRESS:'Unassigned external IPv4', GCP_IDLE_CLOUD_SQL:'Idle Cloud SQL evidence',
+  K8S_CPU_OVERSIZED:'CPU request review', K8S_MEMORY_OVERSIZED:'Memory request review',
   ORPHANED_DISK:'Unattached disk',
   ORPHANED_DISKS:'Unattached disk',
   UNASSOCIATED_PUBLIC_IP:'Unassociated public IP',
@@ -94,15 +105,16 @@ function Inventory({findings,onSelect}:{findings:Finding[];onSelect:(f:Finding)=
   const [query,setQuery]=useState('');
   const [rule,setRule]=useState('');
   const [severity,setSeverity]=useState('');
+  const [provider,setProvider]=useState('');
   const [sorting,setSorting]=useState<SortingState>([]);
 
-  const filtered=useMemo(()=>findings.filter(f=>(!rule||f.rule_id===rule)&&(!severity||f.severity===severity)&&`${f.resource_name} ${f.resource_group} ${f.subscription_id} ${label(f.rule_id)}`.toLowerCase().includes(query.toLowerCase())),[findings,query,rule,severity]);
+  const filtered=useMemo(()=>findings.filter(f=>(!provider||(f.cloud_provider||'azure')===provider)&&(!rule||f.rule_id===rule)&&(!severity||f.severity===severity)&&`${f.resource_name} ${f.resource_group} ${f.subscription_id} ${label(f.rule_id)}`.toLowerCase().includes(query.toLowerCase())),[findings,query,rule,severity,provider]);
 
   const columns=useMemo<ColumnDef<Finding>[]>(()=>[
     {
       accessorKey:'resource_name',
       header:'Resource',
-      cell:({row})=><button className="resource-name" onClick={()=>onSelect(row.original)}><span>{row.original.resource_name}</span><small>{row.original.resource_type.split('/').slice(-1)[0]}</small></button>
+      cell:({row})=><button className="resource-name" onClick={()=>onSelect(row.original)}><span>{row.original.resource_name}</span><small>{(row.original.cloud_provider||'azure').toUpperCase()} · {row.original.resource_type.split('/').slice(-1)[0]}</small></button>
     },
     {
       accessorKey:'rule_id',
@@ -111,7 +123,7 @@ function Inventory({findings,onSelect}:{findings:Finding[];onSelect:(f:Finding)=
     },
     {
       accessorKey:'resource_group',
-      header:'Resource group',
+      header:'Group / scope',
       cell:({row})=><div><span>{row.original.resource_group}</span><small className="mono">{row.original.subscription_id.slice(0,12)}…</small></div>
     },
     {
@@ -154,6 +166,13 @@ function Inventory({findings,onSelect}:{findings:Finding[];onSelect:(f:Finding)=
         <input type="search" placeholder="Search resource, group or subscription…" value={query} onChange={e=>setQuery(e.target.value)}/>
       </label>
       <label>
+        <span className="sr-only">Filter by provider</span>
+        <select value={provider} onChange={e=>setProvider(e.target.value)}>
+          <option value="">All providers</option>
+          {[...new Set(findings.map(f=>f.cloud_provider||'azure'))].sort().map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}
+        </select>
+      </label>
+      <label>
         <span className="sr-only">Filter by finding</span>
         <select value={rule} onChange={e=>setRule(e.target.value)}>
           <option value="">All findings</option>
@@ -185,6 +204,33 @@ function Inventory({findings,onSelect}:{findings:Finding[];onSelect:(f:Finding)=
   </section>;
 }
 
+type Trend={total_snapshots:number;direction:string;net_change_usd:number|null;new_findings_count:number|null;resolved_findings_count:number|null;snapshots:{scan_id:string;timestamp:string;total_findings:number}[]};
+
+function TrendPanel({scan,token}:{scan:Scan;token:string}){
+  const [trend,setTrend]=useState<Trend|null>(null);
+  const [error,setError]=useState('');
+  useEffect(()=>{
+    let active=true;
+    setTrend(null);setError('');
+    request<Trend>(`/trends?days=30&scan_id=${encodeURIComponent(scan.scan_id)}`,token)
+      .then(value=>{if(active)setTrend(value);}).catch(()=>{if(active)setError('Trend history could not be loaded.');});
+    return()=>{active=false;};
+  },[scan.scan_id,token]);
+  const points=trend?.snapshots.slice(-12)||[];
+  const maximum=Math.max(1,...points.map(p=>p.total_findings));
+  return <section className="panel trend-panel" aria-label="FinOps history">
+    <div className="section-title"><div><h2>Finding trajectory</h2><p>Last 30 days · matching scope, provider selection and data mode · up to 100 scans</p></div>
+      <span>{trend?`${trend.total_snapshots} comparable scans`:'Loading…'}</span></div>
+    {error?<p role="status">{error}</p>:trend&&<>
+      <div className="trend-bars" role="img" aria-label={points.map(p=>`${date(p.timestamp)}: ${p.total_findings} findings`).join('; ')}>
+        {points.map(p=><div key={p.scan_id} title={`${date(p.timestamp)}: ${p.total_findings} findings`}><strong>{p.total_findings}</strong><i style={{height:Math.max(2,p.total_findings/maximum*100)}}/><small>{new Date(p.timestamp).toLocaleDateString()}</small></div>)}
+      </div>
+      <p>{trend.new_findings_count===null?'A second matching scan is required for comparison.':`${trend.new_findings_count} new and ${trend.resolved_findings_count} no longer observed findings. This does not prove remediation.`}</p>
+      <p>Cost change: {money(trend.net_change_usd)} · {trend.direction==='unknown'?'Insufficient pricing evidence':trend.direction}. Dollar estimates remain unknown when any resource is unpriced.</p>
+    </>}
+  </section>;
+}
+
 export default function Dashboard(){
   const [accessKey,setAccessKey]=useState('');
   const checkoutKey=useRef<string|null>(null);
@@ -195,6 +241,7 @@ export default function Dashboard(){
   const [error,setError]=useState('');
   const [busy,setBusy]=useState('');
   const [detail,setDetail]=useState<Finding|null>(null);
+  const [providers,setProviders]=useState<string[]>([]);
 
   useEffect(()=>{
     if(!detail)return;
@@ -228,6 +275,7 @@ export default function Dashboard(){
       const me=await request<Workspace>('/me',token);
       const history=await request<Scan[]>('/scans',token);
       setWorkspace(me);
+      setProviders(me.providers||['azure']);
       setKey(token);
       setAccessKey('');
       setScans(history);
@@ -240,11 +288,11 @@ export default function Dashboard(){
   }
 
   async function run(){
-    setBusy('Scanning Azure');
+    setBusy('Scanning providers');
     setError('');
     setDetail(null);
     try{
-      const result=await request<Scan>('/scans',key,'POST');
+      const result=await request<Scan>('/scans/multi-cloud',key,'POST',{providers});
       setScans(previous=>[result,...previous]);
       setSelected(result.scan_id);
     }catch(e){
@@ -307,7 +355,7 @@ export default function Dashboard(){
 
   function downloadCSV(){
     if(!scan)return;
-    const fields=['rule_id','severity','resource_name','resource_type','resource_group','subscription_id','resource_id','estimated_monthly_waste_usd','details'] as const;
+    const fields=['cloud_provider','scope_id','rule_id','severity','resource_name','resource_type','resource_group','subscription_id','resource_id','estimated_monthly_waste_usd','details'] as const;
     const cell=(value:unknown)=>{let text=String(value??'');if(/^[\s]*[=+@\-]|^[\t\r\n]/.test(text))text="'"+text;return '"'+text.replaceAll('"','""')+'"';};
     const csv=[fields.join(','),...scan.findings.map(f=>fields.map(field=>cell(f[field])).join(','))].join('\r\n');
     const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));
@@ -373,7 +421,7 @@ export default function Dashboard(){
         <div className="shield">✓</div>
         <strong>Read-only by design</strong>
         <p>Declarative Terraform & Bash exports. Zero automatic destruction.</p>
-        <div className="version">DEVELOPMENT RELEASE <span>v0.4.1</span></div>
+        <div className="version">DEVELOPMENT RELEASE <span>v0.6.0</span></div>
       </div>
     </aside>
 
@@ -381,21 +429,27 @@ export default function Dashboard(){
       <header className="topbar">
         <span>Workspace <span className="slash">/</span> <strong>{workspace?.name||'Connect your workspace'}</strong></span>
         {workspace&&<span className={`tier-badge ${currentTier.toLowerCase()}`}>{currentTier} PLAN</span>}
-        {workspace&&<span className="quota-tag">{workspace.subscription_ids.length} / {workspace.max_subscriptions||2} Subscriptions</span>}
+        {workspace&&<span className="quota-tag">{workspace.configured_scope_count??workspace.subscription_ids.length} cloud scopes · {workspace.max_scopes_per_scan||2} per scan</span>}
         {workspace&&canBill&&currentTier==='STARTER'&&<button className="btn-upgrade" onClick={upgradePlan} disabled={!!busy}>Upgrade to Growth ↗</button>}
-        <span className={`mode ${workspace?.mode==='azure'?'live':''}`}>{workspace?(workspace.mode==='demo'?'Demo data':'Azure live mode'):'Local workspace'}</span>
+        <span className={`mode ${workspace?.mode==='azure'?'live':''}`}>{workspace?(workspace.mode==='demo'?'Demo data':'Cloud live mode'):'Local workspace'}</span>
         {workspace&&<button className="text-button" onClick={signout} disabled={!!busy}>Disconnect</button>}
       </header>
 
       <div className="content">
         <div className="heading">
           <div>
-            <div className="eyebrow">AZURE RESOURCE REVIEW</div>
+            <div className="eyebrow">MULTI-CLOUD RESOURCE REVIEW</div>
             <h1>Understand cloud waste.<br className="mobile-break"/> Review the evidence.</h1>
             <p>Review resource signals, available retail price evidence and export scripts for independent review.</p>
           </div>
           {workspace&&canAdmin&&<div className="actions">
-            <Button onClick={run} disabled={!!busy} className="primary">{busy==='Scanning Azure'?'Scanning…':'+ Run new scan'}</Button>
+            <label className="provider-select">Scan providers
+              <select aria-label="Providers to scan" value={providers.join(',')} disabled={!!busy} onChange={e=>setProviders(e.target.value.split(','))}>
+                <option value={(workspace.providers||['azure']).join(',')}>All configured providers</option>
+                {(workspace.providers||['azure']).map(p=><option value={p} key={p}>{p.toUpperCase()} only</option>)}
+              </select>
+            </label>
+            <Button onClick={run} disabled={!!busy||!providers.length} className="primary">{busy==='Scanning providers'?'Scanning…':'+ Run new scan'}</Button>
           </div>}
         </div>
 
@@ -408,7 +462,7 @@ export default function Dashboard(){
             <h2>Enterprise Cloud Waste<br/>Remediation at Scale.</h2>
             <p>Access subscriptions provisioned by your operator to review unattached disks, idle public IPs and stopped VMs.</p>
             <ul>
-              <li><span>01</span>Azure Resource Graph (ARG) high-speed query</li>
+              <li><span>01</span>Azure, AWS, GCP and Kubernetes resource review</li>
               <li><span>02</span>Exact retail meter evidence where available</li>
               <li><span>03</span>Terraform 1.5+ import review exports</li>
             </ul>
@@ -428,7 +482,7 @@ export default function Dashboard(){
             <p className="security-note">Credentials remain in browser memory and clear when you disconnect or reload.</p>
           </form>
         </section>:<>
-          {workspace.mode==='demo'&&<div className="demo-notice"><span>DEMO WORKSPACE</span> Findings and dollar amounts are illustrative fixtures. They do not call Azure.</div>}
+          {workspace.mode==='demo'&&<div className="demo-notice"><span>DEMO WORKSPACE</span> Findings and dollar amounts are illustrative fixtures. They do not call cloud or cluster APIs.</div>}
 
           <section className="stats" aria-label="Scan metrics">
             <article className="stat featured">
@@ -450,11 +504,13 @@ export default function Dashboard(){
             </article>
 
             <article className="stat">
-              <div className="stat-label">Subscriptions & Tier<span>◈</span></div>
-              <strong>{workspace.subscription_ids.length} <small style={{fontSize:14,color:'#888'}}>/ {workspace.max_subscriptions||2}</small></strong>
-              <p>{currentTier} plan · {workspace.mode==='demo'?'Demo Mode':'Azure Live'}</p>
+              <div className="stat-label">Providers available<span>◈</span></div>
+              <strong>{workspace.providers?.length||1}</strong>
+              <p>{currentTier} plan · {workspace.providers?.join(' / ')||'Azure'}</p>
             </article>
           </section>
+
+          {scan&&<TrendPanel scan={scan} token={key}/>}
 
           <div className="overview-grid">
             <section className="panel breakdown">
@@ -471,7 +527,7 @@ export default function Dashboard(){
             <section className="panel scan-info">
               <div className="section-title"><h2>Scan snapshot & status</h2><span className="status-dot"/></div>
               <dl>
-                <div><dt>Status</dt><dd>{busy==='Scanning Azure'?'Scanning…':scan?scan.status||'Completed':'Ready to scan'}</dd></div>
+                <div><dt>Status</dt><dd>{busy==='Scanning providers'?'Scanning…':scan?scan.status||'Completed':'Ready to scan'}</dd></div>
                 <div><dt>Finished</dt><dd>{scan?date(scan.timestamp):'No scans yet'}</dd></div>
                 <div><dt>Pricing source</dt><dd>{scan?.mode==='demo'?'Illustrative fixtures':'Exact retail meter where available'}</dd></div>
                 <div><dt>Scan ID</dt><dd className="mono">{scan?scan.scan_id.slice(0,8):'—'}</dd></div>
@@ -484,7 +540,7 @@ export default function Dashboard(){
             <div className="icon-box">◫</div>
             <h2>Start your FinOps review</h2>
             <p>Scan your configured subscriptions to see resource findings and available pricing evidence.</p>
-            <Button onClick={run} className="primary" disabled={!!busy}>Run first scan</Button>
+            {canAdmin&&<Button onClick={run} className="primary" disabled={!!busy}>Run first scan</Button>}
           </section>}
 
           <section className="panel history" id="history">
@@ -499,14 +555,14 @@ export default function Dashboard(){
             {scans.length?<div className="history-list">{scans.map(item=><button className={`history-item ${item.scan_id===scan?.scan_id?'selected':''}`} key={item.scan_id} onClick={()=>{setSelected(item.scan_id);setDetail(null);}}>
               <span><strong>{date(item.timestamp)}</strong><small className="mono">{item.scan_id.slice(0,8)} · {item.mode}</small></span>
               <span>{item.total_items_found.toLocaleString()} findings</span>
-              <span>{item.subscriptions_scanned} subscriptions</span>
+              <span>{(item.cloud_providers||['azure']).join(' / ')}</span>
               <span className="history-view">{item.scan_id===scan?.scan_id?'Viewing':'View scan →'}</span>
             </button>)}</div>:<p className="empty">No saved scans yet.</p>}
           </section>
         </>}
 
         <footer>
-          <span>CloudSaver <b>·</b> Enterprise Azure FinOps SaaS</span>
+          <span>CloudSaver <b>·</b> Multi-Cloud FinOps</span>
           <span>Resource review · Tenant-scoped access · Pricing evidence</span>
         </footer>
       </div>
@@ -531,7 +587,8 @@ export default function Dashboard(){
           {[
             ['Finding',label(detail.rule_id)],
             ['Resource group',detail.resource_group],
-            ['Subscription',detail.subscription_id],
+            ['Provider',(detail.cloud_provider||'azure').toUpperCase()],
+            ['Scope',detail.scope_id||detail.subscription_id],
             ['Resource ID',detail.resource_id],
             ['Monthly waste',money(detail.estimated_monthly_waste_usd)],
             ['Net savings estimate',money(detail.cost_attribution?.realizable_savings_usd)],
@@ -539,15 +596,17 @@ export default function Dashboard(){
           ].map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}
         </dl>
 
+        {detail.evidence&&Object.keys(detail.evidence).length>0&&<details open><summary>Observed evidence</summary><pre className="evidence-json">{JSON.stringify(detail.evidence,null,2)}</pre></details>}
+
         <p className="security-note">Terraform exports contain import declarations for review. Independently verify backups and retention before planning any deletion.</p>
 
         <div className="script-action">
           <p>Download reviewable remediation code to inspect before executing. CloudSaver never runs commands against your cloud.</p>
           <div className="dual-remediation">
-            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode!=='azure'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP'].includes(detail.rule_id)} onClick={remediationBash}>
+            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode==='demo'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG'].includes(detail.rule_id)} onClick={remediationBash}>
               {busy==='Generating bash script'?'Generating…':'Review Bash Script (.sh) ↓'}
             </Button>
-            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||scan?.mode!=='azure'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP'].includes(detail.rule_id)} onClick={remediationTerraform}>
+            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||scan?.mode==='demo'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'].includes(detail.rule_id)} onClick={remediationTerraform}>
               {busy==='Generating Terraform IaC'?'Generating…':'Export Terraform import review (.tf) ↓'}
             </Button>
           </div>

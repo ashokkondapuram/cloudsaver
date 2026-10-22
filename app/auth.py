@@ -145,7 +145,11 @@ def with_plan(settings, workspace):
 
 def workspace_response(workspace, mode):
     from app.entitlements import get_tier_entitlements
+    from app.cloud_scope import configured_providers
     tier = get_tier_entitlements(workspace['plan_tier'])
     return {k: workspace[k] for k in ('tenant_id', 'name', 'subscription_ids', 'roles')} | {
         'mode': mode, 'plan_tier': tier.tier.value, 'max_subscriptions': tier.max_subscriptions,
-        'can_export_terraform': tier.can_export_terraform}
+        'can_export_terraform': tier.can_export_terraform,
+        'providers': configured_providers(workspace, demo=mode == 'demo'),
+        'max_scopes_per_scan': tier.max_subscriptions,
+        'configured_scope_count': sum(len(workspace.get(k, [])) for k in ('subscription_ids','aws_accounts','gcp_projects','kubernetes_clusters'))}

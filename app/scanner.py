@@ -32,6 +32,22 @@ RULES = (
 | where toint(properties.numberOfSites) == 0
 """ + _PROJECTION + ", skuName=tostring(sku.name)",
      "App Service plan currently reports no hosted sites. Confirm intended capacity and dependencies before changes."),
+    ("ORPHANED_NIC", "LOW", """Resources
+| where type =~ 'microsoft.network/networkinterfaces'
+| where isempty(properties.virtualMachine.id) and isempty(properties.privateEndpoint.id)
+""" + _PROJECTION + ", ipConfigs=tostring(properties.ipConfigurations)",
+     "Network interface is not attached to any virtual machine or private endpoint. May retain unneeded IP allocations."),
+    ("ORPHANED_NSG", "LOW", """Resources
+| where type =~ 'microsoft.network/networksecuritygroups'
+| where coalesce(array_length(properties.networkInterfaces), 0) == 0 and coalesce(array_length(properties.subnets), 0) == 0
+""" + _PROJECTION,
+     "Network security group has no associated subnets or network interfaces."),
+    ("IDLE_APP_GATEWAY", "HIGH", """Resources
+| where type =~ 'microsoft.network/applicationgateways'
+| extend pools=properties.backendAddressPools
+| where properties.operationalState =~ 'Stopped' or coalesce(array_length(pools), 0) == 0
+""" + _PROJECTION + ", skuName=tostring(sku.name)",
+     "Application Gateway is stopped or has no configured backend pools. Validate routing intent and billing; this signal does not establish idle duration or savings."),
 )
 
 
@@ -93,7 +109,7 @@ def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
     for rule_id, severity, query, explanation in RULES:
         for row in execute_pages(client, query, subscriptions):
             evidence = []
-            for field in ("sizeGB", "skuName", "powerState"):
+            for field in ("sizeGB", "skuName", "powerState", "ipConfigs"):
                 if row.get(field) is not None:
                     evidence.append(f"{field}: {str(row[field])[:128]}")
             findings.append({
@@ -129,7 +145,7 @@ def scan_live(tenant: dict) -> list[dict]:
             return _findings(client, subscriptions)
 
 
-def demo_findings() -> list[dict]:
+def demo_findings(*, expanded=False) -> list[dict]:
     """Illustrative local fixtures; dollar values are invented for UI demonstration."""
     subscription = "00000000-0000-0000-0000-000000000001"
     fixtures = [
@@ -137,17 +153,26 @@ def demo_findings() -> list[dict]:
         (0, "migration-snapshot-disk", 153.60), (1, "unused-edge-ip", 3.65),
         (1, "legacy-api-ip", 3.65), (2, "retired-build-agent", 12.80),
         (3, "staging-app-plan", 73.00), (3, "legacy-web-plan", 146.00),
+        (4, "nic-legacy-worker-unattached", 0.00),
+        (5, "nsg-dev-sandbox-orphaned", 0.00),
+        (6, "agw-prod-ingress-idle", 178.85),
     ]
     results = []
-    types = ["microsoft.compute/disks", "microsoft.network/publicipaddresses",
-             "microsoft.compute/virtualmachines", "microsoft.web/serverfarms"]
-    for index, name, amount in fixtures:
+    types = [
+        "microsoft.compute/disks", "microsoft.network/publicipaddresses",
+        "microsoft.compute/virtualmachines", "microsoft.web/serverfarms",
+        "microsoft.network/networkinterfaces", "microsoft.network/networksecuritygroups",
+        "microsoft.network/applicationgateways"
+    ]
+    for index, name, amount in (fixtures if expanded else fixtures[:8]):
         rule_id, severity, _, description = RULES[index]
         resource_type = types[index]
-        results.append({"rule_id": rule_id, "severity": severity,
-                        "resource_name": name, "resource_type": resource_type,
-                        "resource_group": "demo-platform", "subscription_id": subscription,
-                        "resource_id": f"/subscriptions/{subscription}/resourceGroups/demo-platform/providers/{resource_type}/{name}",
-                        "estimated_monthly_waste_usd": amount,
-                        "details": "DEMO: illustrative cost, not Azure billing data. " + description})
+        results.append({
+            "rule_id": rule_id, "severity": severity,
+            "resource_name": name, "resource_type": resource_type,
+            "resource_group": "demo-platform", "subscription_id": subscription,
+            "resource_id": f"/subscriptions/{subscription}/resourceGroups/demo-platform/providers/{resource_type}/{name}",
+            "estimated_monthly_waste_usd": amount,
+            "details": "DEMO: illustrative cost, not Azure billing data. " + description
+        })
     return results

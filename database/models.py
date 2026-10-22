@@ -139,3 +139,22 @@ class Scan(Base):
     tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class CloudFinding(Base):
+    __tablename__ = 'cloud_findings'
+    __table_args__ = (
+        ForeignKeyConstraint(['scan_id', 'tenant_id'], ['scans.id', 'scans.tenant_id'], name='fk_cloud_findings_scan_owner', ondelete='RESTRICT'),
+        UniqueConstraint('scan_id', 'cloud_provider', 'resource_id', 'rule_id', name='uq_cloud_findings_identity'),
+        CheckConstraint("cloud_provider IN ('aws','gcp','kubernetes')", name='cloud_findings_cloud_provider_check'),
+        Index('ix_cloud_findings_owner_observed', 'tenant_id', 'observed_at'),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    scan_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    cloud_provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    scope_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    resource_id: Mapped[str] = mapped_column(Text, nullable=False)
+    rule_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
