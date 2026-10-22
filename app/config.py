@@ -16,22 +16,14 @@ class Settings:
 
     @classmethod
     def load(cls):
-        mode = os.getenv('CLOUDSAVER_MODE', 'demo')
-        if mode not in ('demo', 'azure'):
-            raise ValueError('CLOUDSAVER_MODE must be demo or azure')
+        mode = os.getenv('CLOUDSAVER_MODE', 'azure')
+        if mode != 'azure':
+            raise ValueError('CLOUDSAVER_MODE must be azure')
         tenants = json.loads(os.getenv('CLOUDSAVER_TENANTS', '[]'))
         if not isinstance(tenants, list):
             raise ValueError('CLOUDSAVER_TENANTS must be a JSON array')
-        if not tenants and mode == 'demo':
-            key = os.getenv('DEMO_ACCESS_KEY', '')
-            if len(key) < 32:
-                raise ValueError('Set DEMO_ACCESS_KEY (at least 32 characters) or run scripts/run_demo.py')
-            tenants = [dict(tenant_id='11111111-1111-4111-8111-111111111111',
-                            name='Northstar Demo',
-                            subscription_ids=['22222222-2222-4222-8222-222222222222'],
-                            api_key_sha256=hashlib.sha256(key.encode()).hexdigest())]
         if not tenants:
-            raise ValueError('Azure mode requires explicit CLOUDSAVER_TENANTS')
+            raise ValueError('Configure explicit CLOUDSAVER_TENANTS (run scripts/setup_compose.py for a local workspace)')
         seen_ids, seen_keys = set(), set()
         normalized = []
         for tenant in tenants:

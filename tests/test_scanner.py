@@ -2,7 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.scanner import ScanError, _findings, demo_findings, execute_pages, RULES
+from app.scanner import ScanError, _findings, execute_pages, RULES
+from tests.fixtures.synthetic_findings import demo_findings
 
 
 SUB = "00000000-0000-0000-0000-000000000001"

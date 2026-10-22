@@ -64,9 +64,9 @@ def create_app(settings=None, scanner=None, identity_validator=None):
     @api.get('/api/v1/providers')
     def providers(tenant=Depends(current_tenant)):
         from app.cloud_scope import configured_providers
-        return {'providers': configured_providers(tenant, demo=settings.mode == 'demo'),
+        return {'providers': configured_providers(tenant),
                 'mode': settings.mode, 'execution': 'read_only_synchronous',
-                'kubernetes_window_days': 14, 'live_cost_support': 'exact Azure meters only; other providers unknown'}
+                'kubernetes_window_days': 14, 'live_cost_support': 'exact Azure meters where available; other providers unknown'}
 
     @api.get('/api/v1/trends')
     def trends(days: int = 30, scan_id: str | None = None, tenant=Depends(current_tenant)):
@@ -129,7 +129,7 @@ def create_app(settings=None, scanner=None, identity_validator=None):
     @api.post('/api/v1/scans/multi-cloud', status_code=201, response_model=ScanSummary)
     def run_multi_cloud(payload: MultiCloudScanRequest, tenant=Depends(current_tenant)):
         from app.cloud_scope import configured_providers
-        if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant, demo=settings.mode == 'demo')):
+        if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant)):
             raise HTTPException(422, 'Select unique providers configured for this workspace')
         return perform_scan(tenant, payload.providers)
 
@@ -162,46 +162,45 @@ def create_app(settings=None, scanner=None, identity_validator=None):
                 heartbeat = LeaseHeartbeat(lease, tenant_id, lease_token)
                 heartbeat.start()
 
-            from app.scanner import demo_findings, scan_live
+            from app.scanner import scan_live
             if providers:
                 from app.multi_cloud import scan_multi_cloud
-                raw_findings = scan_multi_cloud(tenant, providers, mode=settings.mode)
+                raw_findings = scan_multi_cloud(tenant, providers)
             else:
-                raw_findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
+                raw_findings = scanner(tenant) if scanner else scan_live(tenant)
 
             from app.entitlements import get_tier_entitlements
             if len(raw_findings) > get_tier_entitlements(tier_name).max_resources_per_scan:
                 raise HTTPException(402, 'Scan exceeds the workspace resource quota; no partial results were saved')
 
-            # Demo fixtures are relabeled for the authenticated workspace
-            if settings.mode == 'demo':
-                for finding in raw_findings:
-                    if finding.get('cloud_provider', 'azure') == 'azure':
-                        finding['subscription_id'] = tenant['subscription_ids'][0]
-                        finding['resource_id'] = f"/subscriptions/{tenant['subscription_ids'][0]}/resourceGroups/{finding['resource_group']}/providers/{finding['resource_type']}/{finding['resource_name']}"
-
-            from app.cloud_scope import validate_finding_scope, demo_workspace
-            effective = demo_workspace(tenant) if settings.mode == 'demo' else tenant
+            from app.cloud_scope import validate_finding_scope
             for finding in raw_findings:
-                validate_finding_scope(finding, effective)
+                validate_finding_scope(finding, tenant)
 
-            # Real-time Azure Retail Prices cost attribution
             from app.pricing import attribute_finding_cost
-            enriched_findings = ([attribute_finding_cost(f) for f in raw_findings] if settings.mode == 'azure' else raw_findings)
+            enriched_findings = []
+            for finding in raw_findings:
+                if finding.get('cloud_provider', 'azure') == 'azure':
+                    enriched_findings.append(attribute_finding_cost(finding))
+                else:
+                    enriched_findings.append(finding)
 
             known = all(f.get('estimated_monthly_waste_usd') is not None for f in enriched_findings)
-            total_waste = (round(sum(f['estimated_monthly_waste_usd'] for f in enriched_findings), 2)
-                           if known and (enriched_findings or settings.mode == 'demo') else None)
-            realizable_savings = None
+            total_waste = round(sum(f['estimated_monthly_waste_usd'] for f in enriched_findings), 2) if known and enriched_findings else None
+            realizable_values = [f.get('cost_attribution', {}).get('realizable_savings_usd') for f in enriched_findings]
+            realizable_savings = (
+                round(sum(v for v in realizable_values if v is not None), 2)
+                if realizable_values and all(v is not None for v in realizable_values) else None
+            )
 
             from app.multi_cloud import scope_fingerprint
             result = dict(
                 scan_id=str(uuid4()),
                 timestamp=datetime.now(timezone.utc).isoformat(),
                 status='completed',
-                mode=('multi-cloud' if providers and settings.mode != 'demo' else settings.mode),
+                mode='multi-cloud' if providers else settings.mode,
                 cloud_providers=sorted(providers or ['azure']),
-                scope_fingerprint=scope_fingerprint(tenant, providers or ['azure'], demo=settings.mode == 'demo'),
+                scope_fingerprint=scope_fingerprint(tenant, providers or ['azure']),
                 subscriptions_scanned=len(tenant['subscription_ids']) if not providers or 'azure' in providers else 0,
                 total_items_found=len(enriched_findings),
                 total_monthly_waste_usd=total_waste,

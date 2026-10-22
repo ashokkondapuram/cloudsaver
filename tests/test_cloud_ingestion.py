@@ -6,8 +6,9 @@ import httpx
 import pytest
 
 from app.cloud_http import JSONReader, pages
-from app.cloud_scope import demo_workspace, normalize_sources, validate_finding_scope
-from app.multi_cloud import demo_cloud_findings, scan_multi_cloud
+from app.cloud_scope import normalize_sources, validate_finding_scope
+from app.multi_cloud import scan_multi_cloud
+from tests.fixtures.synthetic_findings import demo_cloud_findings, demo_workspace
 from app.scanner import RULES, ScanError
 from app.scanner_gcp import scan_gcp_project, sql_idle_evidence, SQL_METRIC
 from app.scanner_kubernetes import scan_cluster
@@ -158,17 +159,17 @@ def test_http_reader_refuses_redirects_and_invalid_payloads():
         list(pages(Reader(lambda *_: {'nextPageToken': 'repeat'}), 'https://example.test'))
 
 
-def test_demo_is_explicit_and_scope_checked_for_all_providers():
+def test_synthetic_fixtures_are_scope_checked_for_all_providers():
     tenant = dict(subscription_ids=['22222222-2222-4222-8222-222222222222'])
-    values = scan_multi_cloud(tenant, ['azure', 'aws', 'gcp', 'kubernetes'], mode='demo')
+    values = demo_cloud_findings(demo_workspace(tenant), ['azure', 'aws', 'gcp', 'kubernetes'])
     assert len(values) == 21
     for item in values:
         WasteFinding.model_validate(item)
         validate_finding_scope(item, demo_workspace(tenant))
-        assert item['details'].startswith('DEMO:')
+        assert item['details'].startswith('TEST FIXTURE:')
     assert len(RULES) == 7
     with pytest.raises(ScanError):
-        scan_multi_cloud(tenant, ['gcp'], mode='azure')
+        scan_multi_cloud(tenant, ['gcp'])
 
 
 @pytest.mark.parametrize('entry', [dict(gcp_projects=[{'project_id': '../../foreign', 'regions': ['us-central1']}]),

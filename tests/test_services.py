@@ -16,7 +16,7 @@ SID = '33333333-3333-4333-8333-333333333333'
 
 
 def configuration(tmp_path):
-    return Settings('demo', str(tmp_path / 'test.sqlite3'), (
+    return Settings('azure', str(tmp_path / 'test.sqlite3'), (
         dict(tenant_id=TID, name='Test workspace', subscription_ids=[SID],
              api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest()),
     ))
@@ -55,7 +55,7 @@ def test_tenant_service_returns_no_key_hash(tmp_path):
     client = TestClient(tenant_service(configuration(tmp_path)))
     assert client.get('/api/v1/me').status_code == 401
     data = client.get('/api/v1/me', headers={'Authorization': 'Bearer ' + KEY}).json()
-    assert data['tenant_id'] == TID and data['mode'] == 'demo' and data['plan_tier'] == 'STARTER'
+    assert data['tenant_id'] == TID and data['mode'] == 'azure' and data['plan_tier'] == 'STARTER'
     assert 'api_key_sha256' not in data
 
 
@@ -100,7 +100,7 @@ def test_notification_sends_only_aggregate_message(tmp_path, monkeypatch):
     def handler(request):
         seen.append(request)
         if request.url.host == 'scanner-service':
-            return httpx.Response(200, json={'mode': 'demo', 'total_items_found': 2, 'subscriptions_scanned': 1,
+            return httpx.Response(200, json={'mode': 'azure', 'total_items_found': 2, 'subscriptions_scanned': 1,
                                              'findings': [{'resource_name': 'private-vm'}]})
         assert request.url.host == 'hooks.slack.com'
         assert 'authorization' not in request.headers

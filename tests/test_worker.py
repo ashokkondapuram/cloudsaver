@@ -197,16 +197,13 @@ def test_notification_failure_does_not_roll_back_or_rerun_scan():
     assert len(repository.scans) == 1
 
 
-def test_live_estimates_remain_unknown_and_demo_is_explicit():
+def test_live_estimates_require_verified_pricing_evidence():
     repository = Repository()
     invented = finding()
     invented['estimated_monthly_waste_usd'] = 999
     result = tasks.run_scan_job(settings(), TENANT, [SUB], str(uuid4()), repository, Lease(), scanner=lambda _: [invented])
     assert repository.scans[result['scan_id']]['total_monthly_waste_usd'] is None
     assert repository.scans[result['scan_id']]['findings'][0]['estimated_monthly_waste_usd'] is None
-    demo = tasks.run_scan_job(settings('demo'), TENANT, [SUB], str(uuid4()), repository, Lease())
-    assert repository.scans[demo['scan_id']]['mode'] == 'demo'
-    assert repository.scans[demo['scan_id']]['total_items_found'] == 8
 
 
 def test_scheduler_intersects_database_activation_with_server_allowlist(monkeypatch):

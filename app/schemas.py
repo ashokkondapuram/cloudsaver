@@ -25,7 +25,7 @@ class ScanSummary(BaseModel):
     scan_id: str
     timestamp: str
     status: Literal['completed', 'cancelled', 'failed']
-    mode: Literal['demo', 'azure', 'multi-cloud']
+    mode: Literal['azure', 'multi-cloud']
     cloud_providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(default_factory=lambda: ['azure'])
     subscriptions_scanned: int = Field(ge=0)
     total_items_found: int = Field(ge=0)

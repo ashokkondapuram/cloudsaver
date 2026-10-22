@@ -21,7 +21,7 @@ def test_import_only_without_guessed_settings_or_destruction():
         assert unsafe not in hcl
 
 
-@pytest.mark.parametrize('mode', ['demo', 'unknown', None])
+@pytest.mark.parametrize('mode', ['multi-cloud', 'unknown', None])
 def test_non_live_scan_rejected(mode):
     with pytest.raises(ValueError):
         generate_terraform_hcl(scan(mode), [DISK], TENANT, [SUB])

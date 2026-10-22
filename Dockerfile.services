@@ -12,6 +12,7 @@ COPY --chown=appuser:appuser workers workers
 COPY --chown=appuser:appuser database database
 COPY --chown=appuser:appuser migrations migrations
 COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser scripts scripts
 RUN mkdir -p data && chown appuser:appuser data
 USER appuser
 EXPOSE 8000 8001 8002 8003 8004

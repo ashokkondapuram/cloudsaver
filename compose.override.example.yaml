@@ -1,0 +1,13 @@
+# Copy to compose.override.yaml and set paths/tokens for live multi-cloud scans.
+# Never commit compose.override.yaml if it contains secrets.
+services:
+  scanner-service:
+    environment:
+      AWS_PROFILE: default
+      AWS_SHARED_CREDENTIALS_FILE: /run/cloud/aws/credentials
+      AWS_CONFIG_FILE: /run/cloud/aws/config
+      GOOGLE_APPLICATION_CREDENTIALS: /run/cloud/gcp/service-account.json
+      CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY: ${CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY:-}
+    volumes:
+      - ${CLOUDSAVER_AWS_CONFIG_DIR:-./local-cloud/aws}:/run/cloud/aws:ro
+      - ${CLOUDSAVER_GCP_CREDENTIALS_FILE:-./local-cloud/gcp/service-account.json}:/run/cloud/gcp/service-account.json:ro

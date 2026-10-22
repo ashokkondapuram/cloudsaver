@@ -93,7 +93,8 @@ def authorized_tenant(settings, repository, tenant_id, requested):
 def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, *,
                  scanner=None, notifier=None, final_attempt=False):
     """Dependency-injected core used by Celery and behavior-based unit tests."""
-    from app.scanner import demo_findings, scan_live
+    from app.scanner import scan_live
+    from app.pricing import attribute_finding_cost
     job_id = str(UUID(job_id))
     tenant = authorized_tenant(settings, repository, tenant_id, subscriptions)
     tenant_id = tenant['tenant_id']
@@ -123,24 +124,24 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             if completed and completed['status'] == 'completed':
                 return dict(job_id=job_id, status='completed', scan_id=completed['scan_id'])
             raise TerminalJob('Job exhausted its durable attempt limit')
-        findings = scanner(tenant) if scanner else (demo_findings() if settings.mode == 'demo' else scan_live(tenant))
+        findings = scanner(tenant) if scanner else scan_live(tenant)
         if len(findings) > entitlements.max_resources_per_scan:
             raise UnauthorizedJob('Scan exceeds workspace resource quota')
+        enriched = []
         for finding in findings:
-            if settings.mode == 'demo':
-                finding['subscription_id'] = subscriptions[0]
-                finding['resource_id'] = f"/subscriptions/{subscriptions[0]}/resourceGroups/{finding['resource_group']}/providers/{finding['resource_type']}/{finding['resource_name']}"
-            else:
-                finding['estimated_monthly_waste_usd'] = None
+            enriched.append(attribute_finding_cost(finding) if finding.get('cloud_provider', 'azure') == 'azure' else finding)
+        findings = enriched
+        for finding in findings:
             sub = str(UUID(finding['subscription_id']))
             if sub not in tenant['subscription_ids'] or not finding['resource_id'].lower().startswith(f'/subscriptions/{sub}/'):
                 raise UnauthorizedJob('Scanner returned an unauthorized resource')
+        known = all(f.get('estimated_monthly_waste_usd') is not None for f in findings)
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
             total_items_found=len(findings), findings=findings,
-            total_monthly_waste_usd=(round(sum(f['estimated_monthly_waste_usd'] or 0 for f in findings), 2)
-                                     if settings.mode == 'demo' else None))).model_dump()
+            total_monthly_waste_usd=round(sum(f['estimated_monthly_waste_usd'] for f in findings), 2) if known and findings else None,
+        )).model_dump()
         heartbeat.ensure_owned()
         repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token)
     except TerminalJob:

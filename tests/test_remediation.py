@@ -33,8 +33,8 @@ def test_public_ip_checks_both_associations():
     assert '--yes' not in script
 
 
-@pytest.mark.parametrize('mode,status', [('demo', 'completed'), ('azure', 'running'), ('unknown', 'completed')])
-def test_refuses_demo_and_incomplete_scan(mode, status):
+@pytest.mark.parametrize('mode,status', [('multi-cloud', 'completed'), ('azure', 'running'), ('unknown', 'completed')])
+def test_refuses_non_azure_and_incomplete_scan(mode, status):
     record = scan()
     record.update(mode=mode, status=status)
     with pytest.raises(ValueError):

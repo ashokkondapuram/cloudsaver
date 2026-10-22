@@ -15,7 +15,7 @@ def summarize(scans):
         'total_items_found': latest['total_items_found'],
         'categories': dict(Counter(row['rule_id'] for row in latest['findings'])),
         'monthly_opportunity_usd': latest['total_monthly_waste_usd'],
-        'cost_basis': 'illustrative_demo' if latest['mode'] == 'demo' else 'not_yet_billing_attributed',
+        'cost_basis': 'azure_retail_where_available' if latest['mode'] in ('azure', 'multi-cloud') else 'not_yet_billing_attributed',
     }
 
 

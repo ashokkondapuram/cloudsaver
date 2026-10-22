@@ -114,7 +114,7 @@ def tenant_dependency(settings, validator=None):
         digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
         for tenant in settings.tenants:
             if hmac.compare_digest(digest, tenant['api_key_sha256']):
-                return with_plan(settings, dict(tenant, roles=['TenantAdmin']))
+                return with_plan(settings, dict(tenant, roles=['TenantAdmin', 'BillingAdmin', 'Viewer']))
         raise HTTPException(401, 'Invalid workspace access key', headers={'WWW-Authenticate': 'Bearer'})
     return current
 
@@ -128,9 +128,17 @@ def require_role(required_role):
 
 
 def with_plan(settings, workspace):
-    # With PostgreSQL enabled, persisted billing state is the source of truth.
+    configured = workspace.get('plan_tier', 'STARTER')
+    rank = {'STARTER': 0, 'GROWTH': 1, 'ENTERPRISE': 2}
+
+    def effective_tier(persisted):
+        if persisted and rank.get(configured, 0) > rank.get(persisted, 0):
+            return configured
+        return persisted or configured
+
+    # With PostgreSQL enabled, persisted billing state is authoritative unless tenant config grants a higher tier.
     if not settings.database_url:
-        return dict(workspace, plan_tier=workspace.get('plan_tier', 'STARTER'))
+        return dict(workspace, plan_tier=configured)
     try:
         import psycopg
         with psycopg.connect(settings.database_url, connect_timeout=5) as db:
@@ -138,7 +146,7 @@ def with_plan(settings, workspace):
             rows = db.execute('SELECT plan_tier FROM public.organizations WHERE tenant_id=%s', (workspace['tenant_id'],)).fetchall()
             if len(rows) > 1:
                 raise ValueError('Ambiguous organization')
-        return dict(workspace, plan_tier=rows[0][0] if rows else 'STARTER')
+        return dict(workspace, plan_tier=effective_tier(rows[0][0] if rows else None))
     except Exception:
         raise HTTPException(503, 'Workspace entitlement state is unavailable') from None
 
@@ -146,10 +154,15 @@ def with_plan(settings, workspace):
 def workspace_response(workspace, mode):
     from app.entitlements import get_tier_entitlements
     from app.cloud_scope import configured_providers
+    from app.operations import workspace_operations
     tier = get_tier_entitlements(workspace['plan_tier'])
     return {k: workspace[k] for k in ('tenant_id', 'name', 'subscription_ids', 'roles')} | {
         'mode': mode, 'plan_tier': tier.tier.value, 'max_subscriptions': tier.max_subscriptions,
         'can_export_terraform': tier.can_export_terraform,
-        'providers': configured_providers(workspace, demo=mode == 'demo'),
+        'providers': configured_providers(workspace),
         'max_scopes_per_scan': tier.max_subscriptions,
-        'configured_scope_count': sum(len(workspace.get(k, [])) for k in ('subscription_ids','aws_accounts','gcp_projects','kubernetes_clusters'))}
+        'configured_scope_count': sum(len(workspace.get(k, [])) for k in ('subscription_ids','aws_accounts','gcp_projects','kubernetes_clusters')),
+        'allowed_scan_frequencies': tier.allowed_scan_frequencies,
+        'can_dispatch_automated_alerts': tier.can_dispatch_automated_alerts,
+        'retention_days': tier.retention_days,
+    } | workspace_operations()

@@ -143,36 +143,3 @@ def scan_live(tenant: dict) -> list[dict]:
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
             return _findings(client, subscriptions)
-
-
-def demo_findings(*, expanded=False) -> list[dict]:
-    """Illustrative local fixtures; dollar values are invented for UI demonstration."""
-    subscription = "00000000-0000-0000-0000-000000000001"
-    fixtures = [
-        (0, "archive-export-disk", 76.80), (0, "old-build-cache", 38.40),
-        (0, "migration-snapshot-disk", 153.60), (1, "unused-edge-ip", 3.65),
-        (1, "legacy-api-ip", 3.65), (2, "retired-build-agent", 12.80),
-        (3, "staging-app-plan", 73.00), (3, "legacy-web-plan", 146.00),
-        (4, "nic-legacy-worker-unattached", 0.00),
-        (5, "nsg-dev-sandbox-orphaned", 0.00),
-        (6, "agw-prod-ingress-idle", 178.85),
-    ]
-    results = []
-    types = [
-        "microsoft.compute/disks", "microsoft.network/publicipaddresses",
-        "microsoft.compute/virtualmachines", "microsoft.web/serverfarms",
-        "microsoft.network/networkinterfaces", "microsoft.network/networksecuritygroups",
-        "microsoft.network/applicationgateways"
-    ]
-    for index, name, amount in (fixtures if expanded else fixtures[:8]):
-        rule_id, severity, _, description = RULES[index]
-        resource_type = types[index]
-        results.append({
-            "rule_id": rule_id, "severity": severity,
-            "resource_name": name, "resource_type": resource_type,
-            "resource_group": "demo-platform", "subscription_id": subscription,
-            "resource_id": f"/subscriptions/{subscription}/resourceGroups/demo-platform/providers/{resource_type}/{name}",
-            "estimated_monthly_waste_usd": amount,
-            "details": "DEMO: illustrative cost, not Azure billing data. " + description
-        })
-    return results

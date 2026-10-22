@@ -45,6 +45,16 @@ type Scan={
   status:string;
 };
 
+type Entitlements={
+  tier:string;
+  max_subscriptions:number;
+  current_subscriptions:number;
+  can_export_terraform:boolean;
+  can_use_keyvault:boolean;
+  can_dispatch_automated_alerts:boolean;
+  retention_days:number;
+};
+
 type Workspace={
   name:string;
   tenant_id:string;
@@ -57,6 +67,13 @@ type Workspace={
   providers?:string[];
   configured_scope_count?:number;
   max_scopes_per_scan?:number;
+  allowed_scan_frequencies?:string[];
+  can_dispatch_automated_alerts?:boolean;
+  retention_days?:number;
+  scheduled_scans_enabled?:boolean;
+  scheduled_scan_interval_seconds?:number;
+  automated_alerts_enabled?:boolean;
+  notification_webhook_configured?:boolean;
 };
 
 const rules:Record<string,string>={
@@ -242,6 +259,7 @@ export default function Dashboard(){
   const [busy,setBusy]=useState('');
   const [detail,setDetail]=useState<Finding|null>(null);
   const [providers,setProviders]=useState<string[]>([]);
+  const [entitlements,setEntitlements]=useState<Entitlements|null>(null);
 
   useEffect(()=>{
     if(!detail)return;
@@ -274,7 +292,9 @@ export default function Dashboard(){
       const token=accessKey.trim();
       const me=await request<Workspace>('/me',token);
       const history=await request<Scan[]>('/scans',token);
+      const plan=await request<Entitlements>('/billing/entitlements',token);
       setWorkspace(me);
+      setEntitlements(plan);
       setProviders(me.providers||['azure']);
       setKey(token);
       setAccessKey('');
@@ -340,8 +360,23 @@ export default function Dashboard(){
     setScans([]);
     setSelected('');
     setDetail(null);
+    setEntitlements(null);
     setError('');
   }
+
+  function toggleProvider(name:string){
+    setProviders(previous=>{
+      const next=previous.includes(name)?previous.filter(p=>p!==name):[...previous,name];
+      return next.length?next:previous;
+    });
+  }
+
+  const costEvidence=useMemo(()=>{
+    const findings=scan?.findings||[];
+    const high=findings.filter(f=>f.cost_attribution?.confidence==='HIGH').length;
+    const unknown=findings.length-high;
+    return {high,unknown,total:findings.length};
+  },[scan]);
 
   function download(){
     if(!scan)return;
@@ -415,6 +450,7 @@ export default function Dashboard(){
       <nav aria-label="Primary">
         <a className="active" href="#overview"><span>◫</span>Overview</a>
         <a href="#findings"><span>▤</span>Resource findings</a>
+        <a href="#operations"><span>⚙</span>Billing & operations</a>
         <a href="#history"><span>↺</span>Scan history</a>
       </nav>
       <div className="sidebar-bottom">
@@ -431,7 +467,7 @@ export default function Dashboard(){
         {workspace&&<span className={`tier-badge ${currentTier.toLowerCase()}`}>{currentTier} PLAN</span>}
         {workspace&&<span className="quota-tag">{workspace.configured_scope_count??workspace.subscription_ids.length} cloud scopes · {workspace.max_scopes_per_scan||2} per scan</span>}
         {workspace&&canBill&&currentTier==='STARTER'&&<button className="btn-upgrade" onClick={upgradePlan} disabled={!!busy}>Upgrade to Growth ↗</button>}
-        <span className={`mode ${workspace?.mode==='azure'?'live':''}`}>{workspace?(workspace.mode==='demo'?'Demo data':'Cloud live mode'):'Local workspace'}</span>
+        <span className={`mode live`}>{workspace?'Cloud live mode':'Local workspace'}</span>
         {workspace&&<button className="text-button" onClick={signout} disabled={!!busy}>Disconnect</button>}
       </header>
 
@@ -442,13 +478,14 @@ export default function Dashboard(){
             <h1>Understand cloud waste.<br className="mobile-break"/> Review the evidence.</h1>
             <p>Review resource signals, available retail price evidence and export scripts for independent review.</p>
           </div>
-          {workspace&&canAdmin&&<div className="actions">
-            <label className="provider-select">Scan providers
-              <select aria-label="Providers to scan" value={providers.join(',')} disabled={!!busy} onChange={e=>setProviders(e.target.value.split(','))}>
-                <option value={(workspace.providers||['azure']).join(',')}>All configured providers</option>
-                {(workspace.providers||['azure']).map(p=><option value={p} key={p}>{p.toUpperCase()} only</option>)}
-              </select>
-            </label>
+          {workspace&&canAdmin&&<div className="actions provider-actions">
+            <fieldset className="provider-select" disabled={!!busy}>
+              <legend>Providers to scan</legend>
+              {(workspace.providers||['azure']).map(p=><label key={p} className="provider-chip">
+                <input type="checkbox" checked={providers.includes(p)} onChange={()=>toggleProvider(p)}/>
+                {p.toUpperCase()}
+              </label>)}
+            </fieldset>
             <Button onClick={run} disabled={!!busy||!providers.length} className="primary">{busy==='Scanning providers'?'Scanning…':'+ Run new scan'}</Button>
           </div>}
         </div>
@@ -482,13 +519,11 @@ export default function Dashboard(){
             <p className="security-note">Credentials remain in browser memory and clear when you disconnect or reload.</p>
           </form>
         </section>:<>
-          {workspace.mode==='demo'&&<div className="demo-notice"><span>DEMO WORKSPACE</span> Findings and dollar amounts are illustrative fixtures. They do not call cloud or cluster APIs.</div>}
-
           <section className="stats" aria-label="Scan metrics">
             <article className="stat featured">
               <div className="stat-label">Monthly retail estimate<span>↗</span></div>
               <strong>{scan?money(scan.total_monthly_waste_usd):'—'}</strong>
-              <p>{scan?.mode==='demo'?'Illustrative demo amounts · USD / month':'Retail estimates where supported'}</p>
+              <p>Retail estimates where supported · USD / month</p>
             </article>
 
             <article className="stat savings">
@@ -529,12 +564,28 @@ export default function Dashboard(){
               <dl>
                 <div><dt>Status</dt><dd>{busy==='Scanning providers'?'Scanning…':scan?scan.status||'Completed':'Ready to scan'}</dd></div>
                 <div><dt>Finished</dt><dd>{scan?date(scan.timestamp):'No scans yet'}</dd></div>
-                <div><dt>Pricing source</dt><dd>{scan?.mode==='demo'?'Illustrative fixtures':'Exact retail meter where available'}</dd></div>
+                <div><dt>Pricing evidence</dt><dd>{costEvidence.total?`${costEvidence.high.toLocaleString()} high confidence · ${costEvidence.unknown.toLocaleString()} unknown`:'Run a scan to summarize evidence'}</dd></div>
                 <div><dt>Scan ID</dt><dd className="mono">{scan?scan.scan_id.slice(0,8):'—'}</dd></div>
               </dl>
               <p>All remediation actions produce reviewable code artifacts. CloudSaver never destroys infrastructure automatically.</p>
             </section>
           </div>
+
+          <section className="panel operations" id="operations">
+            <div className="section-title"><div><h2>Billing & operations</h2><p>Plan limits, scheduled scans and alert delivery</p></div></div>
+            <dl className="ops-grid">
+              <div><dt>Plan tier</dt><dd>{entitlements?.tier||currentTier}</dd></div>
+              <div><dt>Subscription quota</dt><dd>{entitlements?`${entitlements.current_subscriptions} / ${entitlements.max_subscriptions}`:'—'}</dd></div>
+              <div><dt>Retention</dt><dd>{entitlements?`${entitlements.retention_days} days`:'—'}</dd></div>
+              <div><dt>Scheduled scans</dt><dd>{workspace.scheduled_scans_enabled?`Enabled · every ${Math.round((workspace.scheduled_scan_interval_seconds||3600)/3600)} h`:'Disabled by operator'}</dd></div>
+              <div><dt>Allowed frequencies</dt><dd>{(workspace.allowed_scan_frequencies||['manual']).join(', ')}</dd></div>
+              <div><dt>Automated alerts</dt><dd>{workspace.automated_alerts_enabled?'Enabled':'Disabled by operator'}</dd></div>
+              <div><dt>Notification webhook</dt><dd>{workspace.notification_webhook_configured?'Configured':'Not configured'}</dd></div>
+              <div><dt>Terraform export</dt><dd>{entitlements?.can_export_terraform?'Included in plan':'Upgrade required'}</dd></div>
+            </dl>
+            {canBill&&currentTier==='STARTER'&&<Button className="secondary" onClick={upgradePlan} disabled={!!busy}>Start Growth checkout</Button>}
+            <p className="security-note">Checkout opens Stripe in a new tab when billing is configured. Scheduled scans require operator activation and a paid plan that allows automated frequency.</p>
+          </section>
 
           {scan?<Inventory key={scan.scan_id} findings={scan.findings} onSelect={setDetail}/>:<section className="panel empty first-scan" id="findings">
             <div className="icon-box">◫</div>
@@ -603,10 +654,10 @@ export default function Dashboard(){
         <div className="script-action">
           <p>Download reviewable remediation code to inspect before executing. CloudSaver never runs commands against your cloud.</p>
           <div className="dual-remediation">
-            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode==='demo'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG'].includes(detail.rule_id)} onClick={remediationBash}>
+            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode!=='azure'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG'].includes(detail.rule_id)} onClick={remediationBash}>
               {busy==='Generating bash script'?'Generating…':'Review Bash Script (.sh) ↓'}
             </Button>
-            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||scan?.mode==='demo'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'].includes(detail.rule_id)} onClick={remediationTerraform}>
+            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'].includes(detail.rule_id)} onClick={remediationTerraform}>
               {busy==='Generating Terraform IaC'?'Generating…':'Export Terraform import review (.tf) ↓'}
             </Button>
           </div>

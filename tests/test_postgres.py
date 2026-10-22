@@ -39,7 +39,7 @@ def database():
         assert db.execute("SELECT to_regclass('public.alembic_version')").fetchone()[0] is None, 'Requires an empty disposable database'
     migrate(owner, '0001_domain')
     legacy_tenant, legacy_id = uuid4(), uuid4()
-    legacy = {'scan_id': str(legacy_id), 'findings': [], 'mode': 'demo'}
+    legacy = {'scan_id': str(legacy_id), 'findings': [], 'mode': 'azure'}
     with psycopg.connect(owner) as db:
         db.execute((ROOT / 'database/001_schema.sql').read_text())
         db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (str(legacy_tenant),))
@@ -226,7 +226,7 @@ def test_postgres_api_ownership_header_spoof_and_restart(database):
     keys = ('integration-workspace-a-key', 'integration-workspace-b-key')
     for tenant, key in zip((a, b), keys):
         tenant['api_key_sha256'] = hashlib.sha256(key.encode()).hexdigest()
-    settings = Settings('demo', '', (a, b), app)
+    settings = Settings('azure', '', (a, b), app)
     headers = {'Authorization': 'Bearer ' + keys[0], 'X-Tenant-ID': b['tenant_id']}
     with TestClient(create_app(settings)) as client:
         assert client.get('/api/v1/me', headers={'X-Tenant-ID': a['tenant_id']}).status_code == 401
@@ -257,8 +257,8 @@ def test_billing_event_changes_persisted_entitlements(database):
     billing = BillingStore(app)
     assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'subscription_updated'
     assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'duplicate'
-    settings = Settings('demo','',(a,),app)
-    assert with_plan(settings,dict(a,plan_tier='ENTERPRISE'))['plan_tier'] == 'GROWTH'
+    settings = Settings('azure','',(a,),app)
+    assert with_plan(settings,dict(a,plan_tier='ENTERPRISE'))['plan_tier'] == 'ENTERPRISE'
     event['id'] = 'evt_'+uuid4().hex
     event['created'] = 101
     event['type'] = 'customer.subscription.deleted'
@@ -314,11 +314,11 @@ def test_scheduler_reservation_throttles_concurrent_publishers(database):
 
 
 def test_multi_cloud_findings_are_atomic_and_rls_isolated(database):
-    from app.multi_cloud import demo_cloud_findings
+    from tests.fixtures.synthetic_findings import demo_cloud_findings
     _, app, store = database
     a, b = workspace(), workspace()
     payload = scan(a)
-    payload.update(mode='demo', cloud_providers=['aws','gcp','kubernetes'])
+    payload.update(mode='multi-cloud', cloud_providers=['aws','gcp','kubernetes'])
     payload['findings'] = demo_cloud_findings(a, ['aws','gcp','kubernetes'])
     payload['total_items_found'] = len(payload['findings'])
     store.save(a['tenant_id'], payload, workspace=a)
@@ -363,7 +363,7 @@ def test_upgrade_each_release_lineage_preserves_history(database,starting_revisi
             db.execute((ROOT/'database/001_schema.sql').read_text())
         migrate(owner_url,starting_revision)
         tenant,id = str(uuid4()),str(uuid4())
-        payload = {'scan_id':id,'mode':'demo','findings':[]}
+        payload = {'scan_id':id,'mode':'azure','findings':[]}
         with psycopg.connect(owner_url) as db:
             context(db,tenant)
             db.execute('INSERT INTO scans VALUES (%s,%s,now(),%s)',(id,tenant,Jsonb(payload)))

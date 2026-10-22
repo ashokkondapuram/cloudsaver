@@ -43,40 +43,29 @@ Live AWS/GCP/Kubernetes prices and net savings remain unknown. GCP Billing Catal
 customer billing reconciliation, OpenCost allocation, idle namespace/DaemonSet
 analysis, GitOps PR automation and autonomous remediation remain roadmap work.
 
-## Local demo
+## Local development (standalone API)
 
-Use Python 3.12 and Node.js 22:
+Use Python 3.12, explicit `CLOUDSAVER_TENANTS`, and Azure credentials for live scans.
+Configure `CLOUDSAVER_MODE=azure` and run the API with Uvicorn per `app/main.py`.
+The standalone API uses SQLite snapshot history; PostgreSQL supplies normalized
+ingestion, billing and scheduled job persistence in Compose.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python scripts/run_demo.py
-```
-
-In a second terminal:
-
-```bash
-cd web-dashboard
-npm ci
-npm run dev
-```
-
-Open http://127.0.0.1:3000 and enter the private workspace key printed by the
-launcher. Demo scans do not call cloud or cluster APIs. The browser keeps credentials in memory;
-reload/disconnect clears them. The standalone API uses SQLite snapshot history;
-PostgreSQL supplies normalized ingestion, billing and scheduled job persistence.
-
-## Local service stack
+## Local service stack (Docker Desktop)
 
 ```bash
 python scripts/setup_compose.py
-# This prints a private workspace key and refuses to overwrite an existing .env.
+# Prints a workspace access key once and writes CLOUDSAVER_TENANTS into .env.
+# Refuses to overwrite an existing .env.
 make build
 make up
 make status
+export CLOUDSAVER_WORKSPACE_KEY='<key printed by setup>'
 python scripts/smoke_stack.py
 ```
+
+Open http://127.0.0.1:3000 and enter the workspace access key. Live scans require
+authorized subscription IDs in `CLOUDSAVER_TENANTS` plus cloud credentials in Compose.
+The browser keeps credentials in memory; reload/disconnect clears them.
 
 Only dashboard port 3000 and gateway port 8000 bind to host loopback. Tenant,
 scanner, analytics and notification services use internal ports 8001–8004.

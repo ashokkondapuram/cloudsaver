@@ -7,10 +7,9 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.multi_cloud import demo_cloud_findings
 from app.remediation_terraform import generate_cloud_terraform_hcl
-from app.cloud_scope import demo_workspace
 from app.trends import calculate_trend
+from tests.fixtures.synthetic_findings import demo_cloud_findings, demo_workspace
 
 TID = '11111111-1111-4111-8111-111111111111'
 SUB = '22222222-2222-4222-8222-222222222222'
@@ -19,12 +18,21 @@ KEY = 'test-cloud-workspace-key-with-32-characters'
 
 def workspace():
     return dict(tenant_id=TID, name='Test cloud workspace', subscription_ids=[SUB], plan_tier='ENTERPRISE',
-                api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest())
+                api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest(),
+                gcp_projects=[dict(project_id='test-cloudsaver', regions=['us-central1'])],
+                kubernetes_clusters=[dict(cluster_id='demo-cluster', prometheus_url='https://prom.example',
+                                         bearer_token_env='CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY')],
+                aws_accounts=[dict(account_id='123456789012', region='us-east-1', credential_profile='test')])
 
 
-def test_multi_cloud_demo_restart_scope_and_trends(tmp_path):
-    settings = Settings('demo', str(tmp_path/'multi.sqlite'), (workspace(),))
+def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):
+    settings = Settings('azure', str(tmp_path/'multi.sqlite'), (workspace(),))
     auth = {'Authorization':'Bearer '+KEY}
+
+    def synthetic_scan(tenant, providers):
+        return demo_cloud_findings(demo_workspace(tenant), providers)
+
+    monkeypatch.setattr('app.multi_cloud.scan_multi_cloud', synthetic_scan)
     with TestClient(create_app(settings)) as client:
         assert client.get('/api/v1/me', headers=auth).json()['providers'] == ['azure','aws','gcp','kubernetes']
         first = client.post('/api/v1/scans/multi-cloud', headers=auth, json={'providers':['gcp','kubernetes']})
@@ -42,13 +50,14 @@ def test_multi_cloud_demo_restart_scope_and_trends(tmp_path):
         assert client.get('/api/v1/trends?scan_id='+str(uuid4()), headers=auth).status_code == 404
         export = client.post('/api/v1/scans/'+first['scan_id']+'/remediation-terraform', headers=auth,
                              json={'resource_ids':[first['findings'][0]['resource_id']]})
-        assert export.status_code == 422
+        assert export.status_code == 200
     with TestClient(create_app(settings)) as client:
+        monkeypatch.setattr('app.multi_cloud.scan_multi_cloud', synthetic_scan)
         assert client.get('/api/v1/scans/'+second['scan_id'], headers=auth).json() == second
 
 
-def test_multi_cloud_live_failure_does_not_persist_demo_or_partial(tmp_path, monkeypatch):
-    tenant = workspace() | {'gcp_projects':[dict(project_id='test-cloudsaver', regions=['us-central1'])]}
+def test_multi_cloud_live_failure_does_not_persist_partial(tmp_path, monkeypatch):
+    tenant = workspace()
     settings = Settings('azure', str(tmp_path/'multi.sqlite'), (tenant,))
     def failure(*args, **kwargs):
         raise RuntimeError('private credentials and provider message')
@@ -77,21 +86,21 @@ def test_import_review_requires_owned_live_scope(provider, expected):
     with pytest.raises(ValueError, match='scope'):
         generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], other)
     with pytest.raises(ValueError, match='live'):
-        generate_cloud_terraform_hcl(dict(scan, mode='demo'), [findings[0]['resource_id']], tenant)
+        generate_cloud_terraform_hcl(dict(scan, mode='azure'), [findings[0]['resource_id']], tenant)
     findings[0]['resource_name'] = 'foreign-name'
     if provider == 'aws':
         with pytest.raises(ValueError, match='identity'):
             generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], tenant)
 
 
-def test_trend_compares_resource_identity_instead_of_count_and_isolates_modes():
+def test_trend_compares_resource_identity_instead_of_count_and_isolates_scope():
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
     def snapshot(id, offset, resource, amount, **kwargs):
         return dict(scan_id=id, timestamp=(now-timedelta(hours=offset)).isoformat(), status='completed',
             mode='multi-cloud', cloud_providers=['gcp'], scope_fingerprint='same', total_items_found=1,
             total_monthly_waste_usd=amount, findings=[dict(cloud_provider='gcp', rule_id='disk', resource_id=resource)]) | kwargs
-    scans = [snapshot('old', 2, 'disk-a', 20), snapshot('demo', 1, 'disk-b', 1000, mode='demo'),
+    scans = [snapshot('old', 2, 'disk-a', 20), snapshot('other', 1, 'disk-b', 1000, scope_fingerprint='other'),
              snapshot('new', 0, 'disk-b', 10)]
     trend = calculate_trend(scans, now=now)
     assert trend['total_snapshots'] == 2 and trend['net_change_usd'] == -10
@@ -109,7 +118,7 @@ def test_gateway_routes_cloud_selection_and_trend_params(tmp_path):
     def reply(request):
         requests.append(request)
         return httpx.Response(200, json={'ok':True})
-    settings = Settings('demo', str(tmp_path/'unused'), (workspace(),))
+    settings = Settings('azure', str(tmp_path/'unused'), (workspace(),))
     with TestClient(gateway(settings, Limiter(), httpx.MockTransport(reply))) as client:
         auth = {'Authorization':'Bearer '+KEY}
         assert client.get('/api/v1/providers', headers=auth).status_code == 200

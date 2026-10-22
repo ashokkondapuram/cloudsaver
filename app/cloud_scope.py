@@ -58,9 +58,7 @@ def normalize_sources(tenant):
     return result
 
 
-def configured_providers(tenant, *, demo=False):
-    if demo:
-        return (['azure'] if tenant.get('subscription_ids') else []) + ['aws', 'gcp', 'kubernetes']
+def configured_providers(tenant):
     return [p for p, key in [('azure', 'subscription_ids'), ('aws', 'aws_accounts'),
                             ('gcp', 'gcp_projects'), ('kubernetes', 'kubernetes_clusters')] if tenant.get(key)]
 
@@ -112,10 +110,3 @@ def validate_finding_scope(finding, tenant):
         valid = False
     if not valid:
         raise ValueError('Finding is outside the configured cloud scope')
-
-
-def demo_workspace(tenant):
-    """Synthetic scopes are available only to explicit demo execution/ingestion."""
-    return dict(tenant, aws_accounts=[dict(account_id='123456789012', region='us-east-1')],
-                gcp_projects=[dict(project_id='demo-cloudsaver', regions=['us-central1'])],
-                kubernetes_clusters=[dict(cluster_id='demo-cluster')])
