@@ -1,4 +1,4 @@
-# CloudSaver roadmap after v0.6.0
+# CloudSaver roadmap after v0.7.0
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
@@ -11,6 +11,13 @@ Read-only GCP inventory and evidence-gated SQL review, native Kubernetes sampled
 P95 request review, scoped AWS ingestion, provider UX, truthful observation
 trends, import-only GCP/AWS/Azure Terraform and atomic forced-RLS persistence.
 See IMPLEMENTATION_STATUS.md and TEST_REPORT.md for exact limits and checks.
+
+## v0.7.0 delivered milestone
+
+Offline Terraform plan guardrails and reusable CLI/Action, optional Infracost USD
+budget checks, operator-approved GitHub App draft-PR review packages and durable
+request idempotency/leases/history. The latest production-only dashboard commit
+076c96f is retained; historical synthetic snapshots cannot become live evidence.
 
 ## Finish v0.6 acceptance and the operational foundation
 
@@ -31,7 +38,8 @@ See IMPLEMENTATION_STATUS.md and TEST_REPORT.md for exact limits and checks.
 
 ## Subsequent roadmap milestones
 
-- **v0.7 GitOps:** customer repository OAuth, isolated branches and reviewed PRs;
+- **Complete v0.7 GitOps:** live GitHub App acceptance, native customer OAuth,
+  GitLab/Bitbucket adapters, broader plan corpus and reviewed deletion workflows;
   Terraform plan JSON cost/OPA checks. Import reviews alone do not authorize
   destruction. Require source mapping, backup evidence and independent approval.
 - **v0.8 anomalies/rightsizing:** billing time series, evaluated models, baseline

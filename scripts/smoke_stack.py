@@ -73,5 +73,14 @@ with httpx.Client(timeout=60, trust_env=False) as client:
     page = client.get(dashboard)
     assert page.status_code == 200 and 'CloudSaver' in page.text
     assert client.get(dashboard + '/api/v1/me', headers=headers).json()['tenant_id'] == body['tenant_id']
+    targets = client.get(dashboard + '/api/v1/gitops/targets',headers=headers)
+    targets.raise_for_status()
+    assert isinstance(targets.json()['targets'],list)
+    history = client.get(dashboard + '/api/v1/gitops/requests',headers=headers)
+    history.raise_for_status()
+    assert isinstance(history.json(),list)
+    invalid = client.post(dashboard + '/api/v1/policies/terraform/evaluate',headers=headers,
+                          json={'plan':{'format_version':'unsupported','variables':{'secret':'do-not-echo'}}})
+    assert invalid.status_code == 422 and 'do-not-echo' not in invalid.text
     assert client.get(dashboard + '/api/v1/unlisted', headers=headers).status_code == 404
 print('Stack smoke passed' + (f'; scan_id={scan_id}' if scan_id else ' (no saved scans)'))

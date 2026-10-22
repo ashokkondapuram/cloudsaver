@@ -15,7 +15,7 @@ SUPPORTED = {
 
 
 def generate_terraform_hcl(scan_record, selected_resource_ids, tenant_id, authorized_subscription_ids):
-    if scan_record.get('mode') != 'azure' or scan_record.get('status') != 'completed':
+    if scan_record.get('mode') != 'azure' or scan_record.get('status') != 'completed' or scan_record.get('data_origin') == 'legacy_synthetic':
         raise ValueError('Terraform export requires a completed live Azure scan')
     if not 1 <= len(selected_resource_ids) <= 50 or len({s.lower() for s in selected_resource_ids}) != len(selected_resource_ids):
         raise ValueError('Select 1–50 unique resource IDs')
@@ -59,7 +59,7 @@ def generate_terraform_hcl(scan_record, selected_resource_ids, tenant_id, author
 def generate_cloud_terraform_hcl(scan_record, selected_resource_ids, workspace):
     """Import-only exports for an owned live scan; one provider per review file."""
     from app.cloud_scope import validate_finding_scope
-    if scan_record.get('mode') not in ('azure', 'multi-cloud') or scan_record.get('status') != 'completed':
+    if scan_record.get('mode') not in ('azure', 'multi-cloud') or scan_record.get('status') != 'completed' or scan_record.get('data_origin') == 'legacy_synthetic':
         raise ValueError('Terraform export requires a completed live scan')
     if not 1 <= len(selected_resource_ids) <= 50 or len(set(selected_resource_ids)) != len(selected_resource_ids):
         raise ValueError('Select 1–50 unique resource IDs')

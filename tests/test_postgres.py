@@ -221,6 +221,7 @@ def test_ingestion_failure_rolls_back_new_workspace(database):
 
 def test_postgres_api_ownership_header_spoof_and_restart(database):
     import hashlib
+    from tests.support import stub_scanner
     _, app, _ = database
     a, b = workspace(), workspace()
     keys = ('integration-workspace-a-key', 'integration-workspace-b-key')
@@ -228,14 +229,14 @@ def test_postgres_api_ownership_header_spoof_and_restart(database):
         tenant['api_key_sha256'] = hashlib.sha256(key.encode()).hexdigest()
     settings = Settings('azure', '', (a, b), app)
     headers = {'Authorization': 'Bearer ' + keys[0], 'X-Tenant-ID': b['tenant_id']}
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings,scanner=stub_scanner)) as client:
         assert client.get('/api/v1/me', headers={'X-Tenant-ID': a['tenant_id']}).status_code == 401
         assert client.get('/api/v1/me', headers=headers).json()['tenant_id'] == a['tenant_id']
         response = client.post('/api/v1/scans', headers=headers)
         assert response.status_code == 201
         result = response.json()
         assert client.get('/api/v1/scans/' + result['scan_id'], headers={'Authorization': 'Bearer ' + keys[1]}).status_code == 404
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings,scanner=stub_scanner)) as client:
         assert client.get('/api/v1/scans/' + result['scan_id'], headers=headers).json() == result
 
 
@@ -300,7 +301,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0005_cloud_findings',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0006_gitops_requests',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -313,10 +314,39 @@ def test_scheduler_reservation_throttles_concurrent_publishers(database):
     assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400)
 
 
+def test_gitops_requests_rls_foreign_keys_and_durable_fencing(database):
+    from app.gitops_store import ReviewRepository,ReviewConflict
+    owner,app,store=database
+    a,b=workspace(),workspace()
+    sa,sb=scan(a),scan(b)
+    store.save(a['tenant_id'],sa,workspace=a)
+    store.save(b['tenant_id'],sb,workspace=b)
+    repository=ReviewRepository(store)
+    package=dict(scan_id=sa['scan_id'],fingerprint='a'*64,target_id='infra',repository='example/infra',branch='cloudsaver/review-test')
+    id=repository.reserve(a['tenant_id'],'test-key-12345678',package)
+    assert repository.reserve(a['tenant_id'],'test-key-12345678',package)==id
+    assert repository.get(b['tenant_id'],id) is None
+    with psycopg.connect(app) as db:
+        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='gitops_requests'::regclass").fetchone()==(True,True)
+        assert db.execute('SELECT count(*) FROM gitops_requests').fetchone()[0]==0
+    with pytest.raises(errors.ForeignKeyViolation):
+        repository.reserve(a['tenant_id'],'foreign-scan-key-12345678',dict(package,scan_id=sb['scan_id']))
+    old,new=str(uuid4()),str(uuid4())
+    assert repository.claim(a['tenant_id'],id,old)
+    with pytest.raises(ReviewConflict):repository.claim(a['tenant_id'],id,new)
+    with psycopg.connect(owner) as db:
+        context(db,a['tenant_id'])
+        db.execute('UPDATE gitops_requests SET lease_until=0 WHERE id=%s',(id,))
+    assert repository.claim(a['tenant_id'],id,new)
+    with pytest.raises(ReviewConflict):repository.finish(a['tenant_id'],id,old,{'pr_number':7})
+    repository.finish(a['tenant_id'],id,new,{'pr_number':7})
+    assert ReviewRepository(PostgresStore(app)).get(a['tenant_id'],id)['status']=='open'
+
+
 def test_multi_cloud_findings_are_atomic_and_rls_isolated(database):
-    from tests.fixtures.synthetic_findings import demo_cloud_findings
+    from tests.fixtures.synthetic_findings import demo_cloud_findings,demo_workspace
     _, app, store = database
-    a, b = workspace(), workspace()
+    a, b = demo_workspace(workspace()), workspace()
     payload = scan(a)
     payload.update(mode='multi-cloud', cloud_providers=['aws','gcp','kubernetes'])
     payload['findings'] = demo_cloud_findings(a, ['aws','gcp','kubernetes'])
@@ -346,7 +376,7 @@ def test_multi_cloud_findings_are_atomic_and_rls_isolated(database):
     assert store.get(a['tenant_id'], broken['scan_id']) is None
 
 
-@pytest.mark.parametrize('starting_revision',['0002_scan_findings','0003_scan_jobs','0004_merge_hardening'])
+@pytest.mark.parametrize('starting_revision',['0002_scan_findings','0003_scan_jobs','0004_merge_hardening','0005_cloud_findings'])
 def test_upgrade_each_release_lineage_preserves_history(database,starting_revision):
     from sqlalchemy.engine import make_url
     privileged = os.getenv('CLOUDSAVER_TEST_PRIVILEGED_URL')

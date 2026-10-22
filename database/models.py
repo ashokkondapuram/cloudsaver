@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Integer, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Numeric, String, Text, UniqueConstraint, false, func
+from sqlalchemy import BigInteger, Boolean, Double, Integer, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Numeric, String, Text, UniqueConstraint, false, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -158,3 +158,29 @@ class CloudFinding(Base):
     rule_id: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GitOpsRequest(Base):
+    __tablename__ = 'gitops_requests'
+    __table_args__ = (
+        ForeignKeyConstraint(['scan_id','tenant_id'],['scans.id','scans.tenant_id'],name='fk_gitops_scan_owner',ondelete='RESTRICT'),
+        UniqueConstraint('tenant_id','idempotency_digest',name='uq_gitops_key'),
+        CheckConstraint("status IN ('pending','publishing','open','uncertain')",name='gitops_requests_status_check'),
+        CheckConstraint('attempts >= 0 AND attempts <= 4',name='gitops_requests_attempts_check'),
+        Index('ix_gitops_owner_created','tenant_id','created_at'),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),primary_key=True,default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),nullable=False)
+    scan_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True),nullable=False)
+    idempotency_digest: Mapped[str] = mapped_column(String(64),nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64),nullable=False)
+    target_id: Mapped[str] = mapped_column(String(40),nullable=False)
+    repository: Mapped[str] = mapped_column(String(201),nullable=False)
+    branch: Mapped[str] = mapped_column(String(120),nullable=False)
+    status: Mapped[str] = mapped_column(String(16),nullable=False,server_default='pending')
+    attempts: Mapped[int] = mapped_column(Integer,nullable=False,server_default='0')
+    lease_token: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True),nullable=True)
+    lease_until: Mapped[float] = mapped_column(Double,nullable=False,server_default='0')
+    result: Mapped[dict | None] = mapped_column(JSONB,nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False,server_default=func.now())

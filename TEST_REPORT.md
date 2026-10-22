@@ -1,91 +1,98 @@
-# CloudSaver v0.6.0 verification report
+# CloudSaver v0.7.0 verification report
 
-Date: 2026-10-22 (UTC). Source repository: ashokkondapuram/project.
+Date: 2026-10-22 UTC. Repository: ashokkondapuram/project.
 
-## Scope and source review
+## Baseline and delivered behavior
 
-Read the v0.5.0 source package/guide and the advanced v0.6.0–v1.0.0 roadmap
-from Drive root. The source ZIP SHA256 is recorded in SOURCE_CONTEXT.md.
-Kept the verified PostgreSQL/authentication paths, ported AWS/network feature
-intent, and implemented GCP/Kubernetes ingestion, provider UX, scoped import
-review exports and observation trends. Did not inherit PostgreSQL stubs,
-permissive schemas, live-to-demo fallbacks or unverified scheduling/ITSM claims.
+Fetched remote main and incorporated commit 076c96f, which removes runtime demo
+mode and expands the billing/operations dashboard. Resolved the dashboard merge
+conflict while retaining both feature sets. Fixed stale test assumptions and
+explicitly injected test-only scanner fixtures; verification never relies on
+production synthetic scan paths or cloud credentials.
 
-## Executed checks
+Added offline Terraform JSON guardrails, optional Infracost USD budget checks,
+a standard-library CLI/composite Action, bounded policy API and dashboard panel.
+Added owned live-scan GitOps preview and explicit GitHub App draft-PR adapter,
+operator repository allowlists and durable tenant-scoped request history,
+idempotency keys, bounded attempts and publisher leases. Packages are import-only
+and isolated under .cloudsaver/reviews/. No existing infrastructure definition is
+edited, no force-push is used and CloudSaver executes no Terraform or cloud action.
 
-- Python 3.12.14: `python scripts/test_postgres.py` — **242 passed**, no skips.
-  The runner created and removed disposable PostgreSQL 16 and Redis 7 containers.
+Historical synthetic snapshots remain stored unchanged, but reads mark their
+origin, hide illustrative costs and prevent Bash/Terraform/GitOps export. They
+cannot become live evidence merely through a compatibility mode label.
+
+## Executed verification
+
+- Python 3.12: `python scripts/test_postgres.py` — **272 passed**, no skips.
+  The runner creates/removes its own disposable PostgreSQL 16/Redis 7 containers.
   One inherited Starlette/httpx TestClient deprecation warning remains.
-- PostgreSQL runtime role denies cross-tenant access independently of HTTP.
-  New cloud_findings rows use forced RLS and tenant-owned scan foreign keys.
-  Mixed snapshot/finding failures roll back; old scan history survives upgrades
-  from each prior branch and the v0.4.1 merge revision.
-- Existing identity, Stripe signature/ownership, entitlements, Key Vault, Azure
-  pagination, worker retries/leases/fencing, gateway and remediation checks pass.
-- GCP tests cover zonal/regional disks, reserved external IPv4, pagination,
-  malformed/foreign identities, partial scopes, repeated tokens and late failures.
-  SQL tests require all 336 hourly maxima for every series; gaps, nonzero values,
-  wrong project identities and absent telemetry never become idle findings.
-- Kubernetes tests cover complete 337-point windows, P95/headroom calculations,
-  missing samples, high usage, NaN, wrong cluster labels, duplicate series and
-  provider warnings. Unknown live costs remain null.
-- Real boto3/botocore Stubber contract tests cover STS account binding, EC2/RDS
-  pagination, association filtering, foreign RDS ARNs and provider failures.
-  No AWS request or demo fallback occurs in those tests.
-- API tests cover provider selection, rejection of caller-supplied scopes,
-  role boundaries, full-scan failure without persistence, restart history,
-  scope/mode-separated trends, same-count resource replacement and Terraform
-  ownership/live-mode constraints. Gateway forwards only fixed routes.
-- Frontend TypeScript and Next.js production build passed on the host. The
-  Node 22 Docker build also performs TypeScript checking and production build.
-- `python -m compileall -q app services database workers tests`, `pip check` and
-  `git diff --check` passed.
+- Database tests verify forced RLS on gitops_requests, foreign tenant reads,
+  cross-tenant scan foreign keys, durable keys, active publisher exclusion and
+  stale-token fencing. Upgrades preserve history from both earlier lineages,
+  the v0.4.1 merge and v0.6 cloud-findings revision.
+- SQLite tests verify request keys across restart, payload-key conflict, lease
+  takeover, stale completion denial and foreign-tenant lookup denial.
+- GitHub tests use real RS256 signatures and mocked HTTP: repository-scoped App
+  token requests, numeric repository verification, atomic review commits, draft
+  creation, lost-response reconciliation, wrong-repository denial, conflicting
+  branches, redirect denial and preview-file hash verification on existing PRs.
+  No live branch or PR was created by these tests.
+- Policy tests exercise orphan versus declared/concrete attachment, nested Azure
+  attributes, module-local references, conservative indexed-instance denial,
+  deletion/replacement, required/unknown tags, USD budget/unknown pricing,
+  inconsistent cost totals, duplicate keys, malformed/versioned/deep/oversized
+  input, NaN/infinity rejection and sanitized output. CLI exit codes 0/1/2 pass.
+- API tests verify Viewer reads/evaluation versus Admin publish restrictions,
+  plan entitlement/owned scan checks, previews without I/O, idempotent publication,
+  auditable uncertain outcomes, disabled publishing and bounded request bodies.
+- Existing Azure/AWS/GCP/Kubernetes ingestion, identity, billing, credentials,
+  quotas, worker lease/fencing, service routing and remediation tests pass.
+- Frontend TypeScript and production build passed after merging the latest
+  dashboard. Node 22 Docker build also checks types and builds successfully.
+  Python image build passed with a strict runtime-source whitelist and non-root
+  user. Consolidating runtime COPY avoids duplicated vfs layer storage.
+- compileall, pip check and git diff --check passed.
 
-## Container stack and upgrade acceptance
+- Running Compose stack: all eight long-running services healthy; migration
+  completed successfully without replacing PostgreSQL/Redis volumes.
+- Gateway and dashboard proxy smoke passed before and after restarting the
+  scanner, gateway and dashboard: authentication, entitlements, history,
+  GitOps target/history routes, invalid-plan redaction and route restrictions.
+- Both retained historical synthetic snapshots read as legacy_synthetic with
+  illustrative finding prices removed. The saved multi-cloud scan remained
+  readable after restart. GitOps publishing stayed disabled with no targets.
+  No live scan or external product action was triggered.
 
-- Built the final Python image and dashboard image through the managed proxy,
-  with TLS verification and a temporary BuildKit CA mount. Python 3.12 and Node
-  22 builds passed. The five Python services share one image.
-- `docker compose up -d --no-build --wait --wait-timeout 120` passed against
-  the existing local v0.4.1 data volume; migration 0005 completed successfully.
-  Eight services ran, required health checks passed, migration exited zero.
-- Legacy Azure demo smoke passed through gateway, history and analytics.
-  Saved scan: d818a9ef-9bae-4deb-a9bc-a72d88ced6f0.
-- Multi-cloud demo smoke passed through dashboard POST proxy, gateway, scanner,
-  PostgreSQL, analytics, provider discovery and trend proxy. All 21 synthetic
-  findings persisted, including 10 normalized non-Azure findings.
-  Saved scan: 97b7f025-9e24-4be1-8d13-d595913507ea.
-- Restarted scanner, gateway and dashboard. Read both saved scans again without
-  generating new ones, and read the previously saved v0.4.1 scan
-  966ad538-0f24-4dba-8c3b-0792168a3053. Persistence and compatibility passed.
-- No database/Redis volume was removed. Build cache was pruned to accommodate
-  the environment's vfs disk usage. No live cloud, alert or payment was invoked.
+## Limits and acceptance still required
 
-These are HTTP/service checks, not browser visual/accessibility acceptance.
+GitHub App installation/permission behavior, real Terraform plan corpora, target
+provider versions and real Infracost reports need authorized external acceptance.
+The App is operator-provisioned; native OAuth onboarding, GitLab/Bitbucket and
+native OPA execution are not included. CI must pin reviewed checker code, protect
+policy ownership and establish same-plan cost-report provenance. Source alone
+cannot enforce merge checks.
 
-## Cost and operational limits
+Association checking is conservative and limited to documented resource/attribute
+patterns; indexed/indirect/external bindings may need independent review. Optional
+Infracost figures are reported USD estimates, not verified billing or savings.
+Raw uploaded plans can contain secrets: they are processed transiently and are
+not stored or echoed by CloudSaver. Repository CI may run on an explicitly
+published draft PR; operators must exclude review folders from auto-apply jobs.
 
-GCP and AWS test responses and Kubernetes metrics are controlled offline fixtures;
-these checks do not establish live provider/IAM/engine/metric acceptance.
-Kubernetes P95 is over hourly samples of five-minute CPU rates / working-set
-memory, not continuous peak utilization or node/billing savings. Missing data is
-unknown. GCP SQL requires explicit dev/staging labels and engine-supported
-connection metrics. Global GCP addresses and other AWS partitions are excluded.
+Ambiguous GitHub outcomes remain uncertain, with a maximum of four attempts.
+Retry the same key after inspecting history; changed branch contents/base or
+exhausted attempts require manual review. No distributed exactly-once delivery,
+background replay, merge, deletion approval or destructive remediation is claimed.
 
-Live AWS/GCP/Kubernetes prices, net and realized savings remain unknown. GCP
-Billing Catalog and customer billing reconciliation remain roadmap work. No
-Azure/GCP/AWS mutation, Terraform plan/import/apply, real Stripe Checkout, alert
-send, ITSM ticket creation or external Gemini review was executed.
+Runtime is production-only (CLOUDSAVER_MODE=azure). Local verification uses health,
+existing-history reads and invalid-input checks, with scheduled scans and alerts
+disabled. No live cloud scan, payment, notification, ITSM ticket, remediation or
+customer infrastructure PR was run. The final source publication to this user's
+project repository is separate from testing the product's PR adapter.
 
-Interactive scans remain synchronous, with current proxy time limits. Existing
-Azure-only Celery scheduling remains opt-in and alerts disabled; transactional
-publish/delivery outbox, multi-cloud jobs/cancellation and ITSM operational
-acceptance are pending. Browser PKCE/onboarding, browser visual/accessibility QA,
-backup/restore drill, load/fault tests and production deployment remain pending.
-
-The frontend audit still reports **9 inherited advisories (6 high, 3 moderate)**
-in the Next/PostCSS and Tailwind dependency graph. The recorded remediation
-requires a planned compatible upgrade; no unsafe major-version audit fix or
-TLS bypass was applied. This development release is not production acceptance.
-
-Historical v0.4.1 evidence is retained in docs/TEST_REPORT_v0.4.1.md.
+Live Entra/Stripe/cloud acceptance, browser visual/accessibility QA, a production
+restore drill, load/fault acceptance, GCP Catalog reconciliation and OpenCost
+allocation remain pending. The inherited frontend dependency graph still has
+9 advisories (6 high, 3 moderate); no unreviewed major upgrade was applied.
+Prior evidence is retained in docs/TEST_REPORT_v0.6.0.md and earlier reports.

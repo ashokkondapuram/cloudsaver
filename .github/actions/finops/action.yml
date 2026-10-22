@@ -1,0 +1,25 @@
+name: CloudSaver Terraform guardrails
+description: Evaluate a complete Terraform plan JSON offline using repository-owned policy.
+inputs:
+  plan:
+    description: Path to terraform show -json output
+    required: true
+  policy:
+    description: Path to trusted policy JSON (keep protected from untrusted PR edits)
+    required: true
+  infracost:
+    description: Optional Infracost v0.2 JSON for the same plan
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CLOUDSAVER_PLAN_PATH: ${{ inputs.plan }}
+        CLOUDSAVER_POLICY_PATH: ${{ inputs.policy }}
+        CLOUDSAVER_INFRACOST_PATH: ${{ inputs.infracost }}
+      run: |
+        set -eu
+        arguments=("$CLOUDSAVER_PLAN_PATH" --policy "$CLOUDSAVER_POLICY_PATH")
+        if [ -n "$CLOUDSAVER_INFRACOST_PATH" ]; then arguments+=(--infracost "$CLOUDSAVER_INFRACOST_PATH"); fi
+        python3 "$GITHUB_ACTION_PATH/../../../scripts/check_terraform_plan.py" "${arguments[@]}"

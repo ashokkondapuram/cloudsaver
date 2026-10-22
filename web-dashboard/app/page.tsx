@@ -4,6 +4,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {ColumnDef,flexRender,getCoreRowModel,getSortedRowModel,SortingState,useReactTable} from '@tanstack/react-table';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {Button} from '../components/ui/button';
+import {GitOpsPanel,PlanPolicyPanel} from '../components/GitOpsPanel';
 
 type CostAttribution={
   monthly_waste_usd:number|null;
@@ -43,6 +44,7 @@ type Scan={
   findings:Finding[];
   cloud_providers?:string[];
   status:string;
+  data_origin?:string;
 };
 
 type Entitlements={
@@ -452,12 +454,14 @@ export default function Dashboard(){
         <a href="#findings"><span>▤</span>Resource findings</a>
         <a href="#operations"><span>⚙</span>Billing & operations</a>
         <a href="#history"><span>↺</span>Scan history</a>
+        <a href="#policy-checks"><span>✓</span>Plan guardrails</a>
+        <a href="#gitops"><span>↗</span>GitOps reviews</a>
       </nav>
       <div className="sidebar-bottom">
         <div className="shield">✓</div>
         <strong>Read-only by design</strong>
         <p>Declarative Terraform & Bash exports. Zero automatic destruction.</p>
-        <div className="version">DEVELOPMENT RELEASE <span>v0.6.0</span></div>
+        <div className="version">DEVELOPMENT RELEASE <span>v0.7.0</span></div>
       </div>
     </aside>
 
@@ -519,6 +523,7 @@ export default function Dashboard(){
             <p className="security-note">Credentials remain in browser memory and clear when you disconnect or reload.</p>
           </form>
         </section>:<>
+          {scan?.data_origin==='legacy_synthetic'&&<p className="error">This saved snapshot contains historical synthetic data. Prices are hidden and export/publishing is disabled. Select a current live scan for review.</p>}
           <section className="stats" aria-label="Scan metrics">
             <article className="stat featured">
               <div className="stat-label">Monthly retail estimate<span>↗</span></div>
@@ -594,6 +599,9 @@ export default function Dashboard(){
             {canAdmin&&<Button onClick={run} className="primary" disabled={!!busy}>Run first scan</Button>}
           </section>}
 
+          <PlanPolicyPanel token={key}/>
+          <GitOpsPanel key={scan?.scan_id||'no-scan'} token={key} scan={scan} canPublish={!!canAdmin&&!!workspace.can_export_terraform}/>
+
           <section className="panel history" id="history">
             <div className="section-title">
               <div><h2>Scan history</h2><p>Saved results for this workspace</p></div>
@@ -654,10 +662,10 @@ export default function Dashboard(){
         <div className="script-action">
           <p>Download reviewable remediation code to inspect before executing. CloudSaver never runs commands against your cloud.</p>
           <div className="dual-remediation">
-            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode!=='azure'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG'].includes(detail.rule_id)} onClick={remediationBash}>
+            <Button className="secondary" disabled={!!busy||!canAdmin||scan?.mode!=='azure'||scan?.data_origin==='legacy_synthetic'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG'].includes(detail.rule_id)} onClick={remediationBash}>
               {busy==='Generating bash script'?'Generating…':'Review Bash Script (.sh) ↓'}
             </Button>
-            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'].includes(detail.rule_id)} onClick={remediationTerraform}>
+            <Button className="primary" disabled={!!busy||!canAdmin||!workspace?.can_export_terraform||scan?.data_origin==='legacy_synthetic'||!['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'].includes(detail.rule_id)} onClick={remediationTerraform}>
               {busy==='Generating Terraform IaC'?'Generating…':'Export Terraform import review (.tf) ↓'}
             </Button>
           </div>

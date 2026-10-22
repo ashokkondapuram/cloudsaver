@@ -5,12 +5,18 @@ from pathlib import Path
 
 
 def normalize_legacy_scan(payload):
-    """Upgrade persisted demo snapshots for API response validation."""
+    """Read legacy history without converting synthetic fixtures into live evidence."""
     if not isinstance(payload, dict) or payload.get('mode') != 'demo':
         return payload
     payload = dict(payload)
     providers = payload.get('cloud_providers') or ['azure']
     payload['mode'] = 'multi-cloud' if len(providers) > 1 else 'azure'
+    payload['data_origin'] = 'legacy_synthetic'
+    payload['scope_fingerprint'] = None
+    payload['total_monthly_waste_usd'] = None
+    payload['realizable_monthly_savings_usd'] = None
+    payload['findings'] = [dict(f,estimated_monthly_waste_usd=None,cost_attribution=None,
+                                details='Historical synthetic fixture; not live cloud evidence.') for f in payload.get('findings',[])]
     return payload
 
 
@@ -65,7 +71,7 @@ class PostgresStore:
             role = db.execute('SELECT rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = current_user').fetchone()
             if any(role):
                 raise ValueError('Application database role must not be superuser or BYPASSRLS')
-            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
+            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings', 'gitops_requests') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
                 raise ValueError('Application database role must not own storage tables or inherit their owner role')
             table = db.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'public.scans'::regclass").fetchone()
             if not table or not all(table):

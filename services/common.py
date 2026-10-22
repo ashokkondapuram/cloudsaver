@@ -12,7 +12,7 @@ from app.config import Settings
 
 def service(title, settings=None, identity_validator=None):
     settings = settings or Settings.load()
-    app = FastAPI(title=title, version='0.6.0')
+    app = FastAPI(title=title, version='0.7.0')
     from app.auth import tenant_dependency
     tenant = tenant_dependency(settings, identity_validator)
 

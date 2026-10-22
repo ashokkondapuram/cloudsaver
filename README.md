@@ -1,11 +1,33 @@
-# CloudSaver v0.6.0
+# CloudSaver v0.7.0
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release implements the GCP and Kubernetes milestone from the advanced roadmap
-in Drive, while preserving verified tenant isolation and Azure behavior.
+release implements the GitOps/CI milestone from the Drive roadmap and builds on
+the latest GitHub production-dashboard changes (076c96f).
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.7.0
+
+- Offline Terraform JSON guardrails for supported orphan relationships, deletion /
+  replacement, required ownership tags and optional Infracost USD budget checks.
+  A CLI and composite GitHub Action work without cloud credentials or Python
+  dependencies. Raw plan values are not included in the report.
+- Owned live-scan GitOps previews and explicit GitHub App draft-PR publishing to
+  operator-approved repository IDs. Packages contain import review files only in
+  `.cloudsaver/reviews/`; existing infrastructure files are untouched.
+- Durable PostgreSQL/SQLite request keys, bounded attempts, tenant-scoped history,
+  publisher leases and stale-token rejection. Ambiguous GitHub outcomes remain
+  auditable; retries reconcile the existing draft rather than force-pushing.
+- Production-only execution and expanded billing/operations dashboard from the
+  fetched GitHub commit. Synthetic inventory exists only under tests. Historical
+  synthetic snapshots retain provenance, hide illustrative costs and cannot
+  generate Bash/Terraform exports or GitOps PRs.
+
+Publishing defaults to disabled. Configure a reviewed GitHub App installation,
+repository allowlist and trusted plan policy as described in docs/GITOPS.md.
+Live GitHub App/Terraform/Infracost acceptance, native OAuth onboarding, GitLab /
+Bitbucket and destructive approval workflows remain pending.
 
 ## Advanced features
 
@@ -41,7 +63,7 @@ scheduler remains Azure-only. See SOURCE_CONTEXT.md and IMPLEMENTATION_STATUS.md
 
 Live AWS/GCP/Kubernetes prices and net savings remain unknown. GCP Billing Catalog,
 customer billing reconciliation, OpenCost allocation, idle namespace/DaemonSet
-analysis, GitOps PR automation and autonomous remediation remain roadmap work.
+analysis and autonomous remediation remain roadmap work.
 
 ## Local development (standalone API)
 
@@ -127,10 +149,9 @@ billing/webhook, notifications/{scan_id}, and scan-owned remediation /
 remediation-terraform POST exports. Analytics/notifications need the service
 stack; they are not provided by the standalone scanner API.
 
-New authenticated routes: GET providers, POST scans/multi-cloud with only a
+v0.6 authenticated routes: GET providers, POST scans/multi-cloud with only a
 providers array, and GET trends?days=30&scan_id=UUID. The original POST scans
-remains Azure-only and retains its eight-fixture standalone demo contract. The
-multi-cloud demo contains 21 findings and performs no external requests.
+remains Azure-only. Runtime synthetic scans are unavailable; all fixtures are test-only.
 
 Dashboard scans remain synchronous. Completed synchronous scans return 409 to
 cancellation; foreign/unknown scans return 404. The UI does not report fake

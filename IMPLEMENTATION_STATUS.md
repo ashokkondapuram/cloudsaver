@@ -1,4 +1,4 @@
-# CloudSaver v0.6.0 status
+# CloudSaver v0.7.0 status
 
 This release follows the advanced roadmap found in Drive's root (v0.6.0–v1.0.0).
 The v0.5.0 package was reviewed and selected features were ported into the
@@ -19,7 +19,9 @@ live-to-demo fallbacks were excluded. TEST_REPORT.md records executed evidence.
 | Scheduling | Existing opt-in Azure Celery worker, Redis heartbeat, durable fencing/cadence | Publish outbox, replay/failover, multi-cloud scheduling and interactive jobs |
 | Notifications | Existing explicit aggregate webhook path; automatic alerts disabled | Reliable delivery outbox, audited ITSM integration/provider acceptance |
 | Dashboard | Provider selection/filtering, evidence, trend chart, exports and roles | Browser accessibility/visual QA, interactive sign-in, inherited dependency advisories |
-| Later roadmap | Advanced roadmap and limits recorded | GitOps PR engine, AI anomalies, tags/showback, autonomous approvals, deployment/compliance |
+| Plan policies | Offline CLI/Action and bounded API, supported attachment checks, deletion/tag policies, optional Infracost budget | Real Terraform/Infracost corpus acceptance, more module/instance relationships, native OPA integration and CI provenance |
+| GitOps | GitHub App repository allowlist, import-only draft PRs, deterministic packages, durable idempotency/leases/history | Live App acceptance, native OAuth onboarding, GitLab/Bitbucket, destructive approval workflows |
+| Later roadmap | Advanced roadmap and limits recorded | AI anomalies, tags/showback, autonomous approvals, deployment/compliance |
 
 The Drive v0.5.0 guide describes scheduler/ITSM behavior beyond what its source
 wires into the service stack. Those claims are not inherited as verified features.
@@ -30,3 +32,8 @@ Interactive scans are synchronous; completed scans cannot be cancelled. There is
 no reliable automatic alert-delivery guarantee. All live AWS/GCP/Kubernetes dollar
 and net savings estimates remain unknown. A resource no longer observed is not
 proof of remediation. See docs/CLOUD_SOURCES.md for exact scope/telemetry rules.
+
+Latest GitHub commit 076c96f was merged before release. Its production-only mode
+and dashboard operations are retained. Legacy synthetic history is read with
+explicit provenance and no illustrative dollar estimates; exports/publishing are
+blocked. No live PR or infrastructure change was created during verification.

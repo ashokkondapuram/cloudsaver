@@ -81,5 +81,5 @@ def test_live_findings_never_invent_savings():
 def test_demo_is_explicitly_illustrative():
     findings = demo_findings()
     assert len(findings) == 8
-    assert all(f["details"].startswith("DEMO:") for f in findings)
+    assert all(f["details"].startswith("TEST FIXTURE:") for f in findings)
     assert sum(f["estimated_monthly_waste_usd"] for f in findings) == pytest.approx(507.90)

@@ -1,6 +1,6 @@
 # Operator-managed cloud connections
 
-v0.6.0 uses the existing workspace UUID and auth roles for every provider.
+v0.7.0 uses the existing workspace UUID and auth roles for every provider.
 Only trusted CLOUDSAVER_TENANTS configuration selects cloud scopes; HTTP requests
 can select provider names but cannot supply projects, accounts, regions, profiles,
 URLs, tokens or arbitrary findings. Cloud sources are not returned by /me.
@@ -95,8 +95,8 @@ submission is future work.
 All live AWS/GCP/Kubernetes dollar estimates remain unknown. No fixed published
 rate is silently applied across region, currency, contract or resource class.
 No inference of realizable/realized savings is made. GCP Billing Catalog exact-SKU
-reconciliation is pending. Demo fixtures are always labelled and never substituted
-for a failed live scan.
+reconciliation is pending. Synthetic fixtures exist only under tests and are never available through a
+runtime scan path. Legacy synthetic history is marked and cannot be exported.
 
 Terraform export requires TenantAdmin and Growth/Enterprise entitlement, an owned
 completed live snapshot and a currently configured scope. Select one provider per

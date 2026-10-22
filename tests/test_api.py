@@ -104,7 +104,9 @@ def test_remediation_download_respects_ownership(settings):
         path = f"/api/v1/scans/{scan['scan_id']}/remediation"
         selection = {'resource_ids': [scan['findings'][0]['resource_id']]}
         assert client.post(path, headers=headers(KEY_B), json=selection).status_code == 404
-        assert client.post(path, headers=headers(), json=selection).status_code == 422
+        owned = client.post(path, headers=headers(), json=selection)
+        assert owned.status_code == 200
+        assert 'read -r confirmation' in owned.json()['script']
 
 
 def test_live_remediation_is_download_only(settings):

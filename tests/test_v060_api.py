@@ -19,7 +19,7 @@ KEY = 'test-cloud-workspace-key-with-32-characters'
 def workspace():
     return dict(tenant_id=TID, name='Test cloud workspace', subscription_ids=[SUB], plan_tier='ENTERPRISE',
                 api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest(),
-                gcp_projects=[dict(project_id='test-cloudsaver', regions=['us-central1'])],
+                gcp_projects=[dict(project_id='demo-cloudsaver', regions=['us-central1'])],
                 kubernetes_clusters=[dict(cluster_id='demo-cluster', prometheus_url='https://prom.example',
                                          bearer_token_env='CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY')],
                 aws_accounts=[dict(account_id='123456789012', region='us-east-1', credential_profile='test')])
@@ -57,7 +57,7 @@ def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):
 
 
 def test_multi_cloud_live_failure_does_not_persist_partial(tmp_path, monkeypatch):
-    tenant = workspace()
+    tenant = dict(workspace(),aws_accounts=[])
     settings = Settings('azure', str(tmp_path/'multi.sqlite'), (tenant,))
     def failure(*args, **kwargs):
         raise RuntimeError('private credentials and provider message')
@@ -86,7 +86,7 @@ def test_import_review_requires_owned_live_scope(provider, expected):
     with pytest.raises(ValueError, match='scope'):
         generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], other)
     with pytest.raises(ValueError, match='live'):
-        generate_cloud_terraform_hcl(dict(scan, mode='azure'), [findings[0]['resource_id']], tenant)
+        generate_cloud_terraform_hcl(dict(scan, data_origin='legacy_synthetic'), [findings[0]['resource_id']], tenant)
     findings[0]['resource_name'] = 'foreign-name'
     if provider == 'aws':
         with pytest.raises(ValueError, match='identity'):

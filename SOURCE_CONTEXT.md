@@ -1,5 +1,14 @@
 # Source context
 
+## v0.7.0 latest GitHub continuation
+
+Fetched and fast-forwarded to remote main 076c96f on 2026-10-22 while the GitOps
+work was in progress. The production-only execution and expanded operations UI
+are retained. Merge conflicts were resolved without dropping either dashboard
+feature set. Historical synthetic provenance, export safety and test isolation
+were repaired before adding the v0.7 GitOps/CI milestone. No live PR or cloud
+mutation was used as a development test.
+
 ## v0.6.0 advanced roadmap continuation
 
 The user identified newer v0.5.0 material in Drive's root, outside the original

@@ -83,9 +83,9 @@ python scripts/smoke_stack.py --scan-id <id-printed-by-first-smoke>
 
 The PostgreSQL runner creates a uniquely named disposable container with temporary
 private credentials and removes it afterward. It never points at existing data.
-The smoke script requires demo mode, creates one fixture scan, checks gateway
-authorization, analytics, history and the dashboard proxy, and invokes neither
-notifications nor remediation. The scan-id form verifies persistence after a
+The smoke script checks workspace authentication, configured providers, entitlements,
+GitOps history and the dashboard proxy. It never triggers a cloud scan,
+notification or remediation. The scan-id form verifies persistence after a
 restart without creating another scan.
 
 `docker compose down` retains history. `docker compose down --volumes` destroys
@@ -130,10 +130,24 @@ Workers/schedules remain Azure-only; automatic alerts remain disabled. Interacti
 multi-cloud scans share the tenant Redis lease with the existing Azure worker.
 
 ```bash
-python scripts/smoke_stack.py --multi-cloud
+python scripts/smoke_stack.py
 # After service restart, use the returned ID without creating a new scan:
-python scripts/smoke_stack.py --multi-cloud --scan-id <saved-multi-cloud-id>
+python scripts/smoke_stack.py --scan-id <saved-scan-id>
 ```
 
-This uses only synthetic demo data through dashboard proxy/gateway/storage.
-It never calls cloud providers, notification hooks, Stripe or remediation.
+This checks existing data and routing only. It never calls cloud providers,
+notification hooks, Stripe or remediation.
+
+## v0.7.0 request history and upgrade
+
+Migration 0006_gitops_requests adds forced-RLS GitOps history with tenant-owned
+scan foreign keys, hashed request keys and fenced publisher leases. Back up first;
+apply migrations with the schema owner before starting scanner-service. Retain
+request history when designing retention: referenced scans cannot be deleted
+while request/job/finding ownership links remain. No purge was run for this release.
+
+Follow GITOPS.md to configure repository/App bindings. Publishing is disabled by
+default. An uncertain result may already exist in GitHub; inspect history and
+retry the same key. Never force-push or delete a branch to bypass a collision.
+Historical synthetic records are projected with explicit provenance and unknown
+prices; their original stored bytes are retained and they cannot be exported.

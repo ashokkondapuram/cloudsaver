@@ -25,7 +25,7 @@ def generate_script(scan: dict, resource_ids: list[str], tenant_id: str,
     Only exact selected finding IDs are accepted. Azure authorization and approval
     remain the responsibility of the human executing the downloaded script.
     """
-    if scan.get('mode') != 'azure' or scan.get('status') != 'completed':
+    if scan.get('mode') != 'azure' or scan.get('status') != 'completed' or scan.get('data_origin') == 'legacy_synthetic':
         raise ValueError('Remediation requires a completed live Azure scan')
     tenant_id = str(UUID(tenant_id))
     allowed = {str(UUID(s)) for s in subscription_ids}
