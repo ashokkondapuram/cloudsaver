@@ -1,3 +1,7 @@
+# v0.7.3 CI correction
+
+The first GitHub v0.7.2 run passed backend/audit/build checks but exposed a frontend Shift-R race. Selection now updates table and workspace state atomically and keyboard handlers refresh before paint.
+
 # v0.7.2 continuation
 
 The Drive UI/UX specification and Production Go-Live & Backend Hardening Guide

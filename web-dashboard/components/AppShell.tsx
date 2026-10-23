@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {usePathname, useRouter} from 'next/navigation';
-import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime, providerNames, scopeOf, ruleLabel} from '../lib/finops';
@@ -89,7 +89,7 @@ export function AppShell({children}: {children: ReactNode}) {
   const prefix = useRef({key:'',at:0});
   useEffect(() => {try {setCollapsed(localStorage.getItem('cloudsaver:ui:sidebar') === 'collapsed');} catch {}}, []);
   useEffect(() => {setMobileOpen(false);}, [pathname]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!workspace) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {e.preventDefault(); if (!overlay || overlay === 'command') setOverlay(overlay ? null : 'command'); return;}
@@ -113,7 +113,7 @@ export function AppShell({children}: {children: ReactNode}) {
   const active = navigation.find(item => item.href === pathname) || navigation[0];
   const scopes = [...new Set((scan?.findings || []).map(scopeOf))];
   const failures = reliability?.counts.filter(c => c.status === 'dead_letter').reduce((sum,c) => sum + c.count,0) || 0;
-  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${pathname === item.href ? 'active' : ''}`} aria-current={pathname === item.href ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v0.7.2</small></>}</button></div></>;
+  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${pathname === item.href ? 'active' : ''}`} aria-current={pathname === item.href ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v0.7.3</small></>}</button></div></>;
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>

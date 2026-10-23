@@ -1,4 +1,4 @@
-# CloudSaver v0.7.2 status
+# CloudSaver v0.7.3 status
 
 This release follows the advanced roadmap found in Drive's root (v0.6.0–v1.0.0).
 The v0.5.0 package was reviewed and selected features were ported into the

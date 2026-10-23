@@ -39,7 +39,7 @@ export function FindingsGrid({initialProvider = ''}: {initialProvider?: string})
   const [pagination,setPagination] = useState({pageIndex:0,pageSize:100});
   const scroller = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null), columnMenu = useRef<HTMLDetailsElement>(null);
   useEffect(() => {setProvider(initialProvider);}, [initialProvider]);
-  useEffect(() => {setRowSelection({});setPagination(previous => ({...previous,pageIndex:0}));}, [query,provider,severity,type,tag,scope]);
+  useEffect(() => {setRowSelection({});setSelection([]);setPagination(previous => ({...previous,pageIndex:0}));}, [query,provider,severity,type,tag,scope,scan?.scan_id,setSelection]);
   const filtered = useMemo(() => findings.filter(f => {
     const tags = observedTags(f);
     const match = !tag.trim() || (tag.includes('=') ? tags[tag.slice(0,tag.indexOf('='))] === tag.slice(tag.indexOf('=')+1) : Object.keys(tags).some(key => key.toLowerCase().includes(tag.toLowerCase())));
@@ -61,10 +61,9 @@ export function FindingsGrid({initialProvider = ''}: {initialProvider?: string})
 
   const table = useReactTable({data:filtered,columns,getRowId:findingKey,
     state:{sorting,rowSelection,columnVisibility:visibility,columnOrder:order,columnPinning:pinning,pagination},
-    onSortingChange:setSorting,onRowSelectionChange:setRowSelection,onColumnVisibilityChange:setVisibility,onColumnOrderChange:setOrder,onColumnPinningChange:setPinning,onPaginationChange:setPagination,
+    onSortingChange:setSorting,onRowSelectionChange:update => {const next=typeof update==='function'?update(rowSelection):update;setRowSelection(next);setSelection(filtered.filter(f=>!!next[findingKey(f)]));},onColumnVisibilityChange:setVisibility,onColumnOrderChange:setOrder,onColumnPinningChange:setPinning,onPaginationChange:setPagination,
     getCoreRowModel:getCoreRowModel(),getSortedRowModel:getSortedRowModel(),getPaginationRowModel:getPaginationRowModel(),autoResetPageIndex:false});
   const selected = useMemo(() => table.getSelectedRowModel().rows.map(row => row.original), [rowSelection,filtered]);
-  useEffect(() => {setSelection(selected);}, [selected,setSelection]);
   useEffect(() => () => setSelection([]), [setSelection]);
   const rows = table.getRowModel().rows;
   const rowHeight = density === 'compact' ? 28 : density === 'medium' ? 36 : 48;

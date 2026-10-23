@@ -1,5 +1,5 @@
 {
-  "version": "0.7.2",
+  "version": "0.7.3",
   "files": [
     {
       "path": ".dockerignore",
@@ -48,7 +48,7 @@
     },
     {
       "path": "IMPLEMENTATION_STATUS.md",
-      "sha256": "6e50cb2c1b70bd09a1b456c9d0974e078ce9022682a298f820554c68e46ac22d",
+      "sha256": "a15ba9ff43777ca0aa1c9fd7493872317786f7ab319dcb38c630d69bb3aa62eb",
       "bytes": 4623
     },
     {
@@ -58,18 +58,18 @@
     },
     {
       "path": "README.md",
-      "sha256": "f171bebe797572d398d5e6a1e5864e86b2e147ea8d0bed074efd327f7b9c8a1d",
-      "bytes": 12920
+      "sha256": "7a637c7539c6914d27269e20022963dc1273662ead0f0444de676cca9f62e711",
+      "bytes": 13294
     },
     {
       "path": "ROADMAP.md",
-      "sha256": "0bc17b186353f765e447eefe390d1c69b728bdd7f3d1039afec83a71326252c3",
+      "sha256": "ab70b97ab7b41de1159d0f2581e16a3c482403802f0beab4af2bb9a58ae72e2f",
       "bytes": 4445
     },
     {
       "path": "SOURCE_CONTEXT.md",
-      "sha256": "94fcfb06b6a334df96eb63fb521b09c459999f3b74c08e0aa9b1d8f134168946",
-      "bytes": 3523
+      "sha256": "fc7554ba3fde8d8783e11ae709f22a9a48711e79040cef287714115e123359a3",
+      "bytes": 3750
     },
     {
       "path": "SPRINTS_ABC.md",
@@ -78,8 +78,8 @@
     },
     {
       "path": "TEST_REPORT.md",
-      "sha256": "75b48075c373afaa2dba95b46bcb37d91224d4aab10d6308dfde050896df2661",
-      "bytes": 5486
+      "sha256": "bcb27d73fab90cc45c8abbef61e8718861e8d85433d90a4ee40fd7e3b1813ee1",
+      "bytes": 6517
     },
     {
       "path": "alembic.ini",
@@ -153,7 +153,7 @@
     },
     {
       "path": "app/main.py",
-      "sha256": "0e8cbec784ce6fb09281198f643d9804e73c5aa3e3f7f60ca1041d787be5373a",
+      "sha256": "a2835d84877c75338643a6d088ef2713630dfd49d92871eaa47da5b762293e66",
       "bytes": 15070
     },
     {
@@ -233,7 +233,7 @@
     },
     {
       "path": "compose.yaml",
-      "sha256": "686f2363ebfea4f78416030c2d85e728cc3a067e0ec887da6ee11ff3af04ea43",
+      "sha256": "a7ad9b9369a3629140ea8be7b8de23f55375d429fe13000ca833dd52e5413e19",
       "bytes": 8866
     },
     {
@@ -335,6 +335,11 @@
       "path": "docs/TEST_REPORT_v0.7.1.md",
       "sha256": "5b63672db388fd04253f53a84efe8f4af67a0c746b40776f328d22ca276b9e18",
       "bytes": 6872
+    },
+    {
+      "path": "docs/TEST_REPORT_v0.7.2.md",
+      "sha256": "75b48075c373afaa2dba95b46bcb37d91224d4aab10d6308dfde050896df2661",
+      "bytes": 5486
     },
     {
       "path": "docs/UI_UX.md",
@@ -448,7 +453,7 @@
     },
     {
       "path": "scripts/release.py",
-      "sha256": "cf9f8b3f48cf1985006927b9286dfd75ec848af2b97134cb6d253c9f7eee674b",
+      "sha256": "1ef8941aafc1994e507ab2889956dc04e86c881caabdce3fce981c6665da13f2",
       "bytes": 1649
     },
     {
@@ -488,7 +493,7 @@
     },
     {
       "path": "services/common.py",
-      "sha256": "96dc065ef3f69cc26d09ea897011170d4498660e384d5451221d33794452c817",
+      "sha256": "393587b28f6f22971c582e585fd3d0c9a300fcb5a1c088a350d789242bfc2c8a",
       "bytes": 2879
     },
     {
@@ -708,8 +713,8 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "dcb7a1c1954ce1870c09c0a3c18d75d25b75cb8bc4bfa3f22b485d3a40ece7dc",
-      "bytes": 18876
+      "sha256": "ec7a1864de93bc274c7c62dfed5bc3e88e74b38d4fe95032eff48e14bdf7026f",
+      "bytes": 18899
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
@@ -743,8 +748,8 @@
     },
     {
       "path": "web-dashboard/components/datagrid/FindingsGrid.tsx",
-      "sha256": "363b6e1a7679ee52524756c34809b80098dd5245756c797f2d562d40dd85c911",
-      "bytes": 17944
+      "sha256": "803f68a0c14b2db99a653b7daced53b9604d214d21657a7a9910bf3577cbe6b3",
+      "bytes": 18058
     },
     {
       "path": "web-dashboard/components/drawer/FindingDrawer.tsx",
@@ -808,12 +813,12 @@
     },
     {
       "path": "web-dashboard/package-lock.json",
-      "sha256": "8fe8c4226c4463657def5fbc36d9d141e2b16f43d325c3bfe2789ee3d8307bb4",
+      "sha256": "b0e682b90bc3fc4cd155da16f3d33caedc14d75adc9dd9a42ac4d519c3b6aeff",
       "bytes": 78396
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "1b981907929fe6ce5693f7536da9595bc27ebf8c7179c3bc398292320ce1dc59",
+      "sha256": "116b5b16d6638e9511d51570f894047bdda2f1cc8ca1d451891094ce349c7d6a",
       "bytes": 995
     },
     {

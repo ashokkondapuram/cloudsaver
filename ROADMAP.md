@@ -1,4 +1,4 @@
-# CloudSaver roadmap after v0.7.2
+# CloudSaver roadmap after v0.7.3
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,

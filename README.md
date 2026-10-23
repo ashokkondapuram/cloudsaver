@@ -1,4 +1,4 @@
-# CloudSaver v0.7.2
+# CloudSaver v0.7.3
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
@@ -7,6 +7,13 @@ scheduling/integration foundation. Production deployment still requires the acce
 checks in TEST_REPORT.md; feature coverage alone is not production readiness.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.7.3: keyboard review synchronization
+
+Table selection and workspace selection now update in the same event. Global
+keyboard handlers are refreshed before paint, so Shift-R consistently opens the
+current selection even in fast browser runners. Switching snapshots clears the
+selection. This patch follows the first GitHub CI browser result; see TEST_REPORT.md.
 
 ## New in v0.7.2: workspace experience and backend hardening
 

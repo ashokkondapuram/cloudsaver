@@ -1,4 +1,4 @@
-# CloudSaver v0.7.2 verification report
+# CloudSaver v0.7.3 verification report
 
 October 22, 2026. This report describes local verification, not production certification.
 
@@ -9,6 +9,8 @@ October 22, 2026. This report describes local verification, not production certi
 - Existing v0.7.1 features, production-only provenance, forced tenant RLS and import-only GitOps are retained. Earlier release evidence is archived in docs/TEST_REPORT_v0.7.1.md.
 
 ## Backend evidence
+
+Backend behavior is unchanged from v0.7.2. Its 324-test suite also passed on GitHub in run 39864318033. The v0.7.3 change updates frontend selection timing and release metadata.
 
 `python scripts/test_postgres.py --tb=short`: **324 passed**, using fresh disposable PostgreSQL 16 and Redis 7 containers, separate owner/runtime roles and migration upgrades. Containers are removed by the runner; existing data volumes are not changed.
 
@@ -39,3 +41,10 @@ Builds preserve the session proxy configuration and CA verification. No credenti
 - Authorized Azure/AWS/GCP/Kubernetes, Entra, Stripe test-mode, GitHub App and Slack/Teams acceptance is still required. Local fixtures cannot certify these integrations.
 - Billing series, non-Azure verified dollar estimates, realized savings, OpenCost allocation, browser PKCE onboarding and ITSM assignment remain unavailable. Unknown values remain unknown.
 - Production TLS, Kubernetes/HPA, backup/restore, chaos/load acceptance, secret rotation/expiry and production cutover/rollback have not been executed. Delivery remains at least once; Redis leases are not a quorum Redlock guarantee. Preserve job/outbox/audit state during incident recovery.
+
+## CI follow-up
+
+The first GitHub run passed backend tests, dependency audit, typechecking and production build, but its faster Chromium runner exposed a Shift-R selection synchronization race. Selection now updates table and workspace state in the same event, keyboard listeners update before paint, and snapshot changes clear selection. Follow-up production build and browser checks are recorded with the correcting commit. The v0.7.2 container/smoke results above describe the preceding release; v0.7.3 has not been redeployed to the local Compose stack.
+
+The v0.7.3 webpack production build and TypeScript check pass. All 13 Playwright workflows pass against that production build, including the corrected shortcut and automated accessibility checks.
+The combined filter/selection/Shift-R workflow also passes five consecutive fresh-browser runs.
