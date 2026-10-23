@@ -40,7 +40,7 @@ class Store:
             db.close()
 
     def save(self, tenant_id, scan, *, workspace=None):
-        if workspace is None or workspace['tenant_id'] != tenant_id or scan.get('status') != 'completed' or len(scan['findings']) != scan['total_items_found']:
+        if workspace is None or workspace['tenant_id'] != tenant_id or scan.get('status') != 'completed' or len(scan.get('inventory') or scan['findings']) != scan['total_items_found']:
             raise ValueError('Authenticated workspace and complete scan are required')
         from app.cloud_scope import validate_finding_scope
         for finding in scan['findings']:
@@ -106,7 +106,8 @@ class PostgresStore:
         if workspace is None or str(UUID(workspace['tenant_id'])) != tenant_id:
             raise ValueError('Authenticated workspace configuration is required')
         subscriptions = {str(UUID(s)) for s in workspace['subscription_ids']}
-        if scan['status'] != 'completed' or len(scan['findings']) != scan['total_items_found']:
+        counted = scan.get('inventory') or scan['findings']
+        if scan['status'] != 'completed' or len(counted) != scan['total_items_found']:
             raise ValueError('Only complete scan results can be stored')
         from app.cloud_scope import validate_finding_scope
         for finding in scan['findings']:

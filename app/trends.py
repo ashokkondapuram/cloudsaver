@@ -37,6 +37,6 @@ def calculate_trend(scans, *, days=30, scan_id=None, now=None):
         net_change_usd=delta, percentage_change=round(delta / prior * 100, 2) if delta is not None and prior and prior > 0 else None,
         new_findings_count=len(identities(latest) - identities(previous)) if previous else None,
         resolved_findings_count=len(identities(previous) - identities(latest)) if previous else None,
-        snapshots=[dict(scan_id=s['scan_id'], timestamp=s['timestamp'], total_findings=s['total_items_found'],
+        snapshots=[dict(scan_id=s['scan_id'], timestamp=s['timestamp'], total_findings=len(s['findings']),
                         total_monthly_waste_usd=s.get('total_monthly_waste_usd'),
                         findings_by_provider=dict(Counter(f.get('cloud_provider', 'azure') for f in s['findings']))) for s in comparable])

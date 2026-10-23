@@ -359,7 +359,7 @@ def test_subscription_patch_plan_code(service, monkeypatch):
 def test_issuance_blocked_without_active_subscription(service, clock, monkeypatch):
     monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
     customer = workspace(service)
-    with pytest.raises(IdentityError, match='active subscription'):
+    with pytest.raises(IdentityError, match='active billing subscription'):
         issue(service, clock)
     now = service.now()
     service.create_customer_subscription(customer['id'], {
