@@ -1,6 +1,6 @@
 """Strict normalized FOCUS billing subset. Imports are evidence, never verified savings."""
 from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, localcontext
 import hashlib
 import json
 import math
@@ -181,6 +181,12 @@ class FocusRepository:
         return [dict(zip(keys,[str(r[0]),*r[1:]])) for r in rows if authorized(r[2],r[3],tenant)]
 
     def summary(self,tenant,start,end,currency,budget=None):
+        # Keep all permitted totals, ratios and projections inside a request-local precision budget.
+        with localcontext() as context:
+            context.prec=60
+            return self._summary(tenant,start,end,currency,budget)
+
+    def _summary(self,tenant,start,end,currency,budget=None):
         begin=datetime.combine(start,time.min,tzinfo=timezone.utc);finish=datetime.combine(end,time.min,tzinfo=timezone.utc)
         with self.store.transaction(tenant['tenant_id']) as db:
             rows=db.execute('''SELECT provider,sub_account,period_start,period_end,billed_cost,effective_cost,list_cost,charge_category

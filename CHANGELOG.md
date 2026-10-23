@@ -4,6 +4,7 @@
 
 - Apply the exact Drive v1.0.0 master guide to the current verified code, preserving the original Drive artifact and documenting the inspected ZIP's older implementation.
 - Add SQL-persisted inference attempt intent, permanent idempotency fences, finalized outcomes, lifecycle events and provider-reported usage by model/target/structured observed attribution.
+- Harden permitted boundary-value monetary ratios/projections with isolated decimal precision and a regression test.
 - Add finance-only normalized FOCUS-subset imports, decimal-preserving monetary records, current cloud scope enforcement, transactional deduplication and currency-isolated billing summaries.
 - Derive provisional month-end projections and 30-day nonseasonal Z-scores only from sufficient closed-day coverage; keep missing data, unreconciled billing and realized savings explicit.
 - Add migration 0009 with forced RLS on four evidence tables, append-only runtime billing/audit grants and protected terminal inference outcomes.

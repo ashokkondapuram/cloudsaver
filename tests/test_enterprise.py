@@ -293,3 +293,14 @@ def test_same_month_in_another_year_is_not_a_month_to_date_projection(evidence):
     repo.import_records(tenant,ImportRequest.model_validate(batch([],period_start='2025-10-01',period_end='2026-10-02')))
     summary=repo.summary(tenant,date(2025,10,1),date(2026,10,2),'USD')
     assert summary['forecast'] is None
+
+
+def test_extreme_permitted_decimal_ratios_and_projections_remain_exact(evidence):
+    _,store,_=evidence;repo=FocusRepository(store);tenant=workspace()
+    maximum='999999999999999.99999999'
+    rows=[charge(day,maximum,ListCost='0.00000001') for day in range(1,8)]
+    repo.import_records(tenant,ImportRequest.model_validate(batch(rows,period_end='2026-10-08')))
+    summary=repo.summary(tenant,date(2026,10,1),date(2026,10,8),'USD')
+    expected=str((1-int(maximum.replace('.','')))*100)+'.0000'
+    assert summary['effective_savings_rate_pct']==expected
+    assert summary['forecast']['month_end_billed_cost']=='30999999999999999.99999969'
