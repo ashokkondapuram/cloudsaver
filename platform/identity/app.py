@@ -292,6 +292,52 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
                  identity=Depends(operator)):
         return service.failures({'tenant_id': tenant_id, 'source_ip': source_ip, 'reason': reason}, start)
 
+    @app.get('/admin/v1/plans')
+    def plans(identity=Depends(operator)):
+        return service.list_plans()
+
+    @app.get('/admin/v1/plans/{code}')
+    def plan(code: str, identity=Depends(operator)):
+        return service.get_plan(code)
+
+    @app.get('/admin/v1/billing/settings')
+    def billing_settings(identity=Depends(operator)):
+        return service.get_billing_settings()
+
+    @app.put('/admin/v1/billing/settings')
+    def update_billing_settings(request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_billing_settings(payload, identity, rid(request))
+
+    @app.get('/admin/v1/billing/customers')
+    def billing_customers(billing_state: str | None = Query(None, max_length=16), plan: str | None = Query(None, max_length=16),
+                          renews_before: str | None = None, cursor: str | None = None, limit: int = Query(50, ge=1, le=200),
+                          identity=Depends(operator)):
+        return service.list_billing_customers(billing_state, plan, renews_before, cursor, limit)
+
+    @app.get('/admin/v1/customers/{customer_id}/subscriptions')
+    def customer_subscriptions(customer_id: str, identity=Depends(operator)):
+        return service.list_customer_subscriptions(customer_id)
+
+    @app.post('/admin/v1/customers/{customer_id}/subscriptions', status_code=201)
+    def create_customer_subscription(customer_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.create_customer_subscription(customer_id, payload, identity, rid(request))
+
+    @app.get('/admin/v1/customers/{customer_id}/payments')
+    def customer_payments(customer_id: str, identity=Depends(operator)):
+        return service.list_customer_payments(customer_id)
+
+    @app.post('/admin/v1/customers/{customer_id}/payments', status_code=201)
+    def create_customer_payment(customer_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.create_customer_payment(customer_id, payload, identity, rid(request))
+
+    @app.get('/admin/v1/customers/{customer_id}/entitlements')
+    def customer_entitlements(customer_id: str, identity=Depends(operator)):
+        return service.get_customer_entitlements(customer_id)
+
+    @app.patch('/admin/v1/subscriptions/{subscription_id}')
+    def update_subscription(subscription_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_subscription(subscription_id, payload, identity, rid(request))
+
     @app.get('/admin/v1/plan-change-requests')
     def plan_change_requests(status: str | None = Query(None, max_length=24), limit: int = Query(50, ge=1, le=200),
                              identity=Depends(operator)):

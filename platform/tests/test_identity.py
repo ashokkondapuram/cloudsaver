@@ -313,6 +313,13 @@ def test_billing_session_flags(monkeypatch):
     assert billing_session_flags() == {'billing_enabled': True, 'billing_provider': 'manual'}
 
 
+def test_list_plans_for_portal(service):
+    workspace(service)
+    plans = service.list_plans()
+    assert len(plans['items']) == 3
+    assert plans['items'][0]['entitlements']['max_subscriptions'] >= 2
+
+
 def test_plan_change_request_flow(service):
     workspace(service)
     created = service.create_plan_change_request(TID, {'requested_plan_code': 'GROWTH', 'requested_by': 'billing@contoso.com'},

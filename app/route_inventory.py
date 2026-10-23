@@ -28,6 +28,7 @@ ROUTES = {
     ('POST', '/api/v1/billing/plan-requests'): 'agnostic',
     ('GET', '/api/v1/settings'): 'agnostic',
     ('PUT', '/api/v1/settings'): 'agnostic',
+    ('POST', '/api/v1/settings/access-test'): 'agnostic',
     ('GET', '/api/v1/gitops/targets'): 'agnostic',
     ('GET', '/api/v1/ai/targets'): 'agnostic',
     ('GET', '/api/v1/operations/reliability'): 'agnostic',

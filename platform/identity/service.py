@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from identity import keys as keyfmt
 from identity.config import env, flag
+from identity.billing.admin import BillingOps
 from identity.domain import (DEFAULT_EXPIRY_DAYS, EXPIRING_SOON_DAYS, MAX_ACTIVE_KEYS, MAX_EXPIRY_DAYS, PROVIDERS,
                              SCOPE_KEYS, STATUSES, TIERS, Conflict, IdentityError, NotFound, StaleVersion, Throttled,
                              configured_providers, empty_scopes, iso, normalize_identity_bindings, normalize_roles,
@@ -52,7 +53,7 @@ def snapshot(workspace, customer):
     }
 
 
-class IdentityService:
+class IdentityService(BillingOps):
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
                  cache_seconds=None, provider_scoped_keys=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage

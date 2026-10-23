@@ -320,4 +320,8 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def update_workspace_settings(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await tenant_write('PUT', '/api/v1/settings', request, authorization)
 
+    @app.post('/api/v1/settings/access-test')
+    async def workspace_access_test(row=Depends(allowed), authorization: str = Header()):
+        return await forward('POST', 'tenant', '/api/v1/settings/access-test', authorization)
+
     return app

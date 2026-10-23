@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useEffect, useMemo, useState} from 'react';
-import {Activity, BrainCircuit, ArrowRight, Bell, Blocks, Check, CheckCircle2, ChevronRight, Cloud, CreditCard, Database, ExternalLink, FileCode2, GitBranch, GitPullRequest, History, KeyRound, Layers3, LockKeyhole, MinusCircle, Plus, Settings2, ShieldCheck, Tags, Target, Wallet} from 'lucide-react';
+import {Activity, BrainCircuit, ArrowRight, Bell, Blocks, Check, CheckCircle2, ChevronRight, Cloud, CreditCard, Database, ExternalLink, FileCode2, Fingerprint, GitBranch, GitPullRequest, History, KeyRound, Layers3, LockKeyhole, MinusCircle, Plus, Settings2, ShieldCheck, Tags, Target, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime, money, observedTags, providerNames, providerOf, scopeOf} from '../lib/finops';
 import {CONTACT_ACCOUNT_MANAGER, billingStateLabels, frequencyNames, manageBillingUrl, planDate} from '../lib/plan';
@@ -65,7 +65,28 @@ function CloudAccounts() {
   const {workspace,scan,setOverlay,canAdmin,planProviders} = useWorkspace();
   const providers = workspace?.providers || ['azure'];
   const descriptions:Record<string,string>={azure:'Azure Resource Graph inventory',aws:'Account-verified AWS resource inventory',gcp:'Google Cloud resource observations',kubernetes:'Prometheus workload request review'};
-  return <><section className="panel"><SectionTitle title="Cloud accounts">Providers with at least one authorized scope</SectionTitle><div className="cloud-account-grid">{planProviders(['azure','aws','gcp','kubernetes']).map(provider=><article key={provider} className={`cloud-account ${providers.includes(provider)?'configured':''}`}><div><ProviderBadge provider={provider}/><span className={`connection-state ${providers.includes(provider)?'configured':''}`}><i/>{providers.includes(provider)?'Available':'Not configured'}</span></div><h3>{providerNames[provider]}</h3><p>{descriptions[provider]}</p>{providers.includes(provider)?<Link className="text-link" href={`/findings?provider=${provider}`}>View findings<ArrowRight size={15}/></Link>:<span className="inline-help">Add a scope below to connect</span>}</article>)}</div><div className="settings-notice"><LockKeyhole size={17}/><p>CloudSaver uses keyless, read-only access. This console never asks for client secrets or access keys.</p></div></section><IdentityOnboardingPanel/><CloudScopesEditor/><section className="panel"><SectionTitle title="Workspace scope">Configured limits and authorized cloud scopes</SectionTitle><dl className="settings-key-values"><div><dt>Configured cloud scopes</dt><dd>{workspace?.configured_scope_count ?? workspace?.subscription_ids.length}</dd></div><div><dt>Scopes allowed per scan</dt><dd>{workspace?.max_scopes_per_scan || 'Plan-limited'}</dd></div><div><dt>Latest completed snapshot</dt><dd>{scan ? dateTime(scan.timestamp) : 'No scan yet'}</dd></div></dl>{!!workspace?.subscription_ids.length&&<div className="subscription-list">{workspace.subscription_ids.map(id=><div key={id}><ProviderBadge provider="azure"/><code>{id}</code></div>)}</div>}{canAdmin&&<div className="panel-bottom-action"><button className="button secondary" onClick={()=>setOverlay('scan')}><Plus size={15}/>Scan available sources</button></div>}</section></>;
+  return <><section className="panel"><SectionTitle title="Cloud accounts">Providers with at least one authorized scope</SectionTitle><div className="cloud-account-grid">{planProviders(['azure','aws','gcp','kubernetes']).map(provider=><article key={provider} className={`cloud-account ${providers.includes(provider)?'configured':''}`}><div><ProviderBadge provider={provider}/><span className={`connection-state ${providers.includes(provider)?'configured':''}`}><i/>{providers.includes(provider)?'Available':'Not configured'}</span></div><h3>{providerNames[provider]}</h3><p>{descriptions[provider]}</p>{providers.includes(provider)?<Link className="text-link" href={`/findings?provider=${provider}`}>View findings<ArrowRight size={15}/></Link>:<span className="inline-help">Add a scope below to connect</span>}</article>)}</div><div className="settings-notice"><LockKeyhole size={17}/><p>CloudSaver uses keyless, read-only access. This console never asks for client secrets or access keys.</p></div></section><CloudScopesEditor/><section className="panel"><SectionTitle title="Workspace scope">Configured limits and authorized cloud scopes</SectionTitle><dl className="settings-key-values"><div><dt>Configured cloud scopes</dt><dd>{workspace?.configured_scope_count ?? workspace?.subscription_ids.length}</dd></div><div><dt>Scopes allowed per scan</dt><dd>{workspace?.max_scopes_per_scan || 'Plan-limited'}</dd></div><div><dt>Latest completed snapshot</dt><dd>{scan ? dateTime(scan.timestamp) : 'No scan yet'}</dd></div></dl>{!!workspace?.subscription_ids.length&&<div className="subscription-list">{workspace.subscription_ids.map(id=><div key={id}><ProviderBadge provider="azure"/><code>{id}</code></div>)}</div>}{canAdmin&&<div className="panel-bottom-action"><button className="button secondary" onClick={()=>setOverlay('scan')}><Plus size={15}/>Scan available sources</button></div>}</section></>;
+}
+
+function ResourceAccessSettings() {
+  const {token, canAdmin, notify} = useWorkspace();
+  const [testing, setTesting] = useState(false);
+  const [results, setResults] = useState<{provider: string; status: string; message: string}[]>([]);
+  async function testAccess() {
+    if (!canAdmin || testing) return;
+    setTesting(true);
+    setResults([]);
+    try {
+      const response = await api<{providers: {provider: string; status: string; message: string}[]}>('/settings/access-test', token, {method: 'POST'});
+      setResults(response.providers || []);
+      notify('Access test finished.');
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'Access test could not run.', 'error');
+    } finally {
+      setTesting(false);
+    }
+  }
+  return <><IdentityOnboardingPanel/><section className="panel"><SectionTitle title="Test access" action={canAdmin ? <button type="button" className="button secondary" disabled={testing} onClick={() => void testAccess()}>{testing ? 'Testing…' : 'Test access'}</button> : undefined}>Check read-only access for this workspace before you run a scan</SectionTitle>{!canAdmin && <Notice tone="info">A workspace administrator can run access tests.</Notice>}{results.length ? <dl className="settings-key-values">{results.map(row => <div key={row.provider}><dt>{providerNames[row.provider] || row.provider}</dt><dd>{row.message || row.status}</dd></div>)}</dl> : <p className="inline-help">Runs a short probe per configured cloud provider. No secrets are shown.</p>}</section></>;
 }
 
 function Integrations() {
@@ -128,6 +149,6 @@ function Preferences() {
 
 export function SettingsView() {
   const [tab,setTab] = useState('accounts');
-  const tabs = [{id:'accounts',label:'Cloud accounts',icon:Cloud},{id:'schedule',label:'Schedule & alerts',icon:Bell},{id:'integrations',label:'Integrations',icon:GitBranch},{id:'plan',label:'Plan',icon:CreditCard},{id:'preferences',label:'Preferences & access',icon:Settings2}];
-  return <><div className="page-tabs" role="tablist" aria-label="Workspace settings">{tabs.map(item=><button role="tab" key={item.id} id={`settings-${item.id}-tab`} aria-controls={`settings-${item.id}`} aria-selected={tab===item.id} onClick={()=>setTab(item.id)}><item.icon size={16}/>{item.label}</button>)}</div><div role="tabpanel" id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='accounts'?<CloudAccounts/>:tab==='schedule'?<ScheduleAlertsEditor/>:tab==='integrations'?<Integrations/>:tab==='plan'?<Plan/>:<Preferences/>}</div></>;
+  const tabs = [{id:'accounts',label:'Cloud accounts',icon:Cloud},{id:'access',label:'Resource access',icon:Fingerprint},{id:'schedule',label:'Schedule & alerts',icon:Bell},{id:'integrations',label:'Integrations',icon:GitBranch},{id:'plan',label:'Plan',icon:CreditCard},{id:'preferences',label:'Preferences & access',icon:Settings2}];
+  return <><div className="page-tabs" role="tablist" aria-label="Workspace settings">{tabs.map(item=><button role="tab" key={item.id} id={`settings-${item.id}-tab`} aria-controls={`settings-${item.id}`} aria-selected={tab===item.id} onClick={()=>setTab(item.id)}><item.icon size={16}/>{item.label}</button>)}</div><div role="tabpanel" id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='accounts'?<CloudAccounts/>:tab==='access'?<ResourceAccessSettings/>:tab==='schedule'?<ScheduleAlertsEditor/>:tab==='integrations'?<Integrations/>:tab==='plan'?<Plan/>:<Preferences/>}</div></>;
 }
