@@ -94,6 +94,11 @@ def import_directory(service, tenants, source, *, platform=None, deadline=None, 
                    if k in platform and platform[k] != current[k]}
         if changes:
             service.update_platform(dict(changes, version=current['version']), ACTOR)
+        if not (current.get('resource_access') or {}):
+            from identity.resource_access import env_defaults
+            seeded = {k: v for k, v in env_defaults().items() if v}
+            if seeded:
+                service.update_platform({'version': service.get_platform()['version'], 'resource_access': seeded}, ACTOR)
     return counts
 
 

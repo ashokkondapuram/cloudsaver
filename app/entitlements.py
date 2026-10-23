@@ -298,4 +298,6 @@ def billing_summary(tenant, workspace=None) -> dict:
         'can_dispatch_automated_alerts': plan.can_dispatch_automated_alerts,
         'retention_days': plan.retention_days,
         'entitlements_source': 'platform' if plan.source == 'platform' else 'fallback',
+        'settings_version': int((workspace or tenant).get('version') or 1),
+        'plan_change_allowed': True,
     }

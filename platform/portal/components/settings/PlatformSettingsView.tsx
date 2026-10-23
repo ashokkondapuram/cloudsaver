@@ -9,6 +9,7 @@ import {useLoad} from '../../lib/useLoad';
 import {useSession} from '../SessionProvider';
 import {Loading, Notice, PageHeading, SectionTitle, Switch} from '../ui/shared';
 import {BillingSettingsSection} from './BillingSettingsSection';
+import {ResourceAccessSection} from './ResourceAccessSection';
 
 export function PlatformSettingsView() {
   const {canWrite} = useSession();
@@ -58,6 +59,7 @@ export function PlatformSettingsView() {
         {canWrite && <button type="button" className="button primary small" disabled={!dirty || busy} onClick={() => void save()}>{busy ? <Loader2 className="spin" size={14}/> : <Save size={14}/>}Save changes</button>}
       </div>
     </section>}
+    {data && <ResourceAccessSection settings={data} onSaved={setData}/>}
     <BillingSettingsSection/>
   </>;
 }

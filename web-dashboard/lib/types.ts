@@ -95,7 +95,11 @@ export type IdentityOnboarding = {
   aws_token_audience: string;
   aws_external_id?: string | null;
   gcp_workload_provider: string | null;
+  gcp_token_audience?: string | null;
   gcp_service_account?: string | null;
+  source?: Record<string, string>;
+  commands?: {azure?: string[]; aws?: string[]; gcp?: string[]};
+  setup_guide_path?: string;
 };
 
 export type PlatformSettings = {scheduled_scans_enabled: boolean; automated_alerts_enabled: boolean; version: number};
@@ -131,6 +135,21 @@ export type Entitlements = {
   can_dispatch_automated_alerts: boolean;
   retention_days: number;
   entitlements_source: 'platform' | 'fallback';
+  settings_version: number;
+  plan_change_allowed: boolean;
+};
+
+export type PlanOption = {
+  code: string;
+  name: string;
+  max_subscriptions: number;
+  max_resources_per_scan: number;
+  allowed_scan_frequencies: string[];
+  can_export_terraform: boolean;
+  can_use_keyvault: boolean;
+  can_dispatch_automated_alerts: boolean;
+  retention_days: number;
+  allowed_providers: string[];
 };
 
 export type Delivery = {

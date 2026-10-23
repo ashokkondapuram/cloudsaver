@@ -11,6 +11,8 @@ PROJECT = r'[a-z][a-z0-9-]{4,28}[a-z0-9]'
 NAME = r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
 REGION = r'[a-z]+(?:-[a-z]+)+-?[0-9]+'
 ROLE_ARN = r'arn:aws:iam::([0-9]{12}):role/[A-Za-z0-9+=,.@_/-]{1,512}'
+ROLE_ARN_STRICT = r'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}'
+WORKLOAD_PROVIDER = r'//iam\.googleapis\.com/projects/[0-9]{1,20}/locations/global/workloadIdentityPools/[a-z0-9-]{4,32}/providers/[a-z0-9-]{4,32}'
 SERVICE_ACCOUNT = r'[a-z][a-z0-9-]{4,28}[a-z0-9]@' + PROJECT + r'\.iam\.gserviceaccount\.com'
 
 

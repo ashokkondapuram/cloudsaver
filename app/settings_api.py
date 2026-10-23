@@ -46,6 +46,11 @@ class Alerts(Strict):
     remove_webhook: StrictBool = False
 
 
+class PlanChange(Strict):
+    version: int = Field(ge=1)
+    plan_tier: Literal['STARTER', 'GROWTH', 'ENTERPRISE']
+
+
 class WorkspaceSettings(Strict):
     version: int = Field(ge=1)
     subscription_ids: list[UUID] = Field(max_length=100)
@@ -116,7 +121,7 @@ def create_router(settings, current_tenant):
         editable = settings.registry is not None and Role.TENANT_ADMIN.value in workspace.get('roles', [])
         return {'editable': editable, 'scopes_editable': editable and not cutover(), 'directory_mode': directory_mode(),
                 'settings': public_tenant(stored or workspace), 'limits': limits(workspace),
-                'platform': platform, 'identity': onboarding(stored or workspace)}
+                'platform': platform, 'identity': onboarding(stored or workspace, platform)}
 
     @router.put('/api/v1/settings')
     def write_settings(payload: WorkspaceSettings, workspace=Depends(current_tenant)):
@@ -170,5 +175,37 @@ def create_router(settings, current_tenant):
                        alerts={'enabled': alerts.enabled, 'channel': alerts.channel})
         tenant = save(lambda: store.update(workspace['tenant_id'], changes, payload.version, actor_for(workspace), webhook=webhook))
         return {'settings': public_tenant(visible(tenant, workspace))}
+
+    @router.get('/api/v1/billing/plans')
+    def billing_plans(workspace=Depends(current_tenant)):
+        require_workspace_role(workspace, Role.BILLING_ADMIN)
+        from app.billing_plan import list_plans
+        return {'items': list_plans(), 'current_tier': entitlements_for(workspace).tier}
+
+    @router.put('/api/v1/billing/plan')
+    def billing_plan_change(payload: PlanChange, workspace=Depends(current_tenant)):
+        require_workspace_role(workspace, Role.BILLING_ADMIN)
+        store = registry()
+        stored = save(lambda: store.update_plan(workspace['tenant_id'], payload.plan_tier, payload.version, actor_for(workspace)))
+        from app.entitlements import billing_summary
+        return {'settings_version': stored['version'], 'entitlements': billing_summary(stored, stored)}
+
+    @router.post('/api/v1/settings/access-test')
+    def access_test(workspace=Depends(current_tenant)):
+        require_workspace_role(workspace, Role.TENANT_ADMIN)
+        store = registry()
+        tenant = store.get(workspace['tenant_id']) or workspace
+        key = f'access-test:{workspace["tenant_id"]}'
+        if not hasattr(access_test, '_limits'):
+            access_test._limits = {}
+        import time
+        now = time.monotonic()
+        window = [t for t in access_test._limits.get(key, []) if now - t < 60]
+        if len(window) >= 3:
+            raise HTTPException(429, 'Too many access tests. Try again in a minute.')
+        window.append(now)
+        access_test._limits[key] = window
+        from app.access_probe import run_probe
+        return run_probe(tenant, store.platform())
 
     return router

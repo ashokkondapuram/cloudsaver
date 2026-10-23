@@ -57,7 +57,7 @@ export function SignIn({authMode, error, signedOut, returnTo}: {authMode: 'entra
         <a className="button primary signin-submit" href={`/api/auth/login?return_to=${encodeURIComponent(target)}`}>Sign in with Microsoft<ArrowRight size={17}/></a>
         <div className="connection-security"><ShieldCheck size={16}/><span>You sign in with your Microsoft Entra work account. Your access is checked on every request.</span></div>
       </> : <form onSubmit={submit} style={{display: 'flex', flexDirection: 'column', gap: 12}}>
-        <Notice tone="warning">Local development sign-in. Production uses Microsoft sign-in.</Notice>
+        <Notice tone="warning">Operator key sign-in. For local use only—production portals use Microsoft sign-in.</Notice>
         <label className="field" htmlFor="operator-key">Operator access key
           <span className="credential-input"><LockKeyhole size={17}/><input id="operator-key" type="password" autoComplete="off" value={key} onChange={event => setKey(event.target.value)} required disabled={busy}/></span>
         </label>

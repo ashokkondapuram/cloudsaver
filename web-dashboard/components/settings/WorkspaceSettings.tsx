@@ -129,14 +129,15 @@ export function IdentityOnboardingPanel() {
   const {data} = useSettings();
   if (!data) return null;
   const identity = data.identity;
-  const developer = identity.identity_mode === 'developer';
+  const localSignIn = identity.identity_mode === 'developer';
   return <section className="panel">
-    <SectionTitle title="Keyless access" action={<span className="state-badge configured"><Fingerprint size={14}/>{developer ? 'Developer sign-in' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Grant read-only access to the identity below.</SectionTitle>
-    {developer && <Notice tone="warning">This deployment uses developer sign-in for local testing. Production deployments use an Azure managed identity.</Notice>}
+    <SectionTitle title="Resource access" action={<span className="state-badge configured"><Fingerprint size={14}/>{localSignIn ? 'Local sign-in (Azure CLI)' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Copy the commands below to grant read-only access.</SectionTitle>
+    {localSignIn && <Notice tone="info">Scans use your local Azure CLI, AWS, and gcloud credentials. Hosted deployments use a managed identity instead.</Notice>}
+    <p className="inline-help"><a className="text-link" href={`/${identity.setup_guide_path || 'docs/MANAGED_IDENTITY_ROLES.md'}`} target="_blank" rel="noreferrer">View setup guide</a></p>
     <div className="identity-grid">
-      <article><ProviderBadge provider="azure"/><p>Consent the CloudSaver app in your Microsoft Entra tenant, then assign it the Reader role on each subscription.</p><dl className="settings-key-values"><Value label="App (client) ID" value={identity.azure_app_client_id}/><Value label="Access method" value={identity.azure_access === 'direct' ? 'Managed identity (same tenant)' : 'Federated app credential'}/></dl></article>
-      <article><ProviderBadge provider="aws"/><p>Create a read-only role that trusts the CloudSaver hub role and requires your external ID.</p><dl className="settings-key-values"><Value label="Trusted hub role" value={identity.aws_hub_role_arn}/><Value label="External ID" value={identity.aws_external_id}/></dl></article>
-      <article><ProviderBadge provider="gcp"/><p>Grant the Viewer role in each project to your CloudSaver service account.</p><dl className="settings-key-values"><Value label="Service account" value={identity.gcp_service_account}/><Value label="Workload identity provider" value={identity.gcp_workload_provider}/></dl></article>
+      <article><ProviderBadge provider="azure"/><p>Consent the CloudSaver app in your Microsoft Entra tenant, then assign Reader on each subscription.</p><dl className="settings-key-values"><Value label="App (client) ID" value={identity.azure_app_client_id}/>{identity.azure_access === 'direct' && <Value label="Managed identity client ID" value={identity.managed_identity_client_id}/>}<Value label="Access method" value={identity.azure_access === 'direct' ? 'Managed identity (same tenant)' : 'Federated app credential'}/></dl>{identity.commands?.azure?.map((line: string) => <code key={line} className="command-block">{line}</code>)}</article>
+      <article><ProviderBadge provider="aws"/><p>Create a read-only role that trusts the CloudSaver hub role and requires your external ID.</p><dl className="settings-key-values"><Value label="Trusted hub role" value={identity.aws_hub_role_arn}/><Value label="External ID" value={identity.aws_external_id}/></dl>{identity.commands?.aws?.map((line: string) => <code key={line} className="command-block">{line}</code>)}</article>
+      <article><ProviderBadge provider="gcp"/><p>Grant the Viewer role in each project to your CloudSaver service account.</p><dl className="settings-key-values"><Value label="Service account" value={identity.gcp_service_account}/><Value label="Workload identity provider" value={identity.gcp_workload_provider}/></dl>{identity.commands?.gcp?.map((line: string) => <code key={line} className="command-block">{line}</code>)}</article>
     </div>
   </section>;
 }

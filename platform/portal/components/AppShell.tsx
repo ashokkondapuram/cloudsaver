@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useEffect, type ReactNode} from 'react';
 import {Activity, Building2, Cloud, CreditCard, Layers, LayoutGrid, LogOut, Settings2, ShieldAlert, ShieldCheck} from 'lucide-react';
-import {operatorRoleLabel} from '../lib/labels';
+import {environmentDisplayLabel, operatorRoleLabel} from '../lib/labels';
 import {useSession} from './SessionProvider';
 import {ThemeToggle} from './ThemeProvider';
 import {Loading} from './ui/shared';
@@ -57,7 +57,7 @@ export function AppShell({children}: {children: ReactNode}) {
     </aside>
     <div className="app-main">
       <header className="topbar">
-        <div className="topbar-left"><span className="current-page">{active?.label || 'Platform portal'}</span>{session.environment !== 'production' && <span className="environment-badge">{session.environment}</span>}</div>
+        <div className="topbar-left"><span className="current-page">{active?.label || 'Platform portal'}</span>{session.environment !== 'production' && <span className="environment-badge" title="Non-production environment (test workspace keys)">{environmentDisplayLabel(session.environment)}</span>}</div>
         <div className="topbar-actions">
           <span className="session-role" title={session.roles.join(', ')}><ShieldCheck size={13}/>{role}</span>
           <div className="operator-identity"><span className="profile-avatar" aria-hidden="true">{initials(session.display_name || session.actor)}</span><div><strong>{session.display_name || session.actor}</strong><small>{role}</small></div></div>

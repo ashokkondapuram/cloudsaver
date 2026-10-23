@@ -38,6 +38,15 @@ def body(**changes):
                 schedule={'frequency': 'daily'}, alerts={'enabled': False, 'channel': None}) | changes
 
 
+def test_billing_admin_changes_plan(stack):
+    client, registry, _settings = stack
+    plans = client.get('/api/v1/billing/plans', headers=as_workspace()).json()
+    assert plans['current_tier'] == 'ENTERPRISE' and len(plans['items']) == 3
+    updated = client.put('/api/v1/billing/plan', headers=as_workspace(), json={'version': 1, 'plan_tier': 'GROWTH'}).json()
+    assert updated['entitlements']['tier'] == 'GROWTH'
+    assert registry.get(TID)['plan_tier'] == 'GROWTH'
+
+
 def test_tenant_admin_changes_scopes_and_schedule_without_restart(stack):
     client, registry, settings = stack
     loaded = client.get('/api/v1/settings', headers=as_workspace()).json()

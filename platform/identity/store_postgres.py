@@ -152,12 +152,13 @@ class PostgresTx:
 
     # platform
     def get_platform(self):
-        return dict(self._one('SELECT scheduled_scans_enabled, automated_alerts_enabled, version, updated_by, updated_at '
-                              'FROM directory.platform_settings WHERE id=1'))
+        return dict(self._one('SELECT scheduled_scans_enabled, automated_alerts_enabled, resource_access, version, '
+                              'updated_by, updated_at FROM directory.platform_settings WHERE id=1'))
 
     def update_platform(self, expected_version, fields):
         row = self._update('directory.platform_settings', 'id', 1, expected_version, fields)
-        return {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'version', 'updated_by', 'updated_at')} if row else None
+        return {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'version',
+                                     'updated_by', 'updated_at')} if row else None
 
     # change feed
     def append_change(self, tenant_id, change_type, version, snapshot):
@@ -375,12 +376,36 @@ class PostgresTx:
                          (customer_id, provider))['mark']
 
     # cache events (long poll)
-    def append_cache_event(self, tenant_id, key_id, event, directory):
-        return self._one('INSERT INTO identity.cache_events (tenant_id, key_id, event, directory) VALUES (%s, %s, %s, %s) '
-                         'RETURNING seq', (tenant_id, key_id, event, directory))['seq']
+    def insert_access_check(self, row):
+        from psycopg.types.json import Jsonb
+        self._insert('directory.access_checks', {**row, 'result': Jsonb(row['result']) if row.get('result') else None})
+
+    def get_access_check(self, check_id, lock=False):
+        row = self._one('SELECT * FROM directory.access_checks WHERE check_id=%s' + (' FOR UPDATE' if lock else ''),
+                        (check_id,))
+        return dict(row) if row else None
+
+    def update_access_check(self, check_id, fields):
+        from psycopg.types.json import Jsonb
+        if 'result' in fields and fields['result'] is not None:
+            fields = dict(fields, result=Jsonb(fields['result']))
+        row = self._one('UPDATE directory.access_checks SET ' + ', '.join(f'{k}=%s' for k in fields) +
+                        ' WHERE check_id=%s RETURNING *', [*fields.values(), check_id])
+        return dict(row) if row else None
+
+    def count_recent_access_checks(self, tenant_id, since):
+        row = self._one('SELECT count(*) AS count FROM directory.access_checks WHERE '
+                        '(tenant_id IS NOT DISTINCT FROM %s) AND requested_at >= %s', (tenant_id, since))
+        return int(row['count'])
+
+    def append_cache_event(self, tenant_id, key_id, event, directory, payload=None):
+        from psycopg.types.json import Jsonb
+        return self._one('INSERT INTO identity.cache_events (tenant_id, key_id, event, directory, payload) '
+                         'VALUES (%s, %s, %s, %s, %s) RETURNING seq',
+                         (tenant_id, key_id, event, directory, Jsonb(payload or {})))['seq']
 
     def cache_events_after(self, after, limit):
-        rows = self._all('SELECT seq, tenant_id, key_id, event, directory, created_at FROM identity.cache_events '
+        rows = self._all('SELECT seq, tenant_id, key_id, event, directory, payload, created_at FROM identity.cache_events '
                          'WHERE seq > %s ORDER BY seq LIMIT %s', (after, limit))
         return [_text(dict(r), 'tenant_id') for r in rows]
 

@@ -20,7 +20,7 @@ def managed(monkeypatch):
                  'AZURE_CLIENT_ID', 'CLOUDSAVER_AZURE_ACCESS'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('CLOUDSAVER_CLOUD_IDENTITY', 'managed_identity')
-    monkeypatch.setattr(cloud_identity, 'managed_identity_token', lambda audience: 'mi-token-for-' + audience)
+    monkeypatch.setattr(cloud_identity, 'managed_identity_token', lambda audience, *a, **k: 'mi-token-for-' + audience)
 
 
 def test_azure_uses_federated_app_assertion_not_a_secret(monkeypatch):

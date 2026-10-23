@@ -73,6 +73,24 @@
 .identity-grid code { word-break:break-all; font-size:11px; }
 @media (max-width:720px) { .settings-row .wide { grid-column:auto; } }
 
+.doc-guide-page { max-width: 920px; }
+.doc-guide-content { padding: 28px 32px 36px; font-size: 14px; line-height: 1.75; color: var(--slate-700); }
+.doc-guide-content h1, .doc-guide-content h2, .doc-guide-content h3, .doc-guide-content h4 { color: var(--slate-900); margin: 1.6em 0 0.65em; }
+.doc-guide-content h1 { font-size: 22px; }
+.doc-guide-content h2 { font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 0.35em; }
+.doc-guide-content h3 { font-size: 15px; }
+.doc-guide-content p, .doc-guide-content ul, .doc-guide-content ol { margin: 0.75em 0; }
+.doc-guide-content ul, .doc-guide-content ol { padding-left: 1.35em; }
+.doc-guide-content li { margin: 0.35em 0; }
+.doc-guide-content a { color: var(--indigo-600); text-decoration: underline; }
+.doc-guide-content code { font-size: 12px; background: var(--slate-50); border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.35em; }
+.doc-guide-content pre { margin: 1em 0; padding: 14px 16px; background: var(--slate-50); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.65; }
+.doc-guide-content pre code { border: 0; background: transparent; padding: 0; }
+.doc-guide-content table { width: 100%; border-collapse: collapse; margin: 1.25em 0; font-size: 13px; }
+.doc-guide-content th, .doc-guide-content td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+.doc-guide-content th { background: var(--slate-50); font-weight: 600; color: var(--slate-700); }
+.doc-guide-content hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
+
 /* Evidence-led architectural review and optional AI advisory. */
 .capitalize{text-transform:capitalize}
 .analysis-footnote{padding:0 24px 20px;color:var(--muted);font-size:12px;line-height:1.65}

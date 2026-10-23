@@ -119,7 +119,7 @@ def test_billing_summary_has_exactly_the_dashboard_fields():
                              'subscription_plan_name', 'manage_billing_url', 'max_subscriptions', 'current_subscriptions',
                              'max_resources_per_scan', 'allowed_scan_frequencies', 'allowed_providers',
                              'can_export_terraform', 'can_use_keyvault', 'can_dispatch_automated_alerts', 'retention_days',
-                             'entitlements_source']
+                             'entitlements_source', 'settings_version', 'plan_change_allowed']
     assert summary['current_subscriptions'] == 3 and summary['entitlements_source'] == 'platform'
     narrowed = billing_summary(workspace(plan=plan(), subscription_ids=[]), workspace())
     assert narrowed['current_subscriptions'] == 3

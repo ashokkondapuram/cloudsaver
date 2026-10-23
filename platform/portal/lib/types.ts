@@ -135,7 +135,11 @@ export type Failure = {
   minute: string; source_ip: string; key_id: string | null; tenant_id: string | null; reason: FailureReason; caller: string; count: number;
 };
 
-export type PlatformSettings = {scheduled_scans_enabled: boolean; automated_alerts_enabled: boolean; version: number; updated_by: string; updated_at: string};
+export type ResourceAccessEffective = Record<string, {value: string | null; source: 'platform' | 'environment' | 'workspace' | 'unset'}>;
+export type PlatformSettings = {
+  scheduled_scans_enabled: boolean; automated_alerts_enabled: boolean; resource_access?: Partial<Record<string, string>>;
+  resource_access_effective?: ResourceAccessEffective; version: number; updated_by: string; updated_at: string;
+};
 
 export type Page<T> = {items: T[]; next_cursor: string | null};
 export type IssuedKey = {key: ApiKey; secret: string; previous?: ApiKey};

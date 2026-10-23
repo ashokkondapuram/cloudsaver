@@ -69,15 +69,12 @@ function EditWorkspaceDialog({open, workspace, onClose, onSaved}: {open: boolean
   const [name, setName] = useState('');
   const [plan, setPlan] = useState<PlanTier>('STARTER');
   const [customerId, setCustomerId] = useState('');
-  const [appId, setAppId] = useState('');
-  const [serviceAccount, setServiceAccount] = useState('');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
     if (!open) return;
-    setName(workspace.name); setPlan(workspace.plan_tier); setCustomerId(workspace.customer_id);
-    setAppId(workspace.identity.azure_app_client_id || ''); setServiceAccount(workspace.identity.gcp_service_account || ''); setError('');
+    setName(workspace.name); setPlan(workspace.plan_tier); setCustomerId(workspace.customer_id); setError('');
     portal<Page<Customer>>('customers', {query: {status: 'active', limit: 100}}).then(page => setCustomers(page.items)).catch(() => setCustomers([]));
   }, [open, workspace]);
 
@@ -89,8 +86,6 @@ function EditWorkspaceDialog({open, workspace, onClose, onSaved}: {open: boolean
       if (name.trim() !== workspace.name) body.name = name.trim();
       if (!workspace.plan_locked && plan !== workspace.plan_tier) body.plan_tier = plan;
       if (customerId !== workspace.customer_id) body.customer_id = customerId;
-      const identity = {azure_app_client_id: appId.trim() || null, gcp_service_account: serviceAccount.trim() || null};
-      if (identity.azure_app_client_id !== (workspace.identity.azure_app_client_id || null) || identity.gcp_service_account !== (workspace.identity.gcp_service_account || null)) body.identity = identity;
       onSaved(await portal<Workspace>(`workspaces/${encodeURIComponent(workspace.tenant_id)}`, {method: 'PATCH', body}));
     } catch (cause) {
       setError(errorMessage(cause));
@@ -111,8 +106,6 @@ function EditWorkspaceDialog({open, workspace, onClose, onSaved}: {open: boolean
             ? <label className="field">Plan<input type="text" value={planName(workspace.plan_tier, workspace.plan_name)} disabled/><span className="field-hint">Set by the customer’s subscription. Change it on the customer’s Billing tab.</span></label>
             : <label className="field">Plan<select value={plan} onChange={event => setPlan(event.target.value as PlanTier)}>{(PLANS.includes(workspace.plan_tier) ? PLANS : [workspace.plan_tier, ...PLANS]).map(tier => <option key={tier} value={tier}>{planName(tier, tier === workspace.plan_tier ? workspace.plan_name : null)}</option>)}</select></label>}
         </div>
-        <label className="field">Azure app client ID<input type="text" value={appId} onChange={event => setAppId(event.target.value)} placeholder="00000000-0000-0000-0000-000000000000"/><span className="field-hint">Optional. The multi-tenant app the customer consented to.</span></label>
-        <label className="field">GCP service account<input type="text" value={serviceAccount} onChange={event => setServiceAccount(event.target.value)} placeholder="reader@project-id.iam.gserviceaccount.com"/><span className="field-hint">Optional. The service account CloudSaver impersonates.</span></label>
       </div>
       <div className="dialog-actions">
         <button type="button" className="button secondary" onClick={onClose}>Cancel</button>

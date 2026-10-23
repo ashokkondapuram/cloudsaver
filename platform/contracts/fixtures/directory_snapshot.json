@@ -36,5 +36,5 @@
       }
     }
   ],
-  "platform": {"scheduled_scans_enabled": true, "automated_alerts_enabled": false, "version": 3}
+  "platform": {"scheduled_scans_enabled": true, "automated_alerts_enabled": false, "resource_access": {}, "version": 3}
 }

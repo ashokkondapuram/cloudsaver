@@ -287,6 +287,17 @@ def test_platform_db_is_internal_and_portal_is_loopback_only():
             assert port.startswith('127.0.0.1:'), (name, port)
 
 
+def test_resource_access_validation_and_platform_view(service):
+    workspace(service)
+    with pytest.raises(IdentityError):
+        service.update_platform({'version': 1, 'resource_access': {'unknown': 'x'}}, OPERATOR)
+    updated = service.update_platform({'version': 1, 'resource_access': {
+        'azure_app_client_id': '55555555-5555-4555-8555-555555555555',
+        'aws_hub_role_arn': 'arn:aws:iam::123456789012:role/CloudSaverHub'}}, OPERATOR)
+    assert updated['resource_access']['aws_hub_role_arn'].endswith('CloudSaverHub')
+    assert updated['resource_access_effective']['aws_hub_role_arn']['source'] == 'platform'
+
+
 def test_node_images_are_pinned():
     froms = [line for line in (ROOT / 'portal/Dockerfile').read_text().splitlines() if line.startswith('FROM ')]
     assert froms and all('node:24.22.1-alpine' in line for line in froms)

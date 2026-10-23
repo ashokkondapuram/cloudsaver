@@ -38,6 +38,8 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [new RegExp(`^payments/${ID}$`), ['PATCH']],
   [new RegExp(`^payments/${ID}/void$`), ['POST']],
   [/^platform-settings$/, ['GET', 'PUT']],
+  [/^access-checks$/, ['POST']],
+  [new RegExp(`^access-checks/${ID}$`), ['GET']],
   [/^audit$/, ['GET']],
   [/^failures$/, ['GET']],
 ];

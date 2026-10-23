@@ -112,6 +112,14 @@ def normalize_identity_bindings(value):
         raise IdentityError(str(exc).rstrip('.') + '.') from None
 
 
+def normalize_resource_access_bindings(value):
+    from identity.resource_access import normalize_resource_access
+    try:
+        return normalize_resource_access(value, partial=True)
+    except ValueError as exc:
+        raise IdentityError(str(exc).rstrip('.') + '.') from None
+
+
 def normalize_roles(value):
     if not isinstance(value, list) or not value or any(r not in ROLES for r in value):
         raise IdentityError('Select at least one role.')

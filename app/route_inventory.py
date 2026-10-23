@@ -23,6 +23,8 @@ ROUTES = {
     ('GET', '/api/v1/providers'): 'agnostic',
     ('GET', '/api/v1/auth/consent-url'): 'agnostic',
     ('GET', '/api/v1/billing/entitlements'): 'agnostic',
+    ('GET', '/api/v1/billing/plans'): 'agnostic',
+    ('PUT', '/api/v1/billing/plan'): 'agnostic',
     ('GET', '/api/v1/settings'): 'agnostic',
     ('PUT', '/api/v1/settings'): 'agnostic',
     ('GET', '/api/v1/gitops/targets'): 'agnostic',

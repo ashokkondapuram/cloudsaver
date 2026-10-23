@@ -310,10 +310,30 @@ class MemoryTx:
                     and r['outcome'] == 'ignored_untracked_deletion'), default=0)
 
     # cache events (long poll)
-    def append_cache_event(self, tenant_id, key_id, event, directory):
+    def insert_access_check(self, row):
+        self.s['access_checks'][row['check_id']] = copy.deepcopy(row)
+
+    def get_access_check(self, check_id, lock=False):
+        row = self.s['access_checks'].get(check_id)
+        return copy.deepcopy(row) if row else None
+
+    def update_access_check(self, check_id, fields):
+        row = self.s['access_checks'].get(check_id)
+        if not row:
+            return None
+        row.update(copy.deepcopy(fields))
+        return copy.deepcopy(row)
+
+    def count_recent_access_checks(self, tenant_id, since):
+        return sum(1 for row in self.s['access_checks'].values()
+                   if row['requested_at'] >= since
+                   and ((row['tenant_id'] is None) if tenant_id is None else row['tenant_id'] == tenant_id))
+
+    def append_cache_event(self, tenant_id, key_id, event, directory, payload=None):
         self.s['cache_seq'] += 1
         self.s['cache_events'].append({'seq': self.s['cache_seq'], 'tenant_id': tenant_id, 'key_id': key_id,
-                                       'event': event, 'directory': directory, 'created_at': utcnow()})
+                                       'event': event, 'directory': directory, 'payload': copy.deepcopy(payload or {}),
+                                       'created_at': utcnow()})
         return self.s['cache_seq']
 
     def cache_events_after(self, after, limit):
@@ -336,8 +356,9 @@ class MemoryStore:
                       'usage': {}, 'failures': {}, 'plans': plans, 'subscriptions': {}, 'payments': {},
                       'provider_events': {}, 'cache_events': [], 'cache_seq': 0,
                       'billing_settings': dict(SEED_SETTINGS, version=1, updated_at=now, updated_by='bootstrap'),
+                      'access_checks': {},
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
-                                   'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
+                                   'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
         self._lock = threading.RLock()
 
     @contextmanager

@@ -166,8 +166,11 @@ class IdentityService:
                          'actor_type': actor['actor_type'], 'action': action, 'tenant_id': tenant_id,
                          'key_id': key_id, 'details': details or {}, 'request_id': request_id})
 
-    def _publish(self, messages):
+    def _publish(self, messages, tx=None):
         for message in messages:
+            if tx is not None:
+                tx.append_cache_event(message.get('tenant_id'), message.get('key_id'), message.get('event'),
+                                      bool(message.get('directory')), message.get('payload'))
             self.events.publish(message)
 
     def _changed(self, tx, workspace, customer=None, change_type='workspace_upserted'):
@@ -388,9 +391,13 @@ class IdentityService:
             details = {'name': row['name'], 'changes': sorted(k for k in fields if not k.endswith('_at'))}
             if scopes:
                 details['provider'] = scopes[0]
+            if 'identity' in fields:
+                self._event(tx, actor, 'workspace_identity_updated', tenant_id,
+                            details={'old': current.get('identity') or {}, 'new': row.get('identity') or {}},
+                            request_id=request_id)
             self._event(tx, actor, action, tenant_id, details=details, request_id=request_id)
             view = self.workspace_view(row, tx.get_customer(row['customer_id']), tx.key_stats(now))
-        self._publish(messages + [{'directory': True, 'event': 'directory_changed'}])
+            self._publish(messages + [{'directory': True, 'event': 'directory_changed'}], tx)
         return view
 
     def _providers_changed(self, tx, before, after, actor, request_id):
@@ -410,7 +417,11 @@ class IdentityService:
     # ----- platform -------------------------------------------------------------------------------------
     @staticmethod
     def platform_view(row):
+        from identity.resource_access import effective_resource_access
+        resource_access = row.get('resource_access') or {}
         return {**{k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'version', 'updated_by')},
+                'resource_access': resource_access,
+                'resource_access_effective': effective_resource_access(resource_access),
                 'updated_at': iso(row['updated_at'])}
 
     def get_platform(self):
@@ -418,6 +429,8 @@ class IdentityService:
             return self.platform_view(tx.get_platform())
 
     def update_platform(self, payload, actor, request_id=None):
+        from identity.domain import normalize_resource_access_bindings
+        from identity.resource_access import merge_resource_access
         version = self._version(payload)
         fields = {}
         for name in ('scheduled_scans_enabled', 'automated_alerts_enabled'):
@@ -425,13 +438,29 @@ class IdentityService:
                 if not isinstance(payload[name], bool):
                     raise IdentityError('Platform switches must be on or off.')
                 fields[name] = payload[name]
+        resource_patch = None
+        if 'resource_access' in payload:
+            resource_patch = normalize_resource_access_bindings(payload['resource_access'])
         with self.store.transaction() as tx:
+            current = tx.get_platform()
+            if current['version'] != version:
+                raise StaleVersion()
+            if resource_patch is not None:
+                merged = merge_resource_access(current.get('resource_access') or {}, resource_patch)
+                fields['resource_access'] = merged
             row = tx.update_platform(version, dict(fields, updated_at=self.now(), updated_by=actor['actor'][:120]))
             if row is None:
                 raise StaleVersion()
-            tx.append_change(None, 'platform_updated', row['version'], {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'version')})
-            self._event(tx, actor, 'platform_updated', details={'changes': sorted(fields)}, request_id=request_id)
-        self._publish([{'directory': True, 'event': 'directory_changed'}])
+            snapshot = {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'version')}
+            tx.append_change(None, 'platform_updated', row['version'], snapshot)
+            changes = sorted(k for k in fields if k != 'resource_access')
+            if resource_patch is not None:
+                self._event(tx, actor, 'resource_access_updated', details={'old': current.get('resource_access') or {},
+                                                                            'new': row.get('resource_access') or {}},
+                            request_id=request_id)
+            if changes:
+                self._event(tx, actor, 'platform_updated', details={'changes': changes}, request_id=request_id)
+            self._publish([{'directory': True, 'event': 'directory_changed'}], tx)
         return self.platform_view(row)
 
     # ----- keys -----------------------------------------------------------------------------------------
@@ -709,6 +738,109 @@ class IdentityService:
                            'tenant_id': str(r['tenant_id']) if r['tenant_id'] else None, 'reason': r['reason'],
                            'caller': r['caller'], 'count': r['count']} for r in rows]}
 
+    # ----- access checks and cache events ---------------------------------------------------------------
+    def _access_check_view(self, row):
+        now = self.now()
+        status = 'pending'
+        if row.get('completed_at'):
+            status = 'completed'
+        elif row.get('claimed_at'):
+            status = 'running'
+        elif (now - row['requested_at']).total_seconds() > 60:
+            status = 'completed'
+            row = dict(row, result={'status': 'unavailable', 'providers': []})
+        return {'check_id': str(row['check_id']), 'tenant_id': str(row['tenant_id']) if row['tenant_id'] else None,
+                'status': status, 'requested_at': iso(row['requested_at']), 'requested_by': row['requested_by'],
+                'completed_at': iso(row.get('completed_at')), 'result': row.get('result')}
+
+    def create_access_check(self, payload, actor, request_id=None):
+        tenant_id = payload.get('tenant_id')
+        if tenant_id is not None:
+            tenant_id = uuid_text(tenant_id)
+        since = self.now() - timedelta(minutes=1)
+        key = f'access-check:{tenant_id or "platform"}'
+        if self.throttle.backend.incr('cloudsaver:identity:' + key, 60) > 6:
+            raise Throttled(60)
+        check_id = str(uuid4())
+        now = self.now()
+        with self.store.transaction() as tx:
+            if tenant_id and not tx.get_workspace(tenant_id):
+                raise NotFound('Workspace not found.')
+            tx.insert_access_check({'check_id': check_id, 'tenant_id': tenant_id, 'requested_by': actor['actor'][:120],
+                                    'requested_at': now, 'claimed_by': None, 'claimed_at': None, 'completed_at': None,
+                                    'result': None})
+            self._event(tx, actor, 'access_check_requested', tenant_id,
+                        details={'check_id': check_id}, request_id=request_id)
+            message = [{'tenant_id': tenant_id, 'event': 'access_check_requested',
+                        'payload': {'check_id': check_id}}]
+            self._publish(message, tx)
+        return {'check_id': check_id}
+
+    def get_access_check(self, check_id):
+        with self.store.transaction() as tx:
+            row = tx.get_access_check(uuid_text(check_id, 'Enter a valid check ID.'))
+            if not row:
+                raise NotFound('Access check not found.')
+            return self._access_check_view(row)
+
+    def claim_access_check(self, check_id, caller):
+        with self.store.transaction() as tx:
+            row = tx.get_access_check(uuid_text(check_id), lock=True)
+            if not row:
+                raise NotFound('Access check not found.')
+            if row.get('claimed_at'):
+                raise Conflict('Another service is already running this check.')
+            now = self.now()
+            updated = tx.update_access_check(row['check_id'], {'claimed_by': caller, 'claimed_at': now})
+            return self._access_check_view(updated)
+
+    def complete_access_check(self, check_id, result, caller, request_id=None):
+        if not isinstance(result, dict):
+            raise IdentityError('Include a probe result.')
+        with self.store.transaction() as tx:
+            row = tx.get_access_check(uuid_text(check_id), lock=True)
+            if not row or row.get('claimed_by') != caller:
+                raise Conflict('This check is not assigned to you.')
+            if row.get('completed_at'):
+                return self._access_check_view(row)
+            now = self.now()
+            updated = tx.update_access_check(row['check_id'], {'completed_at': now, 'result': result})
+            actor = {'actor': caller, 'actor_type': 'service'}
+            statuses = [p.get('status') for p in (result.get('providers') or []) if isinstance(p, dict)]
+            self._event(tx, actor, 'access_check_completed', row['tenant_id'],
+                        details={'check_id': check_id, 'statuses': statuses}, request_id=request_id)
+            return self._access_check_view(updated)
+
+    def poll_events(self, after=None, wait=0):
+        wait = max(0, min(int(wait or 0), 25))
+        with self.store.transaction() as tx:
+            head = tx.cache_head()
+            if after is None:
+                return {'items': [], 'seq': head}
+            after = int(after)
+            if after > head:
+                raise IdentityError('The event cursor is ahead of the head. Clear the cache and restart from the head.', 410)
+            oldest = tx.cache_oldest(self.now() - timedelta(hours=24))
+            if oldest is not None and after < oldest - 1:
+                raise IdentityError('The event cursor is older than the retention window. Clear the cache and restart from the head.', 410)
+            rows = tx.cache_events_after(after, 500)
+        if not rows and wait:
+            import time
+            deadline = time.monotonic() + wait
+            while time.monotonic() < deadline:
+                time.sleep(0.2)
+                with self.store.transaction() as tx:
+                    rows = tx.cache_events_after(after, 500)
+                    head = tx.cache_head()
+                if rows:
+                    break
+        else:
+            with self.store.transaction() as tx:
+                head = tx.cache_head()
+        return {'items': [{'seq': r['seq'], 'tenant_id': str(r['tenant_id']) if r.get('tenant_id') else None,
+                           'key_id': r.get('key_id'), 'event': r['event'], 'directory': bool(r.get('directory')),
+                           'payload': r.get('payload') or {}} for r in rows], 'seq': head}
+
     # ----- change feed ----------------------------------------------------------------------------------
     def changes(self, after, limit=500):
         limit = max(1, min(int(limit), 500))
@@ -730,7 +862,8 @@ class IdentityService:
                 customers.setdefault(w['customer_id'], tx.get_customer(w['customer_id']))
             platform = tx.get_platform()
         return {'seq': seq, 'workspaces': [snapshot(w, customers[w['customer_id']]) for w in workspaces],
-                'platform': {k: platform[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'version')}}
+                'platform': {k: platform[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled',
+                                                       'resource_access', 'version')}}
 
     @staticmethod
     def _page(cursor, limit):

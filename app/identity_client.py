@@ -102,6 +102,11 @@ class EventPoller(threading.Thread):
             if isinstance(item, dict):
                 self.cache.evict(item)
                 directory = directory or bool(item.get('directory'))
+                if item.get('event') == 'access_check_requested':
+                    check_id = (item.get('payload') or {}).get('check_id')
+                    if check_id:
+                        from app.access_worker import enqueue
+                        enqueue(check_id)
         self.after = seq
         self.cache.enabled = True
         if directory:
@@ -190,6 +195,14 @@ class IdentityClient:
         except httpx.HTTPError:
             raise IdentityUnavailable() from None
         return response
+
+    def request(self, method, path, *, json=None, timeout=None):
+        import httpx
+        try:
+            with self._client(timeout) as client:
+                return client.request(method, path, json=json)
+        except httpx.HTTPError:
+            raise IdentityUnavailable() from None
 
     def close(self):
         if self.poller:

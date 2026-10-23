@@ -187,6 +187,8 @@ make up               # starts the platform, then CloudSaver
 make status
 ```
 
+For the full variable reference (both `.env` files, deprecated aliases, and Compose-only settings), see [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
+
 Upgrading from 1.2: back up both databases, stop the old stack, then run
 `python3 scripts/setup_platform.py --migrate-from ../.env` in `platform/` (the key pepper
 and operator key move unchanged, and `platform-db` reuses the `cloudsaver_token-db-data`

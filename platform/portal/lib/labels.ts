@@ -108,6 +108,13 @@ export function operatorRoleLabel(session: Session | null) {
   return 'No access';
 }
 
+/** User-facing label for PLATFORM_ENVIRONMENT / identity-service environment. */
+export function environmentDisplayLabel(environment: string) {
+  if (environment === 'development') return 'Local';
+  if (environment === 'production') return 'Production';
+  return environment;
+}
+
 export function keyIdLabel(key: Pick<ApiKey, 'key_id' | 'format'>, prefix: Session['key_prefix'] = 'cs_test_') {
   return key.format === 'legacy' ? `Legacy · ${key.key_id}` : `${prefix}${key.key_id}…`;
 }
@@ -146,6 +153,10 @@ const ACTIONS: Record<string, string> = {
   customer_reactivated: 'Reactivated customer',
   customer_deleted: 'Deleted customer',
   platform_updated: 'Changed platform settings',
+  resource_access_updated: 'Updated resource access settings',
+  workspace_identity_updated: 'Updated workspace identity bindings',
+  access_check_requested: 'Requested access test',
+  access_check_completed: 'Completed access test',
   platform_settings_updated: 'Changed platform settings',
   plan_created: 'Created plan',
   plan_updated: 'Edited plan',

@@ -30,14 +30,22 @@ def env_platform_defaults():
     def flag(name):
         return os.getenv(name, 'false').lower() == 'true'
     return {'scheduled_scans_enabled': flag('CLOUDSAVER_SCHEDULED_SCANS'),
-            'automated_alerts_enabled': flag('CLOUDSAVER_AUTOMATED_ALERTS')}
+            'automated_alerts_enabled': flag('CLOUDSAVER_AUTOMATED_ALERTS'), 'resource_access': {}}
 
 
 def normalize_platform(value):
-    keys = {'scheduled_scans_enabled', 'automated_alerts_enabled'}
-    if not isinstance(value, dict) or set(value) != keys or not all(isinstance(value[k], bool) for k in keys):
+    keys = ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access')
+    if not isinstance(value, dict) or set(value) - set(keys):
+        raise ValueError('Unknown platform setting')
+    if not all(isinstance(value.get(k), bool) for k in ('scheduled_scans_enabled', 'automated_alerts_enabled')):
         raise ValueError('Platform settings require boolean scheduled scan and alert switches')
-    return {k: value[k] for k in keys}
+    resource_access = value.get('resource_access', {})
+    if resource_access is None:
+        resource_access = {}
+    if not isinstance(resource_access, dict):
+        raise ValueError('Platform resource access must be an object')
+    return {'scheduled_scans_enabled': value['scheduled_scans_enabled'],
+            'automated_alerts_enabled': value['automated_alerts_enabled'], 'resource_access': resource_access}
 
 
 class BaseRegistry:
@@ -115,6 +123,21 @@ class BaseRegistry:
         self.invalidate()
         return self.platform()
 
+    def update_plan(self, tenant_id, plan_code, expected_version, actor):
+        from app.billing_plan import build_plan_block
+
+        current = self.get(tenant_id)
+        if current is None:
+            raise KeyError(tenant_id)
+        if current['version'] != expected_version:
+            raise VersionConflict('Settings changed since you loaded them')
+        block = build_plan_block(plan_code, current.get('plan') or {})
+        merged = normalize_tenant(dict(current, plan_tier=block['code'], plan=block), allow_missing_key=True)
+        if not self._write_plan(merged, expected_version, actor, block):
+            raise VersionConflict('Settings changed since you loaded them')
+        self.invalidate()
+        return self._read_one(merged['tenant_id'])
+
     # ----- directory projection (cutover) -----------------------------------------------------------
     @staticmethod
     def projected(current, snap):
@@ -143,8 +166,9 @@ class BaseRegistry:
     def apply_platform(self, value):
         self._ensure_seeded()
         current = self.platform()
-        merged = normalize_platform({k: value[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled')})
-        if {k: current[k] for k in merged} == merged:
+        patch = {k: value[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access') if k in value}
+        merged = normalize_platform({**{k: current[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access')}, **patch})
+        if merged == {k: current[k] for k in merged}:
             return False
         self._write_platform(merged, current['version'], 'directory')
         self.invalidate()
@@ -184,6 +208,14 @@ class MemoryRegistry(BaseRegistry):
             return False
         self._tenants[tenant['tenant_id']] = dict(tenant, version=1)
         self.audit.append((tenant['tenant_id'], actor, 'tenant_created', 1))
+        return True
+
+    def _write_plan(self, tenant, expected_version, actor, plan_block):
+        stored = self._tenants.get(tenant['tenant_id'])
+        if not stored or stored['version'] != expected_version:
+            return False
+        self._tenants[tenant['tenant_id']] = dict(tenant, plan=plan_block, version=expected_version + 1)
+        self.audit.append((tenant['tenant_id'], actor, 'plan_changed', expected_version + 1))
         return True
 
     def _write(self, tenant, expected_version, actor, webhook, *, plan_changed):
@@ -318,6 +350,24 @@ class PostgresRegistry(BaseRegistry):
             if not inserted:
                 return False
             self._audit(db, tenant['tenant_id'], actor, 'tenant_created', 1)
+            self._sync_domain(db, tenant, plan_changed=True)
+        return True
+
+    def _write_plan(self, tenant, expected_version, actor, plan_block):
+        from psycopg.types.json import Jsonb
+        with self._connect() as db:
+            updated = db.execute(
+                'UPDATE public.tenant_registry SET plan_tier=%s, entitlements=%s, entitlements_version=%s, '
+                'billing_state=%s, plan_name=%s, current_period_end=%s, grace_ends_at=%s, subscription_plan_name=%s, '
+                'manage_billing_url=%s, version=version+1, updated_by=%s, updated_at=now() '
+                'WHERE tenant_id=%s AND version=%s RETURNING version',
+                (tenant['plan_tier'], Jsonb(plan_block['entitlements']), plan_block.get('entitlements_version'),
+                 plan_block['billing_state'], plan_block['name'], plan_block.get('current_period_end'),
+                 plan_block.get('grace_ends_at'), plan_block.get('subscription_plan_name'),
+                 plan_block.get('manage_billing_url'), actor, tenant['tenant_id'], expected_version)).fetchone()
+            if not updated:
+                return False
+            self._audit(db, tenant['tenant_id'], actor, 'plan_changed', updated[0])
             self._sync_domain(db, tenant, plan_changed=True)
         return True
 

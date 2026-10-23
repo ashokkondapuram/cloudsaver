@@ -134,6 +134,18 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
         return {'verify': [{'result': labels[1], 'caller': labels[2], 'count': count}
                            for labels, count in sorted(service.metrics.items()) if labels[0] == 'verify']}
 
+    @app.get('/internal/v1/events')
+    def events(after: int | None = Query(None, ge=0), wait: int = Query(0, ge=0, le=25), caller=Depends(any_caller)):
+        return service.poll_events(after, wait)
+
+    @app.post('/internal/v1/access-checks/{check_id}/claim')
+    def claim_access_check(check_id: str, caller=Depends(verify_caller)):
+        return service.claim_access_check(check_id, caller)
+
+    @app.put('/internal/v1/access-checks/{check_id}/result')
+    def complete_access_check(check_id: str, request: Request, payload: dict = Body(...), caller=Depends(verify_caller)):
+        return service.complete_access_check(check_id, payload, caller, rid(request))
+
     # ----- portal admin API --------------------------------------------------------------------------
     @app.get('/admin/v1/session')
     def session(identity=Depends(operator)):
@@ -210,6 +222,14 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     @app.put('/admin/v1/platform-settings')
     def update_platform(request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.update_platform(payload, identity, rid(request))
+
+    @app.post('/admin/v1/access-checks', status_code=202)
+    def create_access_check(request: Request, payload: dict = Body(default={}), identity=Depends(operator)):
+        return service.create_access_check(payload, identity, rid(request))
+
+    @app.get('/admin/v1/access-checks/{check_id}')
+    def access_check(check_id: str, identity=Depends(operator)):
+        return service.get_access_check(check_id)
 
     @app.get('/admin/v1/workspaces/{tenant_id}/keys')
     def keys(tenant_id: str, identity=Depends(operator)):
