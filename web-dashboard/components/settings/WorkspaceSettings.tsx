@@ -25,11 +25,13 @@ function useSettings() {
   return {data, error, reload: () => load()};
 }
 
+type IdentityDraft = {azure_app_client_id?: string; gcp_service_account?: string};
+
 function useSave(data: SettingsResponse | null, onSaved: () => Promise<void>) {
   const {token, notify, reloadProfile} = useWorkspace();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  async function save(changes: Partial<Pick<TenantSettings, 'subscription_ids' | 'aws_accounts' | 'gcp_projects' | 'schedule'>> & {alerts?: Alerts}, message: string) {
+  async function save(changes: Partial<Pick<TenantSettings, 'subscription_ids' | 'aws_accounts' | 'gcp_projects' | 'schedule'>> & {alerts?: Alerts; identity?: IdentityDraft}, message: string) {
     if (!data) return false;
     const current = data.settings;
     setSaving(true); setError('');
@@ -41,6 +43,7 @@ function useSave(data: SettingsResponse | null, onSaved: () => Promise<void>) {
         gcp_projects: changes.gcp_projects ?? current.gcp_projects,
         schedule: changes.schedule ?? current.schedule,
         alerts: changes.alerts ?? {enabled: current.alerts.enabled, channel: current.alerts.channel},
+        ...(changes.identity ? {identity: changes.identity} : {}),
       }});
       await onSaved();
       await reloadProfile().catch(() => {});
@@ -139,6 +142,40 @@ export function IdentityOnboardingPanel() {
       <article><ProviderBadge provider="aws"/><p>Create a read-only role that trusts the CloudSaver hub role and requires your external ID.</p><dl className="settings-key-values"><Value label="Trusted hub role" value={identity.aws_hub_role_arn}/><Value label="External ID" value={identity.aws_external_id}/></dl>{identity.commands?.aws?.map((line: string) => <code key={line} className="command-block">{line}</code>)}</article>
       <article><ProviderBadge provider="gcp"/><p>Grant the Viewer role in each project to your CloudSaver service account.</p><dl className="settings-key-values"><Value label="Service account" value={identity.gcp_service_account}/><Value label="Workload identity provider" value={identity.gcp_workload_provider}/></dl>{identity.commands?.gcp?.map((line: string) => <code key={line} className="command-block">{line}</code>)}</article>
     </div>
+  </section>;
+}
+
+export function ResourceAccessIdentityEditor() {
+  const {data, reload} = useSettings();
+  const {save, saving, error} = useSave(data, reload);
+  const [azureAppClientId, setAzureAppClientId] = useState('');
+  const [gcpServiceAccount, setGcpServiceAccount] = useState('');
+  useEffect(() => {
+    if (!data) return;
+    setAzureAppClientId(data.settings.identity.azure_app_client_id || '');
+    setGcpServiceAccount(data.settings.identity.gcp_service_account || '');
+  }, [data]);
+  if (!data) return null;
+  if (data.directory_mode === 'cutover') {
+    return <section className="panel">
+      <SectionTitle title="Identity overrides"/>
+      <Notice>Identity bindings are managed in the platform portal while this workspace is on the platform directory.</Notice>
+    </section>;
+  }
+  async function submit() {
+    await save({identity: {
+      azure_app_client_id: azureAppClientId.trim() || undefined,
+      gcp_service_account: gcpServiceAccount.trim() || undefined,
+    }}, 'Resource access identity saved.');
+  }
+  return <section className="panel">
+    <SectionTitle title="Identity overrides">Point CloudSaver at your own Azure app registration or GCP service account instead of the platform default.</SectionTitle>
+    {error && <Notice tone="error">{error}</Notice>}
+    <label className="field-label">Azure app client ID</label>
+    <input className="input" value={azureAppClientId} onChange={event => setAzureAppClientId(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
+    <label className="field-label">GCP service account</label>
+    <input className="input" value={gcpServiceAccount} onChange={event => setGcpServiceAccount(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
+    {data.editable && <div className="panel-bottom-action"><button type="button" className="button secondary" disabled={saving} onClick={() => void submit()}><Save size={15}/>Save</button></div>}
   </section>;
 }
 

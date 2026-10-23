@@ -1,10 +1,12 @@
 """Workspace settings for tenant admins.
 
-Tenant admins edit only scopes that their own cloud grants protect (Azure
+Tenant admins edit scopes that their own cloud grants protect (Azure
 subscriptions in their directory, AWS roles that require their tenant ID as the
 external ID, GCP projects reached through their operator-assigned service
-account). Identity bindings and Kubernetes endpoints that reference
-operator secrets are managed by platform operators in the platform portal.
+account) and their own resource-access identity bindings (Azure app client ID,
+GCP service account). Kubernetes endpoints that reference operator secrets
+remain managed by platform operators in the platform portal. In directory
+cutover mode all of the above are projected from the platform and read-only here.
 """
 import hashlib
 from typing import Literal
@@ -16,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from app.auth import Role, require_workspace_role
 from app.config import directory_mode
 from app.provider_access import narrow
+from app.tenant_config import normalize_identity
 
 SCOPES_IN_PORTAL = 'Cloud accounts are managed in the platform portal. Contact your CloudSaver administrator to change them.'
 
@@ -51,6 +54,11 @@ class PlanChange(Strict):
     plan_tier: Literal['STARTER', 'GROWTH', 'ENTERPRISE']
 
 
+class Identity(Strict):
+    azure_app_client_id: str | None = Field(None, max_length=64)
+    gcp_service_account: str | None = Field(None, max_length=320)
+
+
 class WorkspaceSettings(Strict):
     version: int = Field(ge=1)
     subscription_ids: list[UUID] = Field(max_length=100)
@@ -58,6 +66,7 @@ class WorkspaceSettings(Strict):
     gcp_projects: list[GcpProject] = Field(max_length=100)
     schedule: Schedule
     alerts: Alerts
+    identity: Identity | None = None
 
 
 def public_tenant(tenant):
@@ -155,6 +164,16 @@ def create_router(settings, current_tenant, identity_client=None):
             raise HTTPException(422, 'Enter the webhook URL for the new channel.')
         if alerts.enabled and not keeps_webhook:
             raise HTTPException(422, 'Add a webhook URL before you turn on alerts.')
+        identity_changes = {}
+        if payload.identity is not None:
+            try:
+                new_identity = normalize_identity(payload.identity.model_dump())
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from None
+            if new_identity != (current.get('identity') or {}):
+                if cutover():
+                    raise HTTPException(403, SCOPES_IN_PORTAL)
+                identity_changes = {'identity': new_identity}
         scopes = {
             'subscription_ids': [str(s) for s in payload.subscription_ids],
             'aws_accounts': [a.model_dump() for a in payload.aws_accounts],
@@ -177,7 +196,7 @@ def create_router(settings, current_tenant, identity_client=None):
             # A downgraded workspace can still edit its schedule or remove scopes; it just can't add more.
             if total > sum(len(current.get(k, [])) for k in scopes):
                 enforce_subscription_quota(plan, total + len(current.get('kubernetes_clusters', [])), adding_count=0)
-        changes = dict(scopes, schedule=payload.schedule.model_dump(),
+        changes = dict(scopes, **identity_changes, schedule=payload.schedule.model_dump(),
                        alerts={'enabled': alerts.enabled, 'channel': alerts.channel})
         tenant = save(lambda: store.update(workspace['tenant_id'], changes, payload.version, actor_for(workspace), webhook=webhook))
         return {'settings': public_tenant(visible(tenant, workspace))}

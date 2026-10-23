@@ -3,7 +3,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {Bot, Check, Copy, Download, KeyRound, RefreshCw, ShieldCheck, UserPlus, Users} from 'lucide-react';
 import {api} from '../../lib/api';
-import type {AccessEvent, AccessKey, CustomerUser, ServiceAccount, WorkspaceMember} from '../../lib/types';
+import type {AccessEvent, AccessKey, CustomerRole, CustomerUser, ServiceAccount, WorkspaceMember} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
@@ -41,7 +41,8 @@ type Pending =
 
 export function AccessSettings() {
   const {token, workspace, notify} = useWorkspace();
-  const roles = workspace?.customer_roles || [];
+  const keyAdmin = workspace?.subject_type === 'operator' && !!workspace.roles?.includes('TenantAdmin');
+  const roles: CustomerRole[] = keyAdmin ? ['CustomerAdmin'] : workspace?.customer_roles || [];
   const isAdmin = roles.includes('CustomerOwner') || roles.includes('CustomerAdmin');
   const isOwner = roles.includes('CustomerOwner');
   const [data, setData] = useState<Data | null>(null);
@@ -111,6 +112,7 @@ export function AccessSettings() {
   return <>
     {!isAdmin && <Notice tone="info">You have auditor access. You can review users, keys, and activity, but you can't make changes.</Notice>}
     {workspace?.scope_restrictions && <Notice tone="info">Your key is limited to some cloud scopes.</Notice>}
+    {keyAdmin && <Notice tone="info">You’re signed in with a workspace admin key. You can add people to this workspace and issue their keys. Your organization owner manages user status.</Notice>}
 
     <section className="panel">
       <SectionTitle title="Organization users" action={<div className="section-actions">
@@ -123,7 +125,7 @@ export function AccessSettings() {
         <tbody>{data.users.map(user => <tr key={user.user_id}>
           <td>{user.display_name}</td><td>{user.email || '—'}</td><td>{ROLE_LABELS[user.customer_role]}</td>
           <td>{user.membership_status === 'active' ? 'Active' : 'Suspended'}</td>
-          {isAdmin && <td className="row-actions">{user.customer_role !== 'CustomerOwner' && user.user_id !== workspace?.subject_id && <>
+          {isAdmin && <td className="row-actions">{!keyAdmin && user.customer_role !== 'CustomerOwner' && user.user_id !== workspace?.subject_id && <>
             {user.membership_status === 'active'
               ? <button type="button" className="button secondary small" onClick={() => setPending({kind: 'confirm', title: `Suspend ${user.display_name}?`, label: 'Suspend user',
                   body: `${user.display_name} loses access right away and every key issued to them is revoked. You can reactivate them later, but you'll need to issue new keys.`,

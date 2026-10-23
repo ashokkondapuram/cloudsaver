@@ -15,7 +15,7 @@ import {ReliabilityPanel} from './ReliabilityPanel';
 import {ServiceAnalysis} from './ServiceAnalysis';
 import {BillingEvidencePanel,AIAssessmentHistory} from './EnterpriseEvidence';
 import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
-import {CloudScopesEditor, IdentityOnboardingPanel, ScheduleAlertsEditor} from './settings/WorkspaceSettings';
+import {CloudScopesEditor, IdentityOnboardingPanel, ResourceAccessIdentityEditor, ScheduleAlertsEditor} from './settings/WorkspaceSettings';
 import {AccessSettings} from './settings/AccessSettings';
 
 export function Allocation() {
@@ -87,7 +87,7 @@ function ResourceAccessSettings() {
       setTesting(false);
     }
   }
-  return <><IdentityOnboardingPanel/><section className="panel"><SectionTitle title="Test access" action={canAdmin ? <button type="button" className="button secondary" disabled={testing} onClick={() => void testAccess()}>{testing ? 'Testing…' : 'Test access'}</button> : undefined}>Check read-only access for this workspace before you run a scan</SectionTitle>{!canAdmin && <Notice tone="info">A workspace administrator can run access tests.</Notice>}{results.length ? <dl className="settings-key-values">{results.map(row => <div key={row.provider}><dt>{providerNames[row.provider] || row.provider}</dt><dd>{row.message || row.status}</dd></div>)}</dl> : <p className="inline-help">Runs a short probe per configured cloud provider. No secrets are shown.</p>}</section></>;
+  return <><IdentityOnboardingPanel/><ResourceAccessIdentityEditor/><section className="panel"><SectionTitle title="Test access" action={canAdmin ? <button type="button" className="button secondary" disabled={testing} onClick={() => void testAccess()}>{testing ? 'Testing…' : 'Test access'}</button> : undefined}>Check read-only access for this workspace before you run a scan</SectionTitle>{!canAdmin && <Notice tone="info">A workspace administrator can run access tests.</Notice>}{results.length ? <dl className="settings-key-values">{results.map(row => <div key={row.provider}><dt>{providerNames[row.provider] || row.provider}</dt><dd>{row.message || row.status}</dd></div>)}</dl> : <p className="inline-help">Runs a short probe per configured cloud provider. No secrets are shown.</p>}</section></>;
 }
 
 function Integrations() {

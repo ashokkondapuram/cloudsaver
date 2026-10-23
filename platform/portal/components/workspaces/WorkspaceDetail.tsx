@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {useState} from 'react';
-import {Activity, ArrowLeft, BarChart3, Cloud, KeyRound, LayoutGrid, RefreshCw, Shield} from 'lucide-react';
+import {Activity, ArrowLeft, BarChart3, Cloud, KeyRound, LayoutGrid, ListChecks, RefreshCw} from 'lucide-react';
 import {portal} from '../../lib/api';
 import type {Workspace} from '../../lib/types';
 import {useLoad} from '../../lib/useLoad';
@@ -11,13 +11,13 @@ import {Loading, Notice, PageHeading, StatusBadge} from '../ui/shared';
 import {CloudAccountsTab} from './CloudAccountsTab';
 import {KeysTab} from './KeysTab';
 import {OverviewTab} from './OverviewTab';
-import {ResourceAccessTab} from './ResourceAccessTab';
+import {RulesTab} from './RulesTab';
 import {UsageTab} from './UsageTab';
 
 const TABS = [
   {id: 'overview', label: 'Overview', icon: LayoutGrid},
   {id: 'cloud', label: 'Cloud accounts', icon: Cloud},
-  {id: 'access', label: 'Resource access', icon: Shield},
+  {id: 'rules', label: 'Rules', icon: ListChecks},
   {id: 'keys', label: 'Keys', icon: KeyRound},
   {id: 'usage', label: 'Usage', icon: BarChart3},
   {id: 'activity', label: 'Activity', icon: Activity},
@@ -48,7 +48,7 @@ export function WorkspaceDetail({tenantId}: {tenantId: string}) {
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
       {tab === 'overview' && <OverviewTab workspace={workspace} onChange={setData} reload={reload}/>}
       {tab === 'cloud' && <CloudAccountsTab workspace={workspace} onChange={setData} reload={reload}/>}
-      {tab === 'access' && <ResourceAccessTab workspace={workspace} onChange={setData}/>}
+      {tab === 'rules' && <RulesTab workspace={workspace}/>}
       {tab === 'keys' && <KeysTab workspace={workspace} reloadWorkspace={reload}/>}
       {tab === 'usage' && <UsageTab workspace={workspace}/>}
       {tab === 'activity' && <section className="panel"><AuditList filters={{tenant_id: workspace.tenant_id}} title="Activity" description="Changes to this workspace and its keys."/></section>}

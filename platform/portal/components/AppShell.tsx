@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 import {useEffect, type ReactNode} from 'react';
-import {Activity, Building2, Cloud, CreditCard, Layers, LayoutGrid, LogOut, Settings2, ShieldAlert, ShieldCheck} from 'lucide-react';
+import {Activity, BookOpen, Building2, Cloud, CreditCard, Layers, LayoutGrid, LogOut, Settings2, ShieldAlert, ShieldCheck} from 'lucide-react';
 import {environmentDisplayLabel, operatorRoleLabel} from '../lib/labels';
 import {useSession} from './SessionProvider';
 import {ThemeToggle} from './ThemeProvider';
@@ -19,6 +19,7 @@ const navigation = [
   {href: '/activity', label: 'Activity', icon: Activity, group: 'OVERSIGHT'},
   {href: '/security', label: 'Security', icon: ShieldAlert, group: ''},
   {href: '/settings', label: 'Platform settings', icon: Settings2, group: 'PLATFORM'},
+  {href: '/knowledge', label: 'Knowledge', icon: BookOpen, group: ''},
 ];
 
 export function Brand() {

@@ -106,6 +106,8 @@ Caller: `portal` only (the portal route `POST /api/webhooks/stripe` forwards the
 Public to the CloudSaver gateway only. CloudSaver forwards the caller's `Authorization: Bearer <key>` and
 `X-Forwarded-For`; identity-service verifies the key itself and requires a user key with a customer role.
 `CustomerAuditor` is read-only. Every workspace call is pinned to the presented key's workspace by the gateway.
+An operator-issued key with `TenantAdmin` acts as `CustomerAdmin` for its own workspace only: it can invite users,
+manage members, service accounts and keys there, but can't suspend users or transfer ownership.
 
 | Method | Path | Notes |
 | --- | --- | --- |

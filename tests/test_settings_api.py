@@ -78,13 +78,31 @@ def test_stale_version_is_rejected(stack):
 @pytest.mark.parametrize('field,value', [
     ('aws_accounts', [{'account_id': '123456789012', 'region': 'us-east-1', 'role_arn': ROLE, 'external_id': 'x'}]),
     ('aws_accounts', [{'account_id': '210987654321', 'region': 'us-east-1', 'role_arn': ROLE}]),
-    ('identity', {'azure_app_client_id': OTHER}),
     ('kubernetes_clusters', []),
 ])
-def test_tenant_admin_cannot_set_identity_or_foreign_roles(stack, field, value):
+def test_tenant_admin_cannot_set_foreign_roles(stack, field, value):
     client, _, settings, _fake = stack
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body(**{field: value})).status_code == 422
     assert settings.tenants[0]['version'] == 1
+
+
+def test_tenant_admin_can_set_their_own_resource_access_identity(stack):
+    client, registry, settings, _fake = stack
+    result = client.put('/api/v1/settings', headers=as_workspace(),
+                        json=body(identity={'azure_app_client_id': OTHER, 'gcp_service_account': 'reader@example.iam.gserviceaccount.com'}))
+    assert result.status_code == 200, result.text
+    assert settings.tenants[0]['identity'] == {'azure_app_client_id': OTHER,
+                                               'gcp_service_account': 'reader@example.iam.gserviceaccount.com'}
+    assert client.get('/api/v1/settings', headers=as_workspace()).json()['settings']['identity']['azure_app_client_id'] == OTHER
+    bad = client.put('/api/v1/settings', headers=as_workspace(), json=body(version=2, identity={'azure_app_client_id': 'not-a-uuid'}))
+    assert bad.status_code == 422
+
+
+def test_identity_is_projected_in_cutover_mode(stack, monkeypatch):
+    client, registry, settings, _fake = stack
+    monkeypatch.setattr('app.settings_api.directory_mode', lambda: 'cutover')
+    result = client.put('/api/v1/settings', headers=as_workspace(), json=body(identity={'azure_app_client_id': OTHER}))
+    assert result.status_code == 403
 
 
 def test_plan_limits_are_enforced(stack):

@@ -594,6 +594,31 @@ def test_customer_limits(service, clock, monkeypatch):
     assert limited.value.status == 429
 
 
+def test_workspace_admin_key_can_add_users_to_its_workspace(service, clock):
+    workspace(service)
+    admin = service.customer_context_from_key(issue(service, clock, roles=['TenantAdmin'])['secret'], IP, 'gateway')
+    viewer = issue(service, clock, roles=['Viewer'])['secret']
+    with pytest.raises(IdentityError) as denied:
+        service.customer_context_from_key(viewer, IP, 'gateway')
+    assert denied.value.status == 403
+
+    member = invite_member(service, admin, 'lee', roles=('BillingAdmin',))
+    assert [m['user_id'] for m in service.list_workspace_members(TID, admin)['items']] == [member['user_id']]
+    key = service.issue_customer_workspace_key(TID, {'name': 'Lee', 'roles': ['BillingAdmin'], 'all_providers': True,
+                                                     'subject_user_id': member['user_id'],
+                                                     'expires_at': (clock() + timedelta(days=10)).isoformat()}, admin)
+    assert service.verify(key['secret'], IP, 'gateway')['subject_id'] == member['user_id']
+
+    with pytest.raises(IdentityError, match='Choose the user'):
+        service.issue_customer_workspace_key(TID, {'name': 'Self', 'roles': ['Viewer'], 'all_providers': True,
+                                                   'expires_at': (clock() + timedelta(days=10)).isoformat()}, admin)
+    with pytest.raises(IdentityError) as suspend:
+        service.set_customer_user_status(None, member['user_id'], {}, 'suspended', admin)
+    assert suspend.value.status == 403
+    with pytest.raises(NotFound):
+        service.list_workspace_members('33333333-3333-4333-8333-333333333333', admin)
+
+
 def test_workspace_analysis_rules_default_enabled_and_overridable(service, clock):
     workspace(service)
     catalog = service.list_analysis_rules()['items']

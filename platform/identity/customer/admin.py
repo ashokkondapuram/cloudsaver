@@ -41,7 +41,8 @@ class CustomerOps:
         customer_id = uuid_text(customer_id) if customer_id else grant['customer_id']
         if customer_id != grant['customer_id']:
             raise NotFound('Customer not found.')
-        roles = self._membership_roles(tx, grant['subject_id'], customer_id)
+        roles = grant['customer_roles'] if grant.get('key_admin') else \
+            self._membership_roles(tx, grant['subject_id'], customer_id)
         if admin:
             self._assert_customer_admin(tx, customer_id, roles)
         elif not roles:
@@ -50,12 +51,15 @@ class CustomerOps:
 
     def _customer_workspace(self, tx, grant, tenant_id, *, admin=True, lock=False):
         workspace = tx.get_workspace(uuid_text(tenant_id), lock=lock)
-        if not workspace or workspace['customer_id'] != grant['customer_id'] or workspace['status'] == 'deleted':
+        if not workspace or workspace['customer_id'] != grant['customer_id'] or workspace['status'] == 'deleted' \
+                or (grant.get('key_admin') and workspace['tenant_id'] != grant['tenant_id']):
             raise NotFound('Workspace not found.')
         self._customer_scope(tx, grant, admin=admin)
         return workspace
 
     def _issuer_roles(self, tx, tenant_id, grant):
+        if grant.get('key_admin'):
+            return list(grant['roles']) if tenant_id == grant['tenant_id'] else []
         membership = tx.get_workspace_membership(tenant_id, grant['subject_id'])
         return list(membership['roles']) if membership else []
 
@@ -180,9 +184,13 @@ class CustomerOps:
         grant = self.verify(presented, ip, caller)
         if not grant.get('valid'):
             raise IdentityError('Invalid workspace access key.', status=401)
-        if grant.get('subject_type') != 'user' or not grant.get('customer_roles'):
-            raise IdentityError(FORBIDDEN, status=403)
-        return grant
+        if grant.get('subject_type') == 'user' and grant.get('customer_roles'):
+            return grant
+        if grant.get('subject_type') == 'operator' and 'TenantAdmin' in grant.get('roles', []):
+            # Operator-issued admin keys belong to no user; they administer users for their own workspace only.
+            return {**grant, 'subject_id': f"key:{grant['key_id']}", 'customer_roles': ['CustomerAdmin'],
+                    'key_admin': True}
+        raise IdentityError(FORBIDDEN, status=403)
 
     # ----- users --------------------------------------------------------------------------------------
     def list_customer_users(self, customer_id, grant):
@@ -232,6 +240,9 @@ class CustomerOps:
 
     def set_customer_user_status(self, customer_id, user_id, payload, status, grant, request_id=None):
         """Suspend revokes every key issued to the user in this customer; reactivate restores access only."""
+        if grant.get('key_admin'):
+            raise IdentityError('Your organization owner manages user status. You can remove people from this workspace.',
+                                status=403)
         user_id = uuid_text(user_id, 'User')
         reason = text(payload.get('reason') or ('User suspended' if status == 'suspended' else 'User reactivated'),
                       'Reason', 200)
@@ -425,6 +436,8 @@ class CustomerOps:
             if payload.get('subject_user_id') else (None if service_account_id else grant['subject_id'])
         if service_account_id and subject_user_id:
             raise IdentityError('Choose a user or a service account, not both.')
+        if grant.get('key_admin') and subject_user_id == grant['subject_id']:
+            raise IdentityError('Choose the user or service account that receives this key.')
         with self.store.transaction() as tx:
             workspace = self._customer_workspace(tx, grant, tenant_id, lock=True)
             tenant_id = workspace['tenant_id']

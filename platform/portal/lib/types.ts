@@ -162,3 +162,16 @@ export type PlanChangeRequest = {
 
 export type Page<T> = {items: T[]; next_cursor: string | null};
 export type IssuedKey = {key: ApiKey; secret: string; previous?: ApiKey};
+
+export type AnalysisRule = {
+  id: string; provider: Provider; service_category: string; resource_type: string; name: string; description: string;
+  pillar: string; status: 'published' | 'draft' | 'retired'; enabled: boolean; unavailable_reason: string | null;
+  catalog_version: number; override_version: number | null;
+};
+export type WorkspaceAnalysisRules = {tenant_id: string; items: AnalysisRule[]};
+
+export type PublicationStatus = 'draft' | 'published' | 'deprecated' | 'rejected';
+export type KnowledgePublication = {
+  id: string; title: string; summary: string; body: string; status: PublicationStatus; quality_score: number | null;
+  version: number; created_at: string; created_by: string; updated_at: string; updated_by: string;
+};
