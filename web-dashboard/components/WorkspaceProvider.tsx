@@ -26,6 +26,24 @@ type WorkspaceState = {
 const Context = createContext<WorkspaceState | null>(null);
 export function useWorkspace() {const value = useContext(Context); if (!value) throw new Error('Workspace provider is required'); return value;}
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const TOKEN_KEY = 'cloudsaver:session:token';
+const ACTIVITY_KEY = 'cloudsaver:session:activity';
+
+function readSavedToken() {
+  try {
+    const savedToken = sessionStorage.getItem(TOKEN_KEY);
+    const lastActive = Number(sessionStorage.getItem(ACTIVITY_KEY) || 0);
+    if (!savedToken || !lastActive || Date.now() - lastActive > IDLE_TIMEOUT_MS) {
+      sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);
+      return '';
+    }
+    return savedToken;
+  } catch {
+    return '';
+  }
+}
+
 export function WorkspaceProvider({children}: {children: ReactNode}) {
   const [token, setToken] = useState('');
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -48,13 +66,37 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
 
   useEffect(() => {try {const saved = localStorage.getItem('cloudsaver:ui:density'); if (saved === 'compact' || saved === 'medium' || saved === 'relaxed') updateDensity(saved);} catch {}}, []);
   useEffect(() => {if (!notice) return; const timer = setTimeout(() => setNotice(null), 6500); return () => clearTimeout(timer);}, [notice]);
+
+  // Restores a reloaded tab's session if it hasn't been idle past the timeout.
+  useEffect(() => {
+    const saved = readSavedToken();
+    if (saved) connect(saved, {persist: false}).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tracks activity while connected; signs out automatically after IDLE_TIMEOUT_MS of inactivity.
+  useEffect(() => {
+    if (!token) return;
+    const markActive = () => {try {sessionStorage.setItem(ACTIVITY_KEY, String(Date.now()));} catch {}};
+    markActive();
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'] as const;
+    events.forEach(name => window.addEventListener(name, markActive, {passive: true}));
+    const interval = setInterval(() => {
+      let lastActive = 0;
+      try {lastActive = Number(sessionStorage.getItem(ACTIVITY_KEY) || 0);} catch {}
+      if (lastActive && Date.now() - lastActive > IDLE_TIMEOUT_MS) disconnect();
+    }, 30000);
+    return () => {events.forEach(name => window.removeEventListener(name, markActive)); clearInterval(interval);};
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
   const notify = useCallback((text: string, tone: 'success' | 'error' | 'info' = 'success') => setNotice({text, tone}), []);
   const setDensity = (value: Density) => {updateDensity(value); try {localStorage.setItem('cloudsaver:ui:density', value);} catch {}};
 
   function clearContext() {findingFocusKey.current=null;setFinding(null);setFindingContext([]); setReview([]); setSelection([]); setScope([]);}
   function selectScan(id: string) {setSelected(id); clearContext(); setOverlay(null);}
 
-  async function connect(credential: string) {
+  async function connect(credential: string, options: {persist?: boolean} = {}) {
+    const persist = options.persist !== false;
     connecting.current?.abort();
     const controller = new AbortController(); connecting.current = controller;
     const version = ++session.current;
@@ -70,8 +112,10 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
       setToken(nextToken); setWorkspace(me); setEntitlements(plan);
       setScans(history); setSelected(history[0]?.scan_id || '');
       clearContext(); setOverlay(null);
+      if (persist) {try {sessionStorage.setItem(TOKEN_KEY, nextToken); sessionStorage.setItem(ACTIVITY_KEY, String(Date.now()));} catch {}}
     } catch (cause) {
       if (session.current === version && !controller.signal.aborted) {
+        try {sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);} catch {}
         const message = cause instanceof Error ? cause.message : 'Workspace could not be connected.';
         setError(message); throw new Error(message);
       }
@@ -80,6 +124,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
 
   function disconnect() {
     session.current++; connecting.current?.abort();
+    try {sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);} catch {}
     setToken(''); setWorkspace(null); setEntitlements(null); setScans([]); setSelected('');
     setBusy(''); setError(''); setOverlay(null); setNotice(null); clearContext();
   }

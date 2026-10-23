@@ -165,8 +165,8 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None) -> tupl
         raise ScanError("No authorized Azure subscriptions are configured.")
     try:
         credential = azure_credential(tenant)
-    except CredentialError:
-        raise ScanError("The customer Azure credential is unavailable.") from None
+    except CredentialError as exc:
+        raise ScanError(str(exc) or "The customer Azure credential is unavailable.") from None
     with credential:
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:

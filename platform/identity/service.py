@@ -351,6 +351,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
 
     def create_workspace(self, payload, actor, request_id=None, *, scopes=None, status='active', source_action='workspace_created'):
         tenant_id = uuid_text(payload.get('tenant_id'), 'Enter a valid workspace ID.')
+        if int(tenant_id.replace('-', ''), 16) == 0:
+            raise IdentityError("Enter the customer's Microsoft Entra tenant ID. The empty ID isn't valid.")
         customer_id = uuid_text(payload.get('customer_id'), 'Choose a customer.')
         tier = payload.get('plan_tier', 'STARTER')
         if tier not in TIERS:

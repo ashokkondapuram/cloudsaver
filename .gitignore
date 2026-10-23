@@ -12,3 +12,5 @@ backups/
 *.pem
 *.key
 cloudsaver-operator-key.txt
+
+compose.override.yaml

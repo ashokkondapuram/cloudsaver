@@ -74,6 +74,9 @@ def managed_identity_token(audience, settings=None, tenant=None):
 
 def azure_credential(tenant, settings=None):
     tenant_id = _uuid(tenant['tenant_id'], 'Invalid customer tenant ID.')
+    if int(tenant_id.replace('-', ''), 16) == 0:
+        raise CredentialError("This workspace's ID isn't a Microsoft Entra tenant ID. Ask your platform operator to "
+                              "create the workspace with the tenant that owns your subscriptions.")
     cfg = _cfg(settings, tenant)
     try:
         if identity_mode() == 'developer':

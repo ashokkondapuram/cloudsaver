@@ -203,7 +203,8 @@ customer and a workspace, add its cloud accounts (Azure subscriptions, AWS accou
 Google Cloud projects or Kubernetes clusters), and issue a workspace key. Then open
 http://127.0.0.1:3000 and enter that key; `CLOUDSAVER_WORKSPACE_KEY=<key> python
 scripts/smoke_stack.py` verifies the stack. Live scans also require cloud credentials
-in Compose. The browser keeps credentials in memory; reload/disconnect clears them.
+in Compose. The browser keeps the credential in that tab's session storage; it survives a
+reload but clears on disconnect or when the tab closes, and after 30 minutes of inactivity.
 
 Only dashboard port 3000 and gateway port 8000 bind to host loopback. Tenant,
 scanner, analytics and notification services use internal ports 8001–8004.

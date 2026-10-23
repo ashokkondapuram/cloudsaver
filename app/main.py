@@ -15,6 +15,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import Settings
 from app.store import Store, PostgresStore
 from app.schemas import ScanSummary, RemediationRequest, MultiCloudScanRequest
+from app.scanner import ScanError
 
 logger = logging.getLogger('cloudsaver')
 CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
@@ -238,6 +239,9 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             return validated
         except HTTPException:
             raise
+        except ScanError as exc:
+            logger.warning('Scan failed (ScanError)')
+            raise HTTPException(422, str(exc)[:300] or 'The scan could not start.') from None
         except Exception as exc:
             logger.warning('Scan failed (%s)', type(exc).__name__)
             raise HTTPException(502, f'Scan failed. Check cloud credentials, cloud account access and server configuration: {type(exc).__name__}') from None

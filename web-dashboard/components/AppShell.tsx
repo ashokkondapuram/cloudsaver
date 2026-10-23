@@ -45,7 +45,7 @@ function ConnectionForm({switching = false}: {switching?: boolean}) {
     <label htmlFor={switching ? 'switch-key' : 'access-key'}>Workspace access key or Entra Bearer token</label>
     <div className="credential-input"><LockKeyhole size={17}/><input id={switching ? 'switch-key' : 'access-key'} type="password" autoComplete="off" value={credential} onChange={event => setCredential(event.target.value)} placeholder="Paste your workspace credential" required disabled={!!busy}/></div>
     <button className="button primary connection-submit" type="submit" disabled={!!busy || !credential.trim()}>{busy ? <><Loader2 className="spin" size={17}/>Verifying workspace…</> : <>Connect workspace<ArrowRight size={17}/></>}</button>
-    <div className="connection-security"><ShieldCheck size={16}/><span>Credentials stay in browser memory and clear when you disconnect or reload.</span></div>
+    <div className="connection-security"><ShieldCheck size={16}/><span>Your session stays signed in across reloads in this tab and signs out automatically after 30 minutes of inactivity.</span></div>
     <details className="connection-help"><summary>Where do I get a credential?</summary><p>Use the key issued by your workspace administrator, or a delegated access token from your organization’s configured Microsoft Entra application.</p>{!switching && <p>Setting up your organization for the first time? <Link className="text-link" href="/claim">Claim your account</Link> with the onboarding key from your platform operator.</p>}</details>
   </form>;
 }
