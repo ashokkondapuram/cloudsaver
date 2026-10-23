@@ -3,16 +3,17 @@
 import {useLayoutEffect, useRef, type ReactNode} from 'react';
 import {X} from 'lucide-react';
 
-export function Dialog({open, onClose, title, children, drawer = false, className = ''}: {
-  open: boolean; onClose: () => void; title: string; children: ReactNode; drawer?: boolean; className?: string;
+export function Dialog({open, onClose, title, children, drawer = false, className = '', returnFocusKey}: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode; drawer?: boolean; className?: string; returnFocusKey?:string|null;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose); close.current = onClose;
+  const returnKey=useRef(returnFocusKey);returnKey.current=returnFocusKey;
   useLayoutEffect(() => {
     const element = ref.current;
     if (!open || !element) return;
     const previous = document.activeElement as HTMLElement | null;
-    const focusKey = previous?.getAttribute('data-focus-return');
+    const focusKey = returnKey.current||previous?.getAttribute('data-focus-return');
     element.showModal();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -22,7 +23,8 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
       // its native dialog focus handling and virtual rows have settled after resize.
       // A second frame resolves the current row if overflow changes remount it.
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        const target = previous?.isConnected ? previous : focusKey ? document.querySelector<HTMLElement>(`[data-focus-return="${CSS.escape(focusKey)}"]`) : null;
+        const current=focusKey?document.querySelector<HTMLElement>(`[data-focus-return="${CSS.escape(focusKey)}"]`):null;
+        const target=current||(previous?.isConnected?previous:null);
         if (target && !document.querySelector('dialog[open]')) target.focus({preventScroll:true});
       }));
     };

@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import {useEffect, useId, useRef, useState} from 'react';
-import {Activity, ArrowRight, Check, Clipboard, Clock3, Code2, Copy, Database, Download, FileCode2, GitPullRequest, Layers3, Loader2, ShieldCheck, Wallet} from 'lucide-react';
+import {Activity, ArrowRight, ChevronLeft, ChevronRight, Check, Clipboard, Clock3, Code2, Copy, Database, Download, FileCode2, GitPullRequest, Layers3, Loader2, ShieldCheck, Wallet} from 'lucide-react';
 import {api} from '../../lib/api';
 import {bashRules, dateTime, downloadFile, findingKey, money, observedTags, providerOf, ruleLabel, scopeOf, terraformRules} from '../../lib/finops';
 import type {Delivery, Finding} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
+import {TelemetryEvidence} from './TelemetryEvidence';
+import {protectionSignals} from '../../lib/resource-insights';
 import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {EmptyState, Loading, Notice, PriorityBadge, ProviderBadge} from '../ui/shared';
 
@@ -23,7 +25,8 @@ export function CodeReview({findings}: {findings:Finding[]}) {
   const common = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic' && canAdmin && resources.length > 0 && resources.length <= 50;
   const sameProvider = new Set(findings.map(providerOf)).size === 1;
   const canTerraform = common && workspace?.can_export_terraform && sameProvider && findings.every(f => terraformRules.has(f.rule_id));
-  const canBash = common && sameProvider && findings.every(f => providerOf(f) === 'azure' && bashRules.has(f.rule_id));
+  const protectedCount=findings.filter(f=>protectionSignals(f).length>0).length;
+  const canBash = common && !protectedCount && sameProvider && findings.every(f => providerOf(f) === 'azure' && bashRules.has(f.rule_id));
   const reason = !canAdmin ? 'A workspace administrator can generate review artifacts.' : scan?.data_origin === 'legacy_synthetic' ? 'Historical synthetic snapshots cannot generate code.' : !resources.length ? 'Select at least one resource to review.' : resources.length > 50 ? 'Choose up to 50 unique resources per review.' : !sameProvider ? 'Choose resources from one provider per review.' : !canTerraform && !canBash ? 'These finding types or your current plan do not support code export.' : '';
   async function generate(kind:'terraform'|'bash') {
     controller.current?.abort(); const request = new AbortController();controller.current = request;
@@ -36,7 +39,7 @@ export function CodeReview({findings}: {findings:Finding[]}) {
     finally {if(current.current === version) setBusy('');}
   }
   return <div className="code-review"><div className="review-safety"><ShieldCheck size={20}/><div><strong>Review before execution</strong><p>These controls generate code. CloudSaver does not execute it or change your cloud resources.</p></div></div>
-    {!!reason && <Notice tone="warning">{reason}</Notice>}
+    {!!reason && <Notice tone="warning">{reason}</Notice>}{protectedCount>0&&<Notice tone="warning">Protected intent is present on {protectedCount} selected finding{protectedCount===1?'':'s'}. Destructive Bash export is blocked. Import-only Terraform still requires review.</Notice>}
     <div className="code-review-actions"><button className="button primary" disabled={!canTerraform || !!busy} onClick={() => generate('terraform')}>{busy === 'terraform' ? <Loader2 size={16} className="spin"/> : <FileCode2 size={16}/>}Preview Terraform imports</button><button className="button secondary" disabled={!canBash || !!busy} onClick={() => generate('bash')}>{busy === 'bash' ? <Loader2 size={16} className="spin"/> : <Code2 size={16}/>}Preview Bash script</button></div>
     {!workspace?.can_export_terraform && canAdmin && <p className="inline-help">Terraform review requires a plan with export access. <Link href="/settings">View your plan</Link></p>}
     {error && <Notice tone="error">{error}</Notice>}{busy && <Loading label="Generating your review artifact…"/>}
@@ -51,7 +54,7 @@ function Evidence({finding}: {finding:Finding}) {
   const evidence = Object.entries(finding.evidence || {}).filter(([key]) => !['tags','labels'].includes(key));
   return <><div className="drawer-section"><span className="eyebrow">WHY THIS RESOURCE WAS FLAGGED</span><h3>{ruleLabel(finding.rule_id)}</h3><p className="finding-explanation">{finding.details}</p></div><div className="observation-summary"><div><Clock3 size={17}/><span>Observed<strong>{scan ? dateTime(scan.timestamp) : 'Unknown'}</strong></span></div><div><Database size={17}/><span>Source<strong>{String(finding.evidence?.source || 'Saved resource observation')}</strong></span></div></div>
     <div className="drawer-section"><h3>Resource identity</h3><dl className="detail-metadata"><div><dt>Provider</dt><dd><ProviderBadge provider={providerOf(finding)}/></dd></div><div><dt>Resource type</dt><dd>{finding.resource_type}</dd></div><div><dt>Group / namespace</dt><dd>{finding.resource_group || 'Not supplied'}</dd></div><div><dt>Account / scope</dt><dd><code>{scopeOf(finding)}</code></dd></div><div className="full-width"><dt>Resource ID <button className="icon-button" aria-label="Copy resource ID" onClick={() => navigator.clipboard.writeText(finding.resource_id).then(()=>notify('Resource ID copied.')).catch(()=>notify('Clipboard access is unavailable.','info'))}><Copy size={13}/></button></dt><dd><code>{finding.resource_id}</code></dd></div></dl></div>
-    {!!evidence.length && <div className="drawer-section"><h3>Observed evidence</h3><dl className="detail-metadata">{evidence.slice(0,8).map(([key,value]) => <div key={key} className={typeof value === 'object' ? 'full-width' : ''}><dt>{key.replaceAll('_',' ')}</dt><dd>{typeof value === 'object' ? <pre className="evidence-json">{JSON.stringify(value,null,2)}</pre> : String(value ?? 'Not supplied')}</dd></div>)}</dl><details className="raw-evidence"><summary>View complete observation JSON</summary><pre className="evidence-json">{JSON.stringify(finding.evidence,null,2)}</pre></details></div>}
+    {!!evidence.length && <div className="drawer-section"><h3>Observed evidence</h3><dl className="detail-metadata">{evidence.slice(0,8).map(([key,value]) => <div key={key} className={typeof value === 'object' ? 'full-width' : ''}><dt>{key.replaceAll('_',' ')}</dt><dd>{typeof value === 'object' ? <pre className="evidence-json" tabIndex={0}>{JSON.stringify(value,null,2)}</pre> : String(value ?? 'Not supplied')}</dd></div>)}</dl><details className="raw-evidence"><summary>View complete observation JSON</summary><pre className="evidence-json" tabIndex={0}>{JSON.stringify(finding.evidence,null,2)}</pre></details></div>}
     <div className="drawer-section"><h3>Observed tags</h3>{Object.keys(tags).length ? <div className="tag-list">{Object.entries(tags).map(([key,value]) => <span key={key}>{key}<strong>{value}</strong></span>)}</div> : <p className="muted">No tags were supplied in this observation.</p>}</div>
   </>;
 }
@@ -74,16 +77,19 @@ function FindingActivity() {
 }
 
 export function FindingDrawer() {
-  const {overlay,setOverlay,finding} = useWorkspace();
+  const {overlay,setOverlay,finding,findingContext,findingFocusKey,openFinding} = useWorkspace();
   const [tab,setTab] = useState('evidence');
   const id = useId();
-  useEffect(() => {setTab('evidence');}, [finding]);
+  useEffect(()=>{if(overlay==='finding')setTab('evidence');},[overlay]);
   if (!finding) return null;
-  const tabs = [{id:'evidence',label:'Evidence',icon:Layers3},{id:'assessment',label:'360° assessment',icon:ShieldCheck},{id:'cost',label:'Cost breakdown',icon:Wallet},{id:'code',label:'Review code',icon:FileCode2},{id:'activity',label:'Activity & ITSM',icon:Activity}];
-  return <Dialog open={overlay === 'finding'} onClose={() => setOverlay(null)} title="Finding details" drawer>
-    <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={providerOf(finding)}/><PriorityBadge severity={finding.severity}/><span className="state-badge review-required">Review required</span></div><h2>{finding.resource_name}</h2><p>{ruleLabel(finding.rule_id)}</p></div>
-    <div className="drawer-tabs" role="tablist" aria-label="Finding detail views" onKeyDown={e => {if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const index=tabs.findIndex(t=>t.id===tab);const next=tabs[(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];setTab(next.id);document.getElementById(`${id}-${next.id}-tab`)?.focus();}}}>{tabs.map(item => <button key={item.id} role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab===item.id} tabIndex={tab===item.id?0:-1} onClick={() => setTab(item.id)}><item.icon size={15}/>{item.label}</button>)}</div>
-    <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='assessment'?<ArchitecturalAssessment finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
+  const tabs = [{id:'evidence',label:'Evidence',icon:Layers3},{id:'telemetry',label:'Telemetry',icon:Activity},{id:'assessment',label:'360° assessment',icon:ShieldCheck},{id:'cost',label:'Cost breakdown',icon:Wallet},{id:'code',label:'Review code',icon:FileCode2},{id:'activity',label:'Activity & ITSM',icon:Activity}];
+  const position=findingContext.findIndex(item=>findingKey(item)===findingKey(finding));
+  const protectedIntent=protectionSignals(finding).length>0;
+  return <Dialog open={overlay === 'finding'} onClose={() => setOverlay(null)} title="Finding details" drawer returnFocusKey={findingFocusKey}>
+    {findingContext.length>1&&<div className="finding-navigation"><span>Filtered results <code>{position+1} / {findingContext.length.toLocaleString()}</code></span><div><button className="icon-button" aria-label="Previous finding" disabled={position<=0} onClick={()=>openFinding(findingContext[position-1],findingContext)}><ChevronLeft size={15}/></button><button className="icon-button" aria-label="Next finding" disabled={position<0||position>=findingContext.length-1} onClick={()=>openFinding(findingContext[position+1],findingContext)}><ChevronRight size={15}/></button></div></div>}
+    <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={providerOf(finding)}/><PriorityBadge severity={finding.severity}/><span className={`state-badge ${protectedIntent?'protected-intent':'review-required'}`}>{protectedIntent?'Protected intent':'Review required'}</span></div><h2>{finding.resource_name}</h2><p>{ruleLabel(finding.rule_id)}</p></div>
+    <div className="drawer-tabs" role="tablist" aria-label="Finding detail views" onKeyDown={e => {if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.id===tab);const next=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];setTab(next.id);const button=document.getElementById(`${id}-${next.id}-tab`);button?.focus({preventScroll:true});const list=button?.parentElement;if(button&&list){const b=button.getBoundingClientRect(),l=list.getBoundingClientRect();if(b.left<l.left)list.scrollBy({left:b.left-l.left});else if(b.right>l.right)list.scrollBy({left:b.right-l.right});}}}}>{tabs.map(item => <button key={item.id} role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab===item.id} tabIndex={tab===item.id?0:-1} onClick={() => setTab(item.id)}><item.icon size={15}/>{item.label}</button>)}</div>
+    <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='telemetry'?<TelemetryEvidence finding={finding}/>:tab==='assessment'?<ArchitecturalAssessment finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
     <div className="drawer-footer"><ShieldCheck size={15}/>Read-only evidence. All code requires independent review.</div>
   </Dialog>;
 }

@@ -11,14 +11,14 @@ test('overview uses observed data and provides provider drill-down',async({page}
   await page.screenshot({path:test.info().outputPath('overview-desktop.png'),fullPage:true});
   await page.locator('.distribution-legend').getByRole('link',{name:/AWS/}).click();
   await expect(page.getByRole('heading',{name:'Every resource. The full picture.'})).toBeVisible();
-  await expect(page.getByRole('combobox',{name:'Cloud provider',exact:true})).toHaveValue('aws');
+  await expect(page.getByRole('button',{name:/^AWS \d+ findings$/})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(3);
   expect(mutations).toEqual([]);
 });
 
 test('findings combine filters, density, column visibility, and page selection',async({page})=>{
   await mockWorkspace(page);await navigate(page,'Inventory & findings');
-  await page.getByRole('combobox',{name:'Cloud provider',exact:true}).selectOption('azure');
+  await page.getByRole('button',{name:/^Azure \d+ findings$/}).click();
   await page.getByRole('combobox',{name:'Finding priority',exact:true}).selectOption('HIGH');
   await page.getByRole('textbox',{name:'Tag filter',exact:true}).fill('Owner=platform');
   await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(1);

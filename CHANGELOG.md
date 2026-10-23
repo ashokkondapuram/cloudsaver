@@ -1,5 +1,13 @@
 # CloudSaver changelog
 
+## v0.10.0 — Advanced console experience
+
+- Apply the newest Drive UI/UX guide to the latest v0.9.0 code: default dark slate theme, explicit remembered light preference, matching chart colors and 64px collapsed navigation.
+- Add counted cloud/category facets, protected/unpriced quick views, scope/rule token search, exact tag-existence queries, observed sizing and pricing-coverage summaries.
+- Add filtered/sorted drawer comparison, a five-pillar evidence radar, contained pillar navigation, telemetry facts and keyboard tab endpoints.
+- Keep unknown data explicit and server permissions authoritative. Protected intent blocks Bash export in the UI, while review-only Terraform stays available when permitted.
+- Expand browser and accessibility verification across both themes and all six workspace views.
+
 ## v0.9.0 — Evidence-led service analysis and cloud AI advisory
 
 - Add five-pillar resource assessments and service/category breakdowns, preserving unknown billing, dependencies and incomplete telemetry.

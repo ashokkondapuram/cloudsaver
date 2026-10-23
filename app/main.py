@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v0.9.0."""
+"""Runnable CloudSaver enterprise API service v0.10.0."""
 import hashlib
 import hmac
 import logging
@@ -32,7 +32,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.9.0', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.10.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
         'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS', 'CLOUDSAVER_AI_ENABLED')))
@@ -63,7 +63,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.9.0'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.10.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -287,6 +287,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.9.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.10.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

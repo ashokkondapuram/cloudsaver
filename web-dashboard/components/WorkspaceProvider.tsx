@@ -2,6 +2,7 @@
 
 import {createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode} from 'react';
 import {api} from '../lib/api';
+import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
 
 type Overlay = 'command' | 'scan' | 'workspace' | 'notifications' | 'finding' | 'review' | null;
@@ -10,7 +11,7 @@ type WorkspaceState = {
   scans: Scan[]; scan: Scan | undefined; busy: string; error: string;
   canAdmin: boolean; canBill: boolean; scope: string[]; setScope: (value: string[]) => void;
   overlay: Overlay; setOverlay: (value: Overlay) => void;
-  finding: Finding | null; openFinding: (finding: Finding) => void;
+  finding: Finding | null; findingFocusKey:string|null; findingContext: Finding[]; openFinding: (finding: Finding, context?: Finding[]) => void;
   review: Finding[]; openReview: (findings: Finding[]) => void;
   selection: Finding[]; setSelection: (findings: Finding[]) => void;
   density: Density; setDensity: (value: Density) => void;
@@ -35,10 +36,12 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const [error, setError] = useState('');
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [finding, setFinding] = useState<Finding | null>(null);
+  const [findingContext,setFindingContext] = useState<Finding[]>([]);
   const [review, setReview] = useState<Finding[]>([]);
   const [selection, setSelection] = useState<Finding[]>([]);
   const [density, updateDensity] = useState<Density>('medium');
   const [notice, setNotice] = useState<WorkspaceState['notice']>(null);
+  const findingFocusKey=useRef<string|null>(null);
   const session = useRef(0);
   const connecting = useRef<AbortController | null>(null);
   const checkoutKey = useRef<string | null>(null);
@@ -48,7 +51,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const notify = useCallback((text: string, tone: 'success' | 'error' | 'info' = 'success') => setNotice({text, tone}), []);
   const setDensity = (value: Density) => {updateDensity(value); try {localStorage.setItem('cloudsaver:ui:density', value);} catch {}};
 
-  function clearContext() {setFinding(null); setReview([]); setSelection([]); setScope([]);}
+  function clearContext() {findingFocusKey.current=null;setFinding(null);setFindingContext([]); setReview([]); setSelection([]); setScope([]);}
   function selectScan(id: string) {setSelected(id); clearContext(); setOverlay(null);}
 
   async function connect(credential: string) {
@@ -129,12 +132,18 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     finally {if (version === session.current) setBusy('');}
   }
 
-  const openFinding = useCallback((value: Finding) => {setFinding(value); setOverlay('finding');}, []);
+  const openFinding = useCallback((value: Finding, context: Finding[] = []) => {
+    const active=document.activeElement as HTMLElement|null;
+    // Capture before virtual rows can rerender; comparison buttons keep the original opener.
+    if(active?.closest('dialog')?.getAttribute('aria-label')!=='Finding details')
+      findingFocusKey.current=active?.getAttribute('data-focus-return')||findingKey(value);
+    setFinding(value);setFindingContext(context.length?context:[value]);setOverlay('finding');
+  }, []);
   const openReview = useCallback((values: Finding[]) => {setReview(values); setOverlay('review');}, []);
   const scan = scans.find(s => s.scan_id === selected) || scans[0];
   const canAdmin = !!workspace?.roles.includes('TenantAdmin');
   return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'),
-    scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, openFinding,
+    scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, findingContext, findingFocusKey:findingFocusKey.current, openFinding,
     review, openReview, selection, setSelection,
     density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, checkout}}>{children}</Context.Provider>;
 }

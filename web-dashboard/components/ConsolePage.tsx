@@ -4,6 +4,7 @@ import {Download, Plus, RefreshCw, ChevronDown} from 'lucide-react';
 import {downloadFile, exportFindings} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
 import {Overview} from './Overview';
+import type {Category,Intent,Pricing} from '../lib/resource-insights';
 import {FindingsGrid} from './datagrid/FindingsGrid';
 import {ActivityView, Allocation, Automation, SettingsView} from './WorkspaceViews';
 
@@ -17,7 +18,7 @@ const headings:Record<View,{eyebrow:string;title:string;description:string}>={
   settings:{eyebrow:'SETTINGS & INTEGRATIONS',title:'Your workspace, connected.',description:'Review cloud sources, approved integrations, plan limits, and access.'},
 };
 
-export function ConsolePage({view,provider=''}:{view:View;provider?:string}) {
+export function ConsolePage({view,provider='',category='',intent='',pricing=''}:{view:View;provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing}) {
   const {workspace,scan,canAdmin,busy,setOverlay,refresh,notify} = useWorkspace();
   const heading=headings[view];
   function exportSnapshot(format:'json'|'csv') {
@@ -27,6 +28,6 @@ export function ConsolePage({view,provider=''}:{view:View;provider?:string}) {
     notify(`${format.toUpperCase()} snapshot download prepared.`);
   }
   return <><div className="page-heading"><div><div className="eyebrow">{heading.eyebrow}</div><h1>{heading.title}</h1><p>{heading.description}</p></div><div className="page-heading-actions">{['overview','findings','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><RefreshCw size={17}/></button><details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15}/><span>Export snapshot</span><ChevronDown size={13}/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>{canAdmin&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17}/>Run new scan</button>}</>}</div></div>
-    {view==='overview'?<Overview/>:view==='findings'?<FindingsGrid key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} initialProvider={provider}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
+    {view==='overview'?<Overview/>:view==='findings'?<FindingsGrid key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} initialProvider={provider} initialCategory={category} initialIntent={intent} initialPricing={pricing}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
   </>;
 }

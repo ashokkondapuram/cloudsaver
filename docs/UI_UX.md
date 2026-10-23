@@ -1,20 +1,42 @@
-# v0.7.2 workspace UI/UX
+# CloudSaver v0.10.0 console experience
 
-Source: [Detailed UI/UX Improvement Specification & Design System Guide](https://docs.google.com/document/d/1ewfeSv9580SHLb1vN4OGqwX2NZ5fUmBFvsOmPNxMQeU/edit), read October 22, 2026. The normalized source text is retained in drive-ui-ux-v0.7.1.txt.
+Source: [Advanced UI/UX Architecture & Component Engineering Guide](https://docs.google.com/document/d/1hETTGMG5X9zo3AuuthHQgR8cgFPrG97V694sGxve2Os/edit), the newest matching Drive guide, modified October 23, 2026 at 04:07 UTC. Its internal v0.7.2 label describes the source design; implementation extends the latest v0.9.0 product as v0.10.0. The duplicate document `14ZrmNNhiZtkhnBf5tUMc2gjUMAIQ7JsTHHwqwrQZSLQ` contained the same text when reviewed.
 
-## Implemented experience
+## Implemented guide mapping
 
-- Self-hosted Inter and JetBrains Mono, semantic slate/indigo/emerald/amber/rose styles, consistent controls/cards/status states and responsive layouts.
-- Persistent collapsible navigation with six real Next.js routes: Overview, Inventory & findings, Cost allocation, Automation, Activity & delivery, Settings & integrations. Mobile navigation uses a modal. Workspace switching verifies the new credential before replacing context; credentials and resource data stay in React memory.
-- Header command search, notifications from actual reliability state, snapshot selection, multi-scope filtering, profile/plan context and disconnect. Cmd/Ctrl-K, g d, g f, current-page Cmd/Ctrl-A, Shift-R and Escape support the related workflows.
-- Actual observed trend counts with scoped-comparability gates, provider counts/drill-down and separate unknown/retail/net-savings metrics. No fabricated billing history or realized savings is shown.
-- Virtualized TanStack inventory with search, provider/type/priority/tag filters and removable chips; sortable, reorderable, hideable/pinnable columns; 28/36/48px density; stable selection and pagination; selected CSV/JSON exports with CSV formula protection.
-- Context-preserving 640px finding drawer with evidence, observed tags, actual cost basis, annualized retail estimate, server-returned code preview/copy/download and available scan delivery history. Bulk review lets users choose included findings. Viewer, quota, provider, plan and legacy-synthetic gates remain visible and enforced server-side.
-- GitOps selection/preview/file inspection/acknowledged draft publishing, real durable PR history, Terraform plan upload preserving exact JSON for server duplicate-key validation, and the existing operational audit/replay flows.
-- Allocation groups observed resources and priced subtotals by provider/scope. Settings shows real configuration and plan capabilities. Unsupported integrations and absent pricing/issue history are clearly stated.
+| Guide requirement | Current experience |
+| --- | --- |
+| Deep slate design system | Default dark canvas, elevated surfaces, semantic indigo/amber/rose/emerald colors, provider badges, self-hosted Inter/JetBrains Mono and matching chart colors |
+| Comfortable reading preferences | Explicit dark/light toggle in the console and sign-in screen; theme preference survives navigation/reload independently of credentials |
+| 240px/64px navigation | Existing six workspace routes and mobile navigation retained; collapsed desktop rail now measures 64px |
+| Executive inventory banner | Observed finding count, configured scopes represented in findings, known retail subtotal, protected-intent count and unknown pricing coverage; actual observations drive all values |
+| Provider and category pills | Counted AWS/Azure/GCP/Kubernetes facets plus storage/compute/database/network/application categories, composable with priority/type/scope/tag/search filters |
+| Fast focused views | Protected-intent and missing-price presets; command palette opens real category/intent/pricing routes; search matches query tokens across names, groups, rules and scopes |
+| Category and sizing columns | Technical category and observed disk capacity or Kubernetes request size; missing sizing stays explicit |
+| 360° grid posture | Saved protection signals or “Needs assessment”; the grid does not invent a risk percentage or live safety certification |
+| Density and virtualization | 28/38/48px rows, existing pagination, sortable/reorderable/hideable/pinnable columns and virtual rendering retained |
+| Floating bulk actions | Exact selected count, known retail portion and pricing-coverage denominator; existing selected CSV/JSON and reviewed-code workflow |
+| Context-preserving drawer | 640px drawer with previous/next across the filtered, sorted results; active tab stays selected during comparison |
+| Five-pillar radar | Evidence coverage per pillar, explicit observed/risk/unknown legend, accessible textual descriptions and buttons that open the corresponding check group |
+| Telemetry | Returned Kubernetes P95/request/window/sample facts; missing time-series data has an explicit empty state rather than a fabricated utilization chart |
+| Keyboard and accessibility | Existing Cmd/Ctrl-K, g d/g f, table Cmd/Ctrl-A, Shift-R and Escape retained; drawer arrows/Home/End, visible focus, named facets and readable semantic states |
 
-## Verification boundaries
+## Interaction boundaries
 
-Playwright uses explicitly labeled interface QA fixtures and intercepts API calls. Screenshots are interface previews, not live customer/cloud evidence. Tests cover desktop/mobile navigation, filtering, density, selection, 10,000-row virtualization, drawer focus, role gates, command shortcuts, exact plan upload, explicit scan submission and GitOps acknowledgment. Automated axe checks are scoped to serious/critical WCAG violations in key views; manual assistive-technology and broad device testing remain necessary.
+Provider/category counts and the banner describe the current scan and scope selection; table filters then narrow those observations. Quick views modify the protection/pricing lens and combine with other active facets. Clear all removes all table and scope filters. `has:Owner` tests exact tag-key presence, `Owner=platform` tests exact values, and a bare expression matches part of a key. Arbitrary regular expressions are not evaluated.
 
-Illustrative instant savings, fabricated telemetry, deletion execution, fake SSO, customer-created integrations and Jira/ServiceNow assignment from the design guide are not exposed as working features. The backend's new durable Azure scan-job API is documented separately; this dashboard still uses the synchronous multi-cloud scan endpoint.
+Command quick views use bounded `category`, `intent` and `pricing` query parameters. They do not write resource names, account identifiers or credentials into shareable links. Finding navigation uses the current sorted filtered rows, including rows on later pages, and retains that comparison context until the drawer closes or a scan/workspace changes. A command/overview-opened finding has no invented comparison list.
+
+The radar's axis value is the number of checks with evidence divided by the total checks in that pillar. **Observed risks count as evidence.** Full coverage can still include serious risk. Unknown points do not establish zero risk. The server's deterministic assessment, protection rules, current scope and artifact permissions remain authoritative. A saved protection signal disables Bash export in the client too; import-only Terraform still requires independent review.
+
+Telemetry summaries retain native units and sample provenance. No idle-duration, dollar savings, raw metric series or dependency graph is inferred from a stopped/unattached signal. FOCUS billing, Jira/ServiceNow assignment, actual remediation execution and model-granted approval are not added by this UI release.
+
+Only theme, row density and sidebar appearance are saved in browser local storage. Workspace credentials and finding data stay in memory; scan/workspace changes clear comparison context. Theme changes do not request cloud operations. Radar and tab navigation scroll their own containers rather than the document behind the modal.
+
+## Verification
+
+Playwright uses explicitly labeled interface QA fixtures and intercepted APIs. New workflows exercise dark/light persistence, zero-versus-unknown prices, composable facets, protection export gates, sorted drawer comparison, command deep links, telemetry gaps, mobile sizing and tab endpoints. Automated axe checks inspect all six operational views in both themes; existing assessment-dialog and navigation checks remain in the suite. Screenshots show interface test data, not customer cloud evidence. See [the release verification report](../TEST_REPORT.md) for actual executed checks. Manual assistive-technology and broad device acceptance remain necessary.
+
+## Earlier source
+
+The v0.7.2 light console was developed from [Detailed UI/UX Improvement Specification & Design System Guide](https://docs.google.com/document/d/1ewfeSv9580SHLb1vN4OGqwX2NZ5fUmBFvsOmPNxMQeU/edit), read October 22, 2026. Its normalized reference is retained in `drive-ui-ux-v0.7.1.txt`. Existing GitOps, delivery audit/replay, settings and billing permissions continue to use their established backend controls.

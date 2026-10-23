@@ -1,12 +1,22 @@
-# CloudSaver v0.9.0
+# CloudSaver v0.10.0
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release adds evidence-led five-pillar service analysis and optional keyless cloud AI
-advisory to the v0.8.0 tenant registry and operator console. Deployment acceptance
+release updates the latest console with a dark/light design system, faceted resource
+exploration, evidence radar and comparison drawers, retaining the five-pillar analysis
+and optional keyless cloud AI advisory. Deployment acceptance
 and live integration limits are recorded in TEST_REPORT.md.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.10.0: advanced console experience
+
+- Default dark slate console with a persistent light preference, accessible semantic states and a 240px/64px navigation rail.
+- Counted provider/category pills, protected/unpriced quick views, token search, tag existence queries, observed sizing and partial-price summaries.
+- Filtered/sorted previous/next comparison in the 640px drawer, an evidence-coverage radar, keyboard pillar inspection and telemetry facts with explicit gaps.
+- Existing reviewed-code, AI, billing and integration permissions remain enforced. No synthetic safety percentages or historical activity are generated.
+
+Read [the latest UI guide mapping and interaction details](docs/UI_UX.md).
 
 ## New in v0.9.0: service analysis and AI advisory
 

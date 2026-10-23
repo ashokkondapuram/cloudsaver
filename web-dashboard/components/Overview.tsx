@@ -35,11 +35,11 @@ export function TrendChart() {
       <div className="trend-chart" role="img" aria-label={`${metric === 'findings' ? 'Finding count' : 'Monthly retail estimate'} across ${points.length} comparable snapshots`}>
         <ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{top:12,right:16,bottom:0,left:0}} accessibilityLayer>
           <defs><linearGradient id="trajectory-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={0.2}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0.01}/></linearGradient></defs>
-          <CartesianGrid vertical={false} stroke="#e9edf3" strokeDasharray="3 4"/>
-          <XAxis type="number" dataKey="time" domain={['dataMin','dataMax']} tickFormatter={v => new Date(v).toLocaleDateString(undefined,{month:'short',day:'numeric'})} axisLine={false} tickLine={false} tick={{fill:'#64748b',fontSize:11}} minTickGap={35} tickMargin={12}/>
-          <YAxis width={55} allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'#64748b',fontSize:11}} tickFormatter={v => metric === 'estimate' ? '$' + compact(v) : compact(v)}/>
+          <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 4"/>
+          <XAxis type="number" dataKey="time" domain={['dataMin','dataMax']} tickFormatter={v => new Date(v).toLocaleDateString(undefined,{month:'short',day:'numeric'})} axisLine={false} tickLine={false} tick={{fill:'var(--chart-muted)',fontSize:11}} minTickGap={35} tickMargin={12}/>
+          <YAxis width={55} allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'var(--chart-muted)',fontSize:11}} tickFormatter={v => metric === 'estimate' ? '$' + compact(v) : compact(v)}/>
           <Tooltip content={({active,payload}) => active && payload?.length ? <div className="chart-tooltip"><strong>{dateTime(payload[0].payload.timestamp)}</strong><span>{metric === 'findings' ? `${payload[0].payload.findings} findings` : money(payload[0].payload.estimate)}</span></div> : null}/>
-          <Area type="monotone" dataKey={metric} name={metric === 'findings' ? 'Findings' : 'Retail estimate'} stroke="#6366f1" strokeWidth={2.5} fill="url(#trajectory-fill)" dot={{r:3,fill:'#fff',strokeWidth:2}} activeDot={{r:5}} isAnimationActive={false} connectNulls={false}/>
+          <Area type="monotone" dataKey={metric} name={metric === 'findings' ? 'Findings' : 'Retail estimate'} stroke="var(--chart-line)" strokeWidth={2.5} fill="url(#trajectory-fill)" dot={{r:3,fill:'var(--surface)',strokeWidth:2}} activeDot={{r:5}} isAnimationActive={false} connectNulls={false}/>
         </AreaChart></ResponsiveContainer>
       </div><div className="chart-caption"><span><i/>Observed {metric === 'findings' ? 'findings' : 'retail estimates'}</span><span>{trend.total_snapshots} comparable scans · absence does not prove remediation</span></div>
     </>}

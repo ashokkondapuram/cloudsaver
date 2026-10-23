@@ -1,3 +1,12 @@
+# v0.10.0 source context
+
+- Began from latest GitHub `main`, v0.9.0 commit `b61f1b7cdca47e68568f3434dca8a5918ae2bd30`, and checked for newer commits before implementation.
+- Used the newest Drive **CloudSaver: Advanced UI-UX Architecture & Component Engineering Guide**, https://docs.google.com/document/d/1hETTGMG5X9zo3AuuthHQgR8cgFPrG97V694sGxve2Os/edit . Observed modified October 23, 2026, 04:07 UTC. Its internal v0.7.2 label is a source-design label, not a request to downgrade the application. The earlier duplicate document matched its content.
+- The user's “latest version” clarification is applied to current product code. [UI mapping](docs/UI_UX.md) records the implemented design and interaction details.
+- Adapt sample radar percentages into evidence coverage, retain actual saved-data provenance and keyless AI controls, and do not fabricate safety, billing, telemetry or ITSM integration.
+
+## Previous source context
+
 # v0.9.0 source context
 
 - Latest GitHub fetched and fast-forwarded to upstream v0.8.0 commit `6d6a37c645d84e277bdbeefc93f75e902a5b7297` before implementation.

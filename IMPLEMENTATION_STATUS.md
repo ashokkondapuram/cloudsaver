@@ -1,6 +1,8 @@
-# CloudSaver v0.9.0 implementation status
+# CloudSaver v0.10.0 implementation status
 
-Built on upstream v0.8.0 (`6d6a37c645d84e277bdbeefc93f75e902a5b7297`) and the newly populated Drive optimization, service analysis and AI integration README.
+The latest UI milestone builds on v0.9.0 (`b61f1b7cdca47e68568f3434dca8a5918ae2bd30`): dark/light themes, counted resource facets, quick views, sizing, comparison drawers, evidence radar and telemetry facts. See [the UI source mapping](docs/UI_UX.md).
+
+The analysis and AI foundation was built on upstream v0.8.0 (`6d6a37c645d84e277bdbeefc93f75e902a5b7297`) and the newly populated Drive optimization, service analysis and AI integration README.
 
 | Area | Implemented boundary |
 | --- | --- |

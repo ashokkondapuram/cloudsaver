@@ -1,9 +1,15 @@
-# CloudSaver roadmap after v0.9.0
+# CloudSaver roadmap after v0.10.0
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
 production/compliance language and savings percentages are planning targets,
 not acceptance evidence. The v0.5.0 source/guide was reviewed before development.
+
+## v0.10.0 console milestone
+
+The newest [Advanced UI/UX guide](https://docs.google.com/document/d/1hETTGMG5X9zo3AuuthHQgR8cgFPrG97V694sGxve2Os/edit) is applied to current code: dark/light tokens, resource facets, protected/unpriced lenses, observed sizing, evidence radar and context-preserving comparison. [UI mapping](docs/UI_UX.md) records where missing telemetry and financial evidence remain explicit.
+
+Next UI milestones depend on authorized raw metric/billing/dependency feeds, broader usability and assistive-technology testing, and durable identity-scoped preferences. They must preserve unknown evidence and independent approvals.
 
 ## v0.9.0 optimization and AI milestone
 
