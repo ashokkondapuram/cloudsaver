@@ -202,7 +202,7 @@ def test_multiregion_discovery_is_bounded_parallel_and_keeps_source_identity(mon
         barrier.wait()
         return []
     monkeypatch.setattr('app.scanner_aws.scan_account',scan)
-    assert scan_multi_cloud(tenant,['aws'])==[] and set(seen)=={s['region'] for s in sources}
+    assert scan_multi_cloud(tenant, ['aws']) == ([], []) and set(seen) == {s['region'] for s in sources}
 
 
 def test_parallel_provider_failure_discards_other_successful_batches(monkeypatch):

@@ -62,6 +62,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def forward(method, target, path, authorization, params=None):
         return await upstream(method, targets[target], path, authorization, params=params, transport=transport)
 
+    from app.onboarding_api import customer_access_router, onboarding_router
+    app.include_router(onboarding_router())
+    app.include_router(customer_access_router(allowed))
+
     @app.get('/api/v1/auth/consent-url')
     async def consent_url(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/auth/consent-url', authorization)

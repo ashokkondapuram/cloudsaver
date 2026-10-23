@@ -16,7 +16,16 @@ DEFAULT_EXPIRY_DAYS = 90
 EXPIRING_SOON_DAYS = 14
 # Columns added by i0002; rows written before it (or by the 1.2.0 importer) get these values.
 CUSTOMER_DEFAULTS = {'billing_contact_email': None, 'manage_billing_url': None, 'external_customer_refs': {},
-                     'billing_state': 'none', 'billing_state_changed_at': None}
+                     'billing_state': 'none', 'billing_state_changed_at': None,
+                     'claim_status': 'pending', 'membership_policy_version': 1}
+CUSTOMER_ADMIN_ROLES = ('CustomerOwner', 'CustomerAdmin')
+DEFAULT_BOOTSTRAP_HOURS = 24
+MAX_BOOTSTRAP_HOURS = 72
+MAX_SERVICE_ACCOUNTS = 25
+MAX_INVITES_PER_DAY = 20
+CUSTOMER_ROLES = ('CustomerOwner', 'CustomerAdmin', 'CustomerAuditor')
+KEY_DEFAULTS = {'purpose': 'standard', 'subject_type': 'operator', 'subject_user_id': None,
+                'service_account_id': None, 'claimed_at': None}
 WORKSPACE_DEFAULTS = {'entitlements': None, 'entitlements_version': 1, 'suspended_by': None}
 
 
@@ -118,6 +127,35 @@ def normalize_resource_access_bindings(value):
         return normalize_resource_access(value, partial=True)
     except ValueError as exc:
         raise IdentityError(str(exc).rstrip('.') + '.') from None
+
+
+SCOPE_IDENTITY = {'aws_accounts': 'account_id', 'gcp_projects': 'project_id', 'kubernetes_clusters': 'cluster_id'}
+
+
+def scope_ids(workspace, provider):
+    key = SCOPE_KEYS[provider]
+    field = SCOPE_IDENTITY.get(key)
+    return [item if field is None else item[field] for item in workspace.get(key) or []]
+
+
+def normalize_scope_restrictions(value, workspace, allowed_providers):
+    """{provider: [scope id, ...]} limited to providers the key includes and scopes the workspace has."""
+    if value in (None, {}):
+        return None
+    if not isinstance(value, dict):
+        raise IdentityError('Scope limits must list scope IDs per provider.')
+    result = {}
+    for provider, items in value.items():
+        if provider not in PROVIDERS or provider not in allowed_providers:
+            raise IdentityError('Limit scopes only for providers this key includes.')
+        if not isinstance(items, list) or not items or len(items) > 100:
+            raise IdentityError(f'Choose 1–100 {PROVIDER_LABELS[provider]} scopes.')
+        known = scope_ids(workspace, provider)
+        chosen = [uuid_text(i, 'Azure subscription IDs must be UUIDs.') if provider == 'azure' else i for i in items]
+        if any(i not in known for i in chosen):
+            raise IdentityError(f'Choose {PROVIDER_LABELS[provider]} scopes configured for this workspace.')
+        result[provider] = [i for i in known if i in chosen]
+    return result or None
 
 
 def normalize_roles(value):

@@ -15,15 +15,20 @@ def scope_fingerprint(tenant, providers):
     return hashlib.sha256(json.dumps({p: scope[p] for p in sorted(providers)}, sort_keys=True).encode()).hexdigest()
 
 
-def scan_multi_cloud(tenant, providers):
+def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
     if not providers or len(providers) != len(set(providers)) or not set(providers) <= set(configured_providers(tenant)):
         raise ScanError('Provider selection is not configured for this workspace')
     from app.scanner_aws import scan_account
     from app.scanner_gcp import scan_gcp_project
     from app.scanner_kubernetes import scan_cluster
     collectors=[]
+    azure_inventory = []
     if 'azure' in providers:
-        collectors.append(lambda:scan_live(tenant))
+        def collect_azure():
+            findings, inventory = scan_live(tenant, enabled_rule_ids=enabled_rule_ids)
+            azure_inventory.extend(inventory)
+            return findings
+        collectors.append(collect_azure)
     if 'aws' in providers:
         for source in tenant.get('aws_accounts',[]):
             bound=dict(source,external_id=tenant['tenant_id'])
@@ -67,4 +72,4 @@ def scan_multi_cloud(tenant, providers):
         seen.add(identity)
         if len(seen) > 100000:
             raise ScanError('Multi-cloud inventory finding limit exceeded')
-    return findings
+    return findings, azure_inventory

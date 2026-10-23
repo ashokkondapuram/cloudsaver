@@ -2,15 +2,17 @@
 
 This guide describes **what the current source revision actually does** for commercial billing on the platform stack and how CloudSaver consumes it. Target behavior lives in [approved billing architecture](../specs/approved/2026-10-23-platform-separation-billing.md) and [admin billing API contract](../platform/contracts/admin-billing-v1.md). When those documents disagree with registered routes and handlers, **trust the runtime sources** listed at the end of this page.
 
-Configuration for billing flags and Stripe secrets is **platform-only** (`platform/.env`); see [Environment reference](ENVIRONMENT.md#billing-platformenv-only).
+Configuration for billing flags and Stripe secrets is **platform-only** (`platform/.env`); see [Environment reference — Billing](ENVIRONMENT.md#billing-platformenv-only).
+
+For resource analysis, rule administration, and AI knowledge roadmap (separate from billing), see [CloudSaver and Platform Portal product roadmap](RESOURCE_ANALYSIS_AND_PORTAL_ROADMAP.md).
 
 ---
 
 ## Payment providers and Stripe
 
-- **Manual** subscription and payment creation endpoints record ledger and directory state in the platform database. They do **not** become Stripe API operations when `PLATFORM_BILLING_PROVIDER` is set to `stripe`.
-- The admin settings response `provider.configured` checks whether both Stripe secret **environment variables** are non-empty. It does **not** resolve optional Key Vault fallbacks or prove end-to-end webhook readiness.
-- Comments and helpers describing fail-fast provider configuration (`load_provider` in `providers.py`) do **not** by themselves establish that application startup invokes that loader on every deployment path. Verify startup behavior in your environment before assuming Stripe is live.
+- Manual subscription/payment creation endpoints do not become Stripe API operations when the provider flag changes.
+- The admin settings response's `provider.configured` value checks whether both Stripe secrets are present in the environment. It does **not** resolve the optional vault fallback or prove end-to-end webhook readiness.
+- Identity service startup calls `load_provider()` (see app lifespan). Admin `provider.configured` uses the same secret resolution as `load_provider()` (env plus optional Key Vault), not env-only checks.
 - Legacy CloudSaver **checkout** and **billing webhook** routes return HTTP **410**. They are not a workaround for platform billing. Do not route real payments through this revision on the assumption that a configuration flag completes the integration.
 
 ---
@@ -36,11 +38,12 @@ The platform database and CloudSaver application database have **separate migrat
 | Platform `i0002_billing` | Billing schema, catalog/settings seeds, customer/workspace billing fields, provider events, and cache event support |
 | Platform `i0003_resource_access` | Resource access settings, separate from commercial charging |
 | Platform `i0004_plan_change_requests` | Plan-change approval queue and review metadata |
+| Platform `i0005_plan_change_pending_unique` | One pending approval/payment request per workspace |
 | CloudSaver `0013_billing_projection` | Local billing/entitlement projection compatibility changes |
 
-The billing seed migration stores **partial** seed entitlement JSON; the service view enriches known plans with catalog defaults. Raw database rows can differ in shape from the plan API response.
+The billing seed migration stores partial seed entitlement data; the service view enriches known plans with catalog defaults. Raw database rows can differ in shape from the plan API response.
 
-The current subscription uniqueness constraint is customer-scoped and excludes only `canceled` / `expired` statuses. Payment external references and provider event identifiers have separate uniqueness constraints. Plan-change requests have queue indexes but **no** database uniqueness constraint enforcing one pending request per workspace.
+The current subscription uniqueness constraint is customer-scoped and excludes only `canceled` / `expired` statuses. Payment external references and provider event identifiers have separate uniqueness constraints. Plan-change requests use a partial unique index (`i0005`) so only one `pending_approval` or `pending_payment` row exists per workspace; service-level checks remain for clear errors.
 
 ### Isolation and audit boundaries
 
@@ -48,7 +51,7 @@ Billing tables enable and force PostgreSQL RLS, but the inspected policies grant
 
 Registered operations produce audit events such as `billing_settings_updated`, `subscription_created`, `subscription_changed`, `payment_recorded`, `plan_change_requested`, `plan_change_pending_payment`, and `plan_change_rejected`. Manual plan approval records a workspace update linked to the request. Event actor fields and request correlation IDs support review; they are **not** a substitute for externally verified financial settlement.
 
-An export helper exists in [`scripts/export_billing.py`](../scripts/export_billing.py), but the proposed `platform/identity/billing/importer.py` module is **absent**. Do not use an importer command from a design document as if it were an available migration tool.
+An export helper exists in [`scripts/export_billing.py`](../scripts/export_billing.py), but the proposed `platform/identity/billing/importer.py` module is **absent**. Do not use an importer command from a design document as if it were an available migration tool. No migrations or data imports were executed while preparing this guide.
 
 ---
 
@@ -60,21 +63,22 @@ The approved billing specification and API contract describe a broader target th
 | --- | --- | --- |
 | Plan catalog administration | Read endpoints exist; create/edit/retire routes are absent | Do not promise self-service custom plan management |
 | Published prices | Seed prices are null | Confirm agreed pricing separately; null is not free |
-| Subscription detail/cancel actions | List/create/PATCH exist; dedicated detail and cancel action routes are absent | Do not assume every contract route is usable |
-| Subscription plan changes | PATCH does not parse `plan_code` | A successful PATCH is not proof of a plan change; inspect its response |
+| Subscription detail/cancel actions | GET by id, create, PATCH, and POST cancel for manual subscriptions are registered | Stripe-managed cancel still follows provider rules |
+| Subscription plan changes | PATCH accepts `plan_code` for manual subscriptions and syncs workspace tiers when billing is enabled | Stripe-managed subscriptions still reject non-override fields |
 | Overrides during creation | Subscription creation stores no overrides | Apply supported overrides with a subsequent versioned PATCH |
-| Override enforcement | Customer-level effective view works; complete grant/snapshot plan block is missing | CloudSaver may keep using local fallback limits |
-| Manual workspace approval | Updates the requested workspace only | Commercial subscription and other workspaces can diverge |
+| Override enforcement | Customer entitlements API and directory/verify plan blocks project subscription overrides when billing is enabled | Fallback tier limits apply when projection is stale or billing is off |
+| Manual workspace approval | With a manual subscription, approval updates the subscription plan and all customer workspaces; without one, only the requested workspace | Stripe approval creates Checkout when the plan has `external_price_refs.stripe`; completion requires webhook + paid session |
 | Customer subscription creation | Applies its tier to existing customer workspaces when billing is enabled | Review multi-workspace impact before creation |
 | Manual payments | Ledger create/list only | No fund collection, automatic service extension, refund execution, or payment editing |
-| Stripe mode | Partial helpers, forwarder, and queue status | No complete Checkout or webhook-to-entitlement flow |
+| Stripe mode | Checkout session on approve, portal forwarder to `POST /billing/v1/webhooks/stripe`, `checkout.session.completed` handler | Production still needs Stripe signing secret, customer price IDs, and end-to-end payment testing |
 | Automatic renewals | Period/interval fields are stored | No demonstrated invoice generation or automatic period advancement |
 | Lapsed account actions | Policy settings and state derivation exist | No fully wired downgrade/suspension evaluator |
-| Key issuance policy | `issuance_blocked` is returned by entitlement reads | Current issue/rotate paths do not enforce that billing guard |
+| Key issuance policy | `issuance_blocked` on entitlements; issue/rotate enforce when billing is enabled and `require_subscription_for_keys` is on | Internal/verify paths are unchanged |
 | Retention | Catalog value exists | No automatic purge guarantee follows from the plan value |
 | Customer billing overview | Stored state and bounded post-fetch filters | State can lag; filtered pagination is not an accounting export guarantee |
-| Pending request protection | Service pre-insert lookup | Concurrent duplicates are not prevented by a dedicated unique constraint |
-| API contract/BFF allowlist | Includes some target routes without handlers | An allowed proxy path or visible UI action does not prove backend support |
+| Pending request protection | Service pre-insert lookup plus DB partial unique index | Race losers get a database error unless mapped to HTTP 409 |
+| Plan CRUD | `POST/PATCH /admin/v1/plans` and retire are implemented on identity | Portal UI for plan authoring may still be minimal |
+| API contract/BFF allowlist | Analysis rules and knowledge publication routes are allowlisted and implemented on identity | Portal pages for those areas may still be missing |
 
 For a production billing rollout, resolve the relevant gaps before presenting the corresponding features as available. In particular, financial settlement, subscription terms, workspace assignment, and observed entitlement enforcement must be reconciled independently in this revision.
 
@@ -93,12 +97,12 @@ For a production billing rollout, resolve the relevant gaps before presenting th
 | HTTP 422 on customer plan request | Invalid plan/body, no associated customer, or rejected upstream input | Strict `plan_tier`/`version` payload and workspace customer link |
 | HTTP 503 on request submission/status | Identity request service unavailable | Service URL, internal credentials, network access, and service health |
 | Plan list succeeds but pending request is absent | Plan listing suppresses pending-lookup unavailability | Explicit request-status endpoint and identity availability |
-| Stripe webhook gets upstream 404 | Identity webhook receiver is not registered | Current implementation gap, not only the public portal URL |
-| Request disappears after Stripe approval | Default queue shows pending approval only | Query `status=pending_payment`; no Checkout URL is generated |
+| Stripe webhook gets upstream 404 | Portal forwarder or identity route misconfigured | Confirm `platform/portal/app/api/webhooks/stripe` and identity `POST /billing/v1/webhooks/stripe` |
+| Request disappears after Stripe approval | Default queue shows pending approval only | Query `status=pending_payment`; response may include `stripe_checkout_url` when Stripe is configured |
 | Workspace tier changed but commercial plan did not | Manual approval is workspace-scoped | Customer subscription and requested workspace separately |
 | Override visible in platform but not in CloudSaver | Complete plan block was not projected | Workspace directory payload, effective source, and fallback limits |
 | Payment exists but account remains past due | Payment creation does not renew/update the subscription | Subscription status and period, confirmed commercial instructions |
-| Tier PATCH returns success but plan is unchanged | `plan_code` is not parsed by that handler | Returned subscription fields and supported operations |
+| Tier PATCH returns success but plan is unchanged | Wrong `version`, Stripe-managed subscription, or invalid `plan_code` | Returned subscription fields and supported operations |
 | Customer list shows old billing state | Overview reads stored state; time-based evaluator is incomplete | Entitlement endpoint's derived state versus persisted state |
 | HTTP 402/403 on a paid feature | Effective plan restriction, fallback values, or missing separate permissions | Effective entitlements, scope/key grants, and cloud access configuration |
 
@@ -131,4 +135,4 @@ Runtime sources take precedence over target specifications when describing what 
 | Portal API proxy and authorization | [`platform/portal/app/api/portal/[...path]/route.ts`](../platform/portal/app/api/portal/%5B...path%5D/route.ts) |
 | Environment reference | [ENVIRONMENT.md](ENVIRONMENT.md) |
 
-Application behavior and deployment configuration remain those of the referenced source revision unless a later change explicitly updates this guide.
+Application behavior matches the referenced source revision, including the runtime fixes noted above where this guide differs from earlier drafts.

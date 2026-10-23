@@ -232,6 +232,8 @@ Keyless access is configured once per stack; workspace bindings live in the plat
 
 Portal container also receives `IDENTITY_SERVICE_URL`, `PORTAL_PUBLIC_URL` (from `PLATFORM_PUBLIC_URL`), and `PLATFORM_PORTAL_TOKEN`.
 
+For a proposed (not implemented) model where customers manage their own users and keys after a one-time bootstrap credential, see [Client-managed users and access keys](CLIENT_MANAGED_USERS_AND_KEYS.md).
+
 ---
 
 ## Billing (`platform/.env` only)

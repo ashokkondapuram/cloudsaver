@@ -11,6 +11,7 @@ import type {Customer, Page} from '../../lib/types';
 import {useLoad} from '../../lib/useLoad';
 import {useSession} from '../SessionProvider';
 import {EmptyState, Loading, Notice, PageHeading, StatusBadge} from '../ui/shared';
+import {ClaimStatusBadge} from './BootstrapKeyDialog';
 import {CustomerFormDialog} from './CustomerDialogs';
 
 export function useDebounced<T>(value: T, delay = 300) {
@@ -60,7 +61,7 @@ export function CustomerList() {
           <thead><tr><th>Customer</th><th>Status</th><th className="number">Workspaces</th><th>Created</th></tr></thead>
           <tbody>{data.items.map(customer => <tr key={customer.id} className="clickable" onClick={() => router.push(`/customers/${encodeURIComponent(customer.id)}`)}>
             <td><Link className="table-link" href={`/customers/${encodeURIComponent(customer.id)}`} onClick={event => event.stopPropagation()}>{customer.name}</Link></td>
-            <td><StatusBadge status={customer.status}/></td>
+            <td><span className="badge-row"><StatusBadge status={customer.status}/>{customer.claim_status === 'pending' && <ClaimStatusBadge status="pending"/>}</span></td>
             <td className="number">{formatNumber(customer.workspace_count)}<span className="cell-sub">{formatNumber(customer.active_workspace_count)} active</span></td>
             <td>{formatDate(customer.created_at)}<span className="cell-sub">by {customer.created_by}</span></td>
           </tr>)}</tbody>

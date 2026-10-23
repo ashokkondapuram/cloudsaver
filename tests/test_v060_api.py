@@ -29,8 +29,8 @@ def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):
     settings = Settings('azure', str(tmp_path/'multi.sqlite'), (workspace(),))
     auth = {'Authorization':'Bearer '+KEY}
 
-    def synthetic_scan(tenant, providers):
-        return demo_cloud_findings(demo_workspace(tenant), providers)
+    def synthetic_scan(tenant, providers, enabled_rule_ids=None):
+        return demo_cloud_findings(demo_workspace(tenant), providers), []
 
     monkeypatch.setattr('app.multi_cloud.scan_multi_cloud', synthetic_scan)
     with TestClient(create_app(settings)) as client:

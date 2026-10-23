@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
 import {useEffect, useState} from 'react';
-import {ArrowLeft, CreditCard, LayoutGrid, Pause, Pencil, Play, Plus, RefreshCw, Trash2} from 'lucide-react';
+import {ArrowLeft, CreditCard, KeyRound, LayoutGrid, Pause, Pencil, Play, Plus, RefreshCw, Trash2} from 'lucide-react';
 import {portal} from '../../lib/api';
 import {formatAttribution} from '../../lib/format';
 import type {Customer, Workspace} from '../../lib/types';
@@ -13,10 +13,11 @@ import {CreateWorkspaceDialog} from '../workspaces/CreateWorkspaceDialog';
 import {WorkspaceTable, workspaceHref} from '../workspaces/WorkspaceTable';
 import {BillingStateBadge, EmptyState, Loading, Notice, PageHeading, SectionTitle, StatusBadge} from '../ui/shared';
 import {BillingTab} from './BillingTab';
+import {BootstrapKeyDialog, ClaimStatusBadge} from './BootstrapKeyDialog';
 import {ConfirmDialog, CustomerFormDialog} from './CustomerDialogs';
 
 type Detail = {customer: Customer; workspaces: Workspace[]};
-type Pending = 'edit' | 'suspend' | 'reactivate' | 'delete' | 'workspace' | null;
+type Pending = 'edit' | 'suspend' | 'reactivate' | 'delete' | 'workspace' | 'bootstrap' | null;
 
 const TABS = [
   {id: 'overview', label: 'Overview', icon: LayoutGrid},
@@ -63,7 +64,7 @@ export function CustomerDetail({id}: {id: string}) {
   return <>
     <Link className="breadcrumb" href="/customers"><ArrowLeft size={14}/>Customers</Link>
     <PageHeading eyebrow="CUSTOMER" title={customer.name} actions={<button type="button" className="button secondary" onClick={() => void reload()}><RefreshCw size={15}/>Refresh</button>}>
-      <StatusBadge status={customer.status}/> {customer.billing_state && <BillingStateBadge state={customer.billing_state}/>}
+      <StatusBadge status={customer.status}/> <ClaimStatusBadge status={customer.claim_status}/> {customer.billing_state && <BillingStateBadge state={customer.billing_state}/>}
     </PageHeading>
     {message && <Notice tone="success">{message}</Notice>}
     {error && <Notice tone="error">{error}</Notice>}
@@ -75,6 +76,7 @@ export function CustomerDetail({id}: {id: string}) {
         <section className="panel">
           <SectionTitle title="Overview" action={editable ? <div className="section-actions">
             <button type="button" className="button secondary small" onClick={() => setPending('edit')}><Pencil size={14}/>Edit</button>
+            {customer.claim_status === 'pending' && customer.status === 'active' && <button type="button" className="button secondary small" onClick={() => setPending('bootstrap')}><KeyRound size={14}/>Issue onboarding key</button>}
             {customer.status === 'active' && <button type="button" className="button secondary small" onClick={() => setPending('suspend')}><Pause size={14}/>Suspend customer</button>}
             {customer.status === 'suspended' && <button type="button" className="button secondary small" onClick={() => setPending('reactivate')}><Play size={14}/>Reactivate customer</button>}
             <button type="button" className="button danger-outline small" onClick={() => setPending('delete')}><Trash2 size={14}/>Delete customer</button>
@@ -82,6 +84,7 @@ export function CustomerDetail({id}: {id: string}) {
           <dl className="detail-list">
             <div><dt>Name</dt><dd>{customer.name}</dd></div>
             <div><dt>Status</dt><dd><StatusBadge status={customer.status}/></dd></div>
+            <div><dt>Account ownership</dt><dd>{customer.claim_status === 'claimed' ? 'Claimed. The customer manages its own users and keys.' : 'Awaiting claim. Issue an onboarding key to the first administrator.'}</dd></div>
             <div><dt>Workspaces</dt><dd>{customer.workspace_count} total, {customer.active_workspace_count} active</dd></div>
             <div><dt>Created</dt><dd>{formatAttribution(customer.created_at, customer.created_by)}</dd></div>
             <div><dt>Last updated</dt><dd>{formatAttribution(customer.updated_at, customer.updated_by)}</dd></div>
@@ -108,6 +111,7 @@ export function CustomerDetail({id}: {id: string}) {
         ? `${customer.name} still has workspaces. Delete each workspace first, then delete the customer.`
         : `${customer.name} will be removed from the directory. You can't undo this.`}
       onClose={() => setPending(null)} onConfirm={remove}/>
+    <BootstrapKeyDialog open={pending === 'bootstrap'} customer={customer} workspaces={workspaces} onClose={() => setPending(null)} onIssued={() => void reload()}/>
     <CreateWorkspaceDialog open={pending === 'workspace'} customer={customer} onClose={() => setPending(null)} onCreated={workspace => {setPending(null); router.push(workspaceHref(workspace.tenant_id));}}/>
   </>;
 }

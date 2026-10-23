@@ -50,6 +50,10 @@ class FakeIdentity:
             if 'after' not in params:
                 return httpx.Response(200, json={'items': [], 'seq': self.events['seq']})
             return httpx.Response(200, json=copy.deepcopy(self.events))
+        if path.startswith('/customer/v1/'):
+            return httpx.Response(200, json={'method': request.method, 'path': path,
+                                             'authorization': request.headers.get('authorization'),
+                                             'body': json.loads(request.content.decode()) if request.content else None})
         if request.method == 'POST' and path.startswith('/internal/v1/tenants/') and path.endswith('/plan-change-requests'):
             tenant_id = path.split('/')[4]
             body = json.loads(request.content.decode())

@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 from identity.billing.catalog import SEED_PLANS, SEED_SETTINGS
 from identity.billing.domain import ENDED
-from identity.domain import CUSTOMER_DEFAULTS, SCOPE_KEYS, WORKSPACE_DEFAULTS, utcnow
+from identity.domain import CUSTOMER_DEFAULTS, KEY_DEFAULTS, SCOPE_KEYS, WORKSPACE_DEFAULTS, utcnow
 
 
 def _newest(rows):
@@ -142,7 +142,83 @@ class MemoryTx:
         for field in ('key_id', 'secret_digest', 'legacy_sha256', 'legacy_fingerprint'):
             if row[field] is not None and self._find(field, row[field]):
                 raise ValueError('Duplicate key material')
-        self.s['keys'][row['key_id']] = dict(row)
+        self.s['keys'][row['key_id']] = dict(KEY_DEFAULTS) | dict(row)
+
+    # client access
+    def get_user(self, user_id):
+        row = self.s['users'].get(user_id)
+        return copy.deepcopy(row) if row else None
+
+    def get_user_by_idp(self, issuer, subject):
+        for row in self.s['users'].values():
+            if row['idp_issuer'] == issuer and row['idp_subject'] == subject:
+                return copy.deepcopy(row)
+        return None
+
+    def insert_user(self, row):
+        self.s['users'][row['id']] = copy.deepcopy(row)
+        return copy.deepcopy(row)
+
+    def get_customer_membership(self, customer_id, user_id):
+        row = self.s['customer_memberships'].get((customer_id, user_id))
+        return copy.deepcopy(row) if row else None
+
+    def list_customer_memberships(self, customer_id):
+        rows = [copy.deepcopy(r) for (cid, _), r in self.s['customer_memberships'].items() if cid == customer_id]
+        return sorted(rows, key=lambda r: r['user_id'])
+
+    def upsert_customer_membership(self, customer_id, user_id, fields):
+        key = (customer_id, user_id)
+        now = fields.get('updated_at', utcnow())
+        row = self.s['customer_memberships'].get(key)
+        if row:
+            row.update(fields, version=row['version'] + 1, updated_at=now)
+        else:
+            self.s['customer_memberships'][key] = {
+                'customer_id': customer_id, 'user_id': user_id, 'role': fields['role'], 'status': fields.get('status', 'active'),
+                'created_at': now, 'created_by': fields.get('updated_by', 'system'), 'version': 1, **fields,
+            }
+
+    def get_workspace_membership(self, tenant_id, user_id):
+        row = self.s['workspace_memberships'].get((tenant_id, user_id))
+        return copy.deepcopy(row) if row else None
+
+    def list_workspace_memberships(self, tenant_id):
+        rows = [copy.deepcopy(r) for (tid, _), r in self.s['workspace_memberships'].items() if tid == tenant_id]
+        return sorted(rows, key=lambda r: r['user_id'])
+
+    def upsert_workspace_membership(self, tenant_id, user_id, fields):
+        key = (tenant_id, user_id)
+        now = fields.get('updated_at', utcnow())
+        row = self.s['workspace_memberships'].get(key)
+        if row:
+            row.update(fields, version=row['version'] + 1, updated_at=now)
+        else:
+            self.s['workspace_memberships'][key] = {
+                'tenant_id': tenant_id, 'user_id': user_id, 'roles': list(fields['roles']),
+                'created_at': now, 'created_by': fields.get('updated_by', 'system'), 'version': 1, **fields,
+            }
+
+    def list_service_accounts(self, customer_id):
+        rows = [copy.deepcopy(r) for r in self.s['service_accounts'].values() if r['customer_id'] == customer_id]
+        return sorted(rows, key=lambda r: r['name'].lower())
+
+    def get_service_account(self, account_id):
+        row = self.s['service_accounts'].get(account_id)
+        return copy.deepcopy(row) if row else None
+
+    def insert_service_account(self, row):
+        self.s['service_accounts'][row['id']] = copy.deepcopy(row)
+
+    def update_service_account(self, account_id, expected_version, fields):
+        row = self.s['service_accounts'].get(account_id)
+        if not row or row['version'] != expected_version:
+            return None
+        row.update(fields, version=row['version'] + 1)
+        return copy.deepcopy(row)
+
+    def delete_workspace_membership(self, tenant_id, user_id):
+        self.s['workspace_memberships'].pop((tenant_id, user_id), None)
 
     def update_key(self, key_id, fields, expected_version=None):
         row = self.s['keys'].get(key_id)
@@ -366,6 +442,44 @@ class MemoryTx:
     def update_plan_change_request(self, request_id, expected_version, fields):
         return _versioned(self.s['plan_change_requests'].get(request_id), expected_version, fields)
 
+    def list_rule_catalog(self):
+        return copy.deepcopy(sorted(self.s['rule_catalog'].values(), key=lambda r: r['id']))
+
+    def list_workspace_rules(self, tenant_id):
+        return copy.deepcopy([r for r in self.s['workspace_rules'].values() if r['tenant_id'] == tenant_id])
+
+    def upsert_workspace_rule(self, tenant_id, rule_id, fields):
+        key = (tenant_id, rule_id)
+        row = self.s['workspace_rules'].get(key)
+        if row is None:
+            row = {'tenant_id': tenant_id, 'rule_id': rule_id, 'enabled': fields['enabled'],
+                   'unavailable_reason': fields.get('unavailable_reason'), 'version': 1,
+                   'created_at': fields['updated_at'], 'created_by': fields['updated_by'],
+                   'updated_at': fields['updated_at'], 'updated_by': fields['updated_by']}
+            self.s['workspace_rules'][key] = row
+        else:
+            row.update(fields)
+            row['version'] += 1
+        return copy.deepcopy(row)
+
+    def list_knowledge_publications(self, status=None, limit=50, offset=0):
+        rows = [r for r in self.s['knowledge_publications'].values() if not status or r['status'] == status]
+        return copy.deepcopy(_newest(rows)[offset:offset + limit])
+
+    def insert_knowledge_publication(self, row):
+        self.s['knowledge_publications'][row['id']] = copy.deepcopy(row)
+
+    def get_knowledge_publication(self, publication_id):
+        row = self.s['knowledge_publications'].get(publication_id)
+        return copy.deepcopy(row) if row else None
+
+    def update_knowledge_publication(self, publication_id, expected_version, fields):
+        return _versioned(self.s['knowledge_publications'].get(publication_id), expected_version, fields)
+
+    def max_provider_event_created(self, customer_id, provider):
+        return max((r.get('event_created') or 0 for r in self.s['provider_events'].values()
+                    if r.get('customer_id') == customer_id and r.get('provider') == provider), default=0)
+
 
 class MemoryStore:
     def __init__(self):
@@ -373,11 +487,18 @@ class MemoryStore:
         plans = {p['code']: dict(copy.deepcopy(p), status='active', list_price_minor=None, currency=None, interval=None,
                                  external_price_refs={}, version=1, created_at=now, created_by='bootstrap',
                                  updated_at=now, updated_by='bootstrap') for p in SEED_PLANS}
-        self.state = {'customers': {}, 'workspaces': {}, 'keys': {}, 'events': [], 'changes': [], 'seq': 0,
+        from identity.analysis.seed import RULE_SEED
+        rules = {rid: {'id': rid, 'provider': p, 'service_category': c, 'resource_type': rt, 'name': n,
+                       'description': '', 'pillar': pi, 'status': 'published', 'version': 1,
+                       'created_at': now, 'created_by': 'bootstrap', 'updated_at': now, 'updated_by': 'bootstrap'}
+                 for rid, p, c, rt, n, pi in RULE_SEED}
+        self.state = {'customers': {}, 'workspaces': {}, 'keys': {}, 'users': {}, 'customer_memberships': {},
+                      'workspace_memberships': {}, 'service_accounts': {}, 'events': [], 'changes': [], 'seq': 0,
                       'usage': {}, 'failures': {}, 'plans': plans, 'subscriptions': {}, 'payments': {},
                       'provider_events': {}, 'cache_events': [], 'cache_seq': 0,
                       'billing_settings': dict(SEED_SETTINGS, version=1, updated_at=now, updated_by='bootstrap'),
-                      'access_checks': {}, 'plan_change_requests': {},
+                      'access_checks': {}, 'plan_change_requests': {}, 'rule_catalog': rules, 'workspace_rules': {},
+                      'knowledge_publications': {},
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
                                    'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
         self._lock = threading.RLock()

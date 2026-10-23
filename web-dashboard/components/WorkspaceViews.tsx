@@ -16,6 +16,7 @@ import {ServiceAnalysis} from './ServiceAnalysis';
 import {BillingEvidencePanel,AIAssessmentHistory} from './EnterpriseEvidence';
 import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 import {CloudScopesEditor, IdentityOnboardingPanel, ScheduleAlertsEditor} from './settings/WorkspaceSettings';
+import {AccessSettings} from './settings/AccessSettings';
 
 export function Allocation() {
   const {setScope} = useWorkspace();
@@ -149,6 +150,6 @@ function Preferences() {
 
 export function SettingsView() {
   const [tab,setTab] = useState('accounts');
-  const tabs = [{id:'accounts',label:'Cloud accounts',icon:Cloud},{id:'access',label:'Resource access',icon:Fingerprint},{id:'schedule',label:'Schedule & alerts',icon:Bell},{id:'integrations',label:'Integrations',icon:GitBranch},{id:'plan',label:'Plan',icon:CreditCard},{id:'preferences',label:'Preferences & access',icon:Settings2}];
-  return <><div className="page-tabs" role="tablist" aria-label="Workspace settings">{tabs.map(item=><button role="tab" key={item.id} id={`settings-${item.id}-tab`} aria-controls={`settings-${item.id}`} aria-selected={tab===item.id} onClick={()=>setTab(item.id)}><item.icon size={16}/>{item.label}</button>)}</div><div role="tabpanel" id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='accounts'?<CloudAccounts/>:tab==='access'?<ResourceAccessSettings/>:tab==='schedule'?<ScheduleAlertsEditor/>:tab==='integrations'?<Integrations/>:tab==='plan'?<Plan/>:<Preferences/>}</div></>;
+  const tabs = [{id:'accounts',label:'Cloud accounts',icon:Cloud},{id:'access',label:'Resource access',icon:Fingerprint},{id:'users',label:'Users & keys',icon:KeyRound},{id:'schedule',label:'Schedule & alerts',icon:Bell},{id:'integrations',label:'Integrations',icon:GitBranch},{id:'plan',label:'Plan',icon:CreditCard},{id:'preferences',label:'Preferences & access',icon:Settings2}];
+  return <><div className="page-tabs" role="tablist" aria-label="Workspace settings">{tabs.map(item=><button role="tab" key={item.id} id={`settings-${item.id}-tab`} aria-controls={`settings-${item.id}`} aria-selected={tab===item.id} onClick={()=>setTab(item.id)}><item.icon size={16}/>{item.label}</button>)}</div><div role="tabpanel" id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='accounts'?<CloudAccounts/>:tab==='access'?<ResourceAccessSettings/>:tab==='users'?<AccessSettings/>:tab==='schedule'?<ScheduleAlertsEditor/>:tab==='integrations'?<Integrations/>:tab==='plan'?<Plan/>:<Preferences/>}</div></>;
 }

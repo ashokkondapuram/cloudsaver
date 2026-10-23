@@ -42,6 +42,8 @@ def test_zero_price_remains_observed_and_grouped_unknown_is_not_zero():
     assert azure['priced_findings'] == 1 and azure['unknown_price_findings'] == 1
     assert aws['known_retail_subtotal_usd'] is None and aws['risk_findings'] == 1
     assert result['full_inventory'] is result['billed_spend_available'] is False
+    assert result['coverage']['finding_observations'] == len(rows)
+    assert result['coverage']['full_inventory'] is False
 
 
 @pytest.mark.parametrize('tags', [{'DoNotTouch': 'true'}, {'do-not-delete': 'YES'}, {'Role': 'DR-Standby'},

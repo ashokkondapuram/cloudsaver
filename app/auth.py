@@ -132,7 +132,7 @@ def local_workspace(settings, token):
 def identity_workspace(settings, client, token, client_ip, request_id):
     from app.identity_client import IdentityUnavailable, KeyRejected
     from app.entitlements import normalize_plan
-    from app.provider_access import narrow
+    from app.provider_access import narrow, restrict
     try:
         grant = client.verify(token, client_ip, request_id)
     except KeyRejected as exc:
@@ -149,6 +149,9 @@ def identity_workspace(settings, client, token, client_ip, request_id):
         raise HTTPException(503, SETTING_UP, headers={'Retry-After': '5'})
     allowed = None if grant['all_providers'] else list(grant['allowed_providers'])
     workspace = narrow(matched, allowed) if allowed is not None else dict(matched)
+    limits = grant.get('scope_restrictions') or None
+    if limits:
+        workspace = restrict(workspace, limits)
     try:
         plan = normalize_plan(grant.get('plan'))
     except ValueError:
@@ -158,9 +161,11 @@ def identity_workspace(settings, client, token, client_ip, request_id):
     if plan is not None:
         # The verify response is fresher than the projection, so its plan wins.
         workspace = dict(workspace, plan=plan, plan_tier=plan['code'])
-    limits = [v for v in (grant.get('expires_at'), grant.get('rotates_out_at')) if v]
+    expiries = [v for v in (grant.get('expires_at'), grant.get('rotates_out_at')) if v]
     return dict(workspace, roles=list(grant['roles']), key_id=grant['key_id'], key_name=grant['key_name'],
-                allowed_providers=allowed, key_expires_at=min(limits) if limits else None)
+                allowed_providers=allowed, key_expires_at=min(expiries) if expiries else None,
+                scope_restrictions=limits, customer_roles=list(grant.get('customer_roles') or []),
+                subject_type=grant.get('subject_type') or 'operator', subject_id=grant.get('subject_id'))
 
 
 def _shadow(client, token, client_ip, request_id, local_tenant):
@@ -241,7 +246,7 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         if mode == 'entra':
             return await run_in_threadpool(entra, token)
         result = await run_in_threadpool(workspace, token, client_ip.get(), request_id.get())
-        if result.get('allowed_providers') is not None:
+        if result.get('allowed_providers') is not None or result.get('scope_restrictions'):
             source = next((t for t in _tenants(settings) if t['tenant_id'] == result['tenant_id']), result)
             route = request.scope.get('route')
             enforce_route(request.method, getattr(route, 'path', request.url.path), result, configured_providers(source))
@@ -283,6 +288,8 @@ def workspace_response(workspace, mode, settings=None):
     return {k: workspace[k] for k in ('tenant_id', 'name', 'subscription_ids', 'roles')} | {
         'allowed_providers': providers, 'key_id': workspace.get('key_id'), 'key_name': workspace.get('key_name'),
         'key_expires_at': workspace.get('key_expires_at'), 'all_providers': workspace.get('allowed_providers') is None,
+        'scope_restrictions': workspace.get('scope_restrictions'), 'customer_roles': workspace.get('customer_roles', []),
+        'subject_type': workspace.get('subject_type', 'operator'), 'subject_id': workspace.get('subject_id'),
         'directory_mode': directory_mode(), 'scopes_editable': not cutover,
         'mode': mode, 'plan_tier': tier.tier, 'plan_name': tier.plan_name, 'billing_state': tier.billing_state,
         'max_subscriptions': tier.max_subscriptions,

@@ -235,19 +235,39 @@ def _from_key_vault(url, names):
     return values
 
 
-def load_provider():
-    """The configured provider. Refuses to start when Stripe is switched on without both secrets."""
-    name = (env('BILLING_PROVIDER', 'manual') or 'manual').strip().lower()
-    if name == 'manual':
-        return ManualProvider()
-    if name != 'stripe':
-        raise RuntimeError('PLATFORM_BILLING_PROVIDER must be manual or stripe')
+def resolve_billing_secrets():
+    """Stripe secrets from env, with optional Key Vault fallback for missing values."""
     values = {key: env(key) for key in SECRET_NAMES}
     missing = [k for k, v in values.items() if not v]
     vault = env('KEYVAULT_URL')
     if missing and vault:
         values.update({k: v for k, v in _from_key_vault(vault, missing).items() if v})
-        missing = [k for k, v in values.items() if not v]
+    return values
+
+
+def billing_provider_configured(name):
+    """Whether the named provider is ready (env + vault for Stripe)."""
+    if name == 'manual':
+        return True
+    if name != 'stripe':
+        return False
+    values = resolve_billing_secrets()
+    return bool(values.get('STRIPE_SECRET_KEY') and values.get('STRIPE_WEBHOOK_SECRET'))
+
+
+def load_provider():
+    """The configured provider. Refuses to start when Stripe is switched on without both secrets."""
+    from identity.config import flag
+
+    if not flag('BILLING_ENABLED'):
+        return ManualProvider()
+    name = (env('BILLING_PROVIDER', 'manual') or 'manual').strip().lower()
+    if name == 'manual':
+        return ManualProvider()
+    if name != 'stripe':
+        raise RuntimeError('PLATFORM_BILLING_PROVIDER must be manual or stripe')
+    values = resolve_billing_secrets()
+    missing = [k for k in SECRET_NAMES if not values.get(k)]
     if missing:
         names = ' and '.join('PLATFORM_' + k for k in missing)
         raise RuntimeError(f'PLATFORM_BILLING_PROVIDER is stripe, but {names} is not set. Add the secret to Key Vault '

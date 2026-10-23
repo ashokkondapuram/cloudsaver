@@ -87,7 +87,7 @@ def test_verified_plan_wins_over_the_projection(cutover, secret):
         'max_subscriptions': 10, 'current_subscriptions': 2, 'max_resources_per_scan': 2500,
         'allowed_scan_frequencies': ['manual', 'daily'], 'allowed_providers': ['azure', 'aws', 'gcp', 'kubernetes'],
         'can_export_terraform': True, 'can_use_keyvault': False, 'can_dispatch_automated_alerts': True,
-        'retention_days': 90, 'entitlements_source': 'platform'}
+        'retention_days': 90, 'entitlements_source': 'platform', 'plan_change_allowed': True, 'settings_version': 1}
 
 
 def test_scoped_key_only_sees_its_providers(cutover, secret):
@@ -286,6 +286,57 @@ def test_scan_filtering_hides_other_providers():
     assert filtered['cloud_providers'] == ['aws'] and filtered['subscriptions_scanned'] == 0
     assert filter_scan({'scan_id': 'a', 'cloud_providers': ['azure'], 'findings': []}, frozenset({'aws'})) is None
     assert filter_scan(scan, frozenset({'aws'}), strict=True) is None
+
+
+def test_scope_limited_key_only_sees_its_scopes(cutover, secret, fake):
+    fake.verify = dict(fake.verify, all_providers=True, allowed_providers=['azure', 'aws'],
+                       scope_restrictions={'aws': ['999999999999']}, customer_roles=['CustomerAdmin'])
+    settings, tenant = cutover
+    data = tenant.get('/api/v1/me', headers=bearer(secret)).json()
+    assert data['scope_restrictions'] == {'aws': ['999999999999']} and data['customer_roles'] == ['CustomerAdmin']
+    assert data['configured_scope_count'] == 1 and data['subscription_ids'] == [SID]
+    scanner = TestClient(scanner_app(settings, scanner=lambda t: []))
+    full = scanner.get('/api/v1/ai/usage', headers=bearer(secret))
+    assert full.status_code == 403 and full.json()['detail'] == 'This workspace key is limited to some cloud scopes.'
+
+
+def test_gateway_pins_customer_calls_to_the_callers_workspace(cutover, secret, fake):
+    from services.gateway import create_app as gateway
+
+    class Limiter:
+        async def check(self, tenant_id):
+            return None
+
+    settings, _ = cutover
+    client = TestClient(gateway(settings, Limiter()))
+    members = client.get('/api/v1/customer/members', headers=bearer(secret)).json()
+    assert 'path' in members, members
+    assert members['path'] == f'/customer/v1/workspaces/{TID}/members'
+    assert members['authorization'] == 'Bearer ' + secret
+    invite = client.post('/api/v1/customer/users/invite', headers=bearer(secret),
+                         json={'display_name': 'Lin', 'email': 'Lin@Contoso.com'}).json()
+    assert invite['body']['idp_issuer'] == 'urn:cloudsaver:email' and invite['body']['idp_subject'] == 'lin@contoso.com'
+    assert client.get('/api/v1/customer/members').status_code == 401
+    bad = client.post('/api/v1/customer/keys/../../admin/revoke', headers=bearer(secret), json={})
+    assert bad.status_code == 404
+    claim = client.post('/api/v1/onboarding/claim', json={'key': 'k', 'display_name': 'Ada', 'email': 'ada@contoso.com'})
+    assert claim.json()['path'] == '/customer/v1/claim' and claim.json()['authorization'] is None
+
+
+def test_scan_filtering_hides_out_of_scope_findings():
+    from app.provider_access import filter_scan, restrict
+    scan = {'scan_id': 's', 'cloud_providers': ['azure', 'aws'], 'subscriptions_scanned': 1,
+            'findings': [{'cloud_provider': 'azure', 'subscription_id': SID, 'estimated_monthly_waste_usd': 10.0},
+                         {'cloud_provider': 'aws', 'scope_id': '123456789012', 'estimated_monthly_waste_usd': 4.5},
+                         {'cloud_provider': 'aws', 'scope_id': '999999999999', 'estimated_monthly_waste_usd': 1.0}]}
+    allowed = frozenset({'azure', 'aws'})
+    filtered = filter_scan(scan, allowed, scopes={'aws': frozenset({'999999999999'})})
+    assert [f.get('scope_id') or f['subscription_id'] for f in filtered['findings']] == [SID, '999999999999']
+    assert filtered['total_monthly_waste_usd'] == 11.0 and filtered['scope_filtered'] is True
+    assert filter_scan(scan, allowed, strict=True, scopes={'aws': frozenset({'999999999999'})}) is None
+    tenant = {'subscription_ids': [SID], 'aws_accounts': [{'account_id': '123456789012', 'region': 'us-east-1'}]}
+    assert restrict(tenant, {'aws': ['999999999999']})['aws_accounts'] == []
+    assert restrict(tenant, {'aws': ['123456789012']})['subscription_ids'] == [SID]
 
 
 def test_directory_events_wake_the_tenant_projector(cutover, fake):

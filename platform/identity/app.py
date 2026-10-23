@@ -52,7 +52,11 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
 
     @asynccontextmanager
     async def lifespan(_):
+        from identity.billing.providers import load_provider
         from identity.usage import Flusher
+
+        app.state.billing_provider = load_provider()
+        logger.info('Billing provider: %s', app.state.billing_provider)
         flusher = Flusher(service.usage, service.store, flush_interval)
         flusher.start()
         yield
@@ -155,6 +159,114 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
         row = service.pending_plan_change_request(tenant_id)
         return row or {}
 
+    @app.get('/internal/v1/tenants/{tenant_id}/analysis-rules/effective')
+    def effective_analysis_rules(tenant_id: str, caller=Depends(verify_caller)):
+        return service.effective_analysis_rules(tenant_id)
+
+    @app.post('/billing/v1/webhooks/stripe')
+    async def stripe_webhook(request: Request, caller=Depends(portal_caller)):
+        return service.handle_stripe_webhook(await request.body(), request.headers, rid(request))
+
+    def customer_ip(request: Request):
+        forwarded = request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        if forwarded:
+            return forwarded
+        return request.client.host if request.client else '127.0.0.1'
+
+    def customer_grant(request: Request, caller=Depends(verify_caller)):
+        header = request.headers.get('Authorization', '')
+        if not header.startswith('Bearer '):
+            raise HTTPException(401, 'Invalid workspace access key.')
+        try:
+            return service.customer_context_from_key(header[7:].strip(), customer_ip(request), caller)
+        except IdentityError as exc:
+            raise HTTPException(exc.status, exc.detail) from None
+
+    @app.post('/customer/v1/claim')
+    def claim_customer(request: Request, payload: dict = Body(...), caller=Depends(verify_caller)):
+        result = service.claim_customer(payload, rid(request))
+        if not result.get('valid'):
+            raise HTTPException(401, 'Invalid workspace access key.')
+        return result
+
+    @app.get('/customer/v1/me')
+    def customer_me(grant=Depends(customer_grant)):
+        return {k: grant[k] for k in ('customer_id', 'tenant_id', 'subject_id', 'customer_roles', 'roles',
+                                      'membership_version')}
+
+    @app.get('/customer/v1/users')
+    def customer_users(grant=Depends(customer_grant)):
+        return service.list_customer_users(None, grant)
+
+    @app.post('/customer/v1/users/invite', status_code=201)
+    def invite_customer_user(request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.invite_customer_user(None, payload, grant, rid(request))
+
+    @app.post('/customer/v1/users/{user_id}/suspend')
+    def suspend_customer_user(user_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.set_customer_user_status(None, user_id, payload, 'suspended', grant, rid(request))
+
+    @app.post('/customer/v1/users/{user_id}/reactivate')
+    def reactivate_customer_user(user_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.set_customer_user_status(None, user_id, payload, 'active', grant, rid(request))
+
+    @app.post('/customer/v1/ownership/transfer')
+    def transfer_ownership(request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.transfer_ownership(None, payload, grant, rid(request))
+
+    @app.get('/customer/v1/workspaces/{tenant_id}/members')
+    def workspace_members(tenant_id: str, grant=Depends(customer_grant)):
+        return service.list_workspace_members(tenant_id, grant)
+
+    @app.put('/customer/v1/workspaces/{tenant_id}/members/{user_id}')
+    def update_workspace_member(tenant_id: str, user_id: str, request: Request, payload: dict = Body(...),
+                                grant=Depends(customer_grant)):
+        return service.update_workspace_member(tenant_id, user_id, payload, grant, rid(request))
+
+    @app.post('/customer/v1/workspaces/{tenant_id}/members/{user_id}/remove')
+    def remove_workspace_member(tenant_id: str, user_id: str, request: Request, payload: dict = Body(...),
+                                grant=Depends(customer_grant)):
+        return service.remove_workspace_member(tenant_id, user_id, payload, grant, rid(request))
+
+    @app.get('/customer/v1/service-accounts')
+    def service_accounts(grant=Depends(customer_grant)):
+        return service.list_service_accounts(None, grant)
+
+    @app.post('/customer/v1/service-accounts', status_code=201)
+    def create_service_account(request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.create_service_account(None, payload, grant, rid(request))
+
+    @app.patch('/customer/v1/service-accounts/{account_id}')
+    def update_service_account(account_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.update_service_account(account_id, payload, grant, rid(request))
+
+    @app.get('/customer/v1/workspaces/{tenant_id}/keys')
+    def customer_keys(tenant_id: str, grant=Depends(customer_grant)):
+        return service.list_customer_keys(tenant_id, grant)
+
+    @app.post('/customer/v1/workspaces/{tenant_id}/keys', status_code=201)
+    def customer_issue_key(tenant_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.issue_customer_workspace_key(tenant_id, payload, grant, rid(request))
+
+    @app.post('/customer/v1/keys/{key_id}/revoke')
+    def customer_revoke_key(key_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.revoke_customer_key(key_id, payload, grant, rid(request))
+
+    @app.post('/customer/v1/keys/{key_id}/rotate', status_code=201)
+    def customer_rotate_key(key_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.rotate_customer_key(key_id, payload, grant, rid(request))
+
+    @app.get('/customer/v1/audit')
+    def customer_audit(before: str | None = None, limit: int = Query(50, ge=1, le=200),
+                       action: str | None = Query(None, max_length=40), grant=Depends(customer_grant)):
+        return service.customer_audit(grant, before, limit, action)
+
+    @app.get('/customer/v1/access-export')
+    def customer_access_export(grant=Depends(customer_grant)):
+        from fastapi.responses import Response
+        return Response(service.export_customer_access(grant), media_type='text/csv',
+                        headers={'Content-Disposition': 'attachment; filename="access-review.csv"'})
+
     # ----- portal admin API --------------------------------------------------------------------------
     @app.get('/admin/v1/session')
     def session(identity=Depends(operator)):
@@ -175,6 +287,10 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     @app.get('/admin/v1/customers/{customer_id}')
     def customer(customer_id: str, identity=Depends(operator)):
         return service.get_customer(customer_id)
+
+    @app.post('/admin/v1/customers/{customer_id}/bootstrap-key', status_code=201)
+    def bootstrap_key(customer_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.issue_bootstrap_key(customer_id, payload, identity, rid(request))
 
     @app.patch('/admin/v1/customers/{customer_id}')
     def update_customer(customer_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
@@ -300,6 +416,43 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def plan(code: str, identity=Depends(operator)):
         return service.get_plan(code)
 
+    @app.post('/admin/v1/plans', status_code=201)
+    def create_plan(request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.create_plan(payload, identity, rid(request))
+
+    @app.patch('/admin/v1/plans/{code}')
+    def update_plan(code: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_plan(code, payload, identity, rid(request))
+
+    @app.post('/admin/v1/plans/{code}/retire')
+    def retire_plan(code: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.retire_plan(code, payload, identity, rid(request))
+
+    @app.get('/admin/v1/analysis/rules')
+    def analysis_rules(identity=Depends(operator)):
+        return service.list_analysis_rules()
+
+    @app.get('/admin/v1/workspaces/{tenant_id}/analysis-rules')
+    def workspace_analysis_rules(tenant_id: str, identity=Depends(operator)):
+        return service.list_workspace_analysis_rules(tenant_id)
+
+    @app.put('/admin/v1/workspaces/{tenant_id}/analysis-rules')
+    def update_workspace_analysis_rules(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_workspace_analysis_rules(tenant_id, payload, identity, rid(request))
+
+    @app.get('/admin/v1/knowledge/publications')
+    def knowledge_publications(status: str | None = Query(None, max_length=16), limit: int = Query(50, ge=1, le=200),
+                               cursor: str | None = Query(None, max_length=20), identity=Depends(operator)):
+        return service.list_knowledge_publications(status, limit, cursor)
+
+    @app.post('/admin/v1/knowledge/publications', status_code=201)
+    def create_knowledge_publication(request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.create_knowledge_publication(payload, identity, rid(request))
+
+    @app.patch('/admin/v1/knowledge/publications/{publication_id}')
+    def update_knowledge_publication(publication_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_knowledge_publication(publication_id, payload, identity, rid(request))
+
     @app.get('/admin/v1/billing/settings')
     def billing_settings(identity=Depends(operator)):
         return service.get_billing_settings()
@@ -334,9 +487,17 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def customer_entitlements(customer_id: str, identity=Depends(operator)):
         return service.get_customer_entitlements(customer_id)
 
+    @app.get('/admin/v1/subscriptions/{subscription_id}')
+    def get_subscription(subscription_id: str, identity=Depends(operator)):
+        return service.get_subscription(subscription_id)
+
     @app.patch('/admin/v1/subscriptions/{subscription_id}')
     def update_subscription(subscription_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.update_subscription(subscription_id, payload, identity, rid(request))
+
+    @app.post('/admin/v1/subscriptions/{subscription_id}/cancel')
+    def cancel_subscription(subscription_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.cancel_subscription(subscription_id, payload, identity, rid(request))
 
     @app.get('/admin/v1/plan-change-requests')
     def plan_change_requests(status: str | None = Query(None, max_length=24), limit: int = Query(50, ge=1, le=200),

@@ -28,10 +28,17 @@ def settings(tmp_path):
 
 
 def routes(app):
+    # FastAPI includes routers lazily, so app.routes misses them; the OpenAPI schema lists every route.
+    seen = set()
     for route in app.routes:
         if isinstance(route, APIRoute) and route.path not in DOCS:
             for method in route.methods - {'HEAD', 'OPTIONS'}:
-                yield method, route.path
+                seen.add((method, route.path))
+    for path, operations in app.openapi()['paths'].items():
+        for method in operations:
+            if method.upper() not in ('HEAD', 'OPTIONS') and path not in DOCS:
+                seen.add((method.upper(), path))
+    yield from sorted(seen)
 
 
 @pytest.fixture

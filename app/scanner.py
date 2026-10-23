@@ -104,9 +104,29 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
     raise ScanError("Azure inventory exceeded the pagination limit.")
 
 
-def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
+INVENTORY_QUERY = "Resources | where isnotempty(id)" + _PROJECTION
+
+
+def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
+    """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
+    rows = []
+    for row in execute_pages(client, INVENTORY_QUERY, subscriptions):
+        rows.append({
+            'cloud_provider': 'azure',
+            'resource_id': row['id'],
+            'resource_name': row['name'],
+            'resource_type': row['type'],
+            'resource_group': row['resourceGroup'],
+            'subscription_id': row['subscriptionId'],
+            'scope_id': row['subscriptionId'],
+        })
+    return rows
+
+
+def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
     findings = []
-    for rule_id, severity, query, explanation in RULES:
+    rules = RULES if not enabled_rule_ids else tuple(r for r in RULES if r[0] in enabled_rule_ids)
+    for rule_id, severity, query, explanation in rules:
         for row in execute_pages(client, query, subscriptions):
             evidence = []
             for field in ("sizeGB", "skuName", "powerState", "ipConfigs"):
@@ -132,7 +152,7 @@ def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
     return findings
 
 
-def scan_live(tenant: dict) -> list[dict]:
+def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None) -> tuple[list[dict], list[dict]]:
     """Scan only authorized subscriptions with a keyless credential for the customer tenant.
 
     Reader RBAC on each subscription is granted by the customer during onboarding.
@@ -150,4 +170,5 @@ def scan_live(tenant: dict) -> list[dict]:
     with credential:
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
-            return _findings(client, subscriptions)
+            inventory = scan_inventory_observations(client, subscriptions)
+            return _findings(client, subscriptions, enabled_rule_ids), inventory

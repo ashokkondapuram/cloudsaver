@@ -36,6 +36,20 @@ Responses:
 `allowed_providers`. `all_providers` is true only when the key follows the workspace's providers **and** the plan
 allows every configured provider, so a `true` value never widens access.
 
+### Subject and scope fields (added in platform 1.1.0)
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `scope_restrictions` | object or null | `{provider: [scope id]}`. Scope ids are Azure subscription ids, AWS `account_id`, GCP `project_id` and Kubernetes `cluster_id`. Only providers in `allowed_providers` and scopes still configured in the workspace are returned. `null` means every scope of the allowed providers. |
+| `subject_type` | string | `operator`, `user` or `service_account` |
+| `subject_id` | string or null | User or service-account id; null for operator keys |
+| `membership_version` | integer or null | Workspace membership version for user keys |
+| `customer_roles` | array | Subset of `CustomerOwner`, `CustomerAdmin`, `CustomerAuditor`; empty for non-user keys |
+
+CloudSaver narrows provider-scoped data to the listed scopes and rejects routes that need every scope (`403`).
+Keys whose user or service account is suspended, or whose user no longer belongs to the workspace, verify as
+`revoked`. Revocations publish `{key_id, event}` or `{tenant_id, event}` on the events feed so caches are evicted.
+
 ### `plan` block (added in platform 1.0.0)
 
 Present on valid grants and on every workspace snapshot. CloudSaver 1.2.0 ignores it.
@@ -86,3 +100,24 @@ Callers: every verify or directory caller. Long-poll cache evictions; replaces t
 
 Caller: `portal` only (the portal route `POST /api/webhooks/stripe` forwards the raw body and the
 `Stripe-Signature` header). Not part of the CloudSaver contract.
+
+## Customer access API (platform 1.1.0)
+
+Public to the CloudSaver gateway only. CloudSaver forwards the caller's `Authorization: Bearer <key>` and
+`X-Forwarded-For`; identity-service verifies the key itself and requires a user key with a customer role.
+`CustomerAuditor` is read-only. Every workspace call is pinned to the presented key's workspace by the gateway.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/customer/v1/claim` | Unauthenticated. Body `{key, display_name, idp_issuer, idp_subject, email}`. Consumes the single-use bootstrap key and returns the owner's personal key once. |
+| `GET` | `/customer/v1/me` | Caller's customer, roles and workspaces |
+| `GET`, `POST` | `/customer/v1/users`, `/customer/v1/users/invite` | Invites are limited to 20 per customer per day |
+| `POST` | `/customer/v1/users/{id}/suspend`, `/reactivate` | Suspend revokes the user's keys |
+| `POST` | `/customer/v1/ownership/transfer` | Owner only; exactly one owner remains |
+| `GET`, `PUT`, `POST` | `/customer/v1/workspaces/{tenant_id}/members[/{user_id}[/remove]]` | `version: 0` adds a member; removal revokes the user's keys in that workspace |
+| `GET`, `POST`, `PATCH` | `/customer/v1/service-accounts[/{id}]` | 25 per customer; suspend or delete revokes keys |
+| `GET`, `POST` | `/customer/v1/workspaces/{tenant_id}/keys` | Roles must be a subset of the issuer's and the subject's; optional `scope_restrictions` |
+| `POST` | `/customer/v1/keys/{key_id}/revoke`, `/rotate` | Operator-issued keys return `403` |
+| `GET` | `/customer/v1/audit`, `/customer/v1/access-export` | Export is CSV and never contains secrets |
+
+Operators issue bootstrap keys with `POST /admin/v1/customers/{id}/bootstrap-key` (24 hours by default, 72 maximum).

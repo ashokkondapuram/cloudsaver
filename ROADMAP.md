@@ -11,6 +11,10 @@ The [v1.0.0 master guide](https://docs.google.com/document/d/1FmtfohZPlnlwZ1lbcC
 
 Next: accept actual cloud/model identities in staging; ingest native billing exports and reconcile totals; define audit retention/restore procedures and monetary budgets; extend durable jobs to multi-cloud; implement authenticated Jira/ServiceNow status synchronization and full organizational membership. Preserve existing protected intent and independent change approval. Version 1.0.0 does not certify full blueprint completion or production readiness.
 
+**Proposed product spec (not implemented):** [Resource analysis, rule administration, portal UX, and AI knowledge](docs/RESOURCE_ANALYSIS_AND_PORTAL_ROADMAP.md). Commercial features in that spec depend on [platform billing gaps](docs/PLATFORM_BILLING.md) being resolved first.
+
+**Proposed product spec (not implemented):** [Client-managed users and access keys](docs/CLIENT_MANAGED_USERS_AND_KEYS.md)—bootstrap onboarding, customer admin, delegated keys, and service accounts.
+
 ## v0.11.0 assessment and enterprise AI milestone
 
 Versioned service controls, freshness/gaps/provenance, risk-prioritized review queues and snapshot-wide current-scope enforcement extend the README's five-pillar matrix. Target context/output budgets, source-provider restrictions, citation/risk-floor validation, terminal-response checks and provider usage metadata strengthen the existing AI gateway.

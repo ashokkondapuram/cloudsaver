@@ -15,7 +15,7 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [/^session$/, ['GET']],
   [/^customers$/, ['GET', 'POST']],
   [new RegExp(`^customers/${ID}$`), ['GET', 'PATCH', 'DELETE']],
-  [new RegExp(`^customers/${ID}/(suspend|reactivate)$`), ['POST']],
+  [new RegExp(`^customers/${ID}/(suspend|reactivate|bootstrap-key)$`), ['POST']],
   [/^workspaces$/, ['GET', 'POST']],
   [new RegExp(`^workspaces/${ID}$`), ['GET', 'PATCH', 'DELETE']],
   [new RegExp(`^workspaces/${ID}/scopes/(azure|aws|gcp|kubernetes)$`), ['PUT']],
@@ -44,6 +44,10 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [new RegExp(`^access-checks/${ID}$`), ['GET']],
   [/^audit$/, ['GET']],
   [/^failures$/, ['GET']],
+  [/^analysis\/rules$/, ['GET']],
+  [new RegExp(`^workspaces/${ID}/analysis-rules$`), ['GET', 'PUT']],
+  [/^knowledge\/publications$/, ['GET', 'POST']],
+  [new RegExp(`^knowledge/publications/${ID}$`), ['PATCH']],
 ];
 
 const STEP_UP: Array<[RegExp, Method]> = [

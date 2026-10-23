@@ -64,7 +64,18 @@ export type Workspace = {
   key_expires_at?: string | null;
   directory_mode?: 'registry' | 'cutover';
   scopes_editable?: boolean;
+  scope_restrictions?: Record<string, string[]> | null;
+  customer_roles?: CustomerRole[];
+  subject_type?: 'operator' | 'user' | 'service_account';
+  subject_id?: string | null;
 };
+
+export type CustomerRole = 'CustomerOwner' | 'CustomerAdmin' | 'CustomerAuditor';
+export type CustomerUser = {user_id: string; display_name: string; email: string | null; status: string; customer_role: CustomerRole; membership_status: 'active' | 'suspended'; created_at: string | null};
+export type WorkspaceMember = {user_id: string; display_name: string; roles: string[]; version: number};
+export type ServiceAccount = {service_account_id: string; name: string; description: string; status: 'active' | 'suspended' | 'deleted'; version: number};
+export type AccessKey = {key_id: string; name: string; roles: string[]; status: string; subject_type: string; subject_id: string | null; expires_at: string | null; last_used_at: string | null; created_at: string; created_by: string; scope_restrictions: Record<string, string[]> | null};
+export type AccessEvent = {id: string; occurred_at: string; actor: string; actor_type: string; action: string; tenant_id: string | null; key_id: string | null; details: Record<string, unknown>};
 
 export type Frequency = 'manual' | 'daily' | 'hourly';
 export type AwsAccount = {account_id: string; region: string; role_arn: string};

@@ -9,7 +9,7 @@ import pytest
 
 from identity import keys as keyfmt
 from identity.client import GrantCache, IdentityClient, IdentityUnavailable, KeyRejected
-from identity.domain import Conflict, IdentityError, Throttled, utcnow
+from identity.domain import Conflict, IdentityError, NotFound, StaleVersion, Throttled, utcnow
 from identity.events import MemoryEvents
 from identity.importer import customer_id_for, import_directory
 from identity.keys import Peppers
@@ -330,3 +330,304 @@ def test_plan_change_request_flow(service):
     approved = service.approve_plan_change_request(created['id'], {'version': 1}, OPERATOR)
     assert approved['status'] == 'approved'
     assert service.get_workspace(TID)['plan_tier'] == 'GROWTH'
+
+
+def test_billing_provider_configured(monkeypatch):
+    from identity.billing.providers import billing_provider_configured
+    monkeypatch.delenv('PLATFORM_STRIPE_SECRET_KEY', raising=False)
+    monkeypatch.delenv('PLATFORM_STRIPE_WEBHOOK_SECRET', raising=False)
+    assert billing_provider_configured('manual') is True
+    assert billing_provider_configured('stripe') is False
+    monkeypatch.setenv('PLATFORM_STRIPE_SECRET_KEY', 'sk_test_x')
+    monkeypatch.setenv('PLATFORM_STRIPE_WEBHOOK_SECRET', 'whsec_x')
+    assert billing_provider_configured('stripe') is True
+
+
+def test_subscription_patch_plan_code(service, monkeypatch):
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    customer = workspace(service)
+    now = service.now()
+    sub = service.create_customer_subscription(customer['id'], {
+        'plan_code': 'STARTER', 'status': 'active', 'current_period_start': now.isoformat(),
+        'current_period_end': (now + timedelta(days=30)).isoformat(), 'amount_minor': 0, 'currency': 'USD',
+        'interval': 'month',
+    }, OPERATOR)
+    updated = service.update_subscription(sub['id'], {'version': 1, 'plan_code': 'GROWTH'}, OPERATOR)
+    assert updated['plan_code'] == 'GROWTH'
+
+
+def test_issuance_blocked_without_active_subscription(service, clock, monkeypatch):
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    customer = workspace(service)
+    with pytest.raises(IdentityError, match='active subscription'):
+        issue(service, clock)
+    now = service.now()
+    service.create_customer_subscription(customer['id'], {
+        'plan_code': 'STARTER', 'status': 'active', 'current_period_start': now.isoformat(),
+        'current_period_end': (now + timedelta(days=30)).isoformat(), 'amount_minor': 0, 'currency': 'USD',
+        'interval': 'month',
+    }, OPERATOR)
+    issue(service, clock)
+
+
+def test_directory_snapshot_includes_plan_block(service, monkeypatch):
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    customer = workspace(service)
+    now = service.now()
+    service.create_customer_subscription(customer['id'], {
+        'plan_code': 'GROWTH', 'status': 'active', 'current_period_start': now.isoformat(),
+        'current_period_end': (now + timedelta(days=30)).isoformat(), 'amount_minor': 0, 'currency': 'USD',
+        'interval': 'month',
+    }, OPERATOR)
+    snap = service.directory_snapshot()
+    plan = snap['workspaces'][0]['plan']
+    assert plan['code'] == 'GROWTH' and plan['entitlements']['max_resources_per_scan'] == 2500
+
+
+def test_get_and_cancel_subscription(service, monkeypatch):
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    customer = workspace(service)
+    now = service.now()
+    sub = service.create_customer_subscription(customer['id'], {
+        'plan_code': 'STARTER', 'status': 'active', 'current_period_start': now.isoformat(),
+        'current_period_end': (now + timedelta(days=30)).isoformat(), 'amount_minor': 0, 'currency': 'USD',
+        'interval': 'month',
+    }, OPERATOR)
+    loaded = service.get_subscription(sub['id'])
+    assert loaded['id'] == sub['id']
+    canceled = service.cancel_subscription(sub['id'], {'version': 1, 'at_period_end': False, 'reason': 'Test'}, OPERATOR)
+    assert canceled['status'] == 'canceled'
+
+
+def test_plan_approval_updates_manual_subscription(service, monkeypatch):
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    customer = workspace(service)
+    now = service.now()
+    sub = service.create_customer_subscription(customer['id'], {
+        'plan_code': 'STARTER', 'status': 'active', 'current_period_start': now.isoformat(),
+        'current_period_end': (now + timedelta(days=30)).isoformat(), 'amount_minor': 0, 'currency': 'USD',
+        'interval': 'month',
+    }, OPERATOR)
+    created = service.create_plan_change_request(TID, {'requested_plan_code': 'GROWTH', 'requested_by': 'billing@contoso.com'},
+                                                 'tenant-service')
+    service.approve_plan_change_request(created['id'], {'version': 1}, OPERATOR)
+    subs = service.list_customer_subscriptions(customer['id'])
+    assert subs['current']['plan_code'] == 'GROWTH'
+    assert service.get_workspace(TID)['plan_tier'] == 'GROWTH'
+
+
+def test_bootstrap_claim_and_customer_admin_key(service, clock):
+    customer = workspace(service)
+    assert customer['claim_status'] == 'pending'
+    bootstrap = service.issue_bootstrap_key(customer['id'], {'tenant_id': TID}, OPERATOR)
+    secret = bootstrap['secret']
+    assert bootstrap['key']['purpose'] == 'bootstrap'
+    assert service.verify(secret, IP, 'gateway')['valid'] is False
+    claimed = service.claim_customer({
+        'key': secret,
+        'idp_issuer': 'https://login.example.com',
+        'idp_subject': 'owner-subject',
+        'display_name': 'Ada Owner',
+        'email': 'ada@contoso.com',
+    })
+    assert claimed['valid'] and claimed['customer_id'] == customer['id']
+    owner_key = claimed['secret']
+    grant = service.verify(owner_key, IP, 'gateway')
+    assert grant['valid'] and grant['customer_roles'] == ['CustomerOwner']
+    assert grant['subject_type'] == 'user'
+    users = service.list_customer_users(customer['id'], grant)
+    assert len(users['items']) == 1 and users['items'][0]['display_name'] == 'Ada Owner'
+    refreshed = service.get_customer(customer['id'])
+    assert refreshed['customer']['claim_status'] == 'claimed'
+
+
+def claimed_owner(service):
+    customer = workspace(service)
+    secret = service.issue_bootstrap_key(customer['id'], {'tenant_id': TID}, OPERATOR)['secret']
+    claimed = service.claim_customer({'key': secret, 'idp_issuer': 'https://login.example.com',
+                                      'idp_subject': 'owner', 'display_name': 'Ada Owner'})
+    return customer, service.verify(claimed['secret'], IP, 'gateway'), claimed['secret']
+
+
+def invite_member(service, grant, subject, roles=('Viewer',), role='CustomerAdmin'):
+    user = service.invite_customer_user(None, {'idp_issuer': 'https://login.example.com', 'idp_subject': subject,
+                                               'display_name': subject.title(), 'role': role}, grant)
+    service.update_workspace_member(TID, user['user_id'], {'version': 0, 'roles': list(roles)}, grant)
+    return user
+
+
+def test_bootstrap_key_is_single_use_and_lifetime_is_capped(service, clock):
+    customer = workspace(service)
+    with pytest.raises(IdentityError, match='72 hours'):
+        service.issue_bootstrap_key(customer['id'], {'tenant_id': TID,
+                                                     'expires_at': (clock() + timedelta(hours=80)).isoformat()}, OPERATOR)
+    secret = service.issue_bootstrap_key(customer['id'], {'tenant_id': TID}, OPERATOR)['secret']
+    with pytest.raises(Conflict):
+        service.issue_bootstrap_key(customer['id'], {'tenant_id': TID}, OPERATOR)
+    claim = {'key': secret, 'idp_issuer': 'https://login.example.com', 'idp_subject': 'a', 'display_name': 'A'}
+    assert service.claim_customer(claim)['valid']
+    assert service.claim_customer(dict(claim, idp_subject='b'))['valid'] is False
+    with pytest.raises(Conflict, match='already claimed'):
+        service.issue_bootstrap_key(customer['id'], {'tenant_id': TID}, OPERATOR)
+
+
+def test_customer_admin_cannot_escalate_or_act_on_other_customers(service, clock):
+    customer, owner, _ = claimed_owner(service)
+    admin = invite_member(service, owner, 'grace', roles=('Viewer',))
+    key = service.issue_customer_workspace_key(TID, {'name': 'Grace', 'roles': ['Viewer'], 'all_providers': True,
+                                                     'subject_user_id': admin['user_id'],
+                                                     'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    grace = service.verify(key['secret'], IP, 'gateway')
+    assert grace['customer_roles'] == ['CustomerAdmin']
+    with pytest.raises(IdentityError) as denied:
+        service.issue_customer_workspace_key(TID, {'name': 'Escalate', 'roles': ['TenantAdmin'], 'all_providers': True,
+                                                   'expires_at': (clock() + timedelta(days=10)).isoformat()}, grace)
+    assert denied.value.status == 403
+    with pytest.raises(IdentityError) as denied:
+        service.update_workspace_member(TID, admin['user_id'], {'version': 1, 'roles': ['TenantAdmin']}, grace)
+    assert denied.value.status == 403
+    with pytest.raises(IdentityError, match='Only the owner'):
+        service.transfer_ownership(None, {'user_id': owner['subject_id']}, grace)
+    with pytest.raises(IdentityError):
+        service.list_customer_users('22222222-2222-4222-8222-222222222222', grace)
+    auditor = invite_member(service, owner, 'audit', role='CustomerAuditor')
+    audit_key = service.issue_customer_workspace_key(TID, {'name': 'Audit', 'roles': ['Viewer'], 'all_providers': True,
+                                                           'subject_user_id': auditor['user_id'],
+                                                           'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    audit_grant = service.verify(audit_key['secret'], IP, 'gateway')
+    assert len(service.list_customer_users(None, audit_grant)['items']) == 3
+    with pytest.raises(IdentityError) as denied:
+        service.create_service_account(None, {'name': 'CI'}, audit_grant)
+    assert denied.value.status == 403
+
+
+def test_suspending_a_user_revokes_keys_and_verify_rejects_them(service, clock):
+    customer, owner, _ = claimed_owner(service)
+    member = invite_member(service, owner, 'lin')
+    key = service.issue_customer_workspace_key(TID, {'name': 'Lin', 'roles': ['Viewer'], 'all_providers': True,
+                                                     'subject_user_id': member['user_id'],
+                                                     'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    assert service.verify(key['secret'], IP, 'gateway')['valid']
+    invite_member(service, owner, 'other')
+    other = service.verify(issue_for(service, clock, owner)['secret'], IP, 'gateway')
+    with pytest.raises(IdentityError, match='Transfer ownership'):
+        service.set_customer_user_status(None, owner['subject_id'], {}, 'suspended', other)
+    with pytest.raises(IdentityError, match='your own access'):
+        service.set_customer_user_status(None, owner['subject_id'], {}, 'suspended', owner)
+    service.set_customer_user_status(None, member['user_id'], {'reason': 'Left the team'}, 'suspended', owner)
+    assert service.verify(key['secret'], IP, 'gateway') == {'valid': False, 'reason': 'revoked'}
+    assert service.get_key(key['key']['key_id'])['status'] == 'revoked'
+    actions = [e['action'] for e in service.customer_audit(owner)['items']]
+    assert 'user_suspended' in actions and 'user_invited' in actions
+
+
+def issue_for(service, clock, owner):
+    users = service.list_customer_users(None, owner)['items']
+    other = next(u for u in users if u['display_name'] == 'Other')
+    return service.issue_customer_workspace_key(TID, {'name': 'Other', 'roles': ['Viewer'], 'all_providers': True,
+                                                      'subject_user_id': other['user_id'],
+                                                      'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+
+
+def test_removing_workspace_access_and_customer_key_lifecycle(service, clock):
+    customer, owner, _ = claimed_owner(service)
+    member = invite_member(service, owner, 'kim')
+    account = service.create_service_account(None, {'name': 'CI pipeline'}, owner)
+    ci = service.issue_customer_workspace_key(TID, {'name': 'CI', 'roles': ['Viewer'], 'all_providers': True,
+                                                    'service_account_id': account['service_account_id'],
+                                                    'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    rotated = service.rotate_customer_key(ci['key']['key_id'], {'overlap_hours': 0}, owner)
+    assert rotated['key']['subject_type'] == 'service_account'
+    service.revoke_customer_key(rotated['key']['key_id'], {}, owner)
+    assert service.verify(rotated['secret'], IP, 'gateway')['valid'] is False
+    operator_key = issue(service, clock)
+    with pytest.raises(IdentityError, match='platform operator'):
+        service.revoke_customer_key(operator_key['key']['key_id'], {}, owner)
+    kim = service.issue_customer_workspace_key(TID, {'name': 'Kim', 'roles': ['Viewer'], 'all_providers': True,
+                                                     'subject_user_id': member['user_id'],
+                                                     'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    version = next(m['version'] for m in service.list_workspace_members(TID, owner)['items']
+                   if m['user_id'] == member['user_id'])
+    service.remove_workspace_member(TID, member['user_id'], {'version': version}, owner)
+    assert service.verify(kim['secret'], IP, 'gateway')['valid'] is False
+    second = service.create_service_account(None, {'name': 'Nightly'}, owner)
+    service.update_service_account(second['service_account_id'], {'version': 1, 'status': 'suspended'}, owner)
+    csv_text = service.export_customer_access(owner)
+    assert csv_text.startswith('record,') and 'Ada Owner' in csv_text and 'cs_' not in csv_text
+
+
+def test_ownership_transfer_keeps_one_owner(service, clock):
+    customer, owner, _ = claimed_owner(service)
+    member = invite_member(service, owner, 'noor')
+    service.transfer_ownership(None, {'user_id': member['user_id']}, owner)
+    roles = {u['display_name']: u['customer_role'] for u in service.list_customer_users(None, owner)['items']}
+    assert roles == {'Ada Owner': 'CustomerAdmin', 'Noor': 'CustomerOwner'}
+    assert 'ownership_transferred' in [e['action'] for e in service.customer_audit(owner)['items']]
+
+
+def test_scope_restricted_keys_are_validated_and_returned_by_verify(service, clock):
+    workspace(service)
+    with pytest.raises(IdentityError, match='configured for this workspace'):
+        issue(service, clock, scope_restrictions={'azure': ['44444444-4444-4444-8444-444444444444']})
+    with pytest.raises(IdentityError, match='providers this key includes'):
+        issue(service, clock, all_providers=False, allowed_providers=['aws'], scope_restrictions={'azure': [SID]})
+    issued = issue(service, clock, scope_restrictions={'aws': ['123456789012']})
+    assert issued['key']['scope_restrictions'] == {'aws': ['123456789012']}
+    grant = service.verify(issued['secret'], IP, 'gateway')
+    assert grant['scope_restrictions'] == {'aws': ['123456789012']}
+    assert grant['allowed_providers'] == ['azure', 'aws']
+    updated = service.update_key(issued['key']['key_id'], {'version': 1, 'scope_restrictions': None}, OPERATOR)
+    assert updated['scope_restrictions'] is None
+
+
+def test_customer_limits(service, clock, monkeypatch):
+    import identity.customer.admin as admin
+    customer, owner, _ = claimed_owner(service)
+    monkeypatch.setattr(admin, 'MAX_SERVICE_ACCOUNTS', 1)
+    monkeypatch.setattr(admin, 'MAX_INVITES_PER_DAY', 1)
+    service.create_service_account(None, {'name': 'One'}, owner)
+    with pytest.raises(Conflict, match='at most 1 service'):
+        service.create_service_account(None, {'name': 'Two'}, owner)
+    invite_member(service, owner, 'first')
+    with pytest.raises(IdentityError) as limited:
+        invite_member(service, owner, 'second')
+    assert limited.value.status == 429
+
+
+def test_workspace_analysis_rules_default_enabled_and_overridable(service, clock):
+    workspace(service)
+    catalog = service.list_analysis_rules()['items']
+    assert len(catalog) > 0 and all(r['status'] == 'published' for r in catalog)
+    effective = service.list_workspace_analysis_rules(TID)
+    assert effective['tenant_id'] == TID
+    assert all(r['enabled'] is True and r['override_version'] is None for r in effective['items'])
+    rule_id = catalog[0]['id']
+    updated = service.update_workspace_analysis_rules(
+        TID, {'version': 1, 'rules': [{'rule_id': rule_id, 'enabled': False, 'unavailable_reason': 'No collector evidence'}]}, OPERATOR)
+    row = next(r for r in updated['items'] if r['id'] == rule_id)
+    assert row['enabled'] is False and row['unavailable_reason'] == 'No collector evidence'
+    live = service.effective_analysis_rules(TID)
+    assert rule_id not in live['enabled_rule_ids']
+    with pytest.raises(IdentityError, match='published rule from the catalog'):
+        service.update_workspace_analysis_rules(TID, {'version': 1, 'rules': [{'rule_id': 'bogus'}]}, OPERATOR)
+    with pytest.raises(StaleVersion):
+        service.update_workspace_analysis_rules(TID, {'version': 2, 'rules': [{'rule_id': rule_id, 'enabled': True}]}, OPERATOR)
+
+
+def test_knowledge_publication_lifecycle_and_pagination(service, clock):
+    created = [service.create_knowledge_publication(
+        {'title': f'Pattern {i}', 'summary': 'Observed across fleet', 'body': 'Generalized guidance.'}, OPERATOR)
+        for i in range(3)]
+    page = service.list_knowledge_publications(limit=2)
+    assert len(page['items']) == 2 and page['next_cursor'] == '2'
+    rest = service.list_knowledge_publications(limit=2, cursor=page['next_cursor'])
+    assert len(rest['items']) == 1 and rest['next_cursor'] is None
+    pub = created[0]
+    updated = service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'published', 'quality_score': 80}, OPERATOR)
+    assert updated['status'] == 'published' and updated['quality_score'] == 80
+    with pytest.raises(StaleVersion):
+        service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'deprecated'}, OPERATOR)
+    with pytest.raises(IdentityError, match='valid publication status'):
+        service.update_knowledge_publication(pub['id'], {'version': 2, 'status': 'bogus'}, OPERATOR)
+    with pytest.raises(NotFound):
+        service.update_knowledge_publication('00000000-0000-0000-0000-000000000000', {'version': 1, 'status': 'published'}, OPERATOR)

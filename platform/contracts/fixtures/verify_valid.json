@@ -13,6 +13,10 @@
   "expires_at": "2027-01-21T14:00:00Z",
   "rotates_out_at": null,
   "cache_ttl_seconds": 15,
+  "subject_type": "user",
+  "subject_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "membership_version": 2,
+  "customer_roles": ["CustomerOwner"],
   "plan": {
     "code": "GROWTH",
     "name": "Growth",

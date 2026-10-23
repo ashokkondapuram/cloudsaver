@@ -7,14 +7,20 @@ from uuid import uuid4
 
 from identity import keys as keyfmt
 from identity.config import env, flag
+from identity.analysis.admin import AnalysisOps
 from identity.billing.admin import BillingOps
-from identity.domain import (DEFAULT_EXPIRY_DAYS, EXPIRING_SOON_DAYS, MAX_ACTIVE_KEYS, MAX_EXPIRY_DAYS, PROVIDERS,
-                             SCOPE_KEYS, STATUSES, TIERS, Conflict, IdentityError, NotFound, StaleVersion, Throttled,
-                             configured_providers, empty_scopes, iso, normalize_identity_bindings, normalize_roles,
-                             normalize_scope_items, parse_time, text, utcnow, uuid_text)
+from identity.customer.admin import CustomerOps
+from identity.knowledge.admin import KnowledgeOps
+from identity.billing.domain import ISSUANCE_BLOCKED, billing_state
+from identity.domain import (CUSTOMER_DEFAULTS, DEFAULT_EXPIRY_DAYS, EXPIRING_SOON_DAYS, KEY_DEFAULTS, MAX_ACTIVE_KEYS,
+                             MAX_EXPIRY_DAYS, PROVIDERS, SCOPE_KEYS, STATUSES, TIERS, Conflict, IdentityError, NotFound,
+                             StaleVersion, Throttled, configured_providers, empty_scopes, iso, normalize_identity_bindings,
+                             normalize_roles, normalize_scope_items, normalize_scope_restrictions, parse_time, scope_ids,
+                             text, utcnow, uuid_text)
 
 logger = logging.getLogger('cloudsaver.identity')
 SYSTEM = {'actor': 'system', 'actor_type': 'system'}
+GRANT_KEYS = ('roles', 'all_providers', 'allowed_providers', 'scope_restrictions')
 
 
 def scope_limit(tier):
@@ -42,18 +48,21 @@ def key_status(row, now):
     return 'active'
 
 
-def snapshot(workspace, customer):
+def snapshot(workspace, customer, plan=None):
     """Complete directory state for one workspace; applying it twice is harmless."""
-    return {
+    row = {
         'tenant_id': workspace['tenant_id'], 'customer_id': workspace['customer_id'], 'name': workspace['name'],
         'plan_tier': workspace['plan_tier'], 'status': workspace['status'],
         'active': workspace['status'] == 'active' and customer['status'] == 'active',
         'identity': workspace['identity'], 'version': workspace['version'],
         **{key: workspace[key] for key in SCOPE_KEYS.values()},
     }
+    if plan is not None:
+        row['plan'] = plan
+    return row
 
 
-class IdentityService(BillingOps):
+class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
                  cache_seconds=None, provider_scoped_keys=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage
@@ -98,12 +107,20 @@ class IdentityService(BillingOps):
                 reason = 'rotated_out' if row['rotates_out_at'] and row['rotates_out_at'] <= now else 'expired'
             elif workspace['status'] != 'active' or not customer or customer['status'] != 'active':
                 reason = 'workspace_suspended'
+            elif not self._subject_active(tx, row, workspace):
+                reason = 'revoked'
             if reason:
                 return self._reject(ip, caller, reason, key_id=row['key_id'], tenant_id=row['tenant_id'])
+            if row.get('purpose') == 'bootstrap':
+                return self._reject(ip, caller, 'unknown', key_id=row['key_id'], tenant_id=row['tenant_id'])
             self._upgrade(tx, row, presented, request_id)
+            from identity.billing.projection import workspace_plan_block
+            plan = workspace_plan_block(tx, workspace, customer, now)
+            grant = self._grant(row, workspace, customer, now, tx)
+            grant['plan'] = plan
         self.usage.success(row['key_id'], ip)
         self._count('verify', 'valid', caller)
-        return self._grant(row, workspace, now)
+        return grant
 
     def _match(self, tx, presented, kind, key_id):
         if kind == 'v1':
@@ -135,19 +152,49 @@ class IdentityService(BillingOps):
         if legacy:
             self._event(tx, SYSTEM, 'hash_upgraded', row['tenant_id'], row['key_id'], {'name': row['name']}, request_id)
 
-    def _grant(self, row, workspace, now):
+    def _grant(self, row, workspace, customer, now, tx):
         configured = configured_providers(workspace)
         allowed = configured if row['all_providers'] else [p for p in configured if p in row['allowed_providers']]
         ttl = self.cache_seconds
         for limit in (row['expires_at'], row['rotates_out_at']):
             if limit:
                 ttl = min(ttl, max(0, int((limit - now).total_seconds())))
-        return {'valid': True, 'tenant_id': row['tenant_id'], 'customer_id': workspace['customer_id'],
-                'key_id': row['key_id'], 'key_name': row['name'], 'roles': list(row['roles']),
-                'all_providers': row['all_providers'], 'allowed_providers': allowed, 'scope_restrictions': None,
-                'workspace_status': workspace['status'], 'directory_version': workspace['version'],
-                'expires_at': iso(row['expires_at']), 'rotates_out_at': iso(row['rotates_out_at']),
-                'cache_ttl_seconds': ttl}
+        subject_type = row.get('subject_type') or 'operator'
+        subject = row.get('subject_user_id') or row.get('service_account_id')
+        subject_id = str(subject) if subject else None
+        customer_roles = []
+        if row.get('subject_user_id') and customer:
+            customer_roles = self._membership_roles(tx, subject_id, customer['id'])
+        grant = {'valid': True, 'tenant_id': row['tenant_id'], 'customer_id': workspace['customer_id'],
+                 'key_id': row['key_id'], 'key_name': row['name'], 'roles': list(row['roles']),
+                 'all_providers': row['all_providers'], 'allowed_providers': allowed,
+                 'scope_restrictions': self._effective_restrictions(row, workspace, allowed),
+                 'workspace_status': workspace['status'], 'directory_version': workspace['version'],
+                 'expires_at': iso(row['expires_at']), 'rotates_out_at': iso(row['rotates_out_at']),
+                 'cache_ttl_seconds': ttl, 'subject_type': subject_type, 'subject_id': subject_id,
+                 'membership_version': int((customer or {}).get('membership_policy_version') or 1),
+                 'customer_roles': customer_roles}
+        return grant
+
+    @staticmethod
+    def _effective_restrictions(row, workspace, allowed):
+        """Restrictions narrowed to scopes the workspace still has; providers left with none stay empty."""
+        limits = row.get('scope_restrictions') or {}
+        if not limits:
+            return None
+        return {p: [i for i in scope_ids(workspace, p) if i in limits[p]] for p in allowed if p in limits}
+
+    @staticmethod
+    def _subject_active(tx, row, workspace):
+        if row.get('subject_user_id'):
+            user = tx.get_user(str(row['subject_user_id']))
+            membership = tx.get_customer_membership(workspace['customer_id'], str(row['subject_user_id']))
+            return bool(user and user['status'] == 'active' and membership and membership['status'] == 'active'
+                        and tx.get_workspace_membership(row['tenant_id'], str(row['subject_user_id'])))
+        if row.get('service_account_id'):
+            account = tx.get_service_account(str(row['service_account_id']))
+            return bool(account and account['status'] == 'active')
+        return True
 
     def _reject(self, ip, caller, reason, *, key_id=None, tenant_id=None, mismatch=False):
         self.throttle.failure(ip, key_id, mismatch)
@@ -175,8 +222,10 @@ class IdentityService(BillingOps):
             self.events.publish(message)
 
     def _changed(self, tx, workspace, customer=None, change_type='workspace_upserted'):
+        from identity.billing.projection import workspace_plan_block
         customer = customer or tx.get_customer(workspace['customer_id'])
-        return tx.append_change(workspace['tenant_id'], change_type, workspace['version'], snapshot(workspace, customer))
+        plan = workspace_plan_block(tx, workspace, customer, self.now())
+        return tx.append_change(workspace['tenant_id'], change_type, workspace['version'], snapshot(workspace, customer, plan))
 
     @staticmethod
     def _version(payload):
@@ -189,6 +238,7 @@ class IdentityService(BillingOps):
     def customer_view(self, row, counts):
         total, active = counts.get(row['id'], (0, 0))
         return {**{k: row[k] for k in ('id', 'name', 'status', 'notes', 'version', 'created_by', 'updated_by')},
+                'claim_status': row.get('claim_status', 'pending'),
                 'created_at': iso(row['created_at']), 'updated_at': iso(row['updated_at']),
                 'deleted_at': iso(row['deleted_at']), 'workspace_count': total, 'active_workspace_count': active}
 
@@ -215,10 +265,11 @@ class IdentityService(BillingOps):
 
     def create_customer(self, payload, actor, request_id=None):
         now = self.now()
-        row = {'id': str(uuid4()), 'name': text(payload.get('name'), 'Customer name', 120), 'status': 'active',
-               'notes': text(payload.get('notes') or None, 'Notes', 500, required=False), 'version': 1,
-               'created_at': now, 'created_by': actor['actor'][:120], 'updated_at': now,
-               'updated_by': actor['actor'][:120], 'deleted_at': None}
+        row = CUSTOMER_DEFAULTS | {'id': str(uuid4()), 'name': text(payload.get('name'), 'Customer name', 120),
+                                   'status': 'active',
+                                   'notes': text(payload.get('notes') or None, 'Notes', 500, required=False),
+                                   'version': 1, 'created_at': now, 'created_by': actor['actor'][:120],
+                                   'updated_at': now, 'updated_by': actor['actor'][:120], 'deleted_at': None}
         with self.store.transaction() as tx:
             tx.insert_customer(row)
             self._event(tx, actor, 'customer_created', details={'customer_id': row['id'], 'name': row['name']}, request_id=request_id)
@@ -472,9 +523,11 @@ class IdentityService(BillingOps):
             configured = configured_providers(workspace)
             effective = configured if row['all_providers'] else [p for p in configured if p in row['allowed_providers']]
         return {**{k: row[k] for k in ('key_id', 'tenant_id', 'name', 'all_providers', 'format', 'source', 'revoked_by',
-                                       'revoke_reason', 'version')},
+                                       'revoke_reason', 'version', 'purpose', 'subject_type')},
                 'roles': list(row['roles']), 'allowed_providers': list(row['allowed_providers']),
-                'effective_providers': effective, 'scope_restrictions': None, 'status': key_status(row, now),
+                'effective_providers': effective, 'scope_restrictions': row.get('scope_restrictions') or None,
+                'subject_id': str(row.get('subject_user_id') or row.get('service_account_id') or '') or None,
+                'status': key_status(row, now),
                 'created_at': iso(row['created_at']), 'created_by': row['created_by'],
                 'expires_at': iso(row['expires_at']), 'revoked_at': iso(row['revoked_at']),
                 'rotated_from': rotated_from, 'rotates_out_at': iso(row['rotates_out_at']),
@@ -518,8 +571,6 @@ class IdentityService(BillingOps):
         if not isinstance(all_providers, bool):
             raise IdentityError('Choose whether the key includes providers added later.')
         allowed = payload.get('allowed_providers', defaults.get('allowed_providers', []))
-        if payload.get('scope_restrictions') not in (None, {}):
-            raise IdentityError('Scope-level key limits aren\'t available yet.')
         configured = configured_providers(workspace)
         if all_providers:
             allowed = []
@@ -529,7 +580,10 @@ class IdentityService(BillingOps):
             if not isinstance(allowed, list) or not allowed or any(p not in configured for p in allowed):
                 raise IdentityError('Select at least one provider configured for this workspace.')
             allowed = [p for p in PROVIDERS if p in allowed]
-        return {'roles': roles, 'all_providers': all_providers, 'allowed_providers': allowed}
+        restrictions = payload['scope_restrictions'] if 'scope_restrictions' in payload else defaults.get('scope_restrictions')
+        restrictions = normalize_scope_restrictions(restrictions, workspace, configured if all_providers else allowed)
+        return {'roles': roles, 'all_providers': all_providers, 'allowed_providers': allowed,
+                'scope_restrictions': restrictions}
 
     def _expiry(self, value, *, default=None):
         now = self.now()
@@ -546,8 +600,11 @@ class IdentityService(BillingOps):
 
     def _new_key_row(self, workspace, name, grant, expires, actor, rotated_from=None):
         key_id, secret = keyfmt.new_key(self.environment)
-        return {'id': str(uuid4()), 'key_id': key_id, 'tenant_id': workspace['tenant_id'], 'name': name, **grant,
-                'scope_restrictions': None, 'format': 'v1', 'hash_scheme': 'hmac_sha256',
+        meta = {k: grant.pop(k, None) for k in ('purpose', 'subject_type', 'subject_user_id', 'service_account_id')
+                if k in grant}
+        return {**KEY_DEFAULTS, 'id': str(uuid4()), 'key_id': key_id, 'tenant_id': workspace['tenant_id'], 'name': name,
+                'scope_restrictions': None, **grant, **{k: v for k, v in meta.items() if v is not None},
+                'format': 'v1', 'hash_scheme': 'hmac_sha256',
                 'secret_digest': self.peppers.digest(secret), 'pepper_version': self.peppers.current_version,
                 'legacy_sha256': None, 'legacy_fingerprint': None, 'created_at': self.now(),
                 'created_by': actor['actor'][:120], 'expires_at': expires, 'revoked_at': None, 'revoked_by': None,
@@ -558,6 +615,17 @@ class IdentityService(BillingOps):
         now = self.now()
         return [k for k in tx.list_keys(tenant_id) if key_status(k, now) not in ('revoked', 'expired')]
 
+    def _assert_key_issuance_allowed(self, tx, workspace):
+        if not flag('BILLING_ENABLED'):
+            return
+        settings = tx.get_billing_settings()
+        if not settings['require_subscription_for_keys']:
+            return
+        sub = tx.latest_subscription(workspace['customer_id'])
+        state, _ = billing_state(sub, self.now())
+        if state not in ('active', 'grace'):
+            raise IdentityError(ISSUANCE_BLOCKED)
+
     def issue_key(self, tenant_id, payload, actor, request_id=None):
         tenant_id = uuid_text(tenant_id)
         name = text(payload.get('name'), 'Key name', 80)
@@ -565,6 +633,7 @@ class IdentityService(BillingOps):
             workspace = tx.get_workspace(tenant_id, lock=True)
             if not workspace or workspace['status'] == 'deleted':
                 raise NotFound('Workspace not found.')
+            self._assert_key_issuance_allowed(tx, workspace)
             grant = self._grant_fields(payload, workspace)
             expires = self._expiry(payload.get('expires_at'))
             if len(self._open_keys(tx, tenant_id)) >= MAX_ACTIVE_KEYS:
@@ -573,7 +642,8 @@ class IdentityService(BillingOps):
             tx.insert_key(row)
             self._event(tx, actor, 'issued', tenant_id, row['key_id'],
                         {'name': name, 'roles': grant['roles'], 'all_providers': grant['all_providers'],
-                         'allowed_providers': grant['allowed_providers'], 'expires_at': iso(expires)}, request_id)
+                         'allowed_providers': grant['allowed_providers'], 'scope_restrictions': grant['scope_restrictions'],
+                         'expires_at': iso(expires)}, request_id)
             view = self.key_view(row, workspace)
         return {'key': view, 'secret': secret}
 
@@ -592,7 +662,9 @@ class IdentityService(BillingOps):
             workspace = tx.get_workspace(old['tenant_id'], lock=True)
             if not workspace or workspace['status'] == 'deleted':
                 raise NotFound('Workspace not found.')
-            grant = self._grant_fields(payload, workspace, defaults={k: old[k] for k in ('roles', 'all_providers', 'allowed_providers')})
+            self._assert_key_issuance_allowed(tx, workspace)
+            grant = self._grant_fields(payload, workspace, defaults={k: old.get(k) for k in GRANT_KEYS})
+            grant |= {k: old.get(k) for k in ('subject_type', 'subject_user_id', 'service_account_id')}
             duration = (old['expires_at'] - old['created_at']) if old['expires_at'] else timedelta(days=DEFAULT_EXPIRY_DAYS)
             duration = min(max(duration, timedelta(days=1)), timedelta(days=MAX_EXPIRY_DAYS))
             expires = self._expiry(payload.get('expires_at'), default=now + duration)
@@ -623,12 +695,14 @@ class IdentityService(BillingOps):
             if payload.get('name') is not None:
                 fields['name'] = text(payload['name'], 'Key name', 80)
                 actions.append('renamed')
-            if any(payload.get(k) is not None for k in ('roles', 'all_providers', 'allowed_providers')):
-                grant = self._grant_fields(payload, workspace, defaults={k: row[k] for k in ('roles', 'all_providers', 'allowed_providers')})
+            if any(payload.get(k) is not None for k in ('roles', 'all_providers', 'allowed_providers')) or 'scope_restrictions' in payload:
+                grant = self._grant_fields(payload, workspace, defaults={k: row.get(k) for k in GRANT_KEYS})
                 if grant['roles'] != list(row['roles']):
                     actions.append('roles_changed')
                 if (grant['all_providers'], grant['allowed_providers']) != (row['all_providers'], list(row['allowed_providers'])):
                     actions.append('providers_changed')
+                if grant['scope_restrictions'] != (row.get('scope_restrictions') or None):
+                    actions.append('scope_limits_changed')
                 fields.update(grant)
             if payload.get('expires_at') is not None:
                 fields['expires_at'] = self._expiry(payload['expires_at'])
@@ -644,6 +718,8 @@ class IdentityService(BillingOps):
                     details |= {'all_providers': fields['all_providers'], 'allowed_providers': fields['allowed_providers']}
                 elif action == 'expiry_changed':
                     details['expires_at'] = iso(fields['expires_at'])
+                elif action == 'scope_limits_changed':
+                    details['scope_restrictions'] = fields['scope_restrictions']
                 self._event(tx, actor, action, row['tenant_id'], row['key_id'], details, request_id)
             view = self._key_views(tx, [updated])[0]
         if set(actions) - {'renamed'}:
@@ -854,7 +930,12 @@ class IdentityService(BillingOps):
                            'version': r['version'], 'snapshot': r['snapshot'], 'occurred_at': iso(r['occurred_at'])}
                           for r in rows]}
 
+    def handle_stripe_webhook(self, body, headers, request_id=None):
+        from identity.billing.stripe_webhook import handle_stripe_webhook
+        return handle_stripe_webhook(self, body, headers, request_id)
+
     def directory_snapshot(self):
+        from identity.billing.projection import workspace_plan_block
         with self.store.transaction() as tx:
             seq = tx.max_change_seq() or 0
             workspaces = tx.list_workspaces(None, None, None, 0, 100000)
@@ -862,7 +943,13 @@ class IdentityService(BillingOps):
             for w in workspaces:
                 customers.setdefault(w['customer_id'], tx.get_customer(w['customer_id']))
             platform = tx.get_platform()
-        return {'seq': seq, 'workspaces': [snapshot(w, customers[w['customer_id']]) for w in workspaces],
+            now = self.now()
+            views = []
+            for w in workspaces:
+                customer = customers[w['customer_id']]
+                plan = workspace_plan_block(tx, w, customer, now)
+                views.append(snapshot(w, customer, plan))
+        return {'seq': seq, 'workspaces': views,
                 'platform': {k: platform[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled',
                                                        'resource_access', 'version')}}
 
@@ -915,7 +1002,12 @@ class IdentityService(BillingOps):
                    'status': 'pending_approval', 'payment_provider': self._payment_provider_for_new_request(),
                    'stripe_checkout_session_id': None, 'requested_by': requested_by, 'reviewed_by': None,
                    'review_note': note, 'created_at': now, 'updated_at': now, 'version': 1}
-            tx.insert_plan_change_request(row)
+            try:
+                tx.insert_plan_change_request(row)
+            except Exception as exc:
+                if exc.__class__.__name__ == 'UniqueViolation' or 'ux_plan_change_requests_pending_tenant' in str(exc):
+                    raise Conflict('A plan change request is already pending for this workspace.') from None
+                raise
             actor = {'actor': requested_by, 'actor_type': 'service'}
             self._event(tx, actor, 'plan_change_requested', tenant_id,
                         details={'request_id': row['id'], 'from': row['current_plan_code'], 'to': requested},
@@ -956,23 +1048,40 @@ class IdentityService(BillingOps):
             stripe_next = (req['payment_provider'] == 'stripe' and flag('BILLING_ENABLED')
                            and env('BILLING_PROVIDER', 'manual') == 'stripe')
             if stripe_next:
+                from identity.billing.stripe_webhook import create_plan_change_checkout
+                public = env('PUBLIC_URL', 'http://127.0.0.1:3100').rstrip('/')
+                url, session_id = create_plan_change_checkout(
+                    self, tx, req, f'{public}/billing/plan-requests?paid=1', f'{public}/billing/plan-requests?canceled=1')
                 updated = tx.update_plan_change_request(request_id, req['version'], {
                     'status': 'pending_payment', 'reviewed_by': actor['actor'][:120], 'updated_at': now,
-                    'review_note': note})
+                    'review_note': note, 'stripe_checkout_session_id': session_id})
                 self._event(tx, actor, 'plan_change_pending_payment', req['tenant_id'],
                             details={'request_id': request_id}, request_id=correlation_id)
-                return self._plan_request_view(updated, tx)
+                view = self._plan_request_view(updated, tx)
+                view['stripe_checkout_url'] = url
+                return view
             workspace = tx.get_workspace(req['tenant_id'], lock=True)
             if not workspace or workspace['status'] == 'deleted':
                 raise NotFound('Workspace not found.')
-            row = tx.update_workspace(workspace['tenant_id'], workspace['version'], {
-                'plan_tier': req['requested_plan_code'], 'updated_at': now, 'updated_by': actor['actor'][:120]})
-            if row is None:
-                raise StaleVersion()
-            customer = tx.get_customer(row['customer_id'])
-            self._changed(tx, row, customer)
+            customer_id = workspace['customer_id']
+            sub = tx.current_subscription(customer_id)
+            if sub and sub['provider'] == 'manual' and sub['plan_code'] != req['requested_plan_code']:
+                if tx.update_subscription(sub['id'], sub['version'], {
+                        'plan_code': req['requested_plan_code'], 'updated_at': now, 'updated_by': actor['actor'][:120]}) is None:
+                    raise StaleVersion()
+                self._refresh_customer_billing(tx, customer_id, now)
+                self._apply_subscription_plan(tx, customer_id, req['requested_plan_code'], actor, now)
+                self._sync_customer_entitlements(tx, customer_id, actor, now)
+                row = tx.get_workspace(req['tenant_id'])
+            else:
+                row = tx.update_workspace(workspace['tenant_id'], workspace['version'], {
+                    'plan_tier': req['requested_plan_code'], 'updated_at': now, 'updated_by': actor['actor'][:120]})
+                if row is None:
+                    raise StaleVersion()
+                customer = tx.get_customer(row['customer_id'])
+                self._changed(tx, row, customer)
             self._event(tx, actor, 'workspace_updated', req['tenant_id'],
-                        details={'plan_tier': row['plan_tier'], 'plan_change_request_id': request_id},
+                        details={'plan_tier': req['requested_plan_code'], 'plan_change_request_id': request_id},
                         request_id=correlation_id)
             updated = tx.update_plan_change_request(request_id, req['version'], {
                 'status': 'approved', 'reviewed_by': actor['actor'][:120], 'updated_at': now, 'review_note': note})

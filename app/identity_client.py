@@ -196,11 +196,11 @@ class IdentityClient:
             raise IdentityUnavailable() from None
         return response
 
-    def request(self, method, path, *, json=None, timeout=None):
+    def request(self, method, path, *, json=None, timeout=None, headers=None, params=None):
         import httpx
         try:
             with self._client(timeout) as client:
-                return client.request(method, path, json=json)
+                return client.request(method, path, json=json, headers=headers, params=params)
         except httpx.HTTPError:
             raise IdentityUnavailable() from None
 

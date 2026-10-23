@@ -56,7 +56,7 @@ def test_billing_admin_submits_plan_change_request(stack):
 
 
 def test_tenant_admin_changes_scopes_and_schedule_without_restart(stack):
-    client, registry, settings = stack
+    client, registry, settings, _fake = stack
     loaded = client.get('/api/v1/settings', headers=as_workspace()).json()
     assert loaded['editable'] is True and loaded['identity']['aws_external_id'] == TID
     aws = [{'account_id': '123456789012', 'region': 'us-east-1', 'role_arn': ROLE}]
@@ -70,7 +70,7 @@ def test_tenant_admin_changes_scopes_and_schedule_without_restart(stack):
 
 
 def test_stale_version_is_rejected(stack):
-    client, _, _ = stack
+    client, _, _, _ = stack
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body()).status_code == 200
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body()).status_code == 409
 
@@ -82,13 +82,13 @@ def test_stale_version_is_rejected(stack):
     ('kubernetes_clusters', []),
 ])
 def test_tenant_admin_cannot_set_identity_or_foreign_roles(stack, field, value):
-    client, _, settings = stack
+    client, _, settings, _fake = stack
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body(**{field: value})).status_code == 422
     assert settings.tenants[0]['version'] == 1
 
 
 def test_plan_limits_are_enforced(stack):
-    client, registry, _ = stack
+    client, registry, _, _fake = stack
     registry.update(TID, {'plan_tier': 'STARTER'}, 1, 'test')
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body(version=2)).status_code == 402
     alerts = {'enabled': True, 'channel': 'slack', 'webhook_url': SLACK}
@@ -97,7 +97,7 @@ def test_plan_limits_are_enforced(stack):
 
 
 def test_alerts_need_a_matching_write_only_webhook(stack):
-    client, registry, settings = stack
+    client, registry, settings, _fake = stack
     on = {'enabled': True, 'channel': 'slack'}
     assert client.put('/api/v1/settings', headers=as_workspace(), json=body(alerts=on)).status_code == 422
     teams_url = dict(on, webhook_url='https://example.webhook.office.com/hook')
@@ -114,12 +114,12 @@ def test_alerts_need_a_matching_write_only_webhook(stack):
     ('PATCH', f'/api/v1/admin/tenants/{TID}'), ('GET', '/api/v1/admin/settings'), ('PUT', '/api/v1/admin/settings'),
 ])
 def test_legacy_operator_routes_are_gone(stack, method, path):
-    client, _, _ = stack
+    client, _, _, _fake = stack
     assert client.request(method, path, headers=as_workspace(), json={}).status_code in (404, 405)
 
 
 def test_deactivated_tenant_and_platform_switches_apply_without_restart(stack):
-    client, registry, settings = stack
+    client, registry, settings, _fake = stack
     registry.update_platform({'scheduled_scans_enabled': False}, registry.platform()['version'], 'test')
     assert scheduled_interval(settings, settings.tenants[0], 'ENTERPRISE') is None
     registry.update(TID, {'active': False}, 1, 'test')

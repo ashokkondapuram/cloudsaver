@@ -7,7 +7,8 @@ from identity.domain import SCOPE_KEYS
 KEY_COLUMNS = ('id', 'key_id', 'tenant_id', 'name', 'roles', 'all_providers', 'allowed_providers', 'scope_restrictions',
                'format', 'hash_scheme', 'secret_digest', 'pepper_version', 'legacy_sha256', 'legacy_fingerprint',
                'created_at', 'created_by', 'expires_at', 'revoked_at', 'revoked_by', 'revoke_reason', 'rotated_from',
-               'rotates_out_at', 'last_used_at', 'last_used_ip', 'source', 'version')
+               'rotates_out_at', 'last_used_at', 'last_used_ip', 'source', 'version', 'purpose', 'subject_type',
+               'subject_user_id', 'service_account_id', 'claimed_at')
 SCOPE_SQL = {
     'azure': ('workspace_azure_subscriptions', ('subscription_id',)),
     'aws': ('workspace_aws_accounts', ('account_id', 'region', 'role_arn')),
@@ -181,7 +182,7 @@ class PostgresTx:
     def _key(row):
         if not row:
             return None
-        row = _text(dict(row), 'id', 'tenant_id', 'rotated_from')
+        row = _text(dict(row), 'id', 'tenant_id', 'rotated_from', 'subject_user_id', 'service_account_id')
         for field in ('secret_digest', 'legacy_fingerprint'):
             if row[field] is not None:
                 row[field] = bytes(row[field])
@@ -374,6 +375,131 @@ class PostgresTx:
         return self._one("SELECT coalesce(max(event_created), 0) AS mark FROM billing.provider_events "
                          "WHERE customer_id=%s AND provider=%s AND outcome='ignored_untracked_deletion'",
                          (customer_id, provider))['mark']
+
+    def max_provider_event_created(self, customer_id, provider):
+        row = self._one('SELECT coalesce(max(event_created), 0) AS mark FROM billing.provider_events '
+                        'WHERE customer_id=%s AND provider=%s', (customer_id, provider))
+        return int(row['mark']) if row else 0
+
+    def get_user(self, user_id):
+        row = self._one('SELECT * FROM identity.users WHERE id=%s', (user_id,))
+        return _text(dict(row), 'id') if row else None
+
+    def get_user_by_idp(self, issuer, subject):
+        row = self._one('SELECT * FROM identity.users WHERE idp_issuer=%s AND idp_subject=%s', (issuer, subject))
+        return _text(dict(row), 'id') if row else None
+
+    def insert_user(self, row):
+        self._insert('identity.users', row)
+        return row
+
+    def get_customer_membership(self, customer_id, user_id):
+        row = self._one('SELECT * FROM identity.customer_memberships WHERE customer_id=%s AND user_id=%s',
+                        (customer_id, user_id))
+        return _text(dict(row), 'customer_id', 'user_id') if row else None
+
+    def list_customer_memberships(self, customer_id):
+        return [_text(dict(r), 'customer_id', 'user_id') for r in self._all(
+            'SELECT * FROM identity.customer_memberships WHERE customer_id=%s ORDER BY user_id', (customer_id,))]
+
+    def upsert_customer_membership(self, customer_id, user_id, fields):
+        existing = self._one('SELECT * FROM identity.customer_memberships WHERE customer_id=%s AND user_id=%s FOR UPDATE',
+                               (customer_id, user_id))
+        if existing:
+            row = self._one('UPDATE identity.customer_memberships SET role=%s, status=%s, updated_at=%s, updated_by=%s, '
+                            'version=version+1 WHERE customer_id=%s AND user_id=%s AND version=%s RETURNING *',
+                            (fields['role'], fields.get('status', existing['status']), fields['updated_at'],
+                             fields['updated_by'], customer_id, user_id, existing['version']))
+            return dict(row) if row else None
+        row = {'customer_id': customer_id, 'user_id': user_id, 'role': fields['role'], 'status': fields.get('status', 'active'),
+               'created_at': fields['updated_at'], 'created_by': fields['updated_by'], 'updated_at': fields['updated_at'],
+               'updated_by': fields['updated_by'], 'version': 1}
+        self._insert('identity.customer_memberships', row)
+        return row
+
+    def get_workspace_membership(self, tenant_id, user_id):
+        row = self._one('SELECT * FROM identity.workspace_memberships WHERE tenant_id=%s AND user_id=%s',
+                        (tenant_id, user_id))
+        return _text(dict(row), 'tenant_id', 'user_id') if row else None
+
+    def list_workspace_memberships(self, tenant_id):
+        return [_text(dict(r), 'tenant_id', 'user_id') for r in self._all(
+            'SELECT * FROM identity.workspace_memberships WHERE tenant_id=%s ORDER BY user_id', (tenant_id,))]
+
+    def upsert_workspace_membership(self, tenant_id, user_id, fields):
+        existing = self._one('SELECT * FROM identity.workspace_memberships WHERE tenant_id=%s AND user_id=%s FOR UPDATE',
+                               (tenant_id, user_id))
+        if existing:
+            row = self._one('UPDATE identity.workspace_memberships SET roles=%s, updated_at=%s, updated_by=%s, '
+                            'version=version+1 WHERE tenant_id=%s AND user_id=%s AND version=%s RETURNING *',
+                            (fields['roles'], fields['updated_at'], fields['updated_by'], tenant_id, user_id,
+                             existing['version']))
+            return dict(row) if row else None
+        row = {'tenant_id': tenant_id, 'user_id': user_id, 'roles': fields['roles'], 'created_at': fields['updated_at'],
+               'created_by': fields['updated_by'], 'updated_at': fields['updated_at'], 'updated_by': fields['updated_by'],
+               'version': 1}
+        self._insert('identity.workspace_memberships', row)
+        return row
+
+    def list_service_accounts(self, customer_id):
+        return [_text(dict(r), 'id', 'customer_id') for r in self._all(
+            'SELECT * FROM identity.service_accounts WHERE customer_id=%s ORDER BY name', (customer_id,))]
+
+    def get_service_account(self, account_id):
+        row = self._one('SELECT * FROM identity.service_accounts WHERE id=%s', (account_id,))
+        return _text(dict(row), 'id', 'customer_id') if row else None
+
+    def insert_service_account(self, row):
+        self._insert('identity.service_accounts', row)
+
+    def update_service_account(self, account_id, expected_version, fields):
+        row = self._update('identity.service_accounts', 'id', account_id, expected_version, fields)
+        return _text(dict(row), 'id', 'customer_id') if row else None
+
+    def delete_workspace_membership(self, tenant_id, user_id):
+        self.db.execute('DELETE FROM identity.workspace_memberships WHERE tenant_id=%s AND user_id=%s',
+                        (tenant_id, user_id))
+
+    def list_rule_catalog(self):
+        return [dict(r) for r in self._all('SELECT * FROM analysis.rule_catalog ORDER BY id')]
+
+    def list_workspace_rules(self, tenant_id):
+        return [dict(r) for r in self._all('SELECT * FROM analysis.workspace_rules WHERE tenant_id=%s', (tenant_id,))]
+
+    def upsert_workspace_rule(self, tenant_id, rule_id, fields):
+        existing = self._one('SELECT * FROM analysis.workspace_rules WHERE tenant_id=%s AND rule_id=%s FOR UPDATE',
+                             (tenant_id, rule_id))
+        if existing:
+            assignments = [f'"{name}"=%s' for name in fields] + ['version=version+1']
+            values = [_json(name, v) for name, v in fields.items()] + [tenant_id, rule_id, existing['version']]
+            row = self._one(f'UPDATE analysis.workspace_rules SET {", ".join(assignments)} '
+                            'WHERE tenant_id=%s AND rule_id=%s AND version=%s RETURNING *', values)
+            return dict(row) if row else None
+        row = {'tenant_id': tenant_id, 'rule_id': rule_id, 'enabled': fields['enabled'],
+               'unavailable_reason': fields.get('unavailable_reason'), 'version': 1,
+               'created_at': fields['updated_at'], 'created_by': fields['updated_by'],
+               'updated_at': fields['updated_at'], 'updated_by': fields['updated_by']}
+        self._insert('analysis.workspace_rules', row)
+        return row
+
+    def list_knowledge_publications(self, status=None, limit=50, offset=0):
+        if status:
+            rows = self._all('SELECT * FROM knowledge.publications WHERE status=%s ORDER BY updated_at DESC LIMIT %s OFFSET %s',
+                             (status, limit, offset))
+        else:
+            rows = self._all('SELECT * FROM knowledge.publications ORDER BY updated_at DESC LIMIT %s OFFSET %s', (limit, offset))
+        return [_text(dict(r), 'id') for r in rows]
+
+    def insert_knowledge_publication(self, row):
+        self._insert('knowledge.publications', row)
+
+    def get_knowledge_publication(self, publication_id):
+        row = self._one('SELECT * FROM knowledge.publications WHERE id=%s', (publication_id,))
+        return _text(dict(row), 'id') if row else None
+
+    def update_knowledge_publication(self, publication_id, expected_version, fields):
+        row = self._update('knowledge.publications', 'id', publication_id, expected_version, fields)
+        return _text(dict(row), 'id') if row else None
 
     # cache events (long poll)
     def insert_access_check(self, row):

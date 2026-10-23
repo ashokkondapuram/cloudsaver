@@ -5,7 +5,7 @@ import io
 import json
 from decimal import Decimal
 
-from app.assessment import PILLARS, ai_context, assess
+from app.assessment import PILLARS, ai_context, assess, category as service_category
 from app.assessment_policy import POLICY_VERSION
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
@@ -91,8 +91,60 @@ def merge(key, findings, *, observed_at=None, now=None):
     return assessment, context
 
 
+def inventory_observation(obs):
+    """Normalize a saved inventory row into a finding-shaped dict (no waste rule)."""
+    return dict(
+        cloud_provider=obs.get('cloud_provider', 'azure'),
+        resource_id=obs['resource_id'],
+        resource_name=obs.get('resource_name', ''),
+        resource_type=obs.get('resource_type', ''),
+        resource_group=obs.get('resource_group', ''),
+        subscription_id=obs.get('subscription_id') or obs.get('scope_id', ''),
+        scope_id=obs.get('scope_id') or obs.get('subscription_id', ''),
+        rule_id='INVENTORY_OBSERVATION',
+        severity='LOW',
+        details='Resource observed in inventory scan.',
+        evidence={},
+        estimated_monthly_waste_usd=None,
+    )
+
+
+def merge_inventory(key, obs, *, observed_at=None, now=None):
+    """Assessment for a resource present in inventory but without a finding rule hit."""
+    provider = obs.get('cloud_provider', 'azure')
+    kind = service_category(obs)
+    observation = dict(observed_at=observed_at, source='inventory_scan')
+    pillars = [dict(pillar=name, status='unknown', checks=[]) for name in PILLARS]
+    assessment = dict(
+        resource_key=key, provider=provider, resource_id=obs['resource_id'], resource_name=obs.get('resource_name', ''),
+        resource_type=obs.get('resource_type', ''), resource_group=obs.get('resource_group', ''),
+        scope_id=obs.get('scope_id') or obs.get('subscription_id', ''), service_category=kind,
+        finding_count=0, rule_ids=[], policy_version=POLICY_VERSION, observation=observation,
+        review_priority='evidence_required', disposition='inventory_only', protected_reasons=[],
+        risk_level='unknown', risk_check_codes=[], evidence_gap_codes=[],
+        pillars=pillars, guardrails=['INVENTORY_ONLY'],
+        evidence_coverage=dict(observed=0, total=0),
+        retail_estimate_usd=None, billed_cost_usd=None, realizable_savings_usd=None, automatic_execution=False,
+    )
+    context = dict(
+        resource_reference=key, provider=provider, service_category=kind, policy_version=POLICY_VERSION,
+        findings=[], observation=dict(observed_at=observation.get('observed_at')),
+        risk_floor='unknown', checks=[], protected=False, guardrails=['INVENTORY_ONLY'], observed_check_codes=[],
+    )
+    assessment['evidence_digest'] = hashlib.sha256(json.dumps(
+        dict(context=context, retail_estimate_usd=None), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return assessment, context
+
+
 def assessments(scan, *, now=None):
-    return {key: merge(key, items, observed_at=scan.get('timestamp'), now=now) for key, items in group(scan['findings']).items()}
+    merged = {key: merge(key, items, observed_at=scan.get('timestamp'), now=now) for key, items in group(scan['findings']).items()}
+    for obs in scan.get('inventory') or []:
+        pseudo = inventory_observation(obs)
+        key = resource_key(pseudo)
+        if key in merged:
+            continue
+        merged[key] = merge_inventory(key, pseudo, observed_at=scan.get('timestamp'), now=now)
+    return merged
 
 
 def row(assessment):

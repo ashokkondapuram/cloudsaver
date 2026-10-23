@@ -139,8 +139,19 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             if completed and completed['status'] == 'completed':
                 return dict(job_id=job_id, status='completed', scan_id=completed['scan_id'])
             raise TerminalJob('Job exhausted its durable attempt limit')
-        findings = scanner(tenant) if scanner else scan_live(tenant)
-        if len(findings) > entitlements.max_resources_per_scan:
+        from app.effective_rules import enabled_rule_ids_for_tenant
+        rule_ids = enabled_rule_ids_for_tenant(tenant_id)
+        inventory = []
+        if scanner:
+            scanned = scanner(tenant)
+            if isinstance(scanned, tuple):
+                findings, inventory = scanned
+            else:
+                findings = scanned
+        else:
+            findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
+        resource_count = len(inventory) if inventory else len(findings)
+        if resource_count > entitlements.max_resources_per_scan:
             raise UnauthorizedJob('Scan exceeds workspace resource quota')
         enriched = []
         for finding in findings:
@@ -155,7 +166,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
-            total_items_found=len(findings), findings=findings,
+            total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
             cloud_providers=['azure'],
             scope_fingerprint=scope_fingerprint(tenant, ['azure']),
             total_monthly_waste_usd=round(sum(f['estimated_monthly_waste_usd'] for f in findings), 2) if known and findings else None,

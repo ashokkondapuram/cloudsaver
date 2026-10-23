@@ -32,6 +32,7 @@ class ScanSummary(BaseModel):
     total_monthly_waste_usd: float | None = Field(default=None, ge=0)
     realizable_monthly_savings_usd: float | None = Field(default=None, ge=0)
     findings: list[WasteFinding]
+    inventory: list[dict] = Field(default_factory=list)
 
     model_config = ConfigDict(extra='allow', allow_inf_nan=False)
 

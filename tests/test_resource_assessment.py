@@ -12,7 +12,7 @@ from app.config import Settings
 from app.enterprise_store import EnterpriseStore
 from app.inference_ledger import InferenceLedger
 from app.main import create_app
-from app.resource_assessment import changes, csv_report, history, merge, resource_key
+from app.resource_assessment import assessments, changes, csv_report, history, merge, resource_key
 from app.resource_batches import process_batches
 from app.resource_store import ResourceStore
 from app.store import Store
@@ -278,6 +278,21 @@ def test_batches_wait_for_budget_skip_changed_evidence_and_cancel(app_state):
     run_batches(app_state)
     skipped = repo.batch(TID, batch['id'])
     assert skipped['status'] == 'completed' and skipped['items'][0]['reason'] == 'evidence_changed'
+
+
+def test_inventory_rows_appear_in_resource_explorer_without_findings():
+    scan = dict(
+        scan_id=str(uuid4()), status='completed', mode='azure', timestamp='2026-01-01T00:00:00+00:00',
+        subscriptions_scanned=1, total_items_found=1, total_monthly_waste_usd=None, findings=[],
+        inventory=[dict(cloud_provider='azure', resource_id=f'/subscriptions/{SUB}/resourceGroups/rg/providers/Microsoft.Compute/disks/only',
+                          resource_name='only', resource_type='Microsoft.Compute/disks', resource_group='rg',
+                          subscription_id=SUB, scope_id=SUB)],
+    )
+    merged = assessments(scan)
+    assert len(merged) == 1
+    assessment, _ = next(iter(merged.values()))
+    assert assessment['finding_count'] == 0
+    assert assessment['disposition'] == 'inventory_only'
 
 
 def test_viewers_read_resources_but_cannot_run_ai_or_decide(tmp_path, monkeypatch):

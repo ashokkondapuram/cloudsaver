@@ -21,7 +21,7 @@ export type BillingProviderName = 'manual' | 'stripe';
 export type Customer = {
   id: string; name: string; status: RecordStatus; notes: string | null; version: number;
   created_at: string; created_by: string; updated_at: string; updated_by: string; deleted_at: string | null;
-  workspace_count: number; active_workspace_count: number;
+  workspace_count: number; active_workspace_count: number; claim_status?: 'pending' | 'claimed';
   billing_contact_email?: string | null; manage_billing_url?: string | null; external_customer_refs?: Record<string, string> | null;
   billing_state?: BillingState; billing_state_changed_at?: string | null;
 };

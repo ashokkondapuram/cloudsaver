@@ -15,7 +15,8 @@ from app.cloud_scope import validate_finding_scope
 from app.gitops_api import bounded_json
 from app.inference_ledger import attribution
 from app.resource_assessment import (FILTERS, ai_state, assessments, csv_report, decision_state, group, history,
-                                     matches, merge, row)
+                                     inventory_observation, merge_inventory,
+                                     matches, merge, resource_key, row)
 from app.resource_store import ResourceConflict, ResourceStore
 
 KEY = r'^[a-f0-9]{64}$'
@@ -99,9 +100,13 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
     def one(scan, key):
         findings = group(scan['findings']).get(key)
-        if not findings:
-            raise HTTPException(404, 'Resource not found in this scan')
-        return findings, *merge(key, findings, observed_at=scan.get('timestamp'))
+        if findings:
+            return findings, *merge(key, findings, observed_at=scan.get('timestamp'))
+        for obs in scan.get('inventory') or []:
+            pseudo = inventory_observation(obs)
+            if resource_key(pseudo) == key:
+                return [], *merge_inventory(key, pseudo, observed_at=scan.get('timestamp'))
+        raise HTTPException(404, 'Resource not found in this scan')
 
     def summary(items):
         counts = lambda field: {k: sum(1 for i in items if field(i) == k) for k in sorted({field(i) for i in items})}

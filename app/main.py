@@ -62,6 +62,9 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     from app.delivery_api import create_router as delivery_router
     api.include_router(delivery_router(settings,store,current_tenant,targets=delivery_targets,repository=delivery_repository))
+    from app.onboarding_api import onboarding_router, customer_access_router
+    api.include_router(onboarding_router())
+    api.include_router(customer_access_router(current_tenant))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -170,13 +173,23 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 heartbeat.start()
 
             from app.scanner import scan_live
+            from app.effective_rules import enabled_rule_ids_for_tenant
+            rule_ids = enabled_rule_ids_for_tenant(tenant_id)
+            inventory = []
             if providers:
                 from app.multi_cloud import scan_multi_cloud
-                raw_findings = scan_multi_cloud(tenant, providers)
+                raw_findings, inventory = scan_multi_cloud(tenant, providers, enabled_rule_ids=rule_ids)
+            elif scanner:
+                scanned = scanner(tenant)
+                if isinstance(scanned, tuple):
+                    raw_findings, inventory = scanned
+                else:
+                    raw_findings = scanned
             else:
-                raw_findings = scanner(tenant) if scanner else scan_live(tenant)
+                raw_findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
 
-            enforce_resource_quota(plan, len(raw_findings))
+            resource_count = len(inventory) if inventory else len(raw_findings)
+            enforce_resource_quota(plan, resource_count)
 
             from app.cloud_scope import validate_finding_scope
             for finding in raw_findings:
@@ -207,10 +220,11 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 cloud_providers=sorted(providers or ['azure']),
                 scope_fingerprint=scope_fingerprint(tenant, providers or ['azure']),
                 subscriptions_scanned=len(tenant['subscription_ids']) if not providers or 'azure' in providers else 0,
-                total_items_found=len(enriched_findings),
+                total_items_found=len(inventory) if inventory else len(enriched_findings),
                 total_monthly_waste_usd=total_waste,
                 realizable_monthly_savings_usd=realizable_savings,
-                findings=enriched_findings
+                findings=enriched_findings,
+                inventory=inventory,
             )
             # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
             if hasattr(ScanSummary, 'model_validate'):

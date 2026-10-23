@@ -163,9 +163,15 @@ def summarize(scan, *, now=None):
         group['unknown_price_findings'] = group['findings'] - group['priced_findings']
         group['known_retail_subtotal_usd'] = float(group['known_retail_subtotal_usd'].quantize(Decimal('0.01'))) if group['priced_findings'] else None
         rows.append(group)
+    finding_count = len(scan['findings'])
+    unique_resources = len({resource_key(f) for f in scan['findings']})
     return dict(policy_version=POLICY_VERSION, observation=freshness(scan.get('timestamp'), now),
-                review_queue=queue[:50], review_queue_total=len(scan['findings']), review_queue_limit=50,
+                review_queue=queue[:50], review_queue_total=finding_count, review_queue_limit=50,
                 scan_id=scan['scan_id'], source='saved_finding_observations', full_inventory=False,
+                coverage={'finding_observations': finding_count, 'unique_resources_with_findings': unique_resources,
+                          'full_inventory': False,
+                          'message': ('This view includes only resources with saved findings in this scan. '
+                                      'It is not a complete inventory assessment or proof the environment is healthy.')},
                 services=sorted(rows, key=lambda r: (r['provider'], r['service_category'])),
                 billed_spend_available=False, autonomous_execution=False)
 
