@@ -195,6 +195,22 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def detail(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}', authorization)
 
+    @app.get('/api/v1/ai/targets')
+    async def ai_targets(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/ai/targets', authorization)
+
+    @app.get('/api/v1/scans/{scan_id}/analysis')
+    async def analysis(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/analysis', authorization)
+
+    @app.post('/api/v1/scans/{scan_id}/analysis/resource')
+    async def resource_analysis(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/analysis/resource', request, authorization)
+
+    @app.post('/api/v1/scans/{scan_id}/ai-risk-evaluation')
+    async def ai_review(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/ai-risk-evaluation', request, authorization)
+
     @app.get('/api/v1/analytics')
     async def analytics(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'analytics', '/api/v1/analytics', authorization)

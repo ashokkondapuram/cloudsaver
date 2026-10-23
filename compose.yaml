@@ -34,7 +34,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:0.8.0
+  image: cloudsaver-python:0.9.0
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -103,6 +103,9 @@ services:
       CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY: ${CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY:-}
       REDIS_URL: redis://redis:6379/1
       CLOUDSAVER_DISTRIBUTED_SCAN_LOCK: 'true'
+      CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
+      CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
+      CLOUDSAVER_AI_HOURLY_ATTEMPTS: ${CLOUDSAVER_AI_HOURLY_ATTEMPTS:-10}
       CLOUDSAVER_GITOPS_TARGETS: ${CLOUDSAVER_GITOPS_TARGETS:-[]}
       CLOUDSAVER_GITOPS_PUBLISH: ${CLOUDSAVER_GITOPS_PUBLISH:-false}
       CLOUDSAVER_GITHUB_APP_ID: ${CLOUDSAVER_GITHUB_APP_ID:-}

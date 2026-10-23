@@ -1,42 +1,21 @@
-# CloudSaver v0.7.3 status
+# CloudSaver v0.9.0 implementation status
 
-This release follows the advanced roadmap found in Drive's root (v0.6.0–v1.0.0).
-The v0.5.0 package was reviewed and selected features were ported into the
-verified GitHub code. Its PostgreSQL stubs, permissive schema changes and AWS
-live-to-demo fallbacks were excluded. TEST_REPORT.md records executed evidence.
+Built on upstream v0.8.0 (`6d6a37c645d84e277bdbeefc93f75e902a5b7297`) and the newly populated Drive optimization, service analysis and AI integration README.
 
-| Area | Implemented | Remaining work / acceptance |
-| --- | --- | --- |
-| Azure | Seven ARG review checks; complete pagination; unknown unsupported prices | Authorized Azure acceptance, wider billing attribution |
-| AWS | EBS/EIP/stopped-RDS ingestion, named profiles, STS account check, pagination | Real AWS IAM acceptance, pricing, other partitions |
-| GCP | Zonal/regional disks, regional external IPv4, evidence-gated dev/staging SQL review | GCP API/IAM/Monitoring acceptance, global addresses, Billing Catalog |
-| Kubernetes | Native Prometheus CPU/memory review, complete 14-day sampled P95/headroom evidence | Live cluster acceptance, OpenCost allocation, namespace/DaemonSet audits |
-| Exports | Owned live Azure/AWS/GCP import-only Terraform, regional disk support, scope/plan checks; Azure Bash | Terraform/provider acceptance; no AWS/GCP deletion scripts or Kubernetes mutation |
-| Trends | Durable history, matching scope/mode, identity-based observation deltas, unknown costs | Larger history pagination, billing series and realized savings evidence |
-| Database | Atomic normalized Azure/cloud findings and snapshots, restricted role, forced RLS, migration upgrades | Production restore drill and independent review |
-| Identity | Strict signed Entra delegated tokens and explicit roles | Live Entra acceptance, browser PKCE/consent, membership onboarding |
-| Billing | Trusted SDK Checkout and durable verified webhooks, persisted entitlements | Stripe test-mode acceptance, portal/upgrades, invoice UX |
-| Scheduling | Opt-in Azure worker, atomic dispatch outbox, matching broker envelope, broker-loss reconciliation, Redis heartbeat and durable fencing/cadence | Staging chaos/load acceptance, multi-cloud scheduling and multi-cloud queued jobs |
-| Notifications | Tenant-bound Slack/Teams, atomic notification intent, leases, bounded retries, dead letters and admin replay; opt-in dispatcher | Real webhook acceptance, ITSM adapters, rate/retention policy |
-| Runtime | Bounded PostgreSQL pools, dependency readiness, request correlation, problem errors, explicit CORS and shared sliding-window throttling | Staging load, HA, restore and real cloud credential acceptance |
-| Interactive jobs | Azure-only durable submission/polling, tenant isolation, atomic idempotency/outbox, bounded backlog | Multi-cloud queues, cancellation and progress stages |
-| Dashboard | Evidence/trends/exports/roles plus operational queue, audit and replay; Next.js 16/Tailwind 4 security maintenance | Manual assistive-technology acceptance, interactive sign-in, continuous dependency review |
-| Plan policies | Offline CLI/Action and bounded API, supported attachment checks, deletion/tag policies, optional Infracost budget | Real Terraform/Infracost corpus acceptance, more module/instance relationships, native OPA integration and CI provenance |
-| GitOps | GitHub App repository allowlist, import-only draft PRs, deterministic packages, durable idempotency/leases/history | Live App acceptance, native OAuth onboarding, GitLab/Bitbucket, destructive approval workflows |
-| Later roadmap | Advanced roadmap and limits recorded | AI anomalies, tags/showback, autonomous approvals, deployment/compliance |
+| Area | Implemented boundary |
+| --- | --- |
+| Resource assessment | Five evidence-led pillars per saved finding, explicit risk/observed/unknown checks, exact selection and current-scope validation |
+| Service analysis | Provider/category finding counts, protected/risk counts, known retail portions and unknown price counts; not a complete inventory |
+| Protection | Normalized DR/witness/retention tags and returned deletion-protection evidence; server blocks protected destructive scripts |
+| Disk artifact safety | Human confirmation, mandatory successful managed snapshot, post-snapshot attachment check, live tag rechecks, 90-day retention instruction; no script execution |
+| AI integration | Optional tenant-bound Azure OpenAI, Bedrock Converse and Vertex Google-model adapters, keyless identity, fixed instruction, allowlisted context and strict advisory schema |
+| AI coordination | Atomic Redis UTC-hour attempt budget, UUID idempotency fence, cached success, uncertain-outcome suppression, fenced completion; 24-hour retention |
+| Dashboard | 640px resource drawer with 360° assessment, exact context preview, explicit external-processing acknowledgement, admin-only inference and escaped model text |
+| Tenant foundation | Existing PostgreSQL forced RLS, runtime registry, operator-owned identity settings, versioned workspace settings and scoped cloud collection retained |
+| Existing operations | Durable jobs/delivery, manual retry controls, plan guardrails and import-only GitOps review retained |
 
-The Drive v0.5.0 guide describes scheduler/ITSM behavior beyond what its source
-wires into the service stack. Those claims are not inherited as verified features.
-This release does not report synthetic dispatches, cancellation, production
-readiness, SOC 2 certification or Gemini review.
+Read [assessment and AI details](docs/ASSESSMENT_AI.md), [keyless onboarding](docs/CLOUD_SOURCES.md), and [executed checks](TEST_REPORT.md).
 
-Interactive Azure scans support durable HTTP 202 submission/polling through /api/v1/scan-jobs.
-Existing /scans and /scans/multi-cloud routes remain synchronous; completed scans cannot be cancelled. There is
-no exactly-once alert delivery or human-receipt guarantee. All live AWS/GCP/Kubernetes dollar
-and net savings estimates remain unknown. A resource no longer observed is not
-proof of remediation. See docs/CLOUD_SOURCES.md for exact scope/telemetry rules.
+The API does not expose model-generated actions or code. A model cannot remove protection or approve an infrastructure change. Existing saved evidence is not rewritten to invent missing facts. Legacy synthetic snapshots cannot enter resource analysis or AI review.
 
-Latest GitHub commit 076c96f was merged before release. Its production-only mode
-and dashboard operations are retained. Legacy synthetic history is read with
-explicit provenance and no illustrative dollar estimates; exports/publishing are
-blocked. No live PR or infrastructure change was created during verification.
+Remaining work includes FOCUS billing/reconciliation, seasonally evaluated anomalies, complete resource/dependency telemetry, organization hierarchy, broader policies, durable audited AI token/cost accounting and authorized live staging acceptance. No compliance certification, live savings, zero hallucinations, production throughput or end-to-end cloud acceptance is claimed.

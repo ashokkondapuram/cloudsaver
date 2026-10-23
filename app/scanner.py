@@ -9,7 +9,7 @@ class ScanError(RuntimeError):
     """The scan could not produce a complete, authorized result."""
 
 
-_PROJECTION = "| project id, name, type, resourceGroup, subscriptionId"
+_PROJECTION = "| project id, name, type, resourceGroup, subscriptionId, tags, location"
 RULES = (
     ("ORPHANED_DISK", "HIGH", """Resources
 | where type =~ 'microsoft.compute/disks'
@@ -118,6 +118,8 @@ def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
                 "resource_group": row["resourceGroup"],
                 "subscription_id": row["subscriptionId"], "resource_id": row["id"],
                 "estimated_monthly_waste_usd": None,
+                "evidence": {"source": "Azure Resource Graph", "tags": row.get("tags") or {},
+                             **({"size_gb": row["sizeGB"]} if type(row.get("sizeGB")) is int else {})},
                 "details": explanation + (" Evidence: " + "; ".join(evidence) if evidence else ""),
             })
     return findings

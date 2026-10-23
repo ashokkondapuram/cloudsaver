@@ -146,18 +146,19 @@ def aws_session(source):
             client.close()
 
 
-def gcp_credentials(source):
+def gcp_credentials(source, *, scopes=None):
     """Google credentials that impersonate the project's reader service account."""
     account = source.get('service_account')
+    scopes = GCP_SCOPES if scopes is None else scopes
     try:
         if identity_mode() == 'developer':
             import google.auth
             from google.auth import impersonated_credentials
-            base, _ = google.auth.default(scopes=GCP_SCOPES)
+            base, _ = google.auth.default(scopes=scopes)
             if not account:
                 return base
             return impersonated_credentials.Credentials(source_credentials=base, target_principal=account,
-                                                        target_scopes=GCP_SCOPES, lifetime=3600)
+                                                        target_scopes=scopes, lifetime=3600)
         provider = os.getenv('CLOUDSAVER_GCP_WORKLOAD_PROVIDER', '')
         if not re.fullmatch(WORKLOAD_PROVIDER, provider):
             raise CredentialError('Set CLOUDSAVER_GCP_WORKLOAD_PROVIDER to the workload identity provider resource name.')
@@ -174,7 +175,7 @@ def gcp_credentials(source):
             audience=provider, subject_token_type='urn:ietf:params:oauth:token-type:jwt',
             token_url='https://sts.googleapis.com/v1/token', subject_token_supplier=ManagedIdentitySupplier(),
             service_account_impersonation_url=f'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{account}:generateAccessToken',
-            scopes=GCP_SCOPES)
+            scopes=scopes)
     except CredentialError:
         raise
     except Exception:

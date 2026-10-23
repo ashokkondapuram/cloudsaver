@@ -36,7 +36,8 @@ def finding(project, row, kind, *, regional=False):
                 scope_id=project, subscription_id=project, region=region, resource_id=rid,
                 resource_name=name, resource_group=project, resource_type=resource_type,
                 estimated_monthly_waste_usd=None, details=details,
-                evidence={'source': 'Google Cloud APIs', 'state': row.get('status', row.get('state'))})
+                evidence={'source': 'Google Cloud APIs', 'state': row.get('status', row.get('state')),
+                          'labels': row.get('labels') or (row.get('settings') or {}).get('userLabels') or {}})
 
 
 def _verify_self_link(row, project, rid):

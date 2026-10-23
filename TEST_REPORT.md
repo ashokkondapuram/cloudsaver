@@ -1,50 +1,38 @@
-# CloudSaver v0.7.3 verification report
+# CloudSaver v0.9.0 verification report
 
-October 22, 2026. This report describes local verification, not production certification.
+Date: October 23, 2026 (UTC). Baseline: upstream v0.8.0 commit `6d6a37c645d84e277bdbeefc93f75e902a5b7297`. Source requirements and implementation boundaries are recorded in [SOURCE_CONTEXT.md](SOURCE_CONTEXT.md) and [the assessment/AI guide](docs/ASSESSMENT_AI.md).
 
-## Scope and sources
+## Executed checks
 
-- Drive [UI/UX design guide](https://docs.google.com/document/d/1ewfeSv9580SHLb1vN4OGqwX2NZ5fUmBFvsOmPNxMQeU/edit): persistent six-view workspace, observation charts, virtualized inventory, filters, review drawers, automation and settings.
-- Drive [backend hardening guide](https://docs.google.com/document/d/1SHfRfpM9nh_cWeQ6-K1FrCqxG2y2IpJSaL-oEdwykMg/edit): durable Azure scan submission/polling, existing outbox/lease reuse, PostgreSQL pools, dependency readiness, correlation/problem errors, CORS and shared sliding-window rate limiting.
-- Existing v0.7.1 features, production-only provenance, forced tenant RLS and import-only GitOps are retained. Earlier release evidence is archived in docs/TEST_REPORT_v0.7.1.md.
+| Check | Result |
+| --- | --- |
+| Baseline disposable PostgreSQL 16 / Redis 7 suite before development | 305 passed |
+| Final backend suite via `python scripts/test_postgres.py --tb=short` | 352 passed; one inherited Starlette/httpx deprecation warning |
+| Gateway regression after adding the new forwarding/Retry-After test | 14 passed, including 13 cases also present in the backend suite; 353 distinct backend cases covered across these runs |
+| Python dependency consistency (`pip check`) | No broken requirements |
+| Dashboard `npm run typecheck` | Passed |
+| Host production `next build --webpack` | Passed; nine generated pages, fixed same-origin API proxy |
+| Dependency audit (`npm audit --audit-level=moderate`) | Zero known vulnerabilities reported |
+| Production browser workflows, system Chromium | 17 passed against a freshly started production server; exit status 0 |
+| Container builds, Python services and standalone dashboard | Passed, including the normal Turbopack production build |
+| `git diff --check` | Passed |
 
-## Backend evidence
+## Behaviors exercised
 
-Backend behavior is unchanged from v0.7.2. Its 324-test suite also passed on GitHub in run 39864318033. The v0.7.3 change updates frontend selection timing and release metadata.
+- Unknown/invalid/negative/nonfinite prices remain unknown; a real zero remains zero. Retail estimates do not become billed spend or realizable savings. Provider/category aggregation retains unknown-price counts and does not mutate saved scans.
+- All five pillars are represented. Explicit false flags and zero-day backup retention remain risks; absent encryption, backup, dependency and telemetry evidence is not a pass. Complete Kubernetes 14-day sampled P95 evidence is distinguished from incomplete windows.
+- Case/punctuation-normalized recovery, witness and retention tags and explicit deletion protection preserve protected disposition and block destructive artifact generation.
+- Generated Bash was executed only against a local fake CLI in a PTY. Failed snapshots and live protected tags aborted deletion; the unprotected successful-snapshot case reached only the fake delete command. Tests also verify post-snapshot rechecks and retention instructions. No real cloud resource was read, snapshotted or deleted by these artifact tests.
+- Analysis selects exact resource + rule from an owned live scan. Foreign scans are hidden; legacy data and changed cloud scopes are rejected. Entra viewers can read assessment but cannot invoke models. Real PostgreSQL runtime RLS still bounds reads and preserves stored evidence.
+- Azure, Bedrock and Vertex request formation was verified with injected credentials/clients/transports. Approved endpoints, fixed identity bindings, tenant external ID, explicit Vertex scope, no model tools, bounded output, no inference retries and sanitized failures were checked. No live model inference occurred.
+- Context excludes names, raw IDs, tags, emails, endpoints and scan free text. Strict model validation rejects extra approval/code properties, missing/duplicate pillars, unsupported risk classifications and fabricated evidence references. Schema validation does not certify the truth of model prose.
+- Real Redis concurrent submissions produced one provider invocation, cached success, fingerprint conflicts, tenant isolation, hourly attempt exhaustion, uncertain-attempt suppression and TTL bounds. Replaced fences cannot be overwritten by stale completion. Coordination failure blocks inference.
+- Browser tests verify the new assessment, protection banner, sanitized-context preview, acknowledgement and role gates, same-key resubmission and cancellation of late AI results when changing findings. Existing navigation, code review, selection shortcuts, plan upload, GitOps acknowledgement, scan dialog, mobile views and 10,000-row virtualization still pass. Automated accessibility checks cover the assessment dialog and existing major views. These checks do not replace manual assistive-technology acceptance.
 
-`python scripts/test_postgres.py --tb=short`: **324 passed**, using fresh disposable PostgreSQL 16 and Redis 7 containers, separate owner/runtime roles and migration upgrades. Containers are removed by the runner; existing data volumes are not changed.
+## Deployment and external acceptance limits
 
-Added checks cover concurrent idempotent submissions, conflicting key reuse, atomic job/outbox rollback, authorized/connected scopes, tenant isolation, a five-job backlog bound, HTTP 202 without scanning, poll persistence after API restart, disabled-job behavior, Starter manual worker completion, scope fingerprints, connection reuse after commit/rollback with no tenant-context leakage, row-factory restoration, atomic 120-request Redis sliding windows with tenant separation/expiry, safe problem responses, correlation propagation and explicit CORS. Existing broker-loss/retry/fencing, RLS, pricing, billing, provider, GitOps, plan validation and delivery tests remain included.
+The multi-service Compose restart was blocked by automatic approval review because it could mutate shared containers, databases and volumes during verification. It was not retried or bypassed. New images were built, but the running shared stack was not upgraded by this release and no fresh full-stack smoke result is claimed. Existing volumes and customer-like local data were preserved.
 
-`python -m pip check`: no broken requirements. The suite emits the upstream Starlette/httpx TestClient deprecation warning; tests still pass. No backend dependency was added for pooling: SQLAlchemy and psycopg were already present.
+AI remains disabled by default. Authorized cloud/IAM/model staging acceptance, region/retention review, live Azure snapshot/restore drills, provider quotas, billing reconciliation, load/failover acceptance and manual accessibility testing remain outstanding. The Redis inference fence is a 24-hour attempt coordinator, not an immutable audit or permanent exactly-once guarantee. The 90-day snapshot tag is not an enforced lifecycle policy. No live scan, inference, notification, payment, product PR or infrastructure remediation was triggered during these checks.
 
-## Frontend evidence
-
-`npm run test:e2e`: **13 passed** on Chromium against the final production build.
-
-Production typechecking/build: Next.js 16.4.2 and React 19, all eight routes generated (six workspace views, proxy and not-found). Host webpack production build passes. Node 22 Alpine Docker build also passes using the normal Turbopack build and verified TLS dependency installation. `npm audit --json` reports **0 vulnerabilities** across installed dependencies.
-
-Coverage includes actual provider drill-down; combined provider/priority/tag filtering; 28px compact density; column controls; current-page selection; 10,000-row virtualization; evidence/cost/server-code drawers and focus restoration after virtual rows are replaced; viewer gates; command/scoped navigation; memory-only credentials; exact duplicate-key plan upload; GitOps preview/acknowledgment; explicit provider scan action; mobile layout; delivery audit/replay/XSS handling. Automated axe checks find no serious/critical violations in the tested overview, inventory, settings and drawer views. This does not replace manual assistive-technology or broad browser/device acceptance.
-
-All browser APIs are intercepted using explicitly labeled QA workspaces. No real cloud scan, checkout, webhook message, product PR or infrastructure mutation runs in these tests. Screenshots show interface QA fixtures, not customer observations.
-
-## Container and smoke evidence
-
-Both release images build successfully: `cloudsaver-python:0.7.2` and the Node 22 standalone dashboard. All eight long-running Compose services are running; configured PostgreSQL, Redis, gateway, tenant and scanner health checks pass. The existing data volumes are preserved. `scripts/smoke_stack.py` passes through the gateway and dashboard proxy, including readiness, authentication, retained scan lookup, GitOps, reliability/delivery, the new scan-job list, UUID correlation and bounded validation. No cloud scan or outbound integration is triggered.
-
-Builds preserve the session proxy configuration and CA verification. No credentials, .env files, customer snapshots, node_modules or compiled artifacts are included in the source package.
-
-## Remaining acceptance and limits
-
-- New durable interactive jobs support Azure only and remain disabled by default. Operator provisioning, connected subscriptions, a worker and delivery dispatcher are required. The browser and existing multi-cloud API continue synchronous scanning. Cancellation, detailed stage progress and multi-cloud job scheduling remain open.
-- Pool limits apply per process/DSN; a deployment connection budget and load test are required. Readiness checks database/Redis availability where required, not cloud credentials, workers, end-to-end SLOs or HA failover.
-- Authorized Azure/AWS/GCP/Kubernetes, Entra, Stripe test-mode, GitHub App and Slack/Teams acceptance is still required. Local fixtures cannot certify these integrations.
-- Billing series, non-Azure verified dollar estimates, realized savings, OpenCost allocation, browser PKCE onboarding and ITSM assignment remain unavailable. Unknown values remain unknown.
-- Production TLS, Kubernetes/HPA, backup/restore, chaos/load acceptance, secret rotation/expiry and production cutover/rollback have not been executed. Delivery remains at least once; Redis leases are not a quorum Redlock guarantee. Preserve job/outbox/audit state during incident recovery.
-
-## CI follow-up
-
-The first GitHub run passed backend tests, dependency audit, typechecking and production build, but its faster Chromium runner exposed a Shift-R selection synchronization race. Selection now updates table and workspace state in the same event, keyboard listeners update before paint, and snapshot changes clear selection. Follow-up production build and browser checks are recorded with the correcting commit. The v0.7.2 container/smoke results above describe the preceding release; v0.7.3 has not been redeployed to the local Compose stack.
-
-The v0.7.3 webpack production build and TypeScript check pass. All 13 Playwright workflows pass against that production build, including the corrected shortcut and automated accessibility checks.
-The combined filter/selection/Shift-R workflow also passes five consecutive fresh-browser runs.
+GitHub Actions will independently run the repository gates after publication. This source package records local checks; use the linked repository workflow for the subsequent CI result.

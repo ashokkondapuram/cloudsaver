@@ -890,3 +890,20 @@ def test_tenant_registry_seeds_once_syncs_domain_and_rejects_stale_writes(databa
         assert db.execute('SELECT count(*) FROM settings_audit WHERE tenant_id=%s', (tid,)).fetchone() == (2,)
         with pytest.raises(errors.InsufficientPrivilege):
             db.execute('DELETE FROM settings_audit')
+
+
+def test_architecture_analysis_reads_use_runtime_rls_and_preserve_saved_evidence(tenants):
+    import hashlib
+    from app.ai_advisory import AIGateway
+    app, store, a, b, sa, sb = tenants
+    key_a, key_b = 'architecture-a-key-at-least-32-characters', 'architecture-b-key-at-least-32-characters'
+    for row, key in ((a,key_a),(b,key_b)):
+        row['api_key_sha256'] = hashlib.sha256(key.encode()).hexdigest()
+    settings = Settings('azure', ':memory:', (a,b), database_url=app)
+    with TestClient(create_app(settings, ai_gateway=AIGateway(enabled=False))) as client:
+        path = '/api/v1/scans/' + sa['scan_id']
+        assert client.get(path+'/analysis', headers={'Authorization':'Bearer '+key_b}).status_code == 404
+        result = client.post(path+'/analysis/resource', headers={'Authorization':'Bearer '+key_a},
+                             json={'resource_id':sa['findings'][0]['resource_id'],'rule_id':'ORPHANED_DISK'})
+        assert result.status_code == 200 and result.json()['assessment']['retail_estimate_usd'] is None
+        assert store.get(a['tenant_id'],sa['scan_id']) == sa

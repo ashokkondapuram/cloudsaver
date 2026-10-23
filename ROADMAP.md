@@ -1,9 +1,15 @@
-# CloudSaver roadmap after v0.7.3
+# CloudSaver roadmap after v0.9.0
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
 production/compliance language and savings percentages are planning targets,
 not acceptance evidence. The v0.5.0 source/guide was reviewed before development.
+
+## v0.9.0 optimization and AI milestone
+
+The [new optimization / service analysis / AI guide](https://docs.google.com/document/d/1u_9HSbjE41srku4ZjDAbkSQ39wmeENOBMn2OGVO3oYs/edit) drives the next milestones. This release implements five-pillar finding assessment, provider/service grouping, explicit protected intent, mandatory snapshot scripts, and opt-in keyless cloud AI advisory. [Implementation boundaries and activation](docs/ASSESSMENT_AI.md) separate saved evidence from unknown billing and dependency data.
+
+Next: accept model targets and IAM in staging; add durable inference audit and usage accounting; ingest and reconcile FOCUS billing; evaluate seasonal anomaly models; expand dependency and service telemetry; add organization hierarchy and reviewed tag/retention policies. Preserve tenant RLS and independent approvals. Historical version labels below describe the original Drive plan, not a claim that their entire scope shipped.
 
 ## v0.6.0 delivered milestone
 

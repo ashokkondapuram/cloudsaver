@@ -8,6 +8,7 @@ import {bashRules, dateTime, downloadFile, findingKey, money, observedTags, prov
 import type {Delivery, Finding} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
+import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {EmptyState, Loading, Notice, PriorityBadge, ProviderBadge} from '../ui/shared';
 
 export function CodeReview({findings}: {findings:Finding[]}) {
@@ -78,11 +79,11 @@ export function FindingDrawer() {
   const id = useId();
   useEffect(() => {setTab('evidence');}, [finding]);
   if (!finding) return null;
-  const tabs = [{id:'evidence',label:'Evidence',icon:Layers3},{id:'cost',label:'Cost breakdown',icon:Wallet},{id:'code',label:'Review code',icon:FileCode2},{id:'activity',label:'Activity & ITSM',icon:Activity}];
+  const tabs = [{id:'evidence',label:'Evidence',icon:Layers3},{id:'assessment',label:'360° assessment',icon:ShieldCheck},{id:'cost',label:'Cost breakdown',icon:Wallet},{id:'code',label:'Review code',icon:FileCode2},{id:'activity',label:'Activity & ITSM',icon:Activity}];
   return <Dialog open={overlay === 'finding'} onClose={() => setOverlay(null)} title="Finding details" drawer>
     <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={providerOf(finding)}/><PriorityBadge severity={finding.severity}/><span className="state-badge review-required">Review required</span></div><h2>{finding.resource_name}</h2><p>{ruleLabel(finding.rule_id)}</p></div>
     <div className="drawer-tabs" role="tablist" aria-label="Finding detail views" onKeyDown={e => {if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const index=tabs.findIndex(t=>t.id===tab);const next=tabs[(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];setTab(next.id);document.getElementById(`${id}-${next.id}-tab`)?.focus();}}}>{tabs.map(item => <button key={item.id} role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab===item.id} tabIndex={tab===item.id?0:-1} onClick={() => setTab(item.id)}><item.icon size={15}/>{item.label}</button>)}</div>
-    <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
+    <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='assessment'?<ArchitecturalAssessment finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
     <div className="drawer-footer"><ShieldCheck size={15}/>Read-only evidence. All code requires independent review.</div>
   </Dialog>;
 }

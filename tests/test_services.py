@@ -128,3 +128,27 @@ def test_public_billing_payload_limit(tmp_path):
     client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
     assert client.post('/api/v1/billing/webhook', content=b'x' * 1_048_577,
                        headers={'Stripe-Signature': 'any'}).status_code == 413
+
+
+def test_gateway_routes_service_and_ai_review_without_visitor_destinations(tmp_path):
+    import json
+    calls = []
+    scan_id = '44444444-4444-4444-8444-444444444444'
+    def handler(request):
+        calls.append(request)
+        assert request.url.host == 'scanner-service'
+        assert request.headers['authorization'] == 'Bearer '+KEY
+        if request.url.path.endswith('ai-risk-evaluation'):
+            assert json.loads(request.content) == {'target_id':'approved'}
+            return httpx.Response(429,json={'detail':'Workspace AI hourly attempt budget reached'},headers={'Retry-After':'3600'})
+        return httpx.Response(200,json={'ok':True})
+    with TestClient(gateway(configuration(tmp_path),Limiter(),httpx.MockTransport(handler))) as client:
+        headers = {'Authorization':'Bearer '+KEY}
+        assert client.get('/api/v1/ai/targets',headers=headers).status_code == 200
+        assert client.get(f'/api/v1/scans/{scan_id}/analysis',headers=headers).status_code == 200
+        assert client.post(f'/api/v1/scans/{scan_id}/analysis/resource',headers=headers,json={'rule_id':'ORPHANED_DISK'}).status_code == 200
+        result = client.post(f'/api/v1/scans/{scan_id}/ai-risk-evaluation',headers=headers,json={'target_id':'approved'})
+        assert result.status_code == 429 and result.headers['Retry-After'] == '3600'
+        assert result.json()['detail'] == 'Workspace AI hourly attempt budget reached'
+        assert len(calls) == 4
+        assert client.get('/api/v1/ai/anything',headers=headers).status_code == 404

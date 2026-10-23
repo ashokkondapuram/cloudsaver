@@ -83,3 +83,75 @@ def test_sliding_rate_limit_is_atomic_tenant_scoped_and_expires(monkeypatch):
         finally:
             await limiter.client.aclose()
     asyncio.run(exercise())
+
+
+def test_ai_budget_concurrent_claim_cache_uncertain_and_tenant_isolation():
+    from concurrent.futures import ThreadPoolExecutor
+    from app.ai_advisory import RedisBudget, AIError
+    url = os.getenv('CLOUDSAVER_TEST_REDIS_URL')
+    if not url:
+        pytest.skip('Requires disposable Redis integration')
+    budget = RedisBudget(url)
+    tenant, other, key = str(uuid4()), str(uuid4()), str(uuid4())
+    calls = []
+    def invoke():
+        calls.append(1)
+        return {'advisory_only': True}
+    def run(_):
+        try:
+            return budget.run(tenant, key, 'fingerprint', 2, invoke)
+        except AIError as error:
+            assert error.status == 409
+            return None
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        results = list(pool.map(run, range(20)))
+    assert len(calls) == 1
+    assert any(r and r['cached'] is False for r in results)
+    assert budget.run(tenant, key, 'fingerprint', 2, invoke)['cached']
+    with pytest.raises(AIError) as error:
+        budget.run(tenant, key, 'different', 2, invoke)
+    assert error.value.status == 409
+    def ambiguous(): raise AIError('ambiguous', 502)
+    uncertain_key = str(uuid4())
+    with pytest.raises(AIError):
+        budget.run(tenant, uncertain_key, 'same', 2, ambiguous)
+    with pytest.raises(AIError) as error:
+        budget.run(tenant, uncertain_key, 'same', 2, invoke)
+    assert error.value.status == 409
+    with pytest.raises(AIError) as error:
+        budget.run(tenant, str(uuid4()), 'same', 2, invoke)
+    assert error.value.status == 429
+    assert not budget.run(other, key, 'same', 2, invoke)['cached']
+    with redis.from_url(url) as client:
+        assert 0 < client.ttl('cloudsaver:ai:v1:' + tenant + ':' + key) <= 86400
+        # Simulate retention expiration; a new attempt is possible only after the fence expires.
+        client.delete('cloudsaver:ai:v1:' + other + ':' + key)
+    assert not budget.run(other, key, 'same', 2, invoke)['cached']
+
+
+def test_ai_budget_fails_closed_when_redis_is_unavailable():
+    from app.ai_advisory import RedisBudget, AIError
+    budget = RedisBudget('redis://127.0.0.1:1/0')
+    def invoke(): raise AssertionError('Provider must not be called without coordination')
+    with pytest.raises(AIError) as error:
+        budget.run(str(uuid4()), str(uuid4()), 'fingerprint', 2, invoke)
+    assert error.value.status == 503
+
+
+def test_ai_completion_cannot_overwrite_a_replaced_attempt_fence():
+    import json
+    from app.ai_advisory import RedisBudget, AIError
+    url = os.getenv('CLOUDSAVER_TEST_REDIS_URL')
+    if not url: pytest.skip('Requires disposable Redis integration')
+    budget = RedisBudget(url)
+    tenant, key = str(uuid4()), str(uuid4())
+    record = 'cloudsaver:ai:v1:'+tenant+':'+key
+    replacement = json.dumps({'fingerprint':'replacement','status':'uncertain','owner':'new-owner'})
+    def invoke():
+        with redis.from_url(url) as client: client.set(record,replacement,ex=86400)
+        return {'advisory_only':True}
+    with pytest.raises(AIError) as error:
+        budget.run(tenant,key,'old',10,invoke)
+    assert error.value.status == 409
+    with redis.from_url(url,decode_responses=True) as client:
+        assert client.get(record) == replacement

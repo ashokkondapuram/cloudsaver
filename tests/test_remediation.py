@@ -1,4 +1,5 @@
 import subprocess
+import json
 
 import pytest
 
@@ -76,3 +77,59 @@ def test_script_cannot_execute_with_piped_approval(tmp_path):
     assert result.returncode != 0
     assert 'Interactive terminal' in result.stderr
     assert 'CALLED' not in result.stderr
+
+
+def test_disk_snapshot_is_mandatory_and_live_protection_is_rechecked():
+    script = generate_script(scan(), [DISK], TENANT, [SUB])
+    assert script.index('az snapshot create') < script.index('az snapshot show') < script.index('az disk delete')
+    assert '[ "$snapshot_state" = "Succeeded" ]' in script
+    assert 'CloudSaverRetentionDays=90' in script
+    assert script.count('assert_unprotected\n') == 2
+    assert 'az resource show' in script and 'drstandby' in script and 'legalhold' in script
+    assert script.index('Disk changed during snapshot creation') < script.index('az disk delete')
+
+
+@pytest.mark.parametrize('state,protected,expected_delete', [('Failed', False, False), ('Succeeded', True, False), ('Succeeded', False, True)])
+def test_generated_script_aborts_on_failed_snapshot_or_protected_live_tags(tmp_path,state,protected,expected_delete):
+    # Run the actual generated artifact in a PTY against a local fake CLI. No cloud calls.
+    import os
+    import pty
+    import select
+    import time
+    trace = tmp_path/'trace'
+    cli = tmp_path/'az'
+    cli.write_text('''#!/usr/bin/env python3
+import json,sys
+from pathlib import Path
+args=sys.argv[1:]
+with Path('''+repr(str(trace))+''').open('a') as f: f.write(' '.join(args)+'\\n')
+if args[:2]==['account','show']: print('''+repr(TENANT)+''')
+elif args[:2]==['resource','show']: print('''+repr(json.dumps({'Role':'DR-Standby'} if protected else {}))+''')
+elif args[:2]==['disk','show']: print('test-rg' if 'resourceGroup' in args else 'Unattached')
+elif args[:2]==['snapshot','create']: print('/snapshot/test')
+elif args[:2]==['snapshot','show']: print('''+repr(state)+''')
+elif args[:2]==['disk','delete']: pass
+else: sys.exit(2)
+''')
+    cli.chmod(0o700)
+    artifact = tmp_path/'review.sh'
+    artifact.write_text(generate_script(scan(),[DISK],TENANT,[SUB]))
+    master,slave=pty.openpty()
+    process=subprocess.Popen(['bash',str(artifact)],stdin=slave,stdout=slave,stderr=slave,
+                             env={**os.environ,'PATH':str(tmp_path)+':'+os.environ['PATH']})
+    os.close(slave)
+    try:
+        os.write(master,(DISK+'\n').encode())
+        deadline=time.monotonic()+10
+        while process.poll() is None and time.monotonic()<deadline:
+            if select.select([master],[],[],0.05)[0]:
+                try: os.read(master,65536)
+                except OSError: break
+        process.wait(timeout=2)
+        commands=trace.read_text()
+        assert ('disk delete' in commands) is expected_delete
+        assert (process.returncode==0) is expected_delete
+        if protected: assert 'snapshot create' not in commands
+    finally:
+        if process.poll() is None: process.kill();process.wait()
+        os.close(master)

@@ -19,11 +19,12 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
     return () => {
       element.close(); document.body.style.overflow = previousOverflow;
       // Restore after React has removed the modal and the browser has finished
-      // its native dialog focus handling; avoid stealing focus from a new modal.
-      requestAnimationFrame(() => {
+      // its native dialog focus handling and virtual rows have settled after resize.
+      // A second frame resolves the current row if overflow changes remount it.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
         const target = previous?.isConnected ? previous : focusKey ? document.querySelector<HTMLElement>(`[data-focus-return="${CSS.escape(focusKey)}"]`) : null;
         if (target && !document.querySelector('dialog[open]')) target.focus({preventScroll:true});
-      });
+      }));
     };
   }, [open]);
   if (!open) return null;

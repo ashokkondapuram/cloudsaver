@@ -20,7 +20,7 @@ def service(title, settings=None, identity_validator=None):
             await client.aclose()
         from database.connection import dispose
         dispose()
-    app = FastAPI(title=title, version='0.8.0', lifespan=lifespan)
+    app = FastAPI(title=title, version='0.9.0', lifespan=lifespan)
     from app.runtime import install
     install(app, settings, redis_required=title == 'api-gateway')
     from app.auth import tenant_dependency
@@ -62,7 +62,7 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
         if response.status_code >= 400:
             status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 413, 422, 429, 501, 503) else 502
             detail = 'Upstream service could not complete the request'
-            if status in (402, 409, 422):
+            if status in (402, 409, 422, 429):
                 # Internal services return sanitized, user-facing validation messages.
                 try:
                     candidate = response.json().get('detail')
@@ -70,7 +70,9 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
                         detail = candidate
                 except (ValueError, AttributeError):
                     pass
-            raise HTTPException(status, detail)
+            retry = response.headers.get('Retry-After', '')
+            extra = {'Retry-After': retry} if status in (429, 503) and retry.isdigit() and 1 <= int(retry) <= 86400 else None
+            raise HTTPException(status, detail, headers=extra)
         if response.is_redirect:
             raise HTTPException(502, 'Unexpected upstream redirect')
         return response.json()

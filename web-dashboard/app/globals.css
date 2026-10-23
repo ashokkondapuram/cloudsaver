@@ -80,3 +80,28 @@
 .operator-header h1 { font-size:26px; margin:4px 0; }
 .operator-header p { color:var(--muted); margin:0; }
 @media (max-width:720px) { .settings-row .wide { grid-column:auto; } }
+
+/* Evidence-led architectural review and optional AI advisory. */
+.capitalize{text-transform:capitalize}
+.analysis-footnote{padding:0 24px 20px;color:var(--muted);font-size:12px;line-height:1.65}
+.service-analysis>.notice,.service-analysis>.loading{margin:0 24px 20px}
+.architecture-assessment{display:flex;flex-direction:column;gap:22px}
+.assessment-intro{display:flex;gap:14px;padding:20px;background:var(--slate-50);border:1px solid var(--border);border-radius:12px}
+.assessment-intro>svg{flex-shrink:0;color:var(--slate-700);margin-top:3px}
+.assessment-intro h3{margin:6px 0;font-size:17px}.assessment-intro p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.pillar-list{display:flex;flex-direction:column;gap:10px}.pillar-list>details{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pillar-list summary{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px;cursor:pointer;list-style:none;font-size:13px}
+.pillar-list summary:before{content:'+';color:var(--muted)}.pillar-list details[open]>summary:before{content:'−'}.pillar-list summary>strong{flex:1}
+.assessment-state{font-size:10px;font-weight:600;border-radius:5px;padding:5px 7px;background:var(--slate-100);color:var(--slate-700)}
+.assessment-state.risk{background:#fff1f2;color:#9f1239}.assessment-state.observed{background:#ecfdf5;color:#065f46}
+.pillar-list details>div{border-top:1px solid var(--border);padding:4px 16px 14px}.pillar-list article{display:flex;gap:10px;margin-top:13px}
+.assessment-dot{width:7px;height:7px;flex-shrink:0;border-radius:50%;background:#64748b;margin-top:6px}.assessment-dot.risk{background:#be123c}.assessment-dot.observed{background:#047857}
+.pillar-list h4{font-size:12px;margin:0;text-transform:capitalize}.pillar-list p{font-size:12px;line-height:1.65;color:var(--muted);margin:5px 0}.pillar-list small{font-size:10px;color:var(--slate-700)}
+.assessment-guardrails{padding-left:18px;font-size:12px;line-height:1.9;color:var(--slate-700);text-transform:capitalize}
+.ai-advisory{padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--slate-50)}.ai-advisory-heading{display:flex;gap:12px;align-items:flex-start;margin-bottom:18px}
+.ai-advisory-heading svg{color:var(--slate-700);flex-shrink:0}.ai-advisory-heading h3{font-size:15px;margin:0 0 5px}.ai-advisory-heading p{font-size:11px;margin:0;color:var(--muted)}
+.ai-target-label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:600}.ai-target-label select{width:100%;padding:10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--slate-700);font-size:12px}.ai-ack{margin:16px 0;align-items:flex-start!important;line-height:1.6}
+.ai-result{border-top:1px solid var(--border);margin-top:22px;padding-top:20px;overflow-wrap:anywhere}.ai-result>.notice{margin:12px 0}.ai-result h4{font-size:12px;margin:16px 0 6px}.ai-result p,.ai-result li{font-size:12px;line-height:1.7;color:var(--slate-700)}.ai-result small{color:var(--muted);font-size:10px}
+@media(max-width:720px){.assessment-intro,.ai-advisory{padding:15px}.assessment-state{max-width:130px;text-align:center}.analysis-footnote{padding:0 18px 18px}.drawer-tabs{overflow-x:auto}.drawer-tabs>button{flex-shrink:0}}
+
+.service-analysis{margin-top:22px;margin-bottom:22px}

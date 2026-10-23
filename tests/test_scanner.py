@@ -83,3 +83,13 @@ def test_demo_is_explicitly_illustrative():
     assert len(findings) == 8
     assert all(f["details"].startswith("TEST FIXTURE:") for f in findings)
     assert sum(f["estimated_monthly_waste_usd"] for f in findings) == pytest.approx(507.90)
+
+
+def test_arg_retains_observed_tags_and_size_without_inventing_security_or_backups():
+    item = dict(row(), tags={'Role':'DR-Standby'}, sizeGB=128)
+    client = Client(page([item]), *(page([]) for _ in RULES[1:]))
+    finding = _findings(client,[SUB])[0]
+    assert finding['evidence'] == {'source':'Azure Resource Graph','tags':{'Role':'DR-Standby'},'size_gb':128}
+    assert 'tags' in client.requests[0].query
+    from app.assessment import assess
+    assert assess(finding)['disposition'] == 'protected'

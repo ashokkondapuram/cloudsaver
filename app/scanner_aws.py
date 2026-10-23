@@ -29,12 +29,23 @@ def scan_account(source, *, session=None):
                    else f'arn:aws:ec2:{region}:{account}:{kind}/{name}')
             if kind == 'db' and row.get('DBInstanceArn') != rid:
                 raise ScanError('RDS returned an inconsistent account identity')
+            evidence = {'source': 'AWS read-only APIs', 'region': region,
+                        'tags': {tag['Key']: tag['Value'] for tag in (row.get('Tags') or row.get('TagList') or [])
+                                 if isinstance(tag, dict) and isinstance(tag.get('Key'), str) and isinstance(tag.get('Value'), str)}}
+            for source_key, key in [('Encrypted', 'encrypted'), ('StorageEncrypted', 'encrypted'),
+                                    ('MultiAZ', 'multi_az'), ('PubliclyAccessible', 'publicly_accessible'),
+                                    ('DeletionProtection', 'deletion_protection')]:
+                if type(row.get(source_key)) is bool:
+                    evidence[key] = row[source_key]
+            for source_key, key in [('BackupRetentionPeriod', 'backup_retention_days'), ('Size', 'size_gb'), ('Iops', 'provisioned_iops')]:
+                if type(row.get(source_key)) is int and row[source_key] >= 0:
+                    evidence[key] = row[source_key]
             result = dict(rule_id=rule, severity='MEDIUM' if kind == 'elastic-ip' else 'HIGH',
                 cloud_provider='aws', scope_id=account, subscription_id=account, region=region,
                 resource_id=rid, resource_name=name, resource_group=region,
                 resource_type='aws:rds:db' if kind == 'db' else 'aws:ec2:' + kind,
                 estimated_monthly_waste_usd=None, details=details,
-                evidence={'source': 'AWS read-only APIs', 'region': region})
+                evidence=evidence)
             validate_finding_scope(result, {'aws_accounts': [source]})
             if rid not in seen:
                 findings.append(result)

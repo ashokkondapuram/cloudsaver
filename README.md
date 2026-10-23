@@ -1,12 +1,27 @@
-# CloudSaver v0.7.3
+# CloudSaver v0.9.0
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release adds the Drive UI/UX design system and backend hardening to the durable
-scheduling/integration foundation. Production deployment still requires the acceptance
-checks in TEST_REPORT.md; feature coverage alone is not production readiness.
+release adds evidence-led five-pillar service analysis and optional keyless cloud AI
+advisory to the v0.8.0 tenant registry and operator console. Deployment acceptance
+and live integration limits are recorded in TEST_REPORT.md.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.9.0: service analysis and AI advisory
+
+- Resource drawers now expose cost, reliability, performance, security and operations checks with explicit observed, risk and unknown evidence. Cost allocation includes service-level protected/risk/unpriced breakdowns.
+- Resource tags and returned AWS settings support disaster recovery/retention protection. Destructive Azure scripts block protected resources, re-read live tags, and require successful managed snapshots before disk deletion.
+- Opt-in, tenant-bound Azure OpenAI, Bedrock Converse and Vertex Google-model adapters use the existing keyless identities. Explicit acknowledgement, context minimization, strict response validation, Redis attempt budgets and idempotency fences bound inference. AI text cannot approve or execute changes.
+
+Read [the source mapping, API and activation guide](docs/ASSESSMENT_AI.md). AI is disabled by default. Billing normalization, complete dependency analysis and autonomous execution remain outside this milestone.
+
+## Inherited v0.8.0: runtime settings and managed identity
+
+The latest upstream adds a PostgreSQL tenant registry, versioned workspace settings,
+an operator console and managed-identity federation into Azure, AWS and GCP.
+Workspace admins edit permitted cloud scopes and scheduling; identity bindings stay
+operator-owned. No cloud secret storage is required. See [onboarding](docs/CLOUD_SOURCES.md).
 
 ## New in v0.7.3: keyboard review synchronization
 

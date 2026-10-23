@@ -1,3 +1,13 @@
+# v0.9.0 source context
+
+- Latest GitHub fetched and fast-forwarded to upstream v0.8.0 commit `6d6a37c645d84e277bdbeefc93f75e902a5b7297` before implementation.
+- Newly populated Drive **README.md**, titled internally “CloudSaver: Enterprise FinOps Platform & Multi-Cloud Optimization Engine — Architecture, Functional Improvements, 360° Service Analysis & Enterprise AI Integration Guide”: https://docs.google.com/document/d/1u_9HSbjE41srku4ZjDAbkSQ39wmeENOBMn2OGVO3oYs/edit . Source read October 23, 2026; observed modified time 03:17:52 UTC.
+- The functional specification document found earlier was empty. The user's clarified optimization/service-analysis/AI README is the source for this milestone.
+- Adaptation: implement five-pillar evidence, service summaries, protected intent, snapshot scripts and optional keyless cloud AI advisory. Keep tenant ownership/RLS and the upstream managed-identity trust chain. Do not copy sample API keys, old model defaults, unconstrained endpoints or model-granted approval into runtime code.
+- [Implementation mapping and remaining requirements](docs/ASSESSMENT_AI.md). The full guide is aspirational; this release does not claim FOCUS ingestion, hierarchical membership, full dependency graphs, autonomous execution or zero hallucinations.
+
+## Historical source context
+
 # v0.7.3 CI correction
 
 The first GitHub v0.7.2 run passed backend/audit/build checks but exposed a frontend Shift-R race. Selection now updates table and workspace state atomically and keyboard handlers refresh before paint.

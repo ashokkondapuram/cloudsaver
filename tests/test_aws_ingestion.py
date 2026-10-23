@@ -62,3 +62,20 @@ def test_aws_late_failure_never_returns_demo_or_partial(failure):
         with pytest.raises(ScanError) as result:
             scan_account(SOURCE, session=session)
         assert 'private' not in str(result.value)
+
+
+def test_aws_retains_only_explicit_settings_and_protection_intent():
+    stack, stubs, session = setup_stack()
+    with stack:
+        stubs['ec2'].add_response('describe_volumes', {'Volumes':[dict(VolumeId='vol-08a9c2b4d1ef50123',State='available',Attachments=[],
+            Encrypted=False,Size=128,Iops=3000,Tags=[{'Key':'Role','Value':'DR-Standby'}])]})
+        stubs['ec2'].add_response('describe_addresses', {'Addresses':[]})
+        stubs['rds'].add_response('describe_db_instances', {'DBInstances':[dict(DBInstanceIdentifier='staging-db',DBInstanceStatus='stopped',
+            DBInstanceArn='arn:aws:rds:us-east-1:123456789012:db:staging-db',MultiAZ=False,BackupRetentionPeriod=0,
+            StorageEncrypted=True,PubliclyAccessible=False,DeletionProtection=True)]})
+        volume, database = scan_account(SOURCE, session=session)
+        assert volume['evidence']['encrypted'] is False and volume['evidence']['size_gb'] == 128
+        assert volume['evidence']['tags'] == {'Role':'DR-Standby'}
+        assert database['evidence']['backup_retention_days'] == 0 and database['evidence']['multi_az'] is False
+        assert database['evidence']['publicly_accessible'] is False and database['evidence']['deletion_protection'] is True
+        assert 'recent_snapshot_verified' not in volume['evidence']

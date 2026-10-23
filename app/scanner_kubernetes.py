@@ -88,7 +88,7 @@ def scan_cluster(source, *, reader=None, now=None):
                     resource_group=namespace, resource_type='kubernetes.io/Container', severity='MEDIUM',
                     estimated_monthly_waste_usd=None,
                     details=f'{dimension.upper()} request exceeds P95 hourly-sampled usage over 14 days by more than 50%. CPU uses five-minute rates; memory uses working-set samples. Review peaks, limits, SLOs and controller configuration. No node or dollar savings is implied.',
-                    evidence=dict(source='Prometheus query_range', dimension=dimension,
+                    evidence=dict(source='Prometheus query_range', dimension=dimension, window_days=14,
                         window_start=datetime.fromtimestamp(start, timezone.utc).isoformat(),
                         window_end=datetime.fromtimestamp(end, timezone.utc).isoformat(), samples=len(expected),
                         step_seconds=STEP, percentile_method='nearest_rank_0.95',
