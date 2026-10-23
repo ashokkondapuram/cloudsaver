@@ -90,6 +90,14 @@ def enforce_keyvault_access(tier_name: str) -> None:
             detail="Azure Key Vault credential dynamic resolution requires an Enterprise tier plan."
         )
 
+def checkout_configured() -> bool:
+    """Whether the operator has configured Stripe Checkout; mapping errors still surface at checkout."""
+    from urllib.parse import urlparse
+    parsed = urlparse(os.getenv('CLOUDSAVER_BILLING_RETURN_URL', ''))
+    return bool(os.getenv('STRIPE_SECRET_KEY')) and parsed.scheme == 'https' and bool(parsed.hostname) \
+        and not (parsed.username or parsed.password or parsed.query or parsed.fragment)
+
+
 def create_checkout_session(
     target_tier: str,
     tenant_id: str,
@@ -113,8 +121,7 @@ def create_checkout_session(
     from urllib.parse import urlparse
     key = os.getenv('STRIPE_SECRET_KEY', '')
     return_url = os.getenv('CLOUDSAVER_BILLING_RETURN_URL', '')
-    parsed = urlparse(return_url)
-    if not key or parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+    if not checkout_configured():
         raise HTTPException(503, 'Stripe Checkout and its HTTPS return URL must be configured')
     if success_url or cancel_url:
         raise HTTPException(400, 'Checkout return URLs are controlled by the operator')

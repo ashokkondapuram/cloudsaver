@@ -106,6 +106,7 @@ export type Entitlements = {
   can_export_terraform: boolean;
   can_dispatch_automated_alerts: boolean;
   retention_days: number;
+  checkout_available?: boolean;
 };
 
 export type Delivery = {

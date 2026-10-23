@@ -68,3 +68,15 @@ def test_checkout_uses_trusted_customer_price_and_idempotency(monkeypatch):
     assert len(verified) == 2
     with __import__('pytest').raises(HTTPException):
         module.create_checkout_session('GROWTH',tenant,org,success_url='https://evil.example',idempotency_key='checkout-key-123')
+
+
+def test_checkout_is_offered_only_when_stripe_and_https_return_are_configured(monkeypatch):
+    from app.entitlements import checkout_configured
+    monkeypatch.delenv('STRIPE_SECRET_KEY', raising=False)
+    monkeypatch.setenv('CLOUDSAVER_BILLING_RETURN_URL', 'https://billing.example.com/return')
+    assert checkout_configured() is False
+    monkeypatch.setenv('STRIPE_SECRET_KEY', 'STRIPE_TEST_PLACEHOLDER')
+    assert checkout_configured() is True
+    for url in ('http://billing.example.com/return', 'https://billing.example.com/return?x=1', ''):
+        monkeypatch.setenv('CLOUDSAVER_BILLING_RETURN_URL', url)
+        assert checkout_configured() is False

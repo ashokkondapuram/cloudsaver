@@ -100,10 +100,11 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @api.get('/api/v1/billing/entitlements')
     def entitlements(tenant=Depends(current_tenant)):
         tier_name = tenant.get('plan_tier', 'STARTER')
-        from app.entitlements import get_tier_entitlements
+        from app.entitlements import checkout_configured, get_tier_entitlements
         tier_info = get_tier_entitlements(tier_name)
         return {
             'tenant_id': tenant['tenant_id'],
+            'checkout_available': checkout_configured(),
             'tier': tier_info.tier.value,
             'max_subscriptions': tier_info.max_subscriptions,
             'current_subscriptions': len(tenant.get('subscription_ids', [])),
