@@ -238,6 +238,8 @@ Portal container also receives `IDENTITY_SERVICE_URL`, `PORTAL_PUBLIC_URL` (from
 
 Billing is **not** configured in the CloudSaver repo root `.env`. Set it only in **`platform/.env`** (loaded by `platform/compose.yaml` for `identity-service`). The portal learns billing state from `GET /admin/v1/session` (`billing_enabled`, `billing_provider`).
 
+For what manual billing, Stripe flags, and plan-change approval actually do in the current code (versus the approved spec), see [Platform billing — operations and implementation boundaries](PLATFORM_BILLING.md).
+
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `PLATFORM_BILLING_ENABLED` | `false` in Compose if unset; `true` in fresh `setup_platform.py` | When true, portal operators can change plans, subscriptions, and approve plan requests |
