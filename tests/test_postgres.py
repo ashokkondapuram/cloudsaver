@@ -240,31 +240,61 @@ def test_postgres_api_ownership_header_spoof_and_restart(database):
         assert client.get('/api/v1/scans/' + result['scan_id'], headers=headers).json() == result
 
 
-def test_billing_event_changes_persisted_entitlements(database):
-    from database.billing_store import BillingStore
-    from app.auth import with_plan
+def test_local_billing_state_is_read_only_for_the_runtime_role(database):
     owner, app, store = database
     a = workspace()
     store.save(a['tenant_id'], scan(a), workspace=a)
-    customer, subscription = 'cus_'+uuid4().hex, 'sub_'+uuid4().hex
     with psycopg.connect(owner) as db:
-        context(db,a['tenant_id'])
-        organization = db.execute('UPDATE organizations SET stripe_customer_id=%s WHERE tenant_id=%s RETURNING id',
-                                  (customer,a['tenant_id'])).fetchone()[0]
-    event = dict(id='evt_'+uuid4().hex,type='customer.subscription.updated',created=100,
-                 data={'object':dict(id=subscription,customer=customer,created=90,status='active',
-                      items={'data':[dict(price={'id':'price_growth'},quantity=1)]})})
-    route = dict(tenant_id=a['tenant_id'],organization_id=str(organization))
-    billing = BillingStore(app)
-    assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'subscription_updated'
-    assert billing.apply_event(route,customer,event,{'price_growth':'GROWTH'}) == 'duplicate'
-    settings = Settings('azure','',(a,),app)
-    assert with_plan(settings,dict(a,plan_tier='ENTERPRISE'))['plan_tier'] == 'ENTERPRISE'
-    event['id'] = 'evt_'+uuid4().hex
-    event['created'] = 101
-    event['type'] = 'customer.subscription.deleted'
-    billing.apply_event(route,customer,event,{'price_growth':'GROWTH'})
-    assert with_plan(settings,a)['plan_tier'] == 'STARTER'
+        context(db, a['tenant_id'])
+        organization = db.execute("UPDATE organizations SET stripe_customer_id='cus_placeholder' WHERE tenant_id=%s "
+                                  'RETURNING id', (a['tenant_id'],)).fetchone()[0]
+    with psycopg.connect(app) as db:
+        context(db, a['tenant_id'])
+        db.execute("UPDATE organizations SET name='Renamed', plan_tier='PARTNER_2026' WHERE id=%s", (organization,))
+        assert db.execute('SELECT stripe_customer_id FROM organizations WHERE id=%s', (organization,)).fetchone() == ('cus_placeholder',)
+    for statement, params in (
+            ('UPDATE organizations SET stripe_customer_id=NULL WHERE id=%s', (organization,)),
+            ("INSERT INTO stripe_events (event_id, tenant_id, organization_id, event_type, event_created, outcome) "
+             "VALUES ('evt_placeholder', %s, %s, 'invoice.paid', 1, 'applied')", (a['tenant_id'], organization)),
+            ('DELETE FROM stripe_events', ())):
+        with psycopg.connect(app) as db:
+            context(db, a['tenant_id'])
+            with pytest.raises(errors.InsufficientPrivilege):
+                db.execute(statement, params)
+    with psycopg.connect(app) as db:
+        context(db, a['tenant_id'])
+        with pytest.raises(errors.CheckViolation):
+            db.execute("UPDATE organizations SET plan_tier='not a code' WHERE id=%s", (organization,))
+
+
+def test_directory_projection_persists_the_plan_block(database):
+    import json
+    from app.entitlements import billing_summary
+    from app.tenant_registry import PostgresRegistry
+    _, app, _ = database
+    fixtures = ROOT / 'platform/contracts/fixtures'
+    snapshot = json.loads((fixtures / 'directory_snapshot.json').read_text())['workspaces'][0]
+    tid = str(uuid4())
+    snapshot.update(tenant_id=tid, customer_id=str(uuid4()))
+    registry = PostgresRegistry(app, (), ttl=0)
+    assert registry.apply_snapshot(snapshot)
+    stored = registry.get(tid)
+    assert stored['plan']['code'] == 'STARTER' and stored['plan']['billing_state'] == 'lapsed'
+    assert stored['plan']['grace_ends_at'] == '2026-10-14T00:00:00Z' and stored['plan']['entitlements_version'] == 8
+    summary = billing_summary(stored)
+    assert summary['entitlements_source'] == 'platform' and summary['subscription_plan_name'] == 'Growth'
+    custom = dict(snapshot, version=6, plan_tier='PARTNER', plan=dict(snapshot['plan'], code='PARTNER', name='Partner',
+                  billing_state='active', manage_billing_url='https://billing.example.com/partner'))
+    assert registry.apply_snapshot(custom)
+    stored = registry.get(tid)
+    assert stored['plan_tier'] == 'PARTNER' and stored['plan']['manage_billing_url'] == 'https://billing.example.com/partner'
+    with psycopg.connect(app) as db:
+        context(db, tid)
+        assert db.execute('SELECT plan_tier FROM organizations').fetchall() == [('PARTNER',)]
+    unplanned = dict(snapshot, version=7)
+    unplanned.pop('plan')
+    registry.apply_snapshot(unplanned)
+    assert 'plan' not in registry.get(tid) or registry.get(tid)['plan'] is None
 
 
 def test_worker_fencing_and_scan_links_use_real_postgres(database):
@@ -301,7 +331,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0011_registry_projection',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0013_billing_projection',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):

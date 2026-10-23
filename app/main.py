@@ -107,7 +107,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @api.get('/api/v1/billing/entitlements')
     def entitlements(tenant=Depends(current_tenant)):
         from app.entitlements import billing_summary
-        return billing_summary(tenant)
+        workspace = next((t for t in settings.tenants if t['tenant_id'] == tenant['tenant_id']), tenant)
+        return billing_summary(tenant, workspace)
 
     @api.post('/api/v1/billing/checkout')
     def checkout():

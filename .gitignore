@@ -8,3 +8,7 @@ pytest-of-root/
 test-results/
 playwright-report/
 backups/
+*.dump
+*.pem
+*.key
+cloudsaver-operator-key.txt

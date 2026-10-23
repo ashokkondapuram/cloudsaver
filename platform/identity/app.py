@@ -1,6 +1,5 @@
 """identity-service: internal verify API, directory change feed and the platform portal admin API."""
 import logging
-import os
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
@@ -11,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from identity.auth import ADMIN_CALLERS, DIRECTORY_CALLERS, VERIFY_CALLERS, OperatorAuth, caller_dependency, load_callers
+from identity.config import env
 from identity.domain import IdentityError, Throttled
 from identity.keys import key_prefix
 
@@ -32,9 +32,9 @@ def build_service():
     from identity.store_postgres import PostgresStore
     from identity.throttle import RedisBackend, Throttle
     from identity.usage import UsageRecorder
-    url = os.getenv('CLOUDSAVER_IDENTITY_DATABASE_URL')
+    url = env('IDENTITY_DATABASE_URL')
     if not url:
-        raise RuntimeError('Set CLOUDSAVER_IDENTITY_DATABASE_URL')
+        raise RuntimeError('Set PLATFORM_IDENTITY_DATABASE_URL')
     return IdentityService(PostgresStore(url), Peppers.from_env(), Throttle(RedisBackend()), RedisEvents(), UsageRecorder())
 
 
@@ -44,7 +44,7 @@ def problem(request, status, detail, headers=None):
 
 
 def create_app(service=None, callers=None, operator_auth=None, flush_interval=30):
-    from app.runtime import install_log_redaction
+    from identity.redaction import install_log_redaction
     install_log_redaction()
     service = service or build_service()
     callers = callers if callers is not None else load_callers()

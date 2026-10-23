@@ -2,11 +2,11 @@
 import hmac
 import ipaddress
 import logging
-import os
 from datetime import timedelta
 from uuid import uuid4
 
 from identity import keys as keyfmt
+from identity.config import env, flag
 from identity.domain import (DEFAULT_EXPIRY_DAYS, EXPIRING_SOON_DAYS, MAX_ACTIVE_KEYS, MAX_EXPIRY_DAYS, PROVIDERS,
                              SCOPE_KEYS, STATUSES, TIERS, Conflict, IdentityError, NotFound, StaleVersion, Throttled,
                              configured_providers, empty_scopes, iso, normalize_identity_bindings, normalize_roles,
@@ -16,8 +16,10 @@ logger = logging.getLogger('cloudsaver.identity')
 SYSTEM = {'actor': 'system', 'actor_type': 'system'}
 
 
-def flag(name, default='false'):
-    return os.getenv(name, default).lower() == 'true'
+def scope_limit(tier):
+    from identity.billing.catalog import SEED_PLANS
+    plan = next(p for p in SEED_PLANS if p['code'] == tier)
+    return plan['entitlements']['max_subscriptions'], plan['name']
 
 
 def client_ip(value):
@@ -54,12 +56,12 @@ class IdentityService:
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
                  cache_seconds=None, provider_scoped_keys=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage
-        self.environment = environment or os.getenv('CLOUDSAVER_ENVIRONMENT', 'development')
+        self.environment = environment or env('ENVIRONMENT', 'development')
         self.now = clock
-        self.cache_seconds = int(cache_seconds if cache_seconds is not None else os.getenv('CLOUDSAVER_IDENTITY_CACHE_SECONDS', '15'))
+        self.cache_seconds = int(cache_seconds if cache_seconds is not None else env('IDENTITY_CACHE_SECONDS', '15'))
         if not 0 <= self.cache_seconds <= 30:
-            raise ValueError('CLOUDSAVER_IDENTITY_CACHE_SECONDS must be between 0 and 30')
-        self.provider_scoped_keys = flag('CLOUDSAVER_PROVIDER_SCOPED_KEYS') if provider_scoped_keys is None else provider_scoped_keys
+            raise ValueError('PLATFORM_IDENTITY_CACHE_SECONDS must be between 0 and 30')
+        self.provider_scoped_keys = flag('PROVIDER_SCOPED_KEYS') if provider_scoped_keys is None else provider_scoped_keys
         self.metrics = {}
 
     def _count(self, *labels):
@@ -305,7 +307,7 @@ class IdentityService:
                'updated_by': actor['actor'][:120], 'suspended_at': now if status == 'suspended' else None,
                'deleted_at': None, **empty_scopes()}
         for provider, key in SCOPE_KEYS.items():
-            row[key] = normalize_scope_items(provider, (scopes or {}).get(key, []), tier)
+            row[key] = normalize_scope_items(provider, (scopes or {}).get(key, []), *scope_limit(tier))
         with self.store.transaction() as tx:
             customer = tx.get_customer(customer_id, lock=True)
             if not customer or customer['status'] == 'deleted':
@@ -368,9 +370,9 @@ class IdentityService:
                     raise IdentityError('Choose an existing customer.')
             tier = fields.get('plan_tier', current['plan_tier'])
             if 'plan_tier' in fields:
-                normalize_scope_items('azure', current['subscription_ids'], tier)
+                normalize_scope_items('azure', current['subscription_ids'], *scope_limit(tier))
             if scopes:
-                items = normalize_scope_items(scopes[0], scopes[1], tier)
+                items = normalize_scope_items(scopes[0], scopes[1], *scope_limit(tier))
                 tx.replace_scopes(tenant_id, scopes[0], items, actor['actor'][:120], now)
             row = tx.update_workspace(tenant_id, version, dict(fields, updated_at=now, updated_by=actor['actor'][:120]))
             if row is None:

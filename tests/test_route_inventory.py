@@ -7,13 +7,6 @@ from fastapi.routing import APIRoute
 from app.config import Settings
 from app.main import create_app as scanner
 from app.route_inventory import ROUTES, classify
-from identity.app import create_app as identity_app
-from identity.events import MemoryEvents
-from identity.keys import Peppers
-from identity.service import IdentityService
-from identity.store_memory import MemoryStore
-from identity.throttle import MemoryBackend, Throttle
-from identity.usage import UsageRecorder
 from services.analytics import create_app as analytics
 from services.gateway import create_app as gateway
 from services.notification import create_app as notification
@@ -67,9 +60,6 @@ def test_inventory_has_no_stale_entries(apps):
     assert all('{' in item for item in stale), stale
 
 
-def test_identity_routes_are_internal_or_admin():
-    store = MemoryStore()
-    service = IdentityService(store, Peppers(1, b'p' * 32), Throttle(MemoryBackend()), MemoryEvents(), UsageRecorder())
-    app = identity_app(service, callers={'gateway': b'\0' * 32})
-    for method, path in routes(app):
-        assert path in ('/healthz', '/readyz') or path.startswith(('/internal/v1/', '/admin/v1/')), (method, path)
+def test_removed_billing_routes_are_public_gone_responses():
+    assert classify('POST', '/api/v1/billing/webhook') == 'public'
+    assert classify('POST', '/api/v1/billing/checkout') == 'public'

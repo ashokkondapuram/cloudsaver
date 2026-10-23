@@ -683,6 +683,29 @@ volumes:
       key and webhook-secret formats).
 - [ ] Portal and dashboard text follows the UX writing, date, time and currency formatting rules.
 
+## Implementation notes
+
+**Live cutover attempt, Oct 23, 2026 (rolled back).** The 1.2.0 stack was restored and is still the live
+deployment. Findings:
+
+- `make platform-up` failed first because `platform/.env` didn't exist. `setup_platform.py --migrate-from`
+  needs the operator key digest in the source file. The 1.2.0 stack received `CLOUDSAVER_OPERATOR_KEY_SHA256`
+  from the shell, not from the root `.env`, so the digest had to be supplied separately.
+- The committed platform code didn't start on its own. These were fixed: the migrations and `identity/app.py`
+  read `CLOUDSAVER_*` names that compose doesn't set (now `identity.config.env()`, `PLATFORM_*` first);
+  `identity/app.py` imported CloudSaver's `app.runtime` (now `identity.redaction`); `identity.domain` lacked
+  `TIERS`; `normalize_scope_items` was called with the old signature (limits now come from the seed catalog).
+- **Blocking:** migration `i0002_billing` doesn't exist, but `PostgresStore` refuses to start without forced RLS
+  on `billing.subscriptions`. Identity-service also has no plan, subscription, payment, billing-settings or
+  webhook endpoints, and no billing evaluator. The billing acceptance criteria can't be verified until these
+  are built.
+- `platform/tests/test_billing_stripe.py` imports `database.billing_store` and `services.billing`, which don't
+  exist. It needs porting to `identity/billing/providers.py`.
+- `identity/importer.py` still imports CloudSaver's `app.config` for env-seeded tenants, so it can't run in the
+  platform image.
+- The volume `cloudsaver_token-db-data` was reused by `platform-db` without changes. Compose warns that it was
+  created by the `cloudsaver` project. Mark it `external: true` or rename it in a maintenance window.
+
 ## Out of scope
 
 - A separate git repository for the platform. The layout is designed so that a later move is a `git subtree

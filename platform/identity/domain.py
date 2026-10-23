@@ -7,6 +7,7 @@ PROVIDERS = ('azure', 'aws', 'gcp', 'kubernetes')
 SCOPE_KEYS = {'azure': 'subscription_ids', 'aws': 'aws_accounts', 'gcp': 'gcp_projects', 'kubernetes': 'kubernetes_clusters'}
 PROVIDER_LABELS = {'azure': 'Azure', 'aws': 'AWS', 'gcp': 'Google Cloud', 'kubernetes': 'Kubernetes'}
 STATUSES = ('active', 'suspended', 'deleted')
+TIERS = ('STARTER', 'GROWTH', 'ENTERPRISE')
 FAILURE_REASONS = ('malformed', 'unknown', 'secret_mismatch', 'revoked', 'expired', 'rotated_out',
                    'workspace_suspended', 'throttled')
 MAX_ACTIVE_KEYS = 20

@@ -100,7 +100,7 @@ def import_directory(service, tenants, source, *, platform=None, deadline=None, 
 def main():
     from identity.app import build_service
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s %(message)s')
-    from app.runtime import install_log_redaction
+    from identity.redaction import install_log_redaction
     install_log_redaction()
     service = build_service()
     entra = os.getenv('CLOUDSAVER_AUTH_MODE') == 'entra'

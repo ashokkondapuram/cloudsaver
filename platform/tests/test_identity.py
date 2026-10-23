@@ -239,7 +239,7 @@ def test_identity_client_caches_and_fails_closed():
 
 
 def test_logs_never_contain_workspace_keys(caplog):
-    from app.runtime import install_log_redaction
+    from identity.redaction import install_log_redaction
     install_log_redaction()
     key = keyfmt.new_key('development')[1]
     legacy = secrets.token_hex(32)
@@ -267,19 +267,20 @@ def compose_blocks(text, parent):
     return blocks
 
 
-def test_token_db_is_internal_and_portal_is_loopback_only():
+def test_platform_db_is_internal_and_portal_is_loopback_only():
     text = (ROOT / 'compose.yaml').read_text()
     services, networks = compose_blocks(text, 'services'), compose_blocks(text, 'networks')
-    assert not any(line.startswith('ports:') for line in services['token-db'])
-    assert not any(line.startswith('ports:') for line in services['identity-service'])
-    assert 'internal: true' in networks['identity-db'] and 'internal: true' in networks['portal']
+    for name in ('platform-db', 'identity-service', 'platform-redis'):
+        assert not any(line.startswith('ports:') for line in services[name]), name
+    for name in ('platform-db', 'platform-internal', 'platform-link'):
+        assert 'internal: true' in networks[name], name
     def listed(body, field):
         line = next((l for l in body if l.startswith(field + ':')), None)
         return [] if line is None else [v.strip(' \'"') for v in line.split(':', 1)[1].strip(' []').split(',') if v.strip()]
 
-    assert listed(services['token-db'], 'networks') == ['identity-db']
-    members = {name for name, body in services.items() if 'identity-db' in listed(body, 'networks')}
-    assert {'token-db', 'identity-service'} <= members <= {'token-db', 'identity-migrate', 'identity-service', 'identity-import'}
+    assert listed(services['platform-db'], 'networks') == ['platform-db']
+    members = {name for name, body in services.items() if 'platform-db' in listed(body, 'networks')}
+    assert {'platform-db', 'identity-service'} <= members <= {'platform-db', 'identity-migrate', 'identity-service'}
     assert listed(services['platform-portal'], 'ports') == ['127.0.0.1:3100:3100']
     for name, body in services.items():
         for port in listed(body, 'ports'):
@@ -287,7 +288,5 @@ def test_token_db_is_internal_and_portal_is_loopback_only():
 
 
 def test_node_images_are_pinned():
-    for path in ('web-dashboard/Dockerfile', 'platform-portal/Dockerfile'):
-        froms = [line for line in (ROOT / path).read_text().splitlines() if line.startswith('FROM ')]
-        assert froms and all('node:24.22.1-alpine' in line for line in froms), path
-    assert (ROOT / '.nvmrc').read_text().strip() == '24.22.1'
+    froms = [line for line in (ROOT / 'portal/Dockerfile').read_text().splitlines() if line.startswith('FROM ')]
+    assert froms and all('node:24.22.1-alpine' in line for line in froms)

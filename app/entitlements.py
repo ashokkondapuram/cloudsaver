@@ -271,9 +271,13 @@ def enforce_providers(subject, providers) -> None:
             raise HTTPException(403, f"{PROVIDER_LABELS[provider]} isn't included in your plan. " + CONTACT)
 
 
-def billing_summary(tenant) -> dict:
-    """GET /api/v1/billing/entitlements; the dashboard Plan tab is built against exactly these fields."""
+def billing_summary(tenant, workspace=None) -> dict:
+    """GET /api/v1/billing/entitlements; the dashboard Plan tab is built against exactly these fields.
+
+    Quotas are workspace-wide, so scopes are counted on the full workspace even for provider-scoped keys.
+    """
     plan = entitlements_for(tenant)
+    workspace = workspace or tenant
     return {
         'tenant_id': tenant['tenant_id'],
         'tier': plan.tier,
@@ -284,7 +288,7 @@ def billing_summary(tenant) -> dict:
         'subscription_plan_name': plan.subscription_plan_name,
         'manage_billing_url': plan.manage_billing_url,
         'max_subscriptions': plan.max_subscriptions,
-        'current_subscriptions': sum(len(tenant.get(k) or []) for k in
+        'current_subscriptions': sum(len(workspace.get(k) or []) for k in
                                      ('subscription_ids', 'aws_accounts', 'gcp_projects', 'kubernetes_clusters')),
         'max_resources_per_scan': plan.max_resources_per_scan,
         'allowed_scan_frequencies': list(plan.allowed_scan_frequencies),

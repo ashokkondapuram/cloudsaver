@@ -1,13 +1,13 @@
-"""token-db migrations run as identity_owner, never as the identity_app runtime role."""
-import os
-
+"""platform-db migrations run as identity_owner, never as the identity_app runtime role."""
 from alembic import context
 from sqlalchemy import create_engine, pool, text
 from sqlalchemy.engine import make_url
 
-raw_url = os.environ.get('CLOUDSAVER_IDENTITY_MIGRATION_URL')
+from identity.config import env
+
+raw_url = env('IDENTITY_MIGRATION_URL')
 if not raw_url:
-    raise RuntimeError('Set CLOUDSAVER_IDENTITY_MIGRATION_URL to the token-db owner DSN')
+    raise RuntimeError('Set PLATFORM_IDENTITY_MIGRATION_URL to the platform-db owner DSN')
 url = make_url(raw_url)
 if url.get_backend_name() != 'postgresql':
     raise RuntimeError('token-db migrations require PostgreSQL')
