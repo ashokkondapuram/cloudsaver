@@ -199,6 +199,32 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def ai_targets(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/ai/targets', authorization)
 
+    @app.get('/api/v1/ai/assessments')
+    async def ai_history(request: Request, row=Depends(allowed), authorization: str = Header()):
+        params={k:v for k,v in request.query_params.items() if k in ('limit','before','scan_id','resource_reference')}
+        return await forward('GET','scanner','/api/v1/ai/assessments',authorization,params)
+
+    @app.get('/api/v1/ai/assessments/{assessment_id}')
+    async def ai_record(assessment_id: UUID,row=Depends(allowed),authorization: str = Header()):
+        return await forward('GET','scanner',f'/api/v1/ai/assessments/{assessment_id}',authorization)
+
+    @app.get('/api/v1/ai/usage')
+    async def ai_usage(days: int = Query(30,ge=1,le=90),row=Depends(allowed),authorization: str = Header()):
+        return await forward('GET','scanner','/api/v1/ai/usage',authorization,{'days':days})
+
+    @app.get('/api/v1/finops/imports')
+    async def billing_imports(limit: int = Query(25,ge=1,le=100),row=Depends(allowed),authorization: str = Header()):
+        return await forward('GET','scanner','/api/v1/finops/imports',authorization,{'limit':limit})
+
+    @app.post('/api/v1/finops/imports',status_code=201)
+    async def billing_import(request: Request,row=Depends(allowed),authorization: str = Header()):
+        return await gitops_post('/api/v1/finops/imports',request,authorization)
+
+    @app.get('/api/v1/finops/summary')
+    async def billing_summary(request: Request,row=Depends(allowed),authorization: str = Header()):
+        params={k:v for k,v in request.query_params.items() if k in ('start','end','currency','budget')}
+        return await forward('GET','scanner','/api/v1/finops/summary',authorization,params)
+
     @app.get('/api/v1/scans/{scan_id}/analysis')
     async def analysis(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/analysis', authorization)

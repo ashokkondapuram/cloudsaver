@@ -1,6 +1,10 @@
-# Service architecture assessment and cloud AI advisory (v0.11.0)
+# Service architecture assessment and cloud AI advisory (v1.0.0)
 
 Source: [CloudSaver Enterprise FinOps Platform & Multi-Cloud Optimization Engine — optimization, 360° analysis and AI integration guide](https://docs.google.com/document/d/1u_9HSbjE41srku4ZjDAbkSQ39wmeENOBMn2OGVO3oYs/edit), read October 23, 2026. This release implements an evidence-led milestone from that guide. The guide's full hierarchy, billing pipeline, autonomous operation and performance targets are not release acceptance evidence.
+
+## v1.0.0 runtime update
+
+The API now uses the SQL inference ledger described in [the master-guide integration](V1_MASTER_GUIDE.md). Apply migration 0009 first. Attempt intent, outcomes, lifecycle and usage survive restarts without Redis TTL expiry; uncertain requests do not automatically repeat. New history/usage endpoints and observed structured attribution remain separate from model input. The historical Redis section below describes the earlier coordinator and direct-SDK compatibility, not the current default API. There is still no reconciled dollar budget or semantic truth guarantee.
 
 ## Working workflow
 
@@ -50,7 +54,7 @@ Responses use the approved target output ceiling (default 1,800 requested tokens
 
 HTTP provider responses have a 64 KiB body bound, no redirects and no automatic HTTP retries. Parsed model JSON is capped at 16 KiB. Raw provider errors, credentials and responses are not exposed as error details. Cloud identity acquisition follows the existing keyless trust chain; no external provider was invoked in the release tests.
 
-## Attempt coordination and limits
+## Historical v0.9–v0.11 Redis coordination and limits
 
 Redis atomically claims a tenant + UUID idempotency key and increments an attempt counter for the Redis server's UTC hour. Default 10 attempts/hour, configurable from 1–100. The same key and fingerprint returns a cached result after success. Different fingerprints conflict. An in-flight, failed, malformed, timed-out or uncertain attempt retains its fence and is not automatically re-invoked. Failure to coordinate returns 503 before inference. Uncertain outcomes can consume both an attempt and provider charges. Rate-limit responses are 429.
 

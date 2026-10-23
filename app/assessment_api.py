@@ -2,7 +2,7 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 from app.assessment import assess, ai_context, summarize
@@ -33,9 +33,13 @@ async def payload(request, schema):
         raise HTTPException(422, 'Invalid analysis request; exact resource selection and explicit acknowledgement are required') from None
 
 
-def create_router(settings, store, current_tenant, gateway=None):
+def create_router(settings, store, current_tenant, gateway=None, ledger=None):
     router = APIRouter(prefix='/api/v1')
-    gateway = gateway or AIGateway()
+    if ledger is None:
+        from app.enterprise_store import EnterpriseStore
+        from app.inference_ledger import InferenceLedger
+        ledger = InferenceLedger(EnterpriseStore(settings))
+    gateway = gateway or AIGateway(budget=ledger)
 
     def owned(scan_id, tenant):
         scan = store.get(tenant['tenant_id'], str(scan_id))
@@ -76,6 +80,29 @@ def create_router(settings, store, current_tenant, gateway=None):
     def ai_targets(tenant=Depends(current_tenant)):
         return gateway.available(tenant)
 
+    @router.get('/ai/assessments')
+    def assessment_history(limit: int = Query(25,ge=1,le=50), before: UUID | None = None,
+                           scan_id: UUID | None = None, resource_reference: str | None = Query(None,pattern=r'^[a-f0-9]{64}$'),
+                           tenant=Depends(current_tenant)):
+        try:
+            return ledger.page(tenant['tenant_id'],limit,str(before) if before else None,str(scan_id) if scan_id else None,resource_reference)
+        except AIError as error:
+            raise HTTPException(error.status,str(error)) from None
+
+    @router.get('/ai/assessments/{assessment_id}')
+    def assessment_record(assessment_id: UUID,tenant=Depends(current_tenant)):
+        result=ledger.get(tenant['tenant_id'],str(assessment_id))
+        if result is None:
+            raise HTTPException(404,'Assessment not found')
+        return result
+
+    @router.get('/ai/usage')
+    def usage(days: int = Query(30,ge=1,le=90),tenant=Depends(current_tenant)):
+        try:
+            return ledger.usage(tenant['tenant_id'],days)
+        except AIError as error:
+            raise HTTPException(error.status,str(error)) from None
+
     @router.post('/scans/{scan_id}/ai-risk-evaluation')
     async def ai_review(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
@@ -87,10 +114,11 @@ def create_router(settings, store, current_tenant, gateway=None):
         result = assess(finding, observed_at=scan.get('timestamp'))
         if selection.evidence_digest != result['evidence_digest']:
             raise HTTPException(409, 'Assessment evidence changed; refresh and acknowledge the updated context')
+        from app.inference_ledger import attribution
         from starlette.concurrency import run_in_threadpool
         try:
             return await run_in_threadpool(gateway.evaluate, tenant, selection.target_id, selection.idempotency_key,
-                                           str(scan_id), ai_context(finding, result), result)
+                                           str(scan_id), ai_context(finding, result), result, attribution=attribution(finding))
         except AIError as error:
             raise HTTPException(error.status, str(error), headers={'Retry-After': '3600'} if error.status == 429 else None) from None
     return router

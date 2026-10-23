@@ -1,39 +1,37 @@
-# CloudSaver v0.11.0 verification report
+# CloudSaver v1.0.0 integrated verification report
 
-Executed October 23, 2026 against the latest v0.10.0 GitHub baseline, commit `871abc291bb289f4c6de08a0a1748be803c59c67`. Requirements: the Drive optimization, service analysis and enterprise AI integration README linked in SOURCE_CONTEXT.md.
+Executed October 23, 2026. Baseline: verified GitHub v0.11.0, commit `053db837e3d184c4e8847a93a93c58842bb7efea` (CI success). Requirements: the exact user-named [v1.0.0 master guide](https://docs.google.com/document/d/1FmtfohZPlnlwZ1lbcCuu-XX0G1uc6UI3Z87svw4P0zc/edit) and inspected Drive CloudSaver-v1.0.0.zip. See docs/V1_MASTER_GUIDE.md for the eight-area mapping and original-package provenance.
 
-| Check | Result |
+| Check | Executed result |
 | --- | --- |
-| Complete backend suite via `python scripts/test_postgres.py --tb=short` | **399 passed** with disposable PostgreSQL 16 / Redis 7; temporary containers cleaned up |
-| Python dependency consistency (`python -m pip check`) | Passed |
-| TypeScript and production build (`npx next build --webpack`) | Passed, all nine pages generated; webpack used for the managed host's build environment |
-| Production browser workflows (`npm run test:e2e`) | **25 passed**, Chromium with intercepted test-only APIs |
-| Standalone production deployment artifact | **2 assessment workflows passed**, including axe accessibility in the protected-resource workflow |
-| Whitespace validation (`git diff --check`) | Passed |
+| Complete backend suite, `python scripts/test_postgres.py --tb=short` | **432 passed**, disposable PostgreSQL 16 and Redis 7; containers cleaned up |
+| Python dependency consistency, `python -m pip check` | Passed |
+| Production compilation and TypeScript, `npx next build --webpack` | Passed; all nine routes generated |
+| Complete browser suite against a fresh production server | **30 passed**, intercepted test-only APIs |
+| New enterprise workflows against the standalone production artifact | **5 passed**, including finance/history accessibility, viewer restrictions, uncertain outcomes and late-response cancellation |
+| Whitespace validation, `git diff --check` | Passed |
 
-## Verified core and inference behavior
+## Verified implementation
 
-- Missing, invalid, infinite, boolean and excessively large numeric inputs remain unknown. Real zero remains zero. Unknown billed costs and realizable savings remain null.
-- The service matrix evaluates explicit saved controls and publishes required evidence fields, gaps and risk codes. Azure ARG retains known encryption enums and returned empty-plan/zone controls; AWS retains returned upgrade configuration without additional reads.
-- Kubernetes utilization requires the actual complete collector summary. Partial counts, mismatched units, missing requests, malformed timestamps, wrong interval/method and old metric windows are not promoted to complete utilization evidence. Tests connect actual injected collector output to assessment.
-- Observation freshness has explicit recent/stale/invalid/unknown states and a 24-hour review window. Stale evidence keeps risks and requires refresh. Policy version and evaluated-evidence digest support traceability without claiming independent verification.
-- Summary review queues retain at most 50 findings, rank observed security exposures ahead of other risk and evidence gaps, and are stable regardless of input order. All summary findings are revalidated against current workspace scope; foreign scans remain inaccessible.
-- Inference requires an exact resource selection, admin role, explicit acknowledgement and the preview evidence digest. Invalid/mismatched previews fail before budget or provider calls. The model cannot remove deterministic protections or approve infrastructure changes.
-- Operator source-provider and context limits reject before paid attempts. Output ceilings are sent by all cloud adapters. Unapproved endpoints/identities and invalid limits are rejected.
-- Advice rejects duplicate JSON properties, duplicate/wrong-pillar/fabricated citations, missing risk citations and risk downgrades. Missing/truncated/filtered/tool provider outcomes are rejected. Semantic prose claims remain unverified.
-- Usage counters come from provider response metadata, separate from model text. Missing/invalid counters remain null; billed cost stays unavailable. Existing Redis concurrency, fencing, uncertain-outcome and tenant-isolation tests pass.
-- Existing remediation Bash safety, PostgreSQL forced RLS, tenant registry, outbox/delivery faults, roles, cloud scope and integrations remain covered by the complete suite.
+- **Durable inference:** a committed, tenant-owned attempt exists before provider invocation; no transaction spans inference. Restarted instances reuse completed results. Concurrent and uncertain attempts cannot replay, cached reads do not consume another slot, and the hourly budget counts accepted attempts. A failed result commit preserves a fence and never exposes uncommitted advice. Reservation failure prevents invocation. Provider errors remain sanitized.
+- **History/usage:** saved advice, evidence policy/digest, lifecycle and known provider token portions remain tenant-scoped. Missing counters stay unknown. Structured cost-center/application attribution is recorded separately and never enters model input. Unmetered and incomplete outcomes remain visible. No billed-dollar estimate is invented.
+- **PostgreSQL:** migration 0009 applies on the disposable database. All four new tables enable and force RLS. No-context/foreign-context reads cannot reveal records. Cross-owner inserts, runtime billing deletion, lifecycle editing and terminal-outcome updates are rejected. Existing migration lineage, normalized ingestion, forced RLS and lease/outbox tests continue to pass.
+- **Billing evidence:** finance-authorized imports validate schema, scopes, resource ownership, currency, periods and exact decimal strings. Duplicate source replay and overlapping charge deduplication are stable; conflicting charges reject atomically. Credits and real zero are retained. Foreign/removed cloud scopes are not exposed. Float/boolean/NaN/exponent/overprecision inputs are rejected.
+- **Analytics:** currency groups remain separate; missing list costs prevent ESR. Declared complete empty exports establish zero; partial declarations remove coverage. Long or partially overlapping charges never become fabricated daily series or complete forecast coverage. Month-end projections require proper same-year month-to-date windows and sufficient covered closed days. Z-scores require a complete, nonconstant 30-day baseline; signals remain provisional and nonseasonal.
+- **Discovery:** four independent read-only sources can progress concurrently with correct tenant identity bindings. Any failed reader discards the overall result; normalized authorization, duplicate detection and finding limits remain enforced. No error-to-demo fallback is added.
+- **Routing/roles:** new gateway paths forward only to the fixed scanner service and retain bearer authentication. Visitor-supplied upstream parameters are ignored; malformed dynamic IDs fail before forwarding. Viewer billing reads/imports are denied; saved AI history remains tenant-bound.
+- **Console:** explicit billing-file preview/acknowledgement/import, preserved monetary strings, currency/budget filtering, receipts, saved AI advice, lifecycle and usage inspection pass browser workflows. Pending/uncertain outcomes have no retry/approve/execute control. Late detail responses cannot appear after tab changes. All new evidence scroll regions are labeled and keyboard-focusable. Existing dark/light, mobile, virtual inventory, comparison/focus, plan review, delivery replay and role workflows still pass.
 
-## Verified console behavior
+Browser screenshots contain labeled test fixtures, not customer invoices or actual AI responses. Production modules never import these fixtures. All external provider clients used in backend verification are injected/mocked; no real cloud scan, model invocation, remediation, payment, alert, ticket or product GitOps PR was executed.
 
-All existing dark/light, 10,000-row inventory, filtering/export, comparison/focus, keyboard/mobile, plan review, delivery replay, viewer restrictions and late-response cancellation browser workflows pass. New checks verify priority drill-down, stale-evidence warnings, policy provenance, explicit preview digest submission and token usage. Tests use labeled fixtures and never call cloud inference or product mutation endpoints. The built standalone server was checked separately because `next start` warns for an `output: standalone` deployment.
+## Deployment and acceptance boundary
 
-## Activation and practical limits
+Apply schema-owner migration **0009_enterprise_evidence** before starting upgraded PostgreSQL services. The integration keeps existing keyless identity and RLS architecture; no new secret storage is required. The shared Compose stack and existing databases were not upgraded or restarted during testing. SQLite remains a local development path without database-enforced RLS.
 
-AI remains opt-in and disabled by default. Existing API clients must fetch `/analysis/resource` and send its `assessment.evidence_digest` to `/ai-risk-evaluation`; missing digests return 422, changed previews return 409. See docs/ASSESSMENT_AI.md for exact target fields, thresholds, API and keyless activation.
+The API now uses SQL attempt coordination, with durable fences and no automatic advice/history TTL. Define retention, backup/restore and owner-controlled purge procedures. Old Redis inference records are not automatically migrated: use a controlled inference cutover and do not resubmit old uncertain requests. Runtime append-only grants/terminal-outcome protection are not WORM or compliance certification. Database loss/restore can still lose history; external exactly-once inference is not guaranteed.
 
-No new database migration is required. The package does not deploy or rebuild the shared Compose stack. No live cloud scan, model invocation, remediation, payment, alert or product GitOps PR was executed. Cloud identities are not configured in this environment, so actual IAM/provider/model compatibility, staging acceptance and inference quality remain unverified.
+The billing contract is a normalized FOCUS field subset with x_ChargeId identity, not native export ingestion or full FOCUS certification. Completeness is operator-declared and not provider-reconciled. Resource-level bill matching, native connectors, verified amortization, seasonality, net snapshot economics, realized savings and monetary AI budgets remain open. Jira/ServiceNow synchronization, full organization hierarchy, extra role mappings, durable interactive multi-cloud jobs, full topology and autonomous execution are not claimed.
 
-Expanded optional checks do not imply that every live collector now collects those controls. Full dependency graphs, raw telemetry series, FOCUS reconciliation, durable inference audit/usage ledgers and monetary budgets remain roadmap work. The evidence digest is not a signature. Redis attempts/results retain the existing 24-hour lifetime, with no exactly-once guarantee after loss/expiry. Provider-reported tokens are not a billing ledger. No production/compliance certification, guaranteed savings, semantic truth guarantee or autonomous approval is claimed.
+The Drive ZIP was inspected, not accepted as a production baseline or executed wholesale. Its old database/demo/dependency artifacts were not imported. Current secrets, data volumes, caches and test outputs are excluded from the integrated source package. The original Drive ZIP is preserved and the new artifact uses CloudSaver-v1.0.0-integrated.zip.
 
-GitHub CI runs on publication; its final status is reported separately rather than modifying the packaged source report after publication. The local release manifest and ZIP contain matching source bytes, excluding local credentials, live databases, build caches and test outputs.
+No cloud identities are configured here, so live IAM/model compatibility, billing-source reconciliation, deployment/load acceptance, provider retention policies, semantic AI quality and compliance remain unverified. GitHub CI runs on publication; its final result is reported separately without changing the packaged report after release.

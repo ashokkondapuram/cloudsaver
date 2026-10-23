@@ -1,3 +1,13 @@
+# v1.0.0 master-guide continuation
+
+- Latest GitHub main fetched before implementation: v0.11.0 `053db837e3d184c4e8847a93a93c58842bb7efea`; its CI completed successfully.
+- Exact user-named source: [CloudSaver Enterprise Platform: Comprehensive Feature Upgrade & Architecture Master Guide (v1.0.0)](https://docs.google.com/document/d/1FmtfohZPlnlwZ1lbcCuu-XX0G1uc6UI3Z87svw4P0zc/edit), read October 23, 2026, modified 11:37:03 UTC.
+- Inspected [CloudSaver-v1.0.0.zip](https://drive.google.com/file/d/1sR1FVDmi61-B3pWyel5V5JGvwbobkPFc/view), SHA-256 `d77c4cb4bd717669a360a60625d850549a7608a8a01be35ec7763e43723cfa4d`. Its README still identifies v0.4.1 and several components use older demo/reference behavior. No bundled databases, bytecode, demo fallback, credential examples or dependency downgrade were imported.
+- Build on the verified current application, implementing durable AI evidence, billing-backed analytics, bounded discovery and console workflows. [Detailed mapping and limits](docs/V1_MASTER_GUIDE.md) records every guide feature area.
+- Preserve the original Drive package. Publish the integrated source under CloudSaver-v1.0.0-integrated.zip. No automatic AI approval, model-generated destructive IaC or live cloud acceptance is implied by the version number.
+
+## Previous context
+
 # v0.11.0 source context
 
 - Fetched latest GitHub main before development: v0.10.0 commit `871abc291bb289f4c6de08a0a1748be803c59c67`.

@@ -14,7 +14,7 @@ const headings:Record<View,{eyebrow:string;title:string;description:string}>={
   findings:{eyebrow:'INVENTORY & FINDINGS',title:'Every resource. The full picture.',description:'Explore resource signals across your clouds, accounts, and scopes.'},
   allocation:{eyebrow:'COST ALLOCATION',title:'Know where the evidence leads.',description:'Explore cost coverage and resource ownership across your accounts.'},
   automation:{eyebrow:'AUTOMATION ENGINE',title:'From insight to reviewed code.',description:'Prepare change reviews and check infrastructure plans before they reach production.'},
-  activity:{eyebrow:'WORKSPACE ACTIVITY',title:'A clear trail of every delivery.',description:'Inspect durable delivery state, audit history, and saved resource scans.'},
+  activity:{eyebrow:'WORKSPACE ACTIVITY',title:'A clear record of workspace activity.',description:'Inspect delivery state, saved scans, AI assessments and provider-reported usage.'},
   settings:{eyebrow:'SETTINGS & INTEGRATIONS',title:'Your workspace, connected.',description:'Review cloud sources, approved integrations, plan limits, and access.'},
 };
 

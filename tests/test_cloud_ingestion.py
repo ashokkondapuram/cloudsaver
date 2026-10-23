@@ -187,3 +187,32 @@ def test_operator_sources_roundtrip_without_credentials():
     result = normalize_sources(dict(gcp_projects=[GCP], kubernetes_clusters=[CLUSTER],
               aws_accounts=[dict(account_id='123456789012', region='us-east-1', role_arn='arn:aws:iam::123456789012:role/CloudSaverReader')]))
     assert result['gcp_projects'] == [GCP]
+
+
+def test_multiregion_discovery_is_bounded_parallel_and_keeps_source_identity(monkeypatch):
+    from threading import Barrier,Lock
+    from app.multi_cloud import scan_multi_cloud
+    from uuid import uuid4
+    sources=[dict(account_id='123456789012',region=region,role_arn='arn:aws:iam::123456789012:role/Reader') for region in ('us-east-1','us-west-2','eu-west-1','eu-central-1')]
+    tenant=dict(tenant_id=str(uuid4()),subscription_ids=[],aws_accounts=sources)
+    barrier=Barrier(4,timeout=5);guard=Lock();seen=[]
+    def scan(source):
+        assert source['external_id']==tenant['tenant_id']
+        with guard: seen.append(source['region'])
+        barrier.wait()
+        return []
+    monkeypatch.setattr('app.scanner_aws.scan_account',scan)
+    assert scan_multi_cloud(tenant,['aws'])==[] and set(seen)=={s['region'] for s in sources}
+
+
+def test_parallel_provider_failure_discards_other_successful_batches(monkeypatch):
+    from app.multi_cloud import scan_multi_cloud
+    from app.scanner import ScanError
+    from uuid import uuid4
+    sources=[dict(account_id='123456789012',region=region,role_arn='arn:aws:iam::123456789012:role/Reader') for region in ('us-east-1','us-west-2')]
+    tenant=dict(tenant_id=str(uuid4()),subscription_ids=[],aws_accounts=sources)
+    def scan(source):
+        if source['region']=='us-west-2': raise ScanError('Injected read failure')
+        return []
+    monkeypatch.setattr('app.scanner_aws.scan_account',scan)
+    with pytest.raises(ScanError,match='Injected read failure'): scan_multi_cloud(tenant,['aws'])

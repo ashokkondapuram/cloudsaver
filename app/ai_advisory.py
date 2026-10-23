@@ -276,13 +276,13 @@ class AIGateway:
             raise ValueError('AI attempt limit must be between 1 and 100')
 
     def available(self, tenant):
-        return {'enabled': self.enabled, 'hourly_attempt_limit': self.limit, 'advisory_only': True,
+        return {'enabled': self.enabled, 'hourly_attempt_limit': self.limit, 'advisory_only': True, 'durable_history': bool(getattr(self.budget,'durable',False)),
                 'targets': [dict(target_id=t.target_id, provider=t.provider, model=t.model,
                                  max_output_tokens=t.max_output_tokens, max_context_bytes=t.max_context_bytes,
                                  allowed_source_providers=t.allowed_source_providers)
                             for t in self.targets if self.enabled and str(t.tenant_id) == tenant['tenant_id']]}
 
-    def evaluate(self, tenant, target_id, key, scan_id, context, assessment):
+    def evaluate(self, tenant, target_id, key, scan_id, context, assessment, *, attribution=None):
         target = next((t for t in self.targets if str(t.tenant_id) == tenant['tenant_id'] and t.target_id == target_id), None)
         if not self.enabled or target is None:
             raise AIError('AI target is unavailable for this workspace', 404)
@@ -290,8 +290,9 @@ class AIGateway:
             raise AIError('AI target policy does not permit this source provider', 403)
         if len(json.dumps(context, sort_keys=True).encode()) > target.max_context_bytes:
             raise AIError('Sanitized evidence exceeds the AI target context limit', 422)
+        attribution = attribution or dict(cost_center='unassigned',application_id='unassigned')
         fingerprint = hashlib.sha256(json.dumps({'target': target.model_dump(mode='json'), 'scan': scan_id,
-                                                'context': context, 'evidence_digest': assessment['evidence_digest'], 'schema': 2, 'instruction_digest': hashlib.sha256(SYSTEM.encode()).hexdigest()}, sort_keys=True).encode()).hexdigest()
+                                                'context': context, 'evidence_digest': assessment['evidence_digest'], 'attribution': attribution, 'schema': 3, 'instruction_digest': hashlib.sha256(SYSTEM.encode()).hexdigest()}, sort_keys=True).encode()).hexdigest()
         def invoke():
             inferred = self.adapter(target, tenant, context)
             advice = inferred.advice if isinstance(inferred, InferenceResult) else inferred
@@ -305,4 +306,11 @@ class AIGateway:
                         observation=assessment['observation'], usage=usage,
                         validation=dict(schema=True, pillar_citations=True, risk_floor=True, semantic_claims_verified=False),
                         advice=advice, warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
-        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, self.limit, invoke)
+        options = {}
+        if getattr(self.budget,'durable',False):
+            actor = hashlib.sha256((tenant['tenant_id']+'|'+tenant.get('user_id','workspace_key')).encode()).hexdigest()
+            options['metadata'] = dict(scan_id=scan_id,resource_reference=context['resource_reference'],provider=target.provider,
+                model=target.model,target_id=target_id,evidence_digest=assessment['evidence_digest'],
+                policy_version=assessment['policy_version'],actor_reference=actor,
+                cost_center=attribution['cost_center'],application_id=attribution['application_id'],attribution_source='observed_tags_unverified')
+        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, self.limit, invoke, **options)

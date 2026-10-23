@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v0.11.0."""
+"""Runnable CloudSaver enterprise API service v1.0.0."""
 import hashlib
 import hmac
 import logging
@@ -32,16 +32,22 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.11.0', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.0.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
-        'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS', 'CLOUDSAVER_AI_ENABLED')))
+        'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS')))
     locks = {t['tenant_id']: threading.Lock() for t in settings.tenants}
 
     from app.auth import tenant_dependency, require_workspace_role, Role
     current_tenant = tenant_dependency(settings, identity_validator)
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.focus import FocusRepository
+    from app.finops_api import create_router as finops_router
+    evidence_store=EnterpriseStore(settings)
+    api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
     from app.assessment_api import create_router as assessment_router
-    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway))
+    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, InferenceLedger(evidence_store)))
     from app.jobs_api import create_router as jobs_router
     api.include_router(jobs_router(settings, current_tenant, repository=job_repository))
     from app.gitops_api import create_router
@@ -63,7 +69,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.11.0'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.0.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -287,6 +293,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.11.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.0.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

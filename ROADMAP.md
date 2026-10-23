@@ -1,15 +1,21 @@
-# CloudSaver roadmap after v0.11.0
+# CloudSaver roadmap after v1.0.0
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
 production/compliance language and savings percentages are planning targets,
 not acceptance evidence. The v0.5.0 source/guide was reviewed before development.
 
+## v1.0.0 master-guide milestone
+
+The [v1.0.0 master guide](https://docs.google.com/document/d/1FmtfohZPlnlwZ1lbcCuu-XX0G1uc6UI3Z87svw4P0zc/edit) now maps to durable AI assessment/usage evidence, normalized billing ingestion/analytics, bounded discovery and associated console workflows. See [the feature matrix and exact contracts](docs/V1_MASTER_GUIDE.md).
+
+Next: accept actual cloud/model identities in staging; ingest native billing exports and reconcile totals; define audit retention/restore procedures and monetary budgets; extend durable jobs to multi-cloud; implement authenticated Jira/ServiceNow status synchronization and full organizational membership. Preserve existing protected intent and independent change approval. Version 1.0.0 does not certify full blueprint completion or production readiness.
+
 ## v0.11.0 assessment and enterprise AI milestone
 
 Versioned service controls, freshness/gaps/provenance, risk-prioritized review queues and snapshot-wide current-scope enforcement extend the README's five-pillar matrix. Target context/output budgets, source-provider restrictions, citation/risk-floor validation, terminal-response checks and provider usage metadata strengthen the existing AI gateway.
 
-Next: durable tenant-isolated inference audit/usage ledgers and monetary budgets, authorized staging acceptance of provider/IAM policies, raw telemetry/dependency collection, billing reconciliation and evaluated model quality. Provider-reported tokens in a cached response are not a durable billing ledger. Existing Redis idempotency retention remains 24 hours.
+Follow-up implemented in v1.0.0: durable tenant-isolated inference attempt/usage ledgers. Remaining: monetary budgets, authorized staging acceptance of provider/IAM policies, raw telemetry/dependency collection, billing reconciliation and evaluated model quality. Provider-reported tokens in a cached response are not a durable billing ledger. Existing Redis idempotency retention remains 24 hours.
 
 ## v0.10.0 console milestone
 

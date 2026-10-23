@@ -4,11 +4,11 @@ tenant_id always means the customer Azure directory UUID. Async services can use
 these SQLAlchemy 2 models through AsyncSession; no global engine is created.
 Every transaction must set app.current_tenant_id with a transaction-local value.
 """
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, Boolean, Double, Integer, CheckConstraint, DateTime, ForeignKeyConstraint, Index, Numeric, String, Text, UniqueConstraint, false, func
+from sqlalchemy import BigInteger, Boolean, Double, Integer, CheckConstraint, Date, DateTime, ForeignKeyConstraint, Index, Numeric, String, Text, UniqueConstraint, false, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -240,3 +240,77 @@ class DeliveryDispatcher(Base):
     last_poll_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False)
     last_success_at: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
     last_error_at: Mapped[datetime|None] = mapped_column(DateTime(timezone=True))
+
+
+class AIInferenceAttempt(Base):
+    __tablename__='ai_inference_attempts'
+    __table_args__=(UniqueConstraint('tenant_id','request_key'),UniqueConstraint('id','tenant_id'),
+        ForeignKeyConstraint(['scan_id','tenant_id'],['scans.id','scans.tenant_id'],ondelete='RESTRICT'),
+        CheckConstraint("status IN ('pending','completed','uncertain')"),
+        Index('ix_ai_attempt_history','tenant_id','created_at','id'))
+    id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    request_key: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    fingerprint: Mapped[str]=mapped_column(String(64),nullable=False)
+    scan_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    evidence_metadata: Mapped[dict]=mapped_column('metadata',JSONB,nullable=False)
+    status: Mapped[str]=mapped_column(String(16),nullable=False,server_default='pending')
+    response: Mapped[dict|None]=mapped_column(JSONB)
+    input_tokens: Mapped[int|None]=mapped_column(BigInteger)
+    output_tokens: Mapped[int|None]=mapped_column(BigInteger)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.clock_timestamp())
+    completed_at: Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+
+
+class AIInferenceEvent(Base):
+    __tablename__='ai_inference_events'
+    __table_args__=(ForeignKeyConstraint(['attempt_id','tenant_id'],['ai_inference_attempts.id','ai_inference_attempts.tenant_id'],ondelete='RESTRICT'),)
+    id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    attempt_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    action: Mapped[str]=mapped_column(String(16),nullable=False)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.clock_timestamp())
+
+
+class FocusImport(Base):
+    __tablename__='focus_imports'
+    __table_args__=(UniqueConstraint('tenant_id','source_id'),UniqueConstraint('id','tenant_id'),
+        ForeignKeyConstraint(['tenant_id'],['tenants.tenant_id'],ondelete='RESTRICT'),
+        Index('ix_focus_import_period','tenant_id','provider','sub_account','currency','period_start','period_end'))
+    id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    source_id: Mapped[str]=mapped_column(String(100),nullable=False)
+    fingerprint: Mapped[str]=mapped_column(String(64),nullable=False)
+    provider: Mapped[str]=mapped_column(String(8),nullable=False)
+    sub_account: Mapped[str]=mapped_column(String(128),nullable=False)
+    currency: Mapped[str]=mapped_column(String(3),nullable=False)
+    period_start: Mapped[date]=mapped_column(Date,nullable=False)
+    period_end: Mapped[date]=mapped_column(Date,nullable=False)
+    complete: Mapped[bool]=mapped_column(Boolean,nullable=False)
+    records: Mapped[int]=mapped_column(Integer,nullable=False)
+    inserted: Mapped[int]=mapped_column(Integer,nullable=False)
+    actor: Mapped[str]=mapped_column(String(64),nullable=False)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,server_default=func.clock_timestamp())
+
+
+class FocusCharge(Base):
+    __tablename__='focus_charges'
+    __table_args__=(UniqueConstraint('tenant_id','provider','billing_account','charge_id'),
+        ForeignKeyConstraint(['import_id','tenant_id'],['focus_imports.id','focus_imports.tenant_id'],ondelete='RESTRICT'),
+        Index('ix_focus_charge_period','tenant_id','currency','period_start','period_end'))
+    id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),primary_key=True)
+    tenant_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    import_id: Mapped[UUID]=mapped_column(PGUUID(as_uuid=True),nullable=False)
+    provider: Mapped[str]=mapped_column(String(8),nullable=False)
+    billing_account: Mapped[str]=mapped_column(String(128),nullable=False)
+    sub_account: Mapped[str]=mapped_column(String(128),nullable=False)
+    charge_id: Mapped[str]=mapped_column(String(128),nullable=False)
+    fingerprint: Mapped[str]=mapped_column(String(64),nullable=False)
+    currency: Mapped[str]=mapped_column(String(3),nullable=False)
+    period_start: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
+    period_end: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False)
+    resource_id: Mapped[str|None]=mapped_column(Text)
+    charge_category: Mapped[str]=mapped_column(String(16),nullable=False)
+    billed_cost: Mapped[Decimal]=mapped_column(Numeric(24,8),nullable=False)
+    effective_cost: Mapped[Decimal]=mapped_column(Numeric(24,8),nullable=False)
+    list_cost: Mapped[Decimal|None]=mapped_column(Numeric(24,8))

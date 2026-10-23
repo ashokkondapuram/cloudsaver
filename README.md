@@ -1,13 +1,24 @@
-# CloudSaver v0.11.0
+# CloudSaver v1.0.0
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release expands the core assessment engine with versioned service controls,
-evidence freshness, review priorities and stricter enterprise AI governance.
-The console retains its dark/light resource explorer and comparison workflows. Deployment acceptance
-and live integration limits are recorded in TEST_REPORT.md.
+release applies the new v1.0.0 master guide to the latest
+verified code: durable AI assessment history/usage, scoped normalized billing
+imports and analytics, bounded concurrent discovery and corresponding console
+workflows. Activation and live integration limits are recorded in TEST_REPORT.md.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v1.0.0: durable enterprise evidence and billing analytics
+
+- SQL-backed AI attempt reservation, restart-persistent idempotency fences, saved advice, append-only runtime lifecycle events and known token usage by model/target/observed cost-center/application IDs. Pending or uncertain outcomes never retry automatically.
+- Finance-authorized normalized billing imports with exact decimals, stable charge deduplication, atomic conflict handling and PostgreSQL forced RLS. Billed/effective/list costs, conditional ESR, daily coverage, provisional budget projections and Z-score signals keep missing data explicit.
+- Cost allocation adds explicit JSON import/review and currency/period/budget controls. Activity adds saved AI assessment and usage inspection, without initiating inference or approving actions.
+- Up to four account/region readers run concurrently. Any provider failure discards the whole snapshot; source order remains stable.
+
+Read the [master-guide feature mapping, import contract and upgrade instructions](docs/V1_MASTER_GUIDE.md). Apply schema-owner migration **0009_enterprise_evidence** before upgrading PostgreSQL services. The original Drive ZIP is preserved; the integrated source artifact has a distinct filename.
+
+This implements a tested milestone from the guide, not every aspirational integration. Native billing connectors/reconciliation, Jira/ServiceNow synchronization, full hierarchy, monetary AI budgets and autonomous execution remain open. AI is still opt-in; model prose and imported billing completeness are not independently verified.
 
 ## New in v0.11.0: core assessment and enterprise AI governance
 

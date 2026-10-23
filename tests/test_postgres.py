@@ -301,7 +301,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0008_tenant_registry',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0009_enterprise_evidence',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -907,3 +907,42 @@ def test_architecture_analysis_reads_use_runtime_rls_and_preserve_saved_evidence
                              json={'resource_id':sa['findings'][0]['resource_id'],'rule_id':'ORPHANED_DISK'})
         assert result.status_code == 200 and result.json()['assessment']['retail_estimate_usd'] is None
         assert store.get(a['tenant_id'],sa['scan_id']) == sa
+
+
+def test_enterprise_ledger_and_billing_use_forced_rls_and_append_only_evidence(tenants):
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.focus import FocusRepository,ImportRequest
+    from tests.test_enterprise import batch,charge,result
+    from datetime import date
+    app,_,a,b,sa,_=tenants
+    settings=Settings('azure','unused',(a,b),app)
+    persistence=EnterpriseStore(settings);ledger=InferenceLedger(persistence)
+    meta=dict(scan_id=sa['scan_id'],provider='azure',model='injected-test-model',target_id='review',resource_reference='a'*64)
+    key=str(uuid4());calls=[]
+    first=ledger.run(a['tenant_id'],key,'f'*64,10,lambda:(calls.append(1) or result()),metadata=meta)
+    assert InferenceLedger(EnterpriseStore(settings)).run(a['tenant_id'],key,'f'*64,10,result,metadata=meta)['cached']
+    assert len(calls)==1 and ledger.usage(a['tenant_id'])['groups'][0]['input_tokens']==100
+    assert ledger.page(a['tenant_id'])['items'][0]['status']=='completed'
+    assert ledger.get(b['tenant_id'],first['assessment_id']) is None
+    assert ledger.page(b['tenant_id'])['items']==[]
+    billing=FocusRepository(persistence)
+    payload=ImportRequest.model_validate(batch([charge(1,SubAccountId=a['subscription_ids'][0])],sub_account_id=a['subscription_ids'][0]))
+    billing.import_records(a,payload)
+    assert billing.summary(a,date(2026,10,1),date(2026,10,22),'USD')['billed_cost']=='10.00000000'
+    assert billing.summary(b,date(2026,10,1),date(2026,10,22),'USD')['records']==0
+    tables=('ai_inference_attempts','ai_inference_events','focus_imports','focus_charges')
+    with psycopg.connect(app) as db:
+        for table in tables:
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+        context(db,a['tenant_id'])
+        assert db.execute('SELECT count(*) FROM ai_inference_attempts').fetchone()[0]==1
+        with pytest.raises(errors.InsufficientPrivilege): db.execute('DELETE FROM focus_charges')
+        db.rollback();context(db,a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege): db.execute("UPDATE ai_inference_events SET action='uncertain'")
+        db.rollback();context(db,a['tenant_id'])
+        with pytest.raises(errors.CheckViolation): db.execute("UPDATE ai_inference_attempts SET status='uncertain' WHERE id=%s",(first['assessment_id'],))
+        db.rollback();context(db,a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute("INSERT INTO ai_inference_events(id,tenant_id,attempt_id,action) VALUES (%s,%s,%s,'claimed')",(uuid4(),b['tenant_id'],first['assessment_id']))
