@@ -10,11 +10,12 @@ import threading
 import time
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from app.tenant_config import CONFIG_KEYS, config_of, normalize_tenant
+from app.tenant_config import CONFIG_KEYS, SCOPE_KEYS, config_of, normalize_tenant
 
 logger = logging.getLogger('cloudsaver.registry')
 UNSET = object()
 TENANT_FIELDS = set(CONFIG_KEYS) | {'name', 'plan_tier', 'active', 'api_key_sha256'}
+DIRECTORY_FIELDS = set(SCOPE_KEYS) | {'identity', 'name', 'plan_tier', 'active', 'api_key_sha256'}
 
 
 class VersionConflict(ValueError):
@@ -91,13 +92,13 @@ class BaseRegistry:
     def update(self, tenant_id, changes, expected_version, actor, *, webhook=UNSET):
         """Merge validated changes; webhook=None removes it, a string replaces it."""
         if set(changes) - TENANT_FIELDS:
-            raise ValueError('Unknown tenant setting')
+            raise ValueError('Unknown workspace setting')
         current = self.get(tenant_id)
         if current is None:
             raise KeyError(tenant_id)
         if current['version'] != expected_version:
             raise VersionConflict('Settings changed since you loaded them')
-        merged = normalize_tenant(dict(current, **changes))
+        merged = normalize_tenant(dict(current, **changes), allow_missing_key=True)
         if not self._write(merged, expected_version, actor, webhook,
                            plan_changed=merged['plan_tier'] != current['plan_tier']):
             raise VersionConflict('Settings changed since you loaded them')
@@ -113,6 +114,45 @@ class BaseRegistry:
             raise VersionConflict('Platform settings changed since you loaded them')
         self.invalidate()
         return self.platform()
+
+    # ----- directory projection (cutover) -----------------------------------------------------------
+    @staticmethod
+    def projected(current, snap):
+        """Directory-owned fields from a change-feed snapshot over the tenant-owned preferences."""
+        base = config_of(current) if current else {}
+        return normalize_tenant(dict(
+            base, **{k: snap[k] for k in SCOPE_KEYS}, identity=snap['identity'], tenant_id=snap['tenant_id'],
+            name=snap['name'], plan_tier=snap['plan_tier'], plan=snap.get('plan'), active=bool(snap['active']),
+            customer_id=snap['customer_id'], directory_version=snap['version'], api_key_sha256=None,
+            version=current['version'] if current else 1),
+            allow_missing_key=True)
+
+    def apply_snapshot(self, snap):
+        """Idempotent; snapshots older than the projected directory version are ignored."""
+        self._ensure_seeded()
+        changed = self._apply(snap)
+        if changed:
+            self.invalidate()
+        return changed
+
+    def deactivate_missing(self, tenant_ids):
+        changed = self._deactivate_missing({str(UUID(t)) for t in tenant_ids})
+        self.invalidate()
+        return changed
+
+    def apply_platform(self, value):
+        self._ensure_seeded()
+        current = self.platform()
+        merged = normalize_platform({k: value[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled')})
+        if {k: current[k] for k in merged} == merged:
+            return False
+        self._write_platform(merged, current['version'], 'directory')
+        self.invalidate()
+        return True
+
+    @staticmethod
+    def _same(current, tenant):
+        return current is not None and all(current.get(k) == tenant.get(k) for k in tenant if k not in ('version', 'webhook_configured'))
 
 
 class MemoryRegistry(BaseRegistry):
@@ -139,7 +179,8 @@ class MemoryRegistry(BaseRegistry):
         return self._public(tenant) if tenant else None
 
     def _insert(self, tenant, actor):
-        if tenant['tenant_id'] in self._tenants or any(t['api_key_sha256'] == tenant['api_key_sha256'] for t in self._tenants.values()):
+        digest = tenant.get('api_key_sha256')
+        if tenant['tenant_id'] in self._tenants or (digest and any(t.get('api_key_sha256') == digest for t in self._tenants.values())):
             return False
         self._tenants[tenant['tenant_id']] = dict(tenant, version=1)
         self.audit.append((tenant['tenant_id'], actor, 'tenant_created', 1))
@@ -164,6 +205,34 @@ class MemoryRegistry(BaseRegistry):
         self.audit.append((None, actor, 'platform_updated', expected_version + 1))
         return True
 
+    def _apply(self, snap):
+        current = self._tenants.get(snap['tenant_id'])
+        if current and (current.get('directory_version') or 0) > snap['version']:
+            return False
+        tenant = self.projected(current, snap)
+        if self._same(current, tenant):
+            return False
+        version = current['version'] + 1 if current else 1
+        self._tenants[tenant['tenant_id']] = dict(tenant, version=version)
+        self.audit.append((tenant['tenant_id'], 'directory', 'tenant_projected', version))
+        return True
+
+    def _deactivate_missing(self, tenant_ids):
+        changed = 0
+        for tid, tenant in self._tenants.items():
+            if tid not in tenant_ids and tenant['active']:
+                self._tenants[tid] = dict(tenant, active=False, version=tenant['version'] + 1)
+                changed += 1
+        return changed
+
+    projection_seq = 0
+
+    def projection_cursor(self):
+        return self.projection_seq
+
+    def set_projection_cursor(self, seq):
+        self.projection_seq = seq
+
     def webhook_targets(self):
         return [dict(tenant_id=tid, channel=self._tenants[tid]['alerts']['channel'], url=url)
                 for tid, url in self._webhooks.items()
@@ -172,7 +241,9 @@ class MemoryRegistry(BaseRegistry):
 
 class PostgresRegistry(BaseRegistry):
     SELECT = ('SELECT tenant_id, name, plan_tier, api_key_sha256, active, config, '
-              'webhook_url IS NOT NULL, version FROM public.tenant_registry')
+              'webhook_url IS NOT NULL, version, customer_id, directory_version, entitlements, entitlements_version, '
+              'billing_state, plan_name, current_period_end, grace_ends_at, subscription_plan_name, manage_billing_url '
+              'FROM public.tenant_registry')
 
     def __init__(self, url, bootstrap=(), ttl=None):
         super().__init__(bootstrap, ttl)
@@ -184,9 +255,17 @@ class PostgresRegistry(BaseRegistry):
 
     @staticmethod
     def _row(row):
-        tenant_id, name, tier, digest, active, config, has_webhook, version = row
-        tenant = normalize_tenant(dict(config, tenant_id=str(tenant_id), name=name, plan_tier=tier,
-                                       api_key_sha256=digest.strip(), active=active, version=version))
+        (tenant_id, name, tier, digest, active, config, has_webhook, version, customer_id, directory_version,
+         entitlements, entitlements_version, billing_state, plan_name, period_end, grace_ends_at,
+         subscription_plan_name, manage_billing_url) = row
+        plan = None if entitlements is None else dict(
+            code=tier, name=plan_name, billing_state=billing_state, current_period_end=period_end,
+            grace_ends_at=grace_ends_at, subscription_plan_name=subscription_plan_name,
+            entitlements_version=entitlements_version, entitlements=entitlements, manage_billing_url=manage_billing_url)
+        tenant = normalize_tenant(dict(config, tenant_id=str(tenant_id), name=name, plan_tier=tier, plan=plan,
+                                       api_key_sha256=digest.strip() if digest else None, active=active, version=version,
+                                       customer_id=customer_id, directory_version=directory_version),
+                                  allow_missing_key=True)
         tenant['webhook_configured'] = bool(has_webhook)
         return tenant
 
@@ -269,6 +348,60 @@ class PostgresRegistry(BaseRegistry):
             if updated:
                 self._audit(db, None, actor, 'platform_updated', updated[0])
         return bool(updated)
+
+    def _apply(self, snap):
+        from psycopg.types.json import Jsonb
+        with self._connect() as db:
+            row = db.execute(self.SELECT + ' WHERE tenant_id=%s FOR UPDATE', (snap['tenant_id'],)).fetchone()
+            current = self._row(row) if row else None
+            if current and (current.get('directory_version') or 0) > snap['version']:
+                return False
+            tenant = self.projected(current, snap)
+            if self._same(current, tenant):
+                return False
+            plan = tenant.get('plan') or {}
+            version = db.execute(
+                'INSERT INTO public.tenant_registry (tenant_id, name, plan_tier, api_key_sha256, active, config, customer_id, '
+                'directory_version, entitlements, entitlements_version, billing_state, plan_name, current_period_end, '
+                'grace_ends_at, subscription_plan_name, manage_billing_url, projected_at, updated_by) '
+                "VALUES (%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),'directory') "
+                'ON CONFLICT (tenant_id) DO UPDATE SET name=EXCLUDED.name, plan_tier=EXCLUDED.plan_tier, api_key_sha256=NULL, '
+                'active=EXCLUDED.active, config=EXCLUDED.config, customer_id=EXCLUDED.customer_id, '
+                'directory_version=EXCLUDED.directory_version, entitlements=EXCLUDED.entitlements, '
+                'entitlements_version=EXCLUDED.entitlements_version, billing_state=EXCLUDED.billing_state, '
+                'plan_name=EXCLUDED.plan_name, current_period_end=EXCLUDED.current_period_end, '
+                'grace_ends_at=EXCLUDED.grace_ends_at, subscription_plan_name=EXCLUDED.subscription_plan_name, '
+                'manage_billing_url=EXCLUDED.manage_billing_url, projected_at=now(), version=tenant_registry.version+1, '
+                "updated_by='directory', updated_at=now() RETURNING version",
+                (tenant['tenant_id'], tenant['name'], tenant['plan_tier'], tenant['active'], Jsonb(config_of(tenant)),
+                 tenant['customer_id'], tenant['directory_version'],
+                 Jsonb(plan['entitlements']) if plan else None, plan.get('entitlements_version'), plan.get('billing_state'),
+                 plan.get('name'), plan.get('current_period_end'), plan.get('grace_ends_at'),
+                 plan.get('subscription_plan_name'), plan.get('manage_billing_url'))).fetchone()[0]
+            self._audit(db, tenant['tenant_id'], 'directory', 'tenant_projected', version)
+            self._sync_domain(db, tenant, plan_changed=current is None or current['plan_tier'] != tenant['plan_tier'])
+        return True
+
+    def _deactivate_missing(self, tenant_ids):
+        with self._connect() as db:
+            rows = db.execute(self.SELECT + ' WHERE active AND NOT (tenant_id = ANY(%s::uuid[])) FOR UPDATE',
+                              (sorted(tenant_ids),)).fetchall()
+            for tenant in self._rows(rows):
+                db.execute("UPDATE public.tenant_registry SET active=false, version=version+1, updated_by='directory', "
+                           'updated_at=now(), projected_at=now() WHERE tenant_id=%s', (tenant['tenant_id'],))
+                self._audit(db, tenant['tenant_id'], 'directory', 'tenant_projected', tenant['version'] + 1)
+                self._sync_domain(db, dict(tenant, active=False), plan_changed=False)
+        return len(rows)
+
+    def projection_cursor(self):
+        with self._connect() as db:
+            row = db.execute('SELECT seq FROM public.directory_projection_cursor WHERE id=1').fetchone()
+        return row[0] if row else 0
+
+    def set_projection_cursor(self, seq):
+        with self._connect() as db:
+            db.execute('INSERT INTO public.directory_projection_cursor (id, seq) VALUES (1, %s) '
+                       'ON CONFLICT (id) DO UPDATE SET seq=EXCLUDED.seq, updated_at=now()', (seq,))
 
     def webhook_targets(self):
         with self._connect() as db:

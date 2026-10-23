@@ -11,6 +11,9 @@ import {useScopedFindings} from '../Overview';
 import {ExplorerSummary} from './ExplorerSummary';
 import {categories,categoryOf,knownPrice,matchesQuery,matchesTag,protectionSignals,sizingOf,type Category,type Intent,type Pricing} from '../../lib/resource-insights';
 import {EmptyState, PriorityBadge, ProviderBadge} from '../ui/shared';
+import {useRouter} from 'next/navigation';
+import {aiStatusLabels, decisionLabels, findingIdentity, identityOf, useResources, type AIStatus, type DecisionKind, type ResourceRow} from '../../lib/resources';
+import {AIRisk, AIStatusBadge, DecisionBadge} from '../resources/ResourceParts';
 
 function Checkbox({indeterminate = false, ...props}: InputHTMLAttributes<HTMLInputElement> & {indeterminate?: boolean}) {
   const ref = useRef<HTMLInputElement>(null);
@@ -18,7 +21,8 @@ function Checkbox({indeterminate = false, ...props}: InputHTMLAttributes<HTMLInp
   return <input type="checkbox" ref={ref} {...props}/>;
 }
 
-const initialOrder = ['select','resource','provider','category','monthly','posture','priority','signal','scope','savings','actions'];
+const initialOrder = ['select','resource','provider','category','monthly','posture','priority','ai_risk','ai_status','decision','signal','scope','savings','actions'];
+const aiRiskRank:Record<string,number>={critical:0,high:1,medium:2,low:3,unknown:4};
 function pinnedStyle(column: Column<Finding>): CSSProperties {
   const pinned = column.getIsPinned();
   return {width:column.getSize(), minWidth:column.getSize(), ...(pinned ? {
@@ -30,8 +34,13 @@ function pinnedStyle(column: Column<Finding>): CSSProperties {
 }
 
 export function FindingsGrid({initialProvider = '',initialCategory='',initialIntent='',initialPricing=''}: {initialProvider?:string;initialCategory?:Category|'';initialIntent?:Intent;initialPricing?:Pricing}) {
-  const {scan,openFinding,scope,setScope,selection,setSelection,openReview,density,setDensity,notify} = useWorkspace();
+  const {scan,token,openFinding,scope,setScope,selection,setSelection,openReview,density,setDensity,notify} = useWorkspace();
   const findings = useScopedFindings();
+  const router = useRouter();
+  const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
+  const {page:resourcePage} = useResources(scan?.scan_id, token, live);
+  const resources = useMemo(()=>new Map<string,ResourceRow>((resourcePage?.items||[]).map(row=>[identityOf(row.provider,row.resource_id),row])),[resourcePage]);
+  const [aiStatus,setAIStatus] = useState<AIStatus|''>(''), [decision,setDecision] = useState<DecisionKind|'none'|''>('');
   const [query,setQuery] = useState(''), [provider,setProvider] = useState(initialProvider), [severity,setSeverity] = useState(''), [type,setType] = useState(''), [tag,setTag] = useState('');
   const [category,setCategory]=useState<Category|''>(initialCategory),[intent,setIntent]=useState<Intent>(initialIntent),[pricing,setPricing]=useState<Pricing>(initialPricing);
   const deferredQuery=useDeferredValue(query);
@@ -45,15 +54,17 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
   const [pagination,setPagination] = useState({pageIndex:0,pageSize:100});
   const scroller = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null), columnMenu = useRef<HTMLDetailsElement>(null);
   useEffect(()=>{setProvider(initialProvider);setCategory(initialCategory);setIntent(initialIntent);setPricing(initialPricing);},[initialProvider,initialCategory,initialIntent,initialPricing]);
-  useEffect(() => {setRowSelection({});setSelection([]);setPagination(previous => ({...previous,pageIndex:0}));}, [deferredQuery,provider,severity,type,tag,category,intent,pricing,scope,scan?.scan_id,setSelection]);
+  useEffect(() => {setRowSelection({});setSelection([]);setPagination(previous => ({...previous,pageIndex:0}));}, [deferredQuery,provider,severity,type,tag,category,intent,pricing,aiStatus,decision,scope,scan?.scan_id,setSelection]);
   const entries=useMemo(()=>findings.map(finding=>({finding,category:categoryOf(finding),protected:protectionSignals(finding).length>0,
     search:`${finding.resource_name} ${finding.resource_group} ${scopeOf(finding)} ${finding.resource_id} ${finding.rule_id} ${ruleLabel(finding.rule_id)}`})),[findings]);
   const filtered=useMemo(()=>entries.filter(entry=>{
     const f=entry.finding;
     return (!provider||providerOf(f)===provider)&&(!category||entry.category===category)&&(!severity||f.severity===severity)&&(!type||f.resource_type===type)
       &&(!intent||(intent==='protected'?entry.protected:!entry.protected))&&(!pricing||(pricing==='known'?knownPrice(f):!knownPrice(f)))
-      &&matchesTag(f,tag)&&matchesQuery(entry.search,deferredQuery);
-  }).map(entry=>entry.finding),[entries,deferredQuery,provider,category,severity,type,tag,intent,pricing]);
+      &&matchesTag(f,tag)&&matchesQuery(entry.search,deferredQuery)
+      &&(!aiStatus||resources.get(findingIdentity(f))?.ai.status===aiStatus)
+      &&(!decision||(decision==='none'?!resources.get(findingIdentity(f))?.decision:resources.get(findingIdentity(f))?.decision?.decision===decision));
+  }).map(entry=>entry.finding),[entries,deferredQuery,provider,category,severity,type,tag,intent,pricing,aiStatus,decision,resources]);
   const providerCounts=useMemo(()=>Object.fromEntries([...new Set(findings.map(providerOf))].map(p=>[p,findings.filter(f=>providerOf(f)===p).length])),[findings]);
   const categoryCounts=useMemo(()=>Object.fromEntries(categories.map(([id])=>[id,entries.filter(e=>e.category===id).length])),[entries]);
 
@@ -68,8 +79,11 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
     {id:'monthly',accessorFn:f => f.estimated_monthly_waste_usd ?? undefined,sortUndefined:'last',header:'Monthly estimate',size:160,cell:({row}) => <span className={row.original.estimated_monthly_waste_usd === null ? 'unpriced-cell' : 'money-cell'}>{money(row.original.estimated_monthly_waste_usd)}</span>},
     {id:'savings',accessorFn:f => f.cost_attribution?.realizable_savings_usd ?? undefined,sortUndefined:'last',header:'Net savings',size:150,cell:({row}) => <span className={row.original.cost_attribution?.realizable_savings_usd == null ? 'unpriced-cell' : 'money-cell'}>{money(row.original.cost_attribution?.realizable_savings_usd)}</span>},
     {id:'priority',accessorKey:'severity',header:'Priority',size:120,sortingFn:(a,b) => {const rank:Record<string,number>={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};return (rank[a.original.severity] ?? 5) - (rank[b.original.severity] ?? 5);},cell:({row}) => <PriorityBadge severity={row.original.severity}/>},
+    {id:'ai_risk',accessorFn:f=>{const level=resources.get(findingIdentity(f))?.ai.risk_level;return level?aiRiskRank[level] ?? 5:undefined;},sortUndefined:'last',header:'AI risk',size:110,cell:({row})=>{const resource=resources.get(findingIdentity(row.original));return resource?<AIRisk ai={resource.ai}/>:<span className="muted">—</span>;}},
+    {id:'ai_status',accessorFn:f=>resources.get(findingIdentity(f))?.ai.status,sortUndefined:'last',header:'AI status',size:130,cell:({row})=>{const resource=resources.get(findingIdentity(row.original));return resource?<button className="link-cell" aria-label={`Open resource analysis for ${row.original.resource_name}`} onClick={e=>{e.stopPropagation();router.push(`/resources?resource=${resource.resource_key}`);}}><AIStatusBadge ai={resource.ai}/></button>:<span className="muted">—</span>;}},
+    {id:'decision',accessorFn:f=>resources.get(findingIdentity(f))?.decision?.decision,sortUndefined:'last',header:'Decision',size:130,cell:({row})=><DecisionBadge decision={resources.get(findingIdentity(row.original))?.decision ?? null}/>},
     {id:'actions',size:46,enableSorting:false,enableHiding:false,header:() => <span className="sr-only">Open</span>,cell:({row}) => <button className="icon-button" data-focus-return={`action:${findingKey(row.original)}`} aria-label={`View details for ${row.original.resource_name}`} onClick={e => {e.stopPropagation();openContextFinding(row.original);}}><ChevronRight size={16}/></button>},
-  ], [openContextFinding]);
+  ], [openContextFinding,resources,router]);
 
   const table = useReactTable({data:filtered,columns,getRowId:findingKey,
     state:{sorting,rowSelection,columnVisibility:visibility,columnOrder:order,columnPinning:pinning,pagination},
@@ -82,14 +96,14 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
   const rowHeight = density === 'compact' ? 28 : density === 'medium' ? 38 : 48;
   const virtual = useVirtualizer({count:rows.length,getScrollElement:() => scroller.current,estimateSize:() => rowHeight,overscan:10});
   useEffect(() => {virtual.measure();}, [density]);
-  useEffect(() => {scroller.current?.scrollTo({top:0});}, [pagination.pageIndex,deferredQuery,provider,severity,type,tag,category,intent,pricing]);
+  useEffect(() => {scroller.current?.scrollTo({top:0});}, [pagination.pageIndex,deferredQuery,provider,severity,type,tag,category,intent,pricing,aiStatus,decision]);
   const items = virtual.getVirtualItems();
   const options = table.getAllLeafColumns().filter(column => column.getCanHide());
   function move(id:string,direction:number) {setOrder(previous => {const next=[...previous],index=next.indexOf(id),target=index+direction;if(target>0&&target<next.length-1)[next[index],next[target]]=[next[target],next[index]];return next;});}
-  function reset() {setCategory('');setIntent('');setPricing('');setQuery('');setProvider('');setSeverity('');setType('');setTag('');setScope([]);}
+  function reset() {setCategory('');setIntent('');setPricing('');setQuery('');setProvider('');setSeverity('');setType('');setTag('');setAIStatus('');setDecision('');setScope([]);}
   function exportSelection(kind:'csv'|'json') {exportFindings(selected,kind,`cloudsaver-${scan?.scan_id}-selected`);notify(`${kind.toUpperCase()} download prepared for ${selected.length} findings.`);}
   const selectedPriced=selected.filter(knownPrice);
-  const chips = [category&&{label:`Category: ${categories.find(([id])=>id===category)?.[1]}`,clear:()=>setCategory('')},intent&&{label:intent==='protected'?'Protected intent':'Needs assessment',clear:()=>setIntent('')},pricing&&{label:pricing==='unknown'?'Price unknown':'Price observed',clear:()=>setPricing('')},query && {label:`Search: ${query}`,clear:()=>setQuery('')},provider && {label:providerNames[provider] || provider,clear:()=>setProvider('')},severity && {label:`Priority: ${severity.toLowerCase()}`,clear:()=>setSeverity('')},type && {label:type.split('/').slice(-1)[0],clear:()=>setType('')},tag && {label:`Tag: ${tag}`,clear:()=>setTag('')},scope.length>0 && {label:`${scope.length} scope filters`,clear:()=>setScope([])}].filter(Boolean) as {label:string;clear:()=>void}[];
+  const chips = [category&&{label:`Category: ${categories.find(([id])=>id===category)?.[1]}`,clear:()=>setCategory('')},intent&&{label:intent==='protected'?'Protected intent':'Needs assessment',clear:()=>setIntent('')},pricing&&{label:pricing==='unknown'?'Price unknown':'Price observed',clear:()=>setPricing('')},query && {label:`Search: ${query}`,clear:()=>setQuery('')},provider && {label:providerNames[provider] || provider,clear:()=>setProvider('')},severity && {label:`Priority: ${severity.toLowerCase()}`,clear:()=>setSeverity('')},type && {label:type.split('/').slice(-1)[0],clear:()=>setType('')},tag && {label:`Tag: ${tag}`,clear:()=>setTag('')},aiStatus && {label:`AI status: ${aiStatusLabels[aiStatus].toLowerCase()}`,clear:()=>setAIStatus('')},decision && {label:decision==='none'?'No decision':`Decision: ${decisionLabels[decision].toLowerCase()}`,clear:()=>setDecision('')},scope.length>0 && {label:`${scope.length} scope filters`,clear:()=>setScope([])}].filter(Boolean) as {label:string;clear:()=>void}[];
   return <><ExplorerSummary findings={findings}/><section className={`panel findings-grid density-${density}`} data-inventory="true" aria-label="Findings inventory" onKeyDown={e => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && !(e.target as HTMLElement).closest('input[type="search"],input[type="text"]')) {e.preventDefault();table.toggleAllPageRowsSelected(true);}
     if(e.key === '/' && !(e.target as HTMLElement).closest('input,select')) {e.preventDefault();search.current?.focus();}
@@ -101,7 +115,7 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
       <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={()=>setCategory('')}>All categories</button>{categories.filter(([id])=>categoryCounts[id]>0).map(([id,name])=><button key={id} aria-pressed={category===id} onClick={()=>setCategory(category===id?'':id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
     </div>
     <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent&&!pricing} onClick={()=>{setIntent('');setPricing('');}}>All evidence</button><button aria-pressed={intent==='protected'} onClick={()=>{setIntent(intent==='protected'?'':'protected');setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing==='unknown'} onClick={()=>{setPricing(pricing==='unknown'?'':'unknown');setIntent('');}}>Missing prices</button></div>
-    <div className="grid-filters"><label className="grid-search"><Search size={16}/><input ref={search} type="search" aria-label="Search findings" placeholder="Search resources, IDs, or findings…" value={query} onChange={e => setQuery(e.target.value)}/><kbd>/</kbd></label><label><span className="sr-only">Finding priority</span><select aria-label="Finding priority" value={severity} onChange={e => setSeverity(e.target.value)}><option value="">All priorities</option>{['CRITICAL','HIGH','MEDIUM','LOW','INFO'].map(s => <option key={s} value={s}>{s.charAt(0)+s.slice(1).toLowerCase()}</option>)}</select></label><label><span className="sr-only">Resource type</span><select aria-label="Resource type" value={type} onChange={e => setType(e.target.value)}><option value="">All resource types</option>{[...new Set((scan?.findings||[]).map(f=>f.resource_type))].sort().map(t => <option key={t} value={t}>{t.split('/').slice(-1)[0]}</option>)}</select></label><label className="tag-filter"><span className="sr-only">Tag filter</span><input type="text" aria-label="Tag filter" placeholder="Owner=platform or has:Owner" title="Match an exact key=value, has:Key, or part of a tag key" value={tag} onChange={e => setTag(e.target.value)}/></label></div>
+    <div className="grid-filters"><label className="grid-search"><Search size={16}/><input ref={search} type="search" aria-label="Search findings" placeholder="Search resources, IDs, or findings…" value={query} onChange={e => setQuery(e.target.value)}/><kbd>/</kbd></label><label><span className="sr-only">Finding priority</span><select aria-label="Finding priority" value={severity} onChange={e => setSeverity(e.target.value)}><option value="">All priorities</option>{['CRITICAL','HIGH','MEDIUM','LOW','INFO'].map(s => <option key={s} value={s}>{s.charAt(0)+s.slice(1).toLowerCase()}</option>)}</select></label><label><span className="sr-only">Resource type</span><select aria-label="Resource type" value={type} onChange={e => setType(e.target.value)}><option value="">All resource types</option>{[...new Set((scan?.findings||[]).map(f=>f.resource_type))].sort().map(t => <option key={t} value={t}>{t.split('/').slice(-1)[0]}</option>)}</select></label>{live&&<><label><span className="sr-only">AI status</span><select aria-label="AI status" value={aiStatus} onChange={e => setAIStatus(e.target.value as AIStatus|'')}><option value="">All AI statuses</option>{(Object.keys(aiStatusLabels) as AIStatus[]).map(s => <option key={s} value={s}>{aiStatusLabels[s]}</option>)}</select></label><label><span className="sr-only">Decision</span><select aria-label="Decision" value={decision} onChange={e => setDecision(e.target.value as DecisionKind|'none'|'')}><option value="">All decisions</option><option value="none">No decision</option>{(Object.keys(decisionLabels) as DecisionKind[]).map(d => <option key={d} value={d}>{decisionLabels[d]}</option>)}</select></label></>}<label className="tag-filter"><span className="sr-only">Tag filter</span><input type="text" aria-label="Tag filter" placeholder="Owner=platform or has:Owner" title="Match an exact key=value, has:Key, or part of a tag key" value={tag} onChange={e => setTag(e.target.value)}/></label></div>
     {!!chips.length && <div className="active-filters"><Filter size={13}/>{chips.map(chip => <button key={chip.label} onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}>{chip.label}<X size={12}/></button>)}<button className="clear-filters" onClick={reset}>Clear all</button></div>}
     <div className="grid-scroll" ref={scroller} tabIndex={0} aria-label="Scrollable findings table">
       <table className="data-table" style={{width:table.getTotalSize()}} aria-rowcount={filtered.length + 1}>

@@ -60,7 +60,7 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
     from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
 
     if not subscriptions:
-        raise ScanError("At least one authorized subscription is required.")
+        raise ScanError("At least one authorized Azure subscription is required.")
     allowed = {str(UUID(s)).lower() for s in subscriptions}
     token = None
     seen_tokens: set[str] = set()
@@ -89,7 +89,7 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
                     raise ScanError("Azure returned a malformed resource identity.")
             by_id[resource_id.lower()] = row
             if len(by_id) > 100_000:
-                raise ScanError("Inventory exceeds this MVP scan limit; split the workspace subscriptions.")
+                raise ScanError("Inventory exceeds this MVP scan limit; split the workspace Azure subscriptions.")
         next_token = getattr(response, "skip_token", None)
         truncated = str(getattr(response, "result_truncated", "false")).lower()
         is_truncated = truncated in ("true", "resulttruncated.true")
@@ -142,7 +142,7 @@ def scan_live(tenant: dict) -> list[dict]:
     from app.cloud_identity import CredentialError, azure_credential
     subscriptions = [str(UUID(s)) for s in tenant["subscription_ids"]]
     if not subscriptions:
-        raise ScanError("No authorized subscriptions configured.")
+        raise ScanError("No authorized Azure subscriptions are configured.")
     try:
         credential = azure_credential(tenant)
     except CredentialError:

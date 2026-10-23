@@ -1,0 +1,11 @@
+**
+!requirements.txt
+!identity/
+!identity/**
+!identity_migrations/
+!identity_migrations/**
+!identity_alembic.ini
+**/__pycache__/**
+**/.env*
+**/*.pem
+**/*.key

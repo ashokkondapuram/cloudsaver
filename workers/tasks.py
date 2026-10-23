@@ -29,6 +29,12 @@ if not 60 <= tick <= 3600:
     raise ValueError('Scheduler tick must be between 60 and 3600 seconds')
 celery_app.conf.beat_schedule = {'scan-authorized-subscriptions': {
     'task': 'workers.tasks.scheduled_scan_all', 'schedule': float(tick)}}
+ai_tick = int(os.getenv('CLOUDSAVER_AI_BATCH_TICK_SECONDS', '30'))
+if not 10 <= ai_tick <= 3600:
+    raise ValueError('AI batch tick must be between 10 and 3600 seconds')
+if enabled('CLOUDSAVER_AI_ENABLED'):
+    celery_app.conf.beat_schedule['process-ai-batches'] = {
+        'task': 'workers.tasks.process_ai_batches', 'schedule': float(ai_tick), 'options': {'expires': ai_tick}}
 
 
 class JobBusy(RuntimeError):
@@ -93,6 +99,14 @@ def authorized_tenant(settings, repository, tenant_id, requested):
     return dict(tenant, subscription_ids=requested)
 
 
+def workspace_entitlements(tenant, repository):
+    """Projected platform entitlements; organizations.plan_tier only feeds the TIER_LIMITS fallback."""
+    from app.entitlements import entitlements_for
+    if tenant.get('plan'):
+        return entitlements_for(tenant)
+    return entitlements_for(dict(tenant, plan_tier=repository.plan_tier(tenant['tenant_id'])))
+
+
 def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, *,
                  scanner=None, notification_targets=(), final_attempt=False):
     """Dependency-injected core used by Celery and behavior-based unit tests."""
@@ -101,13 +115,12 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
     job_id = str(UUID(job_id))
     tenant = authorized_tenant(settings, repository, tenant_id, subscriptions)
     tenant_id = tenant['tenant_id']
-    from app.entitlements import get_tier_entitlements, enforce_subscription_quota
-    tier = repository.plan_tier(tenant_id)
-    entitlements = get_tier_entitlements(tier)
+    from app.entitlements import enforce_subscription_quota
+    entitlements = workspace_entitlements(tenant, repository)
     origin = repository.job_origin(tenant_id, job_id) if hasattr(repository, 'job_origin') else 'scheduled'
     if origin != 'interactive' and entitlements.allowed_scan_frequencies == ['manual']:
         raise UnauthorizedJob('This workspace does not permit scheduled scans')
-    enforce_subscription_quota(tier, len(subscriptions), adding_count=0)
+    enforce_subscription_quota(entitlements, len(subscriptions), adding_count=0)
     repository.queue_job(tenant_id, job_id)
     existing = repository.get_job(tenant_id, job_id)
     if existing and existing['status'] == 'completed':
@@ -192,7 +205,7 @@ def execute_subscription_scan(self, tenant_id, subscription_ids):
         from app.operations import alerts_enabled
         workspace = next((t for t in settings.tenants if t['tenant_id'] == tenant_id), None)
         targets = (tuple(t for t in load_targets(settings) if t.tenant_id == tenant_id)
-                   if workspace and alerts_enabled(settings, workspace, repository.plan_tier(tenant_id)) else ())
+                   if workspace and alerts_enabled(settings, workspace, workspace_entitlements(workspace, repository)) else ())
         return run_scan_job(settings, tenant_id, subscription_ids, job_id, repository, lease,
                             notification_targets=targets,
                             final_attempt=self.request.retries >= self.max_retries)
@@ -244,7 +257,7 @@ def scheduled_scan_all():
         active = sorted(set(repository.active_subscriptions(tenant['tenant_id'])) & set(tenant['subscription_ids']))
         if not active:
             continue
-        interval = scheduled_interval(settings, tenant, repository.plan_tier(tenant['tenant_id']))
+        interval = scheduled_interval(settings, tenant, workspace_entitlements(tenant, repository))
         if not interval:
             continue
         job_id = str(uuid4())
@@ -253,3 +266,35 @@ def scheduled_scan_all():
         # Dispatcher publishes this committed outbox intent; no broker I/O here.
         count += 1
     return {'scheduled': count, 'enabled': True}
+
+
+@celery_app.task(name='workers.tasks.process_ai_batches')
+def process_ai_batches():
+    """One worker at a time works through queued resource AI batches within each workspace's hourly budget."""
+    if not enabled('CLOUDSAVER_AI_ENABLED'):
+        return {'processed': 0, 'enabled': False}
+    import redis
+    from app.ai_advisory import AIGateway
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.resource_batches import process_batches
+    from app.resource_store import ResourceStore
+    from app.store import PostgresStore, Store
+    client = redis.Redis.from_url(broker, socket_connect_timeout=5, socket_timeout=5)
+    token = str(uuid4())
+    try:
+        if not client.set('cloudsaver:ai-batch-lock', token, nx=True, ex=540):
+            return {'processed': 0, 'enabled': True, 'busy': True}
+        settings = Settings.load()
+        scans = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
+        evidence = EnterpriseStore(settings)
+        gateway = AIGateway(budget=InferenceLedger(evidence))
+        processed = process_batches(settings.tenants, scans, ResourceStore(evidence), gateway,
+                                    max_items=int(os.getenv('CLOUDSAVER_AI_BATCH_ITEMS_PER_TICK', '10')))
+        return {'processed': processed, 'enabled': True}
+    finally:
+        try:
+            client.eval(RedisLease.RELEASE, 1, 'cloudsaver:ai-batch-lock', token)
+            client.close()
+        except Exception:
+            pass

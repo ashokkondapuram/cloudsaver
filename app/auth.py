@@ -1,5 +1,4 @@
-from database.connection import connect as pooled_connect
-"""Verify Entra v2 delegated access tokens before deriving workspace roles."""
+"""Verify Entra v2 delegated access tokens or workspace keys before deriving workspace roles."""
 import hashlib
 import hmac
 import os
@@ -96,54 +95,166 @@ def require_workspace_role(workspace, role):
         raise HTTPException(403, f'{role.value} role is required')
 
 
-def tenant_dependency(settings, validator=None):
+ALL_ROLES = ['TenantAdmin', 'BillingAdmin', 'Viewer']
+INVALID_KEY = 'Invalid workspace access key'
+REJECTIONS = {
+    'revoked': (401, 'This workspace key has expired or was revoked. Ask your CloudSaver administrator for a new key.'),
+    'expired': (401, 'This workspace key has expired or was revoked. Ask your CloudSaver administrator for a new key.'),
+    'rotated_out': (401, 'This workspace key has expired or was revoked. Ask your CloudSaver administrator for a new key.'),
+    'workspace_suspended': (403, 'This workspace is suspended. Contact your CloudSaver administrator.'),
+    'suspended': (403, 'This workspace is suspended. Contact your CloudSaver administrator.'),
+}
+SIGN_IN_UNAVAILABLE = 'Sign-in is temporarily unavailable. Try again in a few minutes.'
+SETTING_UP = 'This workspace is still being set up. Try again in a few seconds.'
+_shadow_pool = None
+
+
+def _tenants(settings):
+    try:
+        return settings.tenants
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, 'Workspace directory is unavailable') from None
+
+
+def local_workspace(settings, token):
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    match = None
+    for tenant in _tenants(settings):
+        if tenant.get('api_key_sha256') and hmac.compare_digest(digest, tenant['api_key_sha256']):
+            match = tenant
+    if match is None:
+        raise HTTPException(401, INVALID_KEY, headers={'WWW-Authenticate': 'Bearer'})
+    return dict(match, roles=list(ALL_ROLES), allowed_providers=None)
+
+
+def identity_workspace(settings, client, token, client_ip, request_id):
+    from app.identity_client import IdentityUnavailable, KeyRejected
+    from app.entitlements import normalize_plan
+    from app.provider_access import narrow
+    try:
+        grant = client.verify(token, client_ip, request_id)
+    except KeyRejected as exc:
+        if exc.reason == 'throttled':
+            raise HTTPException(429, 'Too many sign-in attempts. Try again in 15 minutes.',
+                                headers={'Retry-After': str(exc.retry_after or 900)}) from None
+        status, detail = REJECTIONS.get(exc.reason, (401, INVALID_KEY))
+        raise HTTPException(status, detail, headers={'WWW-Authenticate': 'Bearer'} if status == 401 else None) from None
+    except IdentityUnavailable:
+        raise HTTPException(503, SIGN_IN_UNAVAILABLE) from None
+    matched = next((t for t in _tenants(settings) if t['tenant_id'] == grant['tenant_id']), None)
+    projected = matched.get('directory_version') if matched else None
+    if matched is None or (projected is not None and projected < grant['directory_version']):
+        raise HTTPException(503, SETTING_UP, headers={'Retry-After': '5'})
+    allowed = None if grant['all_providers'] else list(grant['allowed_providers'])
+    workspace = narrow(matched, allowed) if allowed is not None else dict(matched)
+    try:
+        plan = normalize_plan(grant.get('plan'))
+    except ValueError:
+        import logging
+        logging.getLogger('cloudsaver.identity').warning('Ignoring a malformed verify plan block')
+        plan = None
+    if plan is not None:
+        # The verify response is fresher than the projection, so its plan wins.
+        workspace = dict(workspace, plan=plan, plan_tier=plan['code'])
+    limits = [v for v in (grant.get('expires_at'), grant.get('rotates_out_at')) if v]
+    return dict(workspace, roles=list(grant['roles']), key_id=grant['key_id'], key_name=grant['key_name'],
+                allowed_providers=allowed, key_expires_at=min(limits) if limits else None)
+
+
+def _shadow(client, token, client_ip, request_id, local_tenant):
+    """Shadow mode: compare identity-service with the local result without affecting the response."""
+    import logging
+    from app.identity_client import KeyRejected
+    log = logging.getLogger('cloudsaver.identity.shadow')
+    try:
+        remote = client.verify(token, client_ip, request_id)['tenant_id']
+    except KeyRejected:
+        remote = None
+    except Exception:
+        log.warning('Shadow verification unavailable')
+        return
+    if remote != local_tenant:
+        log.warning('Shadow verification mismatch local=%s identity=%s', 'valid' if local_tenant else 'invalid',
+                    'valid' if remote else 'invalid')
+
+
+def tenant_dependency(settings, validator=None, identity_client=None):
+    from fastapi import Request
+    from starlette.concurrency import run_in_threadpool
+    from app.config import key_verifier
+    from app.cloud_scope import configured_providers
+    from app.provider_access import access, enforce_route
+    from app.runtime import client_ip, request_id
     mode = os.getenv('CLOUDSAVER_AUTH_MODE', 'workspace')
     if mode not in ('workspace', 'entra'):
         raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace or entra')
+    verifier = key_verifier() if mode == 'workspace' else 'local'
     own_validator = validator is None
     validator = validator or EntraTokenValidator(EntraIdConfig(allowed_tenants={t['tenant_id'] for t in settings.tenants}))
     bearer = HTTPBearer(auto_error=False)
 
-    def current(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    def client():
+        if identity_client is not None:
+            return identity_client
+        from app.identity_client import shared_client
+        return shared_client()
+
+    def entra(token):
+        tenants = _tenants(settings)
+        if own_validator:
+            validator.config.allowed_tenants = {t['tenant_id'] for t in tenants}
+        claims = validator.verify_token(token)
+        matched = next((t for t in tenants if t['tenant_id'] == claims.tenant_id), None)
+        if matched is None:
+            raise HTTPException(403, 'Workspace is not provisioned')
+        return with_plan(settings, dict(matched, roles=[r.value for r in claims.roles], user_id=claims.user_id,
+                                        allowed_providers=None))
+
+    def workspace(token, ip, rid):
+        if verifier == 'identity':
+            result = identity_workspace(settings, client(), token, ip, rid)
+        else:
+            try:
+                result = local_workspace(settings, token)
+            except HTTPException:
+                if verifier == 'shadow':
+                    shadow(token, ip, rid, None)
+                raise
+            if verifier == 'shadow':
+                shadow(token, ip, rid, result['tenant_id'])
+        return with_plan(settings, result)
+
+    def shadow(token, ip, rid, local_tenant):
+        try:
+            _submit_shadow(client(), token, ip, rid, local_tenant)
+        except Exception:
+            import logging
+            logging.getLogger('cloudsaver.identity.shadow').warning('Shadow verification is not configured')
+
+    async def current(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
+        access.set(None)
         if not credentials or credentials.scheme.lower() != 'bearer':
             raise HTTPException(401, 'Authentication required', headers={'WWW-Authenticate': 'Bearer'})
-        try:
-            tenants = settings.tenants
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(503, 'Workspace directory is unavailable') from None
+        token = credentials.credentials
         if mode == 'entra':
-            if own_validator:
-                validator.config.allowed_tenants = {t['tenant_id'] for t in tenants}
-            claims = validator.verify_token(credentials.credentials)
-            matched = next((t for t in tenants if t['tenant_id'] == claims.tenant_id), None)
-            if matched is None:
-                raise HTTPException(403, 'Workspace is not provisioned')
-            return with_plan(settings, dict(matched, roles=[r.value for r in claims.roles], user_id=claims.user_id))
-        digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-        for tenant in tenants:
-            if hmac.compare_digest(digest, tenant['api_key_sha256']):
-                return with_plan(settings, dict(tenant, roles=['TenantAdmin', 'BillingAdmin', 'Viewer']))
-        raise HTTPException(401, 'Invalid workspace access key', headers={'WWW-Authenticate': 'Bearer'})
+            return await run_in_threadpool(entra, token)
+        result = await run_in_threadpool(workspace, token, client_ip.get(), request_id.get())
+        if result.get('allowed_providers') is not None:
+            source = next((t for t in _tenants(settings) if t['tenant_id'] == result['tenant_id']), result)
+            route = request.scope.get('route')
+            enforce_route(request.method, getattr(route, 'path', request.url.path), result, configured_providers(source))
+        return result
     return current
 
 
-def operator_dependency():
-    """Platform operator access by a separate key whose SHA-256 is operator configuration."""
-    bearer = HTTPBearer(auto_error=False)
-
-    def current(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-        expected = os.getenv('CLOUDSAVER_OPERATOR_KEY_SHA256', '')
-        if len(expected) != 64:
-            raise HTTPException(503, 'Operator access is not configured')
-        if not credentials or credentials.scheme.lower() != 'bearer':
-            raise HTTPException(401, 'Operator authentication required', headers={'WWW-Authenticate': 'Bearer'})
-        digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-        if not hmac.compare_digest(digest, expected.lower()):
-            raise HTTPException(401, 'Invalid operator access key', headers={'WWW-Authenticate': 'Bearer'})
-        return {'actor': 'operator'}
-    return current
+def _submit_shadow(client, token, ip, rid, local_tenant):
+    global _shadow_pool
+    from concurrent.futures import ThreadPoolExecutor
+    if _shadow_pool is None:
+        _shadow_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='identity-shadow')
+    _shadow_pool.submit(_shadow, client, token, ip, rid, local_tenant)
 
 
 def require_role(required_role):
@@ -155,38 +266,28 @@ def require_role(required_role):
 
 
 def with_plan(settings, workspace):
-    configured = workspace.get('plan_tier', 'STARTER')
-    rank = {'STARTER': 0, 'GROWTH': 1, 'ENTERPRISE': 2}
-
-    def effective_tier(persisted):
-        if persisted and rank.get(configured, 0) > rank.get(persisted, 0):
-            return configured
-        return persisted or configured
-
-    # With PostgreSQL enabled, persisted billing state is authoritative unless tenant config grants a higher tier.
-    if not settings.database_url:
-        return dict(workspace, plan_tier=configured)
-    try:
-        import psycopg
-        with pooled_connect(settings.database_url, connect_timeout=5) as db:
-            db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (workspace['tenant_id'],))
-            rows = db.execute('SELECT plan_tier FROM public.organizations WHERE tenant_id=%s', (workspace['tenant_id'],)).fetchall()
-            if len(rows) > 1:
-                raise ValueError('Ambiguous organization')
-        return dict(workspace, plan_tier=effective_tier(rows[0][0] if rows else None))
-    except Exception:
-        raise HTTPException(503, 'Workspace entitlement state is unavailable') from None
+    """Attach the effective plan: verified plan block, else projected entitlements, else the TIER_LIMITS fallback."""
+    from app.entitlements import entitlements_for
+    plan = entitlements_for(workspace)
+    return dict(workspace, plan_tier=plan.tier, plan_name=plan.plan_name, billing_state=plan.billing_state)
 
 
 def workspace_response(workspace, mode, settings=None):
-    from app.entitlements import get_tier_entitlements
+    from app.entitlements import entitlements_for
     from app.cloud_scope import configured_providers
     from app.operations import workspace_operations
-    tier = get_tier_entitlements(workspace['plan_tier'])
+    from app.config import directory_mode
+    tier = entitlements_for(workspace)
+    providers = configured_providers(workspace)
+    cutover = directory_mode() == 'cutover'
     return {k: workspace[k] for k in ('tenant_id', 'name', 'subscription_ids', 'roles')} | {
-        'mode': mode, 'plan_tier': tier.tier.value, 'max_subscriptions': tier.max_subscriptions,
+        'allowed_providers': providers, 'key_id': workspace.get('key_id'), 'key_name': workspace.get('key_name'),
+        'key_expires_at': workspace.get('key_expires_at'), 'all_providers': workspace.get('allowed_providers') is None,
+        'directory_mode': directory_mode(), 'scopes_editable': not cutover,
+        'mode': mode, 'plan_tier': tier.tier, 'plan_name': tier.plan_name, 'billing_state': tier.billing_state,
+        'max_subscriptions': tier.max_subscriptions,
         'can_export_terraform': tier.can_export_terraform,
-        'providers': configured_providers(workspace),
+        'providers': providers,
         'max_scopes_per_scan': tier.max_subscriptions,
         'configured_scope_count': sum(len(workspace.get(k, [])) for k in ('subscription_ids','aws_accounts','gcp_projects','kubernetes_clusters')),
         'allowed_scan_frequencies': tier.allowed_scan_frequencies,

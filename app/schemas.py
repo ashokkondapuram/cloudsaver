@@ -43,10 +43,3 @@ class RemediationRequest(BaseModel):
 class MultiCloudScanRequest(BaseModel):
     providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(min_length=1, max_length=4)
     model_config = ConfigDict(extra='forbid')
-
-
-class BillingCheckoutRequest(BaseModel):
-    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-    target_tier: str
-    success_url: Optional[str] = None
-    cancel_url: Optional[str] = None

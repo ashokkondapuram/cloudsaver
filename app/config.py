@@ -18,11 +18,27 @@ def bootstrap_tenants(raw=None, *, required=True):
             tenant = dict(tenant, api_key_sha256=hashlib.sha256(os.urandom(32)).hexdigest())
         row = normalize_tenant(tenant, require_scope=True)
         if row['tenant_id'] in seen_ids or row['api_key_sha256'] in seen_keys:
-            raise ValueError('Tenant IDs and access key hashes must be unique')
+            raise ValueError('Workspace IDs and access key hashes must be unique')
         seen_ids.add(row['tenant_id'])
         seen_keys.add(row['api_key_sha256'])
         normalized.append(row)
     return tuple(normalized)
+
+
+def directory_mode():
+    value = os.getenv('CLOUDSAVER_DIRECTORY_MODE', 'registry')
+    if value not in ('registry', 'cutover'):
+        raise ValueError('CLOUDSAVER_DIRECTORY_MODE must be registry or cutover')
+    return value
+
+
+def key_verifier():
+    value = os.getenv('CLOUDSAVER_KEY_VERIFIER', 'local')
+    if value not in ('local', 'shadow', 'identity'):
+        raise ValueError('CLOUDSAVER_KEY_VERIFIER must be local, shadow or identity')
+    if directory_mode() == 'cutover' and value != 'identity':
+        raise ValueError('CLOUDSAVER_DIRECTORY_MODE=cutover requires CLOUDSAVER_KEY_VERIFIER=identity')
+    return value
 
 
 @dataclass(frozen=True)
@@ -49,7 +65,11 @@ class Settings:
         use_registry = os.getenv('CLOUDSAVER_TENANT_REGISTRY', 'env') == 'database'
         if use_registry and not database_url:
             raise ValueError('CLOUDSAVER_TENANT_REGISTRY=database requires CLOUDSAVER_DATABASE_URL')
-        tenants = bootstrap_tenants(required=not use_registry)
+        cutover = directory_mode() == 'cutover'
+        if cutover and not use_registry:
+            raise ValueError('CLOUDSAVER_DIRECTORY_MODE=cutover requires CLOUDSAVER_TENANT_REGISTRY=database')
+        # After cutover the platform directory owns workspaces; the bootstrap seed is ignored.
+        tenants = () if cutover else bootstrap_tenants(required=not use_registry)
         registry = None
         if use_registry:
             from app.tenant_registry import registry_for

@@ -10,7 +10,6 @@ from app.tenant_registry import MemoryRegistry, VersionConflict
 from services.tenant import create_app as tenant_service
 
 KEY = 'test-workspace-key-with-32-characters'
-OPERATOR = 'test-operator-key-with-32-characters'
 TID = '11111111-1111-4111-8111-111111111111'
 SID = '33333333-3333-4333-8333-333333333333'
 OTHER = '44444444-4444-4444-8444-444444444444'
@@ -24,8 +23,7 @@ def tenant(**changes):
 
 
 @pytest.fixture
-def stack(tmp_path, monkeypatch):
-    monkeypatch.setenv('CLOUDSAVER_OPERATOR_KEY_SHA256', hashlib.sha256(OPERATOR.encode()).hexdigest())
+def stack(tmp_path):
     registry = MemoryRegistry((tenant(),), platform={'scheduled_scans_enabled': True, 'automated_alerts_enabled': True})
     settings = Settings('azure', str(tmp_path / 'db.sqlite3'), registry.bootstrap, None, registry)
     return TestClient(tenant_service(settings)), registry, settings
@@ -94,32 +92,21 @@ def test_alerts_need_a_matching_write_only_webhook(stack):
     assert workspace_operations(settings.tenants[0], settings)['automated_alerts_enabled'] is True
 
 
-def test_operator_creates_and_deactivates_tenants(stack):
+@pytest.mark.parametrize('method,path', [
+    ('GET', '/api/v1/admin/tenants'), ('POST', '/api/v1/admin/tenants'),
+    ('PATCH', f'/api/v1/admin/tenants/{TID}'), ('GET', '/api/v1/admin/settings'), ('PUT', '/api/v1/admin/settings'),
+])
+def test_legacy_operator_routes_are_gone(stack, method, path):
+    client, _, _ = stack
+    assert client.request(method, path, headers=as_workspace(), json={}).status_code in (404, 405)
+
+
+def test_deactivated_tenant_and_platform_switches_apply_without_restart(stack):
     client, registry, settings = stack
-    operator = as_workspace(OPERATOR)
-    assert client.get('/api/v1/admin/tenants', headers=as_workspace()).status_code == 401
-    created = client.post('/api/v1/admin/tenants', headers=operator,
-                          json={'tenant_id': OTHER, 'name': 'Second', 'plan_tier': 'GROWTH'})
-    assert created.status_code == 201
-    key = created.json()['workspace_key']
-    assert client.get('/api/v1/me', headers=as_workspace(key)).json()['plan_tier'] == 'GROWTH'
-    assert client.post('/api/v1/admin/tenants', headers=operator, json={'tenant_id': OTHER, 'name': 'Again'}).status_code == 409
-    patch = {'version': 1, 'active': False, 'identity': {'gcp_service_account': 'reader-sa@customer-project.iam.gserviceaccount.com'}}
-    assert client.patch(f'/api/v1/admin/tenants/{OTHER}', headers=operator, json=patch).status_code == 200
-    assert client.get('/api/v1/me', headers=as_workspace(key)).status_code == 401
-    assert registry.get(OTHER)['identity']['gcp_service_account'].startswith('reader-sa@')
-
-
-def test_operator_platform_switches_and_disabled_operator(stack, monkeypatch):
-    client, _, settings = stack
-    operator = as_workspace(OPERATOR)
-    platform = client.get('/api/v1/admin/settings', headers=operator).json()['platform']
-    result = client.put('/api/v1/admin/settings', headers=operator,
-                        json={'version': platform['version'], 'scheduled_scans_enabled': False})
-    assert result.status_code == 200 and result.json()['platform']['scheduled_scans_enabled'] is False
+    registry.update_platform({'scheduled_scans_enabled': False}, registry.platform()['version'], 'test')
     assert scheduled_interval(settings, settings.tenants[0], 'ENTERPRISE') is None
-    monkeypatch.delenv('CLOUDSAVER_OPERATOR_KEY_SHA256')
-    assert client.get('/api/v1/admin/tenants', headers=operator).status_code == 503
+    registry.update(TID, {'active': False}, 1, 'test')
+    assert client.get('/api/v1/me', headers=as_workspace()).status_code == 401
 
 
 def test_registry_rejects_unknown_fields_and_stale_writes():

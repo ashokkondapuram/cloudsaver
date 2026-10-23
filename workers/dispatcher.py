@@ -108,7 +108,8 @@ def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,sho
                     origin = event['payload'].get('origin', 'scheduled')
                     if origin == 'interactive':
                         return os.getenv('CLOUDSAVER_INTERACTIVE_JOBS','false').lower() == 'true'
-                    return scheduled and jobs.plan_tier(tenant_id) in ('GROWTH','ENTERPRISE')
+                    from workers.tasks import workspace_entitlements
+                    return scheduled and set(workspace_entitlements(tenant,jobs).allowed_scan_frequencies)>{'manual'}
                 if not dispatch_one(repository,tenant_id,targets=targets,publish_scan=publish_scan,client=client,kinds=kinds,authorize_scan=authorize,authorize_job=authorize_job):
                     break
                 processed+=1

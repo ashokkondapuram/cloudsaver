@@ -11,7 +11,7 @@ test('billing import is explicit, preserves decimal evidence and isolates curren
   await panel.getByLabel('Monthly budget (optional)').fill('300');await panel.getByRole('button',{name:'Apply billing period'}).click();
   const file={name:'test-billing.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(billingFile()))};
   await panel.getByLabel('Choose billing JSON',{exact:false}).setInputFiles(file);
-  const submit=panel.getByRole('button',{name:'Import billing evidence',exact:true});await expect(submit).toBeDisabled();expect(writes).toHaveLength(0);
+  const submit=panel.getByRole('button',{name:'Import cloud billing data',exact:true});await expect(submit).toBeDisabled();expect(writes).toHaveLength(0);
   await panel.getByRole('checkbox',{name:/I have reviewed the account scope/}).check();await submit.click();
   await expect(panel.getByText(/Import saved: 21 new charges/)).toBeVisible();expect(writes).toHaveLength(1);
   expect(writes[0].records[0].BilledCost).toBe('10.00000000');expect(writes[0].source_id).toBe('test-export-october');

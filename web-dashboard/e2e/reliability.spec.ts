@@ -14,7 +14,7 @@ async function workspace(page:Page,admin=true){
     let response:unknown;
     if(path==='/api/v1/me')response={name:'Browser QA workspace',tenant_id:'11111111-1111-4111-8111-111111111111',subscription_ids:[],mode:'azure',plan_tier:'GROWTH',roles:admin?['TenantAdmin']:['Viewer'],providers:['azure'],can_export_terraform:true};
     else if(path==='/api/v1/scans')response=[];
-    else if(path==='/api/v1/billing/entitlements')response={tier:'GROWTH',max_subscriptions:20,current_subscriptions:0,can_export_terraform:true,retention_days:90};
+    else if(path==='/api/v1/billing/entitlements')response={tenant_id:'11111111-1111-4111-8111-111111111111',tier:'GROWTH',plan_name:'Growth',billing_state:'active',current_period_end:'2026-11-30T00:00:00Z',grace_ends_at:null,subscription_plan_name:null,manage_billing_url:null,max_subscriptions:20,current_subscriptions:0,max_resources_per_scan:2500,allowed_scan_frequencies:['manual','daily'],allowed_providers:['azure'],can_export_terraform:true,can_use_keyvault:false,can_dispatch_automated_alerts:true,retention_days:90,entitlements_source:'platform'};
     else if(path==='/api/v1/gitops/targets')response={targets:[],publishing_enabled:false};
     else if(path==='/api/v1/gitops/requests')response=[];
     else if(path==='/api/v1/operations/reliability')response={available:true,dispatcher_enabled:true,targets:[{target_id:'finops',channel:'slack'}],counts:[{kind:'notification',status:row.status,count:1}],oldest_due_seconds:120,dispatcher:{last_poll_at:now,last_success_at:now,last_error_at:null}};

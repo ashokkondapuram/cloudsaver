@@ -301,7 +301,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0009_enterprise_evidence',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0011_registry_projection',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -946,3 +946,57 @@ def test_enterprise_ledger_and_billing_use_forced_rls_and_append_only_evidence(t
         db.rollback();context(db,a['tenant_id'])
         with pytest.raises(errors.InsufficientPrivilege):
             db.execute("INSERT INTO ai_inference_events(id,tenant_id,attempt_id,action) VALUES (%s,%s,%s,'claimed')",(uuid4(),b['tenant_id'],first['assessment_id']))
+
+
+def test_resource_batches_followups_and_decisions_use_forced_rls(tenants):
+    import hashlib
+    from app.ai_advisory import AIGateway
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.resource_batches import process_batches
+    from app.resource_store import ResourceConflict, ResourceStore
+    from tests.test_resource_assessment import adapter_for
+    app, store, a, b, sa, _ = tenants
+    key_a, key_b = 'resource-rls-a-key-at-least-32-characters', 'resource-rls-b-key-at-least-32-characters'
+    for row, key in ((a, key_a), (b, key_b)):
+        row['api_key_sha256'] = hashlib.sha256(key.encode()).hexdigest()
+    settings = Settings('azure', 'unused', (a, b), database_url=app)
+    evidence, calls = EnterpriseStore(settings), []
+    gateway = AIGateway(enabled=True, targets=[dict(target_id='review', tenant_id=a['tenant_id'], provider='azure', model='gpt-4o',
+                                                    endpoint='https://hub.services.ai.azure.com', auth='managed_identity')],
+                        budget=InferenceLedger(evidence), adapter=adapter_for(calls), limit=10)
+    repo = ResourceStore(evidence)
+    with TestClient(create_app(settings, ai_gateway=gateway)) as client:
+        base = '/api/v1/scans/' + sa['scan_id']
+        items = client.get(base + '/resources', headers={'Authorization': 'Bearer ' + key_a}).json()['items']
+        assert items and client.get(base + '/resources', headers={'Authorization': 'Bearer ' + key_b}).status_code == 404
+        batch = client.post(base + '/ai-batches', headers={'Authorization': 'Bearer ' + key_a}, json=dict(
+            all=True, target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True))
+        assert batch.status_code == 202, batch.text
+        with pytest.raises(ResourceConflict):
+            repo.create_batch(a['tenant_id'], scan_id=sa['scan_id'], target_id='review', request_key=str(uuid4()),
+                              actor='0' * 64, items=[(items[0]['resource_key'], items[0]['evidence_digest'])])
+        assert process_batches(settings.tenants, store, repo, gateway) == len(items) == len(calls)
+        assert repo.batch(a['tenant_id'], batch.json()['id'])['status'] == 'completed'
+        assert repo.batch(b['tenant_id'], batch.json()['id']) is None
+        decided = client.post(f"/api/v1/resources/{items[0]['resource_key']}/decisions", headers={'Authorization': 'Bearer ' + key_a},
+                              json=dict(scan_id=sa['scan_id'], decision='accept', evidence_digest=items[0]['evidence_digest']))
+        assert decided.status_code == 201, decided.text
+        assert repo.latest_decisions(b['tenant_id']) == {}
+        listing = client.get(base + '/resources', headers={'Authorization': 'Bearer ' + key_a}).json()
+        assert listing['items'][0]['ai']['status'] == 'completed'
+        assert listing['items'][0]['decision'] is not None
+    tables = ('ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions')
+    with psycopg.connect(app) as db:
+        for table in tables:
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass', (table,)).fetchone() == (True, True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
+        context(db, a['tenant_id'])
+        assert db.execute('SELECT count(*) FROM resource_decisions').fetchone()[0] == 1
+        with pytest.raises(errors.InsufficientPrivilege): db.execute("UPDATE resource_decisions SET decision='dismiss'")
+        db.rollback(); context(db, a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege): db.execute('DELETE FROM ai_batch_items')
+        db.rollback(); context(db, a['tenant_id'])
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute("""INSERT INTO resource_decisions(id,tenant_id,resource_key,scan_id,decision,evidence_digest,actor)
+                VALUES (%s,%s,%s,%s,'accept',%s,%s)""", (uuid4(), b['tenant_id'], 'a' * 64, sa['scan_id'], 'b' * 64, 'c' * 64))

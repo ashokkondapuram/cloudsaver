@@ -20,7 +20,7 @@ def service(title, settings=None, identity_validator=None):
             await client.aclose()
         from database.connection import dispose
         dispose()
-    app = FastAPI(title=title, version='1.0.0', lifespan=lifespan)
+    app = FastAPI(title=title, version='1.3.0', lifespan=lifespan)
     from app.runtime import install
     install(app, settings, redis_required=title == 'api-gateway')
     from app.auth import tenant_dependency
@@ -54,15 +54,17 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5),
                                      follow_redirects=False, transport=transport) as client:
-            from app.runtime import request_id
+            from app.runtime import CLIENT_IP_HEADER, client_ip, request_id
             headers = {'Authorization': authorization}
             if request_id.get():
                 headers['X-Request-ID'] = request_id.get()
+            if client_ip.get():
+                headers[CLIENT_IP_HEADER] = client_ip.get()
             response = await client.request(method, base + path, params=params, json=json, headers=headers)
         if response.status_code >= 400:
-            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 413, 422, 429, 501, 503) else 502
+            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 410, 413, 422, 429, 501, 503) else 502
             detail = 'Upstream service could not complete the request'
-            if status in (402, 409, 422, 429):
+            if status in (401, 402, 403, 409, 410, 422, 429, 503):
                 # Internal services return sanitized, user-facing validation messages.
                 try:
                     candidate = response.json().get('detail')

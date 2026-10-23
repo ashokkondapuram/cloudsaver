@@ -1,0 +1,40 @@
+{
+  "seq": 42,
+  "workspaces": [
+    {
+      "tenant_id": "11111111-1111-4111-8111-111111111111",
+      "customer_id": "22222222-2222-4222-8222-222222222222",
+      "name": "Contoso prod",
+      "plan_tier": "STARTER",
+      "status": "active",
+      "active": true,
+      "identity": {},
+      "version": 5,
+      "subscription_ids": ["33333333-3333-4333-8333-333333333333"],
+      "aws_accounts": [],
+      "gcp_projects": [],
+      "kubernetes_clusters": [],
+      "plan": {
+        "code": "STARTER",
+        "name": "Starter",
+        "billing_state": "lapsed",
+        "current_period_end": "2026-09-30T00:00:00Z",
+        "grace_ends_at": "2026-10-14T00:00:00Z",
+        "subscription_plan_name": "Growth",
+        "entitlements_version": 8,
+        "entitlements": {
+          "max_subscriptions": 2,
+          "max_resources_per_scan": 250,
+          "allowed_scan_frequencies": ["manual"],
+          "can_export_terraform": false,
+          "can_use_keyvault": false,
+          "can_dispatch_automated_alerts": false,
+          "retention_days": 7,
+          "allowed_providers": ["azure", "aws", "gcp", "kubernetes"]
+        },
+        "manage_billing_url": null
+      }
+    }
+  ],
+  "platform": {"scheduled_scans_enabled": true, "automated_alerts_enabled": false, "version": 3}
+}

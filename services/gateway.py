@@ -1,13 +1,15 @@
 import os
 from uuid import UUID
 
-import httpx
-from fastapi import Depends, Header, HTTPException, Query, Request
+from fastapi import Depends, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 
 from services.common import internal_url, service, upstream
 from app.jobs_api import ScanSubmission
-from app.schemas import RemediationRequest, BillingCheckoutRequest, MultiCloudScanRequest
+from app.schemas import RemediationRequest, MultiCloudScanRequest
+
+CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
+WEBHOOK_GONE = 'Billing webhooks are handled by the platform.'
 
 
 class RedisLimiter:
@@ -65,34 +67,16 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         return await forward('GET', 'scanner', '/api/v1/auth/consent-url', authorization)
 
     @app.post('/api/v1/billing/webhook')
-    async def billing_webhook(request: Request):
-        # This public endpoint authenticates by Stripe signature, not workspace bearer.
-        signature = request.headers.get('stripe-signature')
-        if not signature:
-            raise HTTPException(400, 'Stripe signature required')
-        body = bytearray()
-        async for chunk in request.stream():
-            body.extend(chunk)
-            if len(body) > 1_048_576:
-                raise HTTPException(413, 'Webhook payload too large')
-        try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=False, transport=transport) as client:
-                response = await client.post(targets['tenant'] + '/api/v1/billing/webhook',
-                    content=bytes(body), headers={'Stripe-Signature': signature, 'Content-Type': 'application/json'})
-            if response.status_code not in (200, 400, 413, 503):
-                raise HTTPException(502, 'Billing service could not complete the request')
-            return JSONResponse(response.json(), status_code=response.status_code)
-        except (httpx.HTTPError, ValueError):
-            raise HTTPException(502, 'Billing service unavailable') from None
+    def billing_webhook():
+        raise HTTPException(410, WEBHOOK_GONE)
 
     @app.get('/api/v1/billing/entitlements')
     async def billing_entitlements(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/billing/entitlements', authorization)
 
     @app.post('/api/v1/billing/checkout')
-    async def billing_checkout(payload: BillingCheckoutRequest, row=Depends(allowed), authorization: str = Header()):
-        return await upstream('POST', targets['scanner'], '/api/v1/billing/checkout', authorization,
-                              json=payload.model_dump(), transport=transport)
+    def billing_checkout():
+        raise HTTPException(410, CHECKOUT_GONE)
 
     @app.get('/api/v1/me')
     async def me(row=Depends(allowed), authorization: str = Header()):
@@ -237,6 +221,57 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def ai_review(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
         return await gitops_post(f'/api/v1/scans/{scan_id}/ai-risk-evaluation', request, authorization)
 
+    resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'q', 'limit', 'offset')
+    resource_key = Path(pattern=r'^[a-f0-9]{64}$')
+
+    def selected_params(request, names):
+        return {k: v for k, v in request.query_params.items() if k in names}
+
+    @app.get('/api/v1/scans/{scan_id}/resources')
+    async def resources(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources', authorization, selected_params(request, resource_filters))
+
+    @app.get('/api/v1/scans/{scan_id}/resources/export')
+    async def resources_export(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources/export', authorization,
+                             selected_params(request, resource_filters[:-2]))
+
+    @app.get('/api/v1/scans/{scan_id}/resources/{key}')
+    async def resource_detail(scan_id: UUID, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources/{key}', authorization)
+
+    @app.post('/api/v1/scans/{scan_id}/resources/{key}/questions')
+    async def resource_question(scan_id: UUID, request: Request, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/resources/{key}/questions', request, authorization)
+
+    @app.post('/api/v1/scans/{scan_id}/ai-batches')
+    async def create_ai_batch(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/ai-batches', request, authorization)
+
+    @app.get('/api/v1/ai-batches')
+    async def ai_batches(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/ai-batches', authorization, selected_params(request, ('scan_id', 'limit')))
+
+    @app.get('/api/v1/ai-batches/{batch_id}')
+    async def ai_batch(batch_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/ai-batches/{batch_id}', authorization)
+
+    @app.post('/api/v1/ai-batches/{batch_id}/cancel')
+    async def cancel_ai_batch(batch_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('POST', 'scanner', f'/api/v1/ai-batches/{batch_id}/cancel', authorization)
+
+    @app.get('/api/v1/resources/{key}/history')
+    async def resource_history(key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/resources/{key}/history', authorization)
+
+    @app.get('/api/v1/resources/{key}/decisions')
+    async def resource_decisions(key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/resources/{key}/decisions', authorization)
+
+    @app.post('/api/v1/resources/{key}/decisions')
+    async def record_resource_decision(request: Request, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/resources/{key}/decisions', request, authorization)
+
     @app.get('/api/v1/analytics')
     async def analytics(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'analytics', '/api/v1/analytics', authorization)
@@ -259,13 +294,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def notify(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'notification', f'/api/v1/notifications/{scan_id}', authorization)
 
-    from app.auth import operator_dependency
     from app.gitops_api import bounded_json
-    operator = operator_dependency()
-
-    async def operator_allowed(identity=Depends(operator)):
-        await limiter.check('platform-operator')
-        return identity
 
     async def tenant_write(method, path, request, authorization):
         return await upstream(method, targets['tenant'], path, authorization,
@@ -278,25 +307,5 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     @app.put('/api/v1/settings')
     async def update_workspace_settings(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await tenant_write('PUT', '/api/v1/settings', request, authorization)
-
-    @app.get('/api/v1/admin/tenants')
-    async def admin_tenants(identity=Depends(operator_allowed), authorization: str = Header()):
-        return await forward('GET', 'tenant', '/api/v1/admin/tenants', authorization)
-
-    @app.post('/api/v1/admin/tenants', status_code=201)
-    async def admin_create_tenant(request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
-        return await tenant_write('POST', '/api/v1/admin/tenants', request, authorization)
-
-    @app.patch('/api/v1/admin/tenants/{tenant_id}')
-    async def admin_update_tenant(tenant_id: UUID, request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
-        return await tenant_write('PATCH', f'/api/v1/admin/tenants/{tenant_id}', request, authorization)
-
-    @app.get('/api/v1/admin/settings')
-    async def admin_settings(identity=Depends(operator_allowed), authorization: str = Header()):
-        return await forward('GET', 'tenant', '/api/v1/admin/settings', authorization)
-
-    @app.put('/api/v1/admin/settings')
-    async def admin_update_settings(request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
-        return await tenant_write('PUT', '/api/v1/admin/settings', request, authorization)
 
     return app

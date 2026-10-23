@@ -44,7 +44,7 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
 
     def package(payload,tenant):
         require_workspace_role(tenant,Role.TENANT_ADMIN)
-        enforce_terraform_export(tenant.get('plan_tier','STARTER'))
+        enforce_terraform_export(tenant)
         scan = store.get(tenant['tenant_id'],str(payload.scan_id))
         if scan is None:
             raise HTTPException(404,'Scan not found')

@@ -5,6 +5,7 @@ import {useEffect, useId, useRef, useState} from 'react';
 import {Activity, ArrowRight, ChevronLeft, ChevronRight, Check, Clipboard, Clock3, Code2, Copy, Database, Download, FileCode2, GitPullRequest, Layers3, Loader2, ShieldCheck, Wallet} from 'lucide-react';
 import {api} from '../../lib/api';
 import {bashRules, dateTime, downloadFile, findingKey, money, observedTags, providerOf, ruleLabel, scopeOf, terraformRules} from '../../lib/finops';
+import {NOT_INCLUDED} from '../../lib/plan';
 import type {Delivery, Finding} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
@@ -14,7 +15,8 @@ import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {EmptyState, Loading, Notice, PriorityBadge, ProviderBadge} from '../ui/shared';
 
 export function CodeReview({findings}: {findings:Finding[]}) {
-  const {scan,token,workspace,canAdmin,notify} = useWorkspace();
+  const {scan,token,workspace,entitlements,canAdmin,notify} = useWorkspace();
+  const terraformIncluded = entitlements?.can_export_terraform ?? !!workspace?.can_export_terraform;
   const [result,setResult] = useState<{content:string;filename:string;kind:string}|null>(null);
   const [busy,setBusy] = useState(''), [error,setError] = useState('');
   const controller = useRef<AbortController | null>(null);
@@ -24,7 +26,7 @@ export function CodeReview({findings}: {findings:Finding[]}) {
   useEffect(() => {controller.current?.abort();setResult(null);setError('');setBusy('');return()=>controller.current?.abort();}, [fingerprint]);
   const common = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic' && canAdmin && resources.length > 0 && resources.length <= 50;
   const sameProvider = new Set(findings.map(providerOf)).size === 1;
-  const canTerraform = common && workspace?.can_export_terraform && sameProvider && findings.every(f => terraformRules.has(f.rule_id));
+  const canTerraform = common && terraformIncluded && sameProvider && findings.every(f => terraformRules.has(f.rule_id));
   const protectedCount=findings.filter(f=>protectionSignals(f).length>0).length;
   const canBash = common && !protectedCount && sameProvider && findings.every(f => providerOf(f) === 'azure' && bashRules.has(f.rule_id));
   const reason = !canAdmin ? 'A workspace administrator can generate review artifacts.' : scan?.data_origin === 'legacy_synthetic' ? 'Historical synthetic snapshots cannot generate code.' : !resources.length ? 'Select at least one resource to review.' : resources.length > 50 ? 'Choose up to 50 unique resources per review.' : !sameProvider ? 'Choose resources from one provider per review.' : !canTerraform && !canBash ? 'These finding types or your current plan do not support code export.' : '';
@@ -41,7 +43,7 @@ export function CodeReview({findings}: {findings:Finding[]}) {
   return <div className="code-review"><div className="review-safety"><ShieldCheck size={20}/><div><strong>Review before execution</strong><p>These controls generate code. CloudSaver does not execute it or change your cloud resources.</p></div></div>
     {!!reason && <Notice tone="warning">{reason}</Notice>}{protectedCount>0&&<Notice tone="warning">Protected intent is present on {protectedCount} selected finding{protectedCount===1?'':'s'}. Destructive Bash export is blocked. Import-only Terraform still requires review.</Notice>}
     <div className="code-review-actions"><button className="button primary" disabled={!canTerraform || !!busy} onClick={() => generate('terraform')}>{busy === 'terraform' ? <Loader2 size={16} className="spin"/> : <FileCode2 size={16}/>}Preview Terraform imports</button><button className="button secondary" disabled={!canBash || !!busy} onClick={() => generate('bash')}>{busy === 'bash' ? <Loader2 size={16} className="spin"/> : <Code2 size={16}/>}Preview Bash script</button></div>
-    {!workspace?.can_export_terraform && canAdmin && <p className="inline-help">Terraform review requires a plan with export access. <Link href="/settings">View your plan</Link></p>}
+    {!terraformIncluded && canAdmin && <p className="inline-help">Terraform review: {NOT_INCLUDED} <Link href="/settings">View your plan</Link></p>}
     {error && <Notice tone="error">{error}</Notice>}{busy && <Loading label="Generating your review artifact…"/>}
     {result ? <div className="code-file"><div className="code-file-header"><span><FileCode2 size={15}/>{result.filename}</span><div><button className="icon-button" aria-label="Copy generated code" onClick={() => navigator.clipboard.writeText(result.content).then(()=>notify('Code copied to clipboard.')).catch(()=>notify('Clipboard is unavailable. Download the file instead.','info'))}><Copy size={15}/></button><button className="button secondary small" onClick={() => downloadFile(result.content,result.filename)}><Download size={14}/>Download</button></div></div><pre tabIndex={0} aria-label="Generated code preview"><code>{result.content}</code></pre><div className="code-file-footer">{result.kind === 'terraform' ? 'Import declarations only · inspect provider and state ownership before use' : 'Review all deletion, snapshot, and retention behavior before execution'}</div></div> : !busy && <div className="code-preview-empty"><FileCode2 size={28}/><h4>Your generated code will appear here</h4><p>Preview an artifact to inspect the exact content before downloading.</p></div>}
     <p className="inline-help">A generated artifact is not deletion approval. Independently verify resource state, backups, and retention requirements.</p>

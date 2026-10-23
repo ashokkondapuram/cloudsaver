@@ -42,6 +42,8 @@ export type Workspace = {
   roles: string[];
   mode: string;
   plan_tier: string;
+  plan_name?: string;
+  billing_state?: BillingState;
   providers?: string[];
   configured_scope_count?: number;
   max_scopes_per_scan?: number;
@@ -55,6 +57,13 @@ export type Workspace = {
   platform_scheduled_scans_enabled?: boolean;
   platform_automated_alerts_enabled?: boolean;
   settings_editable?: boolean;
+  allowed_providers?: string[];
+  all_providers?: boolean;
+  key_id?: string | null;
+  key_name?: string | null;
+  key_expires_at?: string | null;
+  directory_mode?: 'registry' | 'cutover';
+  scopes_editable?: boolean;
 };
 
 export type Frequency = 'manual' | 'daily' | 'hourly';
@@ -93,20 +102,35 @@ export type PlatformSettings = {scheduled_scans_enabled: boolean; automated_aler
 
 export type SettingsResponse = {
   editable: boolean;
+  scopes_editable?: boolean;
+  directory_mode?: 'registry' | 'cutover';
   settings: TenantSettings;
   limits: {max_subscriptions: number; allowed_scan_frequencies: Frequency[]; can_dispatch_automated_alerts: boolean};
   platform: PlatformSettings | null;
   identity: IdentityOnboarding;
 };
 
+export type BillingState = 'active' | 'grace' | 'lapsed' | 'none';
+
 export type Entitlements = {
+  tenant_id: string;
   tier: string;
+  plan_name: string;
+  billing_state: BillingState;
+  current_period_end: string | null;
+  grace_ends_at: string | null;
+  subscription_plan_name: string | null;
+  manage_billing_url: string | null;
   max_subscriptions: number;
   current_subscriptions: number;
+  max_resources_per_scan: number;
+  allowed_scan_frequencies: string[];
+  allowed_providers: string[];
   can_export_terraform: boolean;
+  can_use_keyvault: boolean;
   can_dispatch_automated_alerts: boolean;
   retention_days: number;
-  checkout_available?: boolean;
+  entitlements_source: 'platform' | 'fallback';
 };
 
 export type Delivery = {

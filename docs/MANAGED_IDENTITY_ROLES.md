@@ -192,7 +192,7 @@ gcloud iam workload-identity-pools providers create-oidc azure-mi \
 ### Each workspace (operator)
 
 Create **one reader service account per workspace** in the CloudSaver project and
-assign it in the operator console. A shared service account would let one
+assign it to the workspace in the platform portal. A shared service account would let one
 customer's project grant reach scans for every workspace.
 
 Let the managed identity impersonate it:

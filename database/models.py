@@ -22,7 +22,7 @@ class Organization(Base):
     __table_args__ = (
         UniqueConstraint('id', 'tenant_id', name='uq_organizations_id_tenant'),
         UniqueConstraint('stripe_customer_id', name='uq_organizations_stripe_customer'),
-        CheckConstraint("plan_tier IN ('STARTER', 'GROWTH', 'ENTERPRISE')", name='ck_organizations_plan_tier'),
+        CheckConstraint("plan_tier ~ '^[A-Z][A-Z0-9_]{0,15}$'", name='ck_organizations_plan_tier'),
         Index('ix_organizations_tenant', 'tenant_id'),
     )
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

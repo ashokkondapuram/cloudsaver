@@ -100,7 +100,7 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
         available()
         chosen=current_targets(tenant['tenant_id'])
         if not enabled() or not chosen:
-            raise HTTPException(503,'Tenant notification delivery is not configured or enabled')
+            raise HTTPException(503,'Workspace notification delivery is not configured or enabled')
         ids=repository.enqueue_notification(tenant['tenant_id'],scan,chosen)
         return {'status':'queued','scan_id':str(scan_id),'delivery_ids':ids}
 

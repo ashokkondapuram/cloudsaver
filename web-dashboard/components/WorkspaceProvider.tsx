@@ -19,7 +19,8 @@ type WorkspaceState = {
   notify: (text: string, tone?: 'success' | 'error' | 'info') => void; clearNotice: () => void;
   connect: (token: string) => Promise<void>; disconnect: () => void;
   selectScan: (id: string) => void; runScan: (providers: string[]) => Promise<void>;
-  refresh: () => Promise<void>; reloadProfile: () => Promise<void>; checkout: () => Promise<void>;
+  refresh: () => Promise<void>; reloadProfile: () => Promise<void>;
+  planName: string; planProviders: (providers: string[]) => string[];
 };
 
 const Context = createContext<WorkspaceState | null>(null);
@@ -44,7 +45,6 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const findingFocusKey=useRef<string|null>(null);
   const session = useRef(0);
   const connecting = useRef<AbortController | null>(null);
-  const checkoutKey = useRef<string | null>(null);
 
   useEffect(() => {try {const saved = localStorage.getItem('cloudsaver:ui:density'); if (saved === 'compact' || saved === 'medium' || saved === 'relaxed') updateDensity(saved);} catch {}}, []);
   useEffect(() => {if (!notice) return; const timer = setTimeout(() => setNotice(null), 6500); return () => clearTimeout(timer);}, [notice]);
@@ -69,7 +69,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
       if (session.current !== version) return;
       setToken(nextToken); setWorkspace(me); setEntitlements(plan);
       setScans(history); setSelected(history[0]?.scan_id || '');
-      clearContext(); checkoutKey.current = null; setOverlay(null);
+      clearContext(); setOverlay(null);
     } catch (cause) {
       if (session.current === version && !controller.signal.aborted) {
         const message = cause instanceof Error ? cause.message : 'Workspace could not be connected.';
@@ -79,7 +79,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   }
 
   function disconnect() {
-    session.current++; connecting.current?.abort(); checkoutKey.current = null;
+    session.current++; connecting.current?.abort();
     setToken(''); setWorkspace(null); setEntitlements(null); setScans([]); setSelected('');
     setBusy(''); setError(''); setOverlay(null); setNotice(null); clearContext();
   }
@@ -115,23 +115,6 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     if (version === session.current) {setWorkspace(me); setEntitlements(plan);}
   }
 
-  async function checkout() {
-    const version = session.current;
-    setBusy('Preparing checkout');
-    // Open synchronously so browser popup protection does not lose an async checkout.
-    const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
-    try {
-      const result = await api<{checkout_url: string}>('/billing/checkout', token, {body: {target_tier: 'GROWTH', idempotency_key: (checkoutKey.current ||= crypto.randomUUID())}});
-      if (version !== session.current) {tab?.close(); return;}
-      const url = new URL(result.checkout_url);
-      if (url.protocol !== 'https:' || url.hostname !== 'checkout.stripe.com') throw new Error('Checkout returned an unexpected destination.');
-      if (tab) tab.location.href = url.href;
-      else notify('Allow popups for this workspace and try checkout again.', 'info');
-    } catch (cause) {tab?.close(); if (version === session.current) notify(cause instanceof Error ? cause.message : 'Checkout is unavailable.', 'error');}
-    finally {if (version === session.current) setBusy('');}
-  }
-
   const openFinding = useCallback((value: Finding, context: Finding[] = []) => {
     const active=document.activeElement as HTMLElement|null;
     // Capture before virtual rows can rerender; comparison buttons keep the original opener.
@@ -142,8 +125,10 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const openReview = useCallback((values: Finding[]) => {setReview(values); setOverlay('review');}, []);
   const scan = scans.find(s => s.scan_id === selected) || scans[0];
   const canAdmin = !!workspace?.roles.includes('TenantAdmin');
-  return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'),
+  const planName = entitlements?.plan_name || workspace?.plan_name || workspace?.plan_tier || '';
+  const planProviders = (providers: string[]) => entitlements?.allowed_providers ? providers.filter(p => entitlements.allowed_providers.includes(p)) : providers;
+  return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'), planName, planProviders,
     scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, findingContext, findingFocusKey:findingFocusKey.current, openFinding,
     review, openReview, selection, setSelection,
-    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, checkout}}>{children}</Context.Provider>;
+    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile}}>{children}</Context.Provider>;
 }

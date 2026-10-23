@@ -4,10 +4,13 @@ Since v0.8.0, workspaces live in the Postgres tenant registry
 (CLOUDSAVER_TENANT_REGISTRY=database, the Compose default). CLOUDSAVER_TENANTS only
 seeds it on first start. After that:
 
-- The platform operator manages workspaces, plans, identity bindings and Kubernetes
-  clusters in the operator console (/admin, operator key).
-- Tenant admins manage their Azure subscriptions, AWS accounts and GCP projects,
-  scan schedule and alerts in Settings. Changes apply within seconds, with no restart.
+- Platform operators manage customers, workspaces, plans, identity bindings, cloud
+  scopes and Kubernetes clusters in the platform portal (http://127.0.0.1:3100). The
+  dashboard's former /admin operator console has been removed.
+- Tenant admins manage their scan schedule and alerts in Settings. Before directory
+  cutover they can also edit Azure subscriptions, AWS accounts and GCP projects there;
+  after cutover cloud scopes are read-only in the dashboard. Changes apply within
+  seconds, with no restart.
 
 Scan requests can still select only provider names. They cannot supply projects,
 accounts, regions, roles, URLs, tokens or findings.

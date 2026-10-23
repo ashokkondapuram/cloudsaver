@@ -5,7 +5,8 @@ from pathlib import Path
 import sqlite3
 from uuid import UUID
 
-TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges')
+TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
+          'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions')
 
 
 class Connection:
@@ -36,7 +37,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError('Apply forced-RLS migration 0009_enterprise_evidence before startup')
+                        raise ValueError(f'Apply forced-RLS migrations through 0010_resource_assessment before startup ({table})')
         else:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
@@ -65,6 +66,24 @@ class EnterpriseStore:
                     billed_cost TEXT NOT NULL,effective_cost TEXT NOT NULL,list_cost TEXT,
                     UNIQUE(tenant_id,provider,billing_account,charge_id));
                 CREATE INDEX IF NOT EXISTS focus_period ON focus_charges(tenant_id,currency,period_start,period_end);
+                CREATE TABLE IF NOT EXISTS ai_batches (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,request_key TEXT NOT NULL,scan_id TEXT NOT NULL,
+                    target_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',total INTEGER NOT NULL,resume_after TEXT,
+                    actor TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(tenant_id,request_key));
+                CREATE UNIQUE INDEX IF NOT EXISTS ai_batch_active ON ai_batches(tenant_id,scan_id)
+                    WHERE status IN ('queued','running','waiting_for_budget');
+                CREATE TABLE IF NOT EXISTS ai_batch_items (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,batch_id TEXT NOT NULL,resource_key TEXT NOT NULL,
+                    evidence_digest TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',attempt_id TEXT,reason TEXT,
+                    updated_at TEXT NOT NULL,UNIQUE(batch_id,resource_key));
+                CREATE TABLE IF NOT EXISTS ai_followups (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,scan_id TEXT NOT NULL,resource_key TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL,question TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS resource_decisions (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,resource_key TEXT NOT NULL,scan_id TEXT NOT NULL,
+                    decision TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',defer_until TEXT,evidence_digest TEXT NOT NULL,
+                    actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE INDEX IF NOT EXISTS resource_decision_latest ON resource_decisions(tenant_id,resource_key,created_at DESC,id DESC);
                 ''')
 
     @contextmanager

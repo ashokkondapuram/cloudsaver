@@ -107,27 +107,12 @@ def test_notification_commits_intent_through_scanner_without_direct_webhook_io(t
     assert len(seen)==1
 
 
-def test_public_billing_route_preserves_signed_bytes_without_workspace_key(tmp_path):
-    payload = b'{ "type": "test" }\n'
+def test_gateway_no_longer_forwards_billing_webhooks(tmp_path):
     def handler(request):
-        assert request.url.path == '/api/v1/billing/webhook'
-        assert request.content == payload
-        assert request.headers['stripe-signature'] == 't=123,v1=example'
-        assert 'authorization' not in request.headers
-        return httpx.Response(200, json={'status': 'ignored'})
+        raise AssertionError('Webhooks must not reach the tenant service')
     client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
-    response = client.post('/api/v1/billing/webhook', content=payload,
-                           headers={'Stripe-Signature': 't=123,v1=example'})
-    assert response.status_code == 200
-    assert client.post('/api/v1/billing/webhook', content=payload).status_code == 400
-
-
-def test_public_billing_payload_limit(tmp_path):
-    def handler(request):
-        raise AssertionError('Oversized request must not reach tenant service')
-    client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
-    assert client.post('/api/v1/billing/webhook', content=b'x' * 1_048_577,
-                       headers={'Stripe-Signature': 'any'}).status_code == 413
+    response = client.post('/api/v1/billing/webhook', content=b'{"type": "test"}', headers={'Stripe-Signature': 't=1,v1=x'})
+    assert response.status_code == 410 and response.json()['detail'] == 'Billing webhooks are handled by the platform.'
 
 
 def test_gateway_routes_service_and_ai_review_without_visitor_destinations(tmp_path):

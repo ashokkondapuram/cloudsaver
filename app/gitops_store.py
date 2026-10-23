@@ -17,6 +17,7 @@ class ReviewRepository:
     columns = 'id,scan_id,target_id,repository,branch,status,attempts,result,created_at,updated_at'
 
     def __init__(self,store):
+        store = getattr(store, 'inner', store)
         self.store, self.postgres = store, isinstance(store,PostgresStore)
         if self.postgres:
             with store.connection(str(uuid4())) as db:

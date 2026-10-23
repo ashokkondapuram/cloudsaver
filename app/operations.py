@@ -1,4 +1,4 @@
-"""Effective schedule and alert state from platform settings, tenant settings and plan."""
+"""Effective schedule and alert state from platform settings, tenant settings and plan entitlements."""
 import os
 
 INTERVALS = {'hourly': 3600, 'daily': 86400}
@@ -13,35 +13,40 @@ def platform_flags(settings=None):
             os.getenv('CLOUDSAVER_AUTOMATED_ALERTS', 'false').lower() == 'true')
 
 
-def effective_frequency(workspace, tier):
+def _plan(workspace, plan):
+    from app.entitlements import entitlements_for, resolve
+    return entitlements_for(workspace) if plan is None else resolve(plan)
+
+
+def effective_frequency(workspace, plan=None):
     """The tenant's choice, capped by what its plan allows."""
-    from app.entitlements import get_tier_entitlements
     from app.tenant_config import default_frequency
-    allowed = get_tier_entitlements(tier).allowed_scan_frequencies
-    chosen = (workspace.get('schedule') or {}).get('frequency') or default_frequency(tier)
+    plan = _plan(workspace, plan)
+    allowed = plan.allowed_scan_frequencies
+    chosen = (workspace.get('schedule') or {}).get('frequency') or default_frequency(plan.tier)
     order = ['hourly', 'daily', 'manual']
     return next(f for f in order[order.index(chosen):] if f in allowed or f == 'manual')
 
 
-def scheduled_interval(settings, workspace, tier):
+def scheduled_interval(settings, workspace, plan=None):
     """Seconds between scheduled scans, or None when the tenant is not scheduled."""
     scheduled, _ = platform_flags(settings)
-    return INTERVALS.get(effective_frequency(workspace, tier)) if scheduled else None
+    return INTERVALS.get(effective_frequency(workspace, plan)) if scheduled else None
 
 
-def alerts_enabled(settings, workspace, tier):
-    from app.entitlements import get_tier_entitlements
+def alerts_enabled(settings, workspace, plan=None):
     _, platform_alerts = platform_flags(settings)
     tenant_alerts = (getattr(settings, 'registry', None) is None
                      or bool((workspace.get('alerts') or {}).get('enabled')))
-    return platform_alerts and tenant_alerts and get_tier_entitlements(tier).can_dispatch_automated_alerts
+    return platform_alerts and tenant_alerts and _plan(workspace, plan).can_dispatch_automated_alerts
 
 
 def workspace_operations(workspace, settings=None):
     from app.delivery_config import target_definitions
-    tier = workspace.get('plan_tier', 'STARTER')
+    from app.entitlements import entitlements_for
+    plan = entitlements_for(workspace)
     scheduled, platform_alerts = platform_flags(settings)
-    frequency = effective_frequency(workspace, tier)
+    frequency = effective_frequency(workspace, plan)
     webhook = bool(workspace.get('webhook_configured')) or any(
         t['tenant_id'] == workspace['tenant_id'] for t in target_definitions())
     return {
@@ -49,7 +54,7 @@ def workspace_operations(workspace, settings=None):
         'scheduled_scan_interval_seconds': INTERVALS.get(frequency, 0),
         'scan_frequency': frequency,
         'platform_scheduled_scans_enabled': scheduled,
-        'automated_alerts_enabled': alerts_enabled(settings, workspace, tier),
+        'automated_alerts_enabled': alerts_enabled(settings, workspace, plan),
         'platform_automated_alerts_enabled': platform_alerts,
         'notification_webhook_configured': webhook,
         'delivery_dispatcher_enabled': os.getenv('CLOUDSAVER_DELIVERY_ENABLED', 'false').lower() == 'true',

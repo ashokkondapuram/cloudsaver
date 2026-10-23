@@ -17,6 +17,9 @@ args = parser.parse_args()
 
 
 def workspace_key():
+    if os.getenv('CLOUDSAVER_KEY_VERIFIER') == 'identity' and os.getenv('CLOUDSAVER_WORKSPACE_KEY'):
+        # Platform-issued keys are verified by identity-service; there is no local digest to compare.
+        return os.environ['CLOUDSAVER_WORKSPACE_KEY']
     env_tenants = os.getenv('CLOUDSAVER_TENANTS')
     if env_tenants:
         tenants = json.loads(env_tenants)
@@ -58,8 +61,12 @@ with httpx.Client(timeout=60, trust_env=False) as client:
     body = me.json()
     assert body['mode'] == 'azure', 'Workspace must run in azure mode'
     assert 'scheduled_scans_enabled' in body and 'notification_webhook_configured' in body
+    assert {'plan_name', 'billing_state'} <= set(body)
     entitlements = client.get(gateway + '/api/v1/billing/entitlements', headers=headers)
     entitlements.raise_for_status()
+    plan = entitlements.json()
+    assert plan['billing_state'] in ('active', 'grace', 'lapsed', 'none') and 'checkout_available' not in plan
+    assert client.post(gateway + '/api/v1/billing/checkout', headers=headers).status_code == 410
     if args.scan_id:
         response = client.get(gateway + '/api/v1/scans/' + args.scan_id, headers=headers)
         response.raise_for_status()

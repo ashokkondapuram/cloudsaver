@@ -172,20 +172,36 @@ ingestion, billing and scheduled job persistence in Compose.
 
 ## Local service stack (Docker Desktop)
 
+CloudSaver 1.3 depends on the platform (identity-service, the platform database and the
+platform portal), which is a separate product in `platform/` with its own compose project
+and `.env`. Start the platform first; it creates the shared internal network `platform-link`.
+
 ```bash
-python scripts/setup_compose.py
-# Prints a workspace access key once and writes CLOUDSAVER_TENANTS into .env.
-# Refuses to overwrite an existing .env.
+python3 scripts/setup_compose.py
+# Writes a new CloudSaver .env with its five identity caller tokens. Refuses to overwrite.
+(cd platform && python3 scripts/setup_platform.py && python3 scripts/setup_platform.py --add-callers ../.env)
+# Writes platform/.env, allows CloudSaver's callers (digests only) and prints the operator key once.
+make platform-up      # docker compose -p platform: platform-db, platform-redis, identity-service, portal
 make build
-make up
+make up               # starts the platform, then CloudSaver
 make status
-export CLOUDSAVER_WORKSPACE_KEY='<key printed by setup>'
-python scripts/smoke_stack.py
 ```
 
-Open http://127.0.0.1:3000 and enter the workspace access key. Live scans require
-authorized subscription IDs in `CLOUDSAVER_TENANTS` plus cloud credentials in Compose.
-The browser keeps credentials in memory; reload/disconnect clears them.
+Upgrading from 1.2: back up both databases, stop the old stack, then run
+`python3 scripts/setup_platform.py --migrate-from ../.env` in `platform/` (the key pepper
+and operator key move unchanged, and `platform-db` reuses the `cloudsaver_token-db-data`
+volume). Start the platform, export billing data with `scripts/export_billing.py` and
+import it with `python -m identity.billing.importer -` in identity-service, then start
+CloudSaver and run `python3 scripts/setup_compose.py --prune-platform`. See
+platform/README.md.
+
+The stack starts empty: no sample customers, workspaces, findings or prices are seeded.
+Sign in to the platform portal (http://127.0.0.1:3100) with the operator key, create a
+customer and a workspace, add its cloud accounts (Azure subscriptions, AWS accounts,
+Google Cloud projects or Kubernetes clusters), and issue a workspace key. Then open
+http://127.0.0.1:3000 and enter that key; `CLOUDSAVER_WORKSPACE_KEY=<key> python
+scripts/smoke_stack.py` verifies the stack. Live scans also require cloud credentials
+in Compose. The browser keeps credentials in memory; reload/disconnect clears them.
 
 Only dashboard port 3000 and gateway port 8000 bind to host loopback. Tenant,
 scanner, analytics and notification services use internal ports 8001–8004.
@@ -215,21 +231,21 @@ The fake sign-in button is removed; authenticated consent-link requests return
 501. Directory consent does not grant subscription Reader RBAC: administrators
 must separately grant and verify Azure access.
 
-## Cloud sources, Stripe and schedules
+## Cloud sources, plans and schedules
 
 For live scanning set CLOUDSAVER_MODE=azure (the compatibility live-mode switch),
-explicit authorized tenant scopes. Cloud access is keyless: an Azure managed identity
-federates into Azure, AWS and GCP (see docs/CLOUD_SOURCES.md). Manage workspaces in the
-operator console (/admin; issue a key with scripts/issue_operator_key.py) and scopes,
-schedules and alerts in Settings.
+explicit authorized workspace scopes. Cloud access is keyless: an Azure managed identity
+federates into Azure, AWS and GCP (see docs/CLOUD_SOURCES.md). Platform operators manage
+customers, workspaces, cloud scopes and keys in the platform portal (http://127.0.0.1:3100;
+for local operator-key sign-in, issue a key with scripts/issue_operator_key.py). Workspace
+admins (TenantAdmin role) manage schedules and alerts in dashboard Settings.
 
-Checkout requires STRIPE_SECRET_KEY, CLOUDSAVER_BILLING_RETURN_URL (fixed HTTPS),
-trusted CLOUDSAVER_STRIPE_CUSTOMERS and STRIPE_PRICE_TIERS, plus matching persisted
-organization/customer ownership. The webhook separately requires
-STRIPE_WEBHOOK_SECRET. See SPRINTS_ABC.md for provisioning and webhook contracts.
-Checkout accepts target_tier and a 16–128 character idempotency_key from a billing
-authorized user. No Stripe session or payment was created during development.
-The existing-subscription portal/upgrade experience remains future work.
+Plans, subscriptions and payments live in the platform. CloudSaver applies the
+entitlements it receives in the identity verify response and the directory feed; the
+built-in plan table is only a logged fallback. CloudSaver has no Stripe code:
+`POST /api/v1/billing/checkout` and `POST /api/v1/billing/webhook` return `410`. Stripe,
+when enabled, is configured on the platform (see platform/README.md). The dashboard Plan
+tab shows the plan, its limits and a Manage billing link when the platform provides one.
 
 Scheduled scans stay disabled by default. Explicitly provision/activate intended
 subscriptions with scripts/provision_tenants.py, verify a persisted paid plan,
@@ -243,10 +259,9 @@ are not connected to production delivery. See docs/DELIVERY.md.
 
 ## API and verification
 
-All /api/v1 routes require bearer authentication except the Stripe webhook, which
-requires a valid raw-body signature. /healthz is public. Core routes are me,
-scans, scans/{id}, analytics, billing/entitlements, billing/checkout,
-billing/webhook, notifications/{scan_id}, and scan-owned remediation /
+All /api/v1 routes require bearer authentication except the retired billing webhook,
+which returns `410`. /healthz is public. Core routes are me,
+scans, scans/{id}, analytics, billing/entitlements, notifications/{scan_id}, and scan-owned remediation /
 remediation-terraform POST exports. Analytics needs the service stack; notification enqueue and operational routes
 are also available on the standalone scanner when PostgreSQL is configured.
 
@@ -265,6 +280,8 @@ python test_platform.py --postgres --frontend
 ```
 
 See TEST_REPORT.md for executed checks and IMPLEMENTATION_STATUS.md for remaining
-work. Live Entra/Stripe/Azure acceptance, browser QA, dependency remediation and a
+work. Platform tests run from `platform/` (see platform/README.md), and
+`scripts/test_postgres_network.sh cloudsaver|platform` runs either PostgreSQL suite on a
+disposable internal Docker network. Live Entra/Stripe/Azure acceptance, browser QA, dependency remediation and a
 backup/restore drill remain required before shared hosting. No production status
 is inferred merely from source files or mocked tests.

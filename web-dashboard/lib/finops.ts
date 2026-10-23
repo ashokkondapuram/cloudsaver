@@ -22,6 +22,7 @@ export const scopeOf = (finding: Finding) => finding.scope_id || finding.subscri
 export const findingKey = (finding: Finding) => JSON.stringify([providerOf(finding), providerOf(finding) === 'azure' ? finding.resource_id.toLowerCase() : finding.resource_id, finding.rule_id]);
 export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? 'Not estimated' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 2}).format(value);
 export const dateTime = (value: string) => {const d = new Date(value); return Number.isNaN(d.valueOf()) ? 'Unknown time' : d.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'});};
+export const shortDate = (value: string) => {const d = new Date(value); return Number.isNaN(d.valueOf()) ? 'an unknown date' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});};
 export const compact = (value: number) => new Intl.NumberFormat('en-US', {notation: value >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1}).format(value);
 
 export function observedTags(finding: Finding): Record<string, string> {

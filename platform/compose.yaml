@@ -1,0 +1,139 @@
+name: platform
+
+# Platform 1.0.0: customers, workspaces, workspace keys and billing. Independent of CloudSaver:
+# CloudSaver reaches identity-service only over the internal platform-link network.
+x-identity: &identity
+  image: zafin-platform-identity:1.0.0
+  build:
+    context: .
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: [/tmp]
+
+x-identity-environment: &identity-environment
+  PLATFORM_IDENTITY_DATABASE_URL: postgresql://identity_app:${PLATFORM_DB_APP_PASSWORD:?Run scripts/setup_platform.py}@platform-db:5432/identity
+  PLATFORM_KEY_PEPPER: ${PLATFORM_KEY_PEPPER:-}
+  PLATFORM_KEY_PEPPER_VERSION: ${PLATFORM_KEY_PEPPER_VERSION:-1}
+  PLATFORM_KEY_PEPPER_PREVIOUS: ${PLATFORM_KEY_PEPPER_PREVIOUS:-}
+  PLATFORM_KEYVAULT_URL: ${PLATFORM_KEYVAULT_URL:-}
+  PLATFORM_IDENTITY_CALLERS: ${PLATFORM_IDENTITY_CALLERS:?Run scripts/setup_platform.py}
+  PLATFORM_REDIS_URL: redis://platform-redis:6379/0
+  PLATFORM_IDENTITY_CACHE_SECONDS: ${PLATFORM_IDENTITY_CACHE_SECONDS:-15}
+  PLATFORM_PROVIDER_SCOPED_KEYS: ${PLATFORM_PROVIDER_SCOPED_KEYS:-false}
+  PLATFORM_ENVIRONMENT: ${PLATFORM_ENVIRONMENT:-development}
+  PLATFORM_PORTAL_AUTH: ${PLATFORM_PORTAL_AUTH:-entra}
+  PLATFORM_OPERATOR_KEY_SHA256: ${PLATFORM_OPERATOR_KEY_SHA256:-}
+  PLATFORM_OPERATOR_TENANT_ID: ${PLATFORM_OPERATOR_TENANT_ID:-}
+  PLATFORM_IDENTITY_AUDIENCE: ${PLATFORM_IDENTITY_AUDIENCE:-api://cloudsaver-identity}
+  PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://127.0.0.1:3100}
+  # Billing: subscriptions drive workspace plans once enabled. Stripe stays off until both secrets resolve.
+  PLATFORM_BILLING_ENABLED: ${PLATFORM_BILLING_ENABLED:-false}
+  PLATFORM_BILLING_PROVIDER: ${PLATFORM_BILLING_PROVIDER:-manual}
+  PLATFORM_STRIPE_SECRET_KEY: ${PLATFORM_STRIPE_SECRET_KEY:-}
+  PLATFORM_STRIPE_WEBHOOK_SECRET: ${PLATFORM_STRIPE_WEBHOOK_SECRET:-}
+  PLATFORM_DB_POOL_SIZE: ${PLATFORM_DB_POOL_SIZE:-4}
+  PLATFORM_DB_MAX_OVERFLOW: ${PLATFORM_DB_MAX_OVERFLOW:-4}
+  NO_PROXY: &platform_no_proxy localhost,127.0.0.1,::1,platform-db,platform-redis,identity-service
+  no_proxy: *platform_no_proxy
+
+services:
+  # Was token-db in the CloudSaver project. Same volume, so no dump and restore is needed.
+  platform-db:
+    image: zafin-platform-db:1.0.0
+    build:
+      context: ./platform-db
+    restart: unless-stopped
+    networks: [platform-db]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:?Run scripts/setup_platform.py}
+      IDENTITY_DB_OWNER_PASSWORD: ${PLATFORM_DB_OWNER_PASSWORD:?Run scripts/setup_platform.py}
+      IDENTITY_DB_APP_PASSWORD: ${PLATFORM_DB_APP_PASSWORD:?Run scripts/setup_platform.py}
+    volumes:
+      - platform-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d identity]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  identity-migrate:
+    <<: *identity
+    restart: 'no'
+    networks: [platform-db]
+    command: [python, -m, alembic, -c, identity_alembic.ini, upgrade, head]
+    environment:
+      PLATFORM_IDENTITY_MIGRATION_URL: postgresql://identity_owner:${PLATFORM_DB_OWNER_PASSWORD:?Run scripts/setup_platform.py}@platform-db:5432/identity
+    depends_on:
+      platform-db: {condition: service_healthy}
+  identity-service:
+    <<: *identity
+    command: [uvicorn, identity.app:create_app, --factory, --host, 0.0.0.0, --port, '8005']
+    networks: [platform-db, platform-internal, platform-link]
+    environment: *identity-environment
+    depends_on:
+      identity-migrate: {condition: service_completed_successfully}
+      platform-redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/readyz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  # Throttling only; it holds no key material and CloudSaver never connects to it.
+  platform-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [platform-internal]
+    command: [redis-server, --save, '', --appendonly, 'no', --maxmemory, 64mb, --maxmemory-policy, volatile-ttl]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  platform-portal:
+    image: zafin-platform-portal:1.0.0
+    build:
+      context: ./portal
+    restart: unless-stopped
+    networks: [platform-internal, portal-edge]
+    ports: ['127.0.0.1:3100:3100']
+    environment:
+      IDENTITY_SERVICE_URL: http://identity-service:8005
+      PLATFORM_PORTAL_TOKEN: ${PLATFORM_PORTAL_TOKEN:?Run scripts/setup_platform.py}
+      PLATFORM_PORTAL_AUTH: ${PLATFORM_PORTAL_AUTH:-entra}
+      PLATFORM_OPERATOR_KEY_SHA256: ${PLATFORM_OPERATOR_KEY_SHA256:-}
+      PLATFORM_ENVIRONMENT: ${PLATFORM_ENVIRONMENT:-development}
+      PORTAL_PUBLIC_URL: ${PLATFORM_PUBLIC_URL:-http://127.0.0.1:3100}
+      PORTAL_ENTRA_TENANT_ID: ${PORTAL_ENTRA_TENANT_ID:-}
+      PORTAL_ENTRA_CLIENT_ID: ${PORTAL_ENTRA_CLIENT_ID:-}
+      PORTAL_ENTRA_CLIENT_SECRET: ${PORTAL_ENTRA_CLIENT_SECRET:-}
+      PORTAL_ENTRA_API_SCOPE: ${PORTAL_ENTRA_API_SCOPE:-api://cloudsaver-identity/.default}
+      NO_PROXY: localhost,127.0.0.1,::1,identity-service
+      no_proxy: localhost,127.0.0.1,::1,identity-service
+    depends_on:
+      identity-service: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:3100/api/healthz]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  # Only platform-db, identity-migrate and identity-service.
+  platform-db:
+    internal: true
+  # identity-service, platform-redis and the portal.
+  platform-internal:
+    internal: true
+  # Egress for Entra sign-in only.
+  portal-edge: {}
+  # Shared with CloudSaver's key-verifying services. Internal: no egress for anything on it.
+  platform-link:
+    name: platform-link
+    internal: true
+
+volumes:
+  # Reuses the volume created by the CloudSaver 1.2.0 project (token-db). Rename in a maintenance window.
+  platform-db-data:
+    name: cloudsaver_token-db-data

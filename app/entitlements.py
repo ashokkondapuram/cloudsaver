@@ -1,19 +1,38 @@
+"""Plan entitlements from the platform, enforced by CloudSaver.
+
+The platform owns plans and billing. Each workspace carries a `plan` block, either from the verify
+response (workspace keys) or from the directory projection (Entra mode, workers). TIER_LIMITS is only
+the fallback for workspaces the platform hasn't sent a plan block for yet.
 """
-CloudSaver - Commercial Billing, Stripe Checkout & Entitlement Enforcement.
-"""
-import os
-from typing import Dict, Any, Optional, List
+import logging
+import re
+import threading
+from datetime import datetime, timezone
 from enum import Enum
-from pydantic import BaseModel
+from typing import Dict, List, Optional
+from urllib.parse import urlsplit
+
 from fastapi import HTTPException
+from pydantic import BaseModel
+
+logger = logging.getLogger('cloudsaver.entitlements')
+PROVIDERS = ('azure', 'aws', 'gcp', 'kubernetes')
+PROVIDER_LABELS = {'azure': 'Azure', 'aws': 'AWS', 'gcp': 'GCP', 'kubernetes': 'Kubernetes'}
+FREQUENCIES = ('manual', 'daily', 'hourly')
+BILLING_STATES = ('active', 'grace', 'lapsed', 'none')
+PLAN_CODE = re.compile(r'^[A-Z][A-Z0-9_]{0,15}$')
+CONTACT = 'Contact your account manager.'
+
 
 class PlanTier(str, Enum):
     STARTER = "STARTER"
     GROWTH = "GROWTH"
     ENTERPRISE = "ENTERPRISE"
 
+
 class TierEntitlements(BaseModel):
-    tier: PlanTier
+    tier: str
+    plan_name: str
     max_subscriptions: int
     max_resources_per_scan: int
     allowed_scan_frequencies: List[str]
@@ -21,10 +40,19 @@ class TierEntitlements(BaseModel):
     can_export_terraform: bool
     can_dispatch_automated_alerts: bool
     retention_days: int
+    allowed_providers: List[str] = list(PROVIDERS)
+    billing_state: str = 'none'
+    current_period_end: Optional[str] = None
+    grace_ends_at: Optional[str] = None
+    subscription_plan_name: Optional[str] = None
+    manage_billing_url: Optional[str] = None
+    entitlements_version: Optional[int] = None
+    source: str = 'fallback'
+
 
 TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
     PlanTier.STARTER: TierEntitlements(
-        tier=PlanTier.STARTER,
+        tier=PlanTier.STARTER.value, plan_name='Starter',
         max_subscriptions=2,
         max_resources_per_scan=250,
         allowed_scan_frequencies=["manual"],
@@ -34,7 +62,7 @@ TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
         retention_days=7
     ),
     PlanTier.GROWTH: TierEntitlements(
-        tier=PlanTier.GROWTH,
+        tier=PlanTier.GROWTH.value, plan_name='Growth',
         max_subscriptions=10,
         max_resources_per_scan=2500,
         allowed_scan_frequencies=["manual", "daily"],
@@ -44,7 +72,7 @@ TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
         retention_days=90
     ),
     PlanTier.ENTERPRISE: TierEntitlements(
-        tier=PlanTier.ENTERPRISE,
+        tier=PlanTier.ENTERPRISE.value, plan_name='Enterprise',
         max_subscriptions=1000,
         max_resources_per_scan=100000,
         allowed_scan_frequencies=["manual", "daily", "hourly"],
@@ -54,116 +82,216 @@ TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
         retention_days=365
     )
 }
+_warned = set()
+_warned_lock = threading.Lock()
 
-def get_tier_entitlements(tier_name: str) -> TierEntitlements:
+
+def plan_code(value):
+    """Plan codes are uppercase; operators may define their own beyond the three built-in tiers."""
+    code = value.strip().upper() if isinstance(value, str) else ''
+    if not PLAN_CODE.fullmatch(code):
+        raise ValueError('Invalid plan tier')
+    return code
+
+
+def _timestamp(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if not isinstance(value, datetime):
+        raise ValueError('Plan dates must be ISO 8601 timestamps')
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _name(value, required=False):
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value.strip() or len(value) > 60:
+        raise ValueError('Plan names must be 1–60 characters')
+    return value.strip()
+
+
+def billing_url(value):
+    """The manage-billing link is shown only when it's a plain HTTPS URL."""
+    if not isinstance(value, str) or len(value) > 2048 or not value.startswith('https://'):
+        return None
     try:
-        tier = PlanTier(tier_name.upper())
-    except (ValueError, AttributeError):
-        tier = PlanTier.STARTER
-    return TIER_LIMITS[tier]
-
-def enforce_subscription_quota(tier_name: str, current_count: int, adding_count: int = 1) -> None:
-    entitlements = get_tier_entitlements(tier_name)
-    if (current_count + adding_count) > entitlements.max_subscriptions:
-        raise HTTPException(
-            status_code=402,
-            detail=(
-                f"Subscription quota exceeded for tier {entitlements.tier.value}. "
-                f"Current limit: {entitlements.max_subscriptions} subscriptions. "
-                f"Upgrade to a higher tier to connect additional Azure subscriptions."
-            )
-        )
-
-def enforce_terraform_export(tier_name: str) -> None:
-    entitlements = get_tier_entitlements(tier_name)
-    if not entitlements.can_export_terraform:
-        raise HTTPException(
-            status_code=403,
-            detail="Terraform remediation export is available on Growth and Enterprise tiers. Please upgrade."
-        )
-
-def enforce_keyvault_access(tier_name: str) -> None:
-    entitlements = get_tier_entitlements(tier_name)
-    if not entitlements.can_use_keyvault:
-        raise HTTPException(
-            status_code=403,
-            detail="Azure Key Vault credential dynamic resolution requires an Enterprise tier plan."
-        )
-
-def checkout_configured() -> bool:
-    """Whether the operator has configured Stripe Checkout; mapping errors still surface at checkout."""
-    from urllib.parse import urlparse
-    parsed = urlparse(os.getenv('CLOUDSAVER_BILLING_RETURN_URL', ''))
-    return bool(os.getenv('STRIPE_SECRET_KEY')) and parsed.scheme == 'https' and bool(parsed.hostname) \
-        and not (parsed.username or parsed.password or parsed.query or parsed.fragment)
-
-
-def create_checkout_session(
-    target_tier: str,
-    tenant_id: str,
-    organization_id: str,
-    customer_id: Optional[str] = None,
-    success_url: Optional[str] = None,
-    cancel_url: Optional[str] = None,
-    idempotency_key: Optional[str] = None
-) -> Dict[str, Any]:
-    try:
-        tier = PlanTier(target_tier.upper())
+        parsed = urlsplit(value)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid target plan tier: {target_tier}")
+        return None
+    if not parsed.hostname or parsed.username or parsed.password or any(c.isspace() for c in value):
+        return None
+    return value
 
-    if tier == PlanTier.STARTER:
-        raise HTTPException(status_code=400, detail="Cannot create checkout session for free Starter tier")
 
-    if not idempotency_key or len(idempotency_key) > 128:
-        raise HTTPException(400, 'A checkout idempotency key is required')
-    import hashlib
-    from urllib.parse import urlparse
-    key = os.getenv('STRIPE_SECRET_KEY', '')
-    return_url = os.getenv('CLOUDSAVER_BILLING_RETURN_URL', '')
-    if not checkout_configured():
-        raise HTTPException(503, 'Stripe Checkout and its HTTPS return URL must be configured')
-    if success_url or cancel_url:
-        raise HTTPException(400, 'Checkout return URLs are controlled by the operator')
+def _limits(value):
+    if not isinstance(value, dict):
+        raise ValueError('Plan entitlements must be an object')
+
+    def number(key):
+        item = value.get(key)
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+            raise ValueError(f'Plan entitlement {key} must be a non-negative integer')
+        return item
+
+    def flag(key):
+        if not isinstance(value.get(key), bool):
+            raise ValueError(f'Plan entitlement {key} must be a boolean')
+        return value[key]
+
+    def subset(key, allowed, default=None):
+        item = value.get(key, default)
+        if not isinstance(item, list) or not all(isinstance(i, str) for i in item) or not set(item) <= set(allowed):
+            raise ValueError(f'Plan entitlement {key} has unknown values')
+        return [i for i in allowed if i in item]
+
+    frequencies = subset('allowed_scan_frequencies', FREQUENCIES)
+    return {'max_subscriptions': number('max_subscriptions'), 'max_resources_per_scan': number('max_resources_per_scan'),
+            'allowed_scan_frequencies': frequencies if 'manual' in frequencies else ['manual'] + frequencies,
+            'can_export_terraform': flag('can_export_terraform'), 'can_use_keyvault': flag('can_use_keyvault'),
+            'can_dispatch_automated_alerts': flag('can_dispatch_automated_alerts'),
+            'retention_days': number('retention_days'),
+            'allowed_providers': subset('allowed_providers', PROVIDERS, list(PROVIDERS))}
+
+
+def normalize_plan(value):
+    """Canonical plan block (contract identity-v1) or None; raises ValueError when it's malformed."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError('The plan block must be an object')
+    code = plan_code(value.get('code'))
+    state = value.get('billing_state') or 'none'
+    if state not in BILLING_STATES:
+        raise ValueError('Unknown billing state')
+    version = value.get('entitlements_version')
+    if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version < 0):
+        raise ValueError('Entitlements version must be a non-negative integer')
+    return {
+        'code': code, 'name': _name(value.get('name')) or code.title(), 'billing_state': state,
+        'current_period_end': _timestamp(value.get('current_period_end')),
+        'grace_ends_at': _timestamp(value.get('grace_ends_at')),
+        'subscription_plan_name': _name(value.get('subscription_plan_name')),
+        'entitlements_version': version, 'entitlements': _limits(value.get('entitlements')),
+        'manage_billing_url': billing_url(value.get('manage_billing_url')),
+    }
+
+
+def fallback_entitlements(tier_name) -> TierEntitlements:
+    """Static limits for a plan code. Unknown codes get Starter limits under their own code."""
     try:
-        from services.billing import configuration
-        customers, tiers = configuration()
-        routes = [(customer, route) for customer, route in customers.items() if route['tenant_id'] == tenant_id]
-        prices = [price for price, mapped_tier in tiers.items() if mapped_tier == tier.value]
-        if len(routes) != 1 or len(prices) != 1:
-            raise ValueError('Ambiguous billing configuration')
-        customer, route = routes[0]
-        _verify_customer(route, customer)
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(503, 'A persisted tenant/customer mapping and one price per tier are required') from None
-    parameters = {'mode': 'subscription', 'customer': customer,
-                  'client_reference_id': route['organization_id'],
-                  'line_items': [{'price': prices[0], 'quantity': 1}],
-                  'success_url': return_url, 'cancel_url': return_url}
+        code = plan_code(tier_name)
+    except ValueError:
+        code = PlanTier.STARTER.value
+    known = TIER_LIMITS.get(PlanTier(code)) if code in PlanTier.__members__ else None
+    if known:
+        return known.model_copy(deep=True)
+    return TIER_LIMITS[PlanTier.STARTER].model_copy(update={'tier': code, 'plan_name': code.title()}, deep=True)
+
+
+def entitlements_for(tenant) -> TierEntitlements:
+    """Effective entitlements: the verified or projected plan block, else TIER_LIMITS for plan_tier."""
     try:
-        session = _stripe_checkout(key, parameters, hashlib.sha256((tenant_id + ':' + idempotency_key).encode()).hexdigest())
-        url = urlparse(session.url)
-        if url.scheme != 'https' or url.hostname != 'checkout.stripe.com' or url.username or url.password:
-            raise ValueError('Unexpected checkout URL')
-        return {'session_id': session.id, 'checkout_url': session.url, 'tier': tier.value}
-    except Exception:
-        raise HTTPException(502, 'Stripe Checkout is unavailable; retry with the same idempotency key') from None
+        plan = normalize_plan((tenant or {}).get('plan'))
+    except ValueError:
+        logger.warning('Ignoring a malformed plan block tenant_id=%s', (tenant or {}).get('tenant_id'))
+        plan = None
+    if plan:
+        return TierEntitlements(
+            tier=plan['code'], plan_name=plan['name'], **plan['entitlements'], billing_state=plan['billing_state'],
+            current_period_end=plan['current_period_end'], grace_ends_at=plan['grace_ends_at'],
+            subscription_plan_name=plan['subscription_plan_name'], manage_billing_url=plan['manage_billing_url'],
+            entitlements_version=plan['entitlements_version'], source='platform')
+    result = fallback_entitlements((tenant or {}).get('plan_tier') or PlanTier.STARTER.value)
+    tenant_id = (tenant or {}).get('tenant_id')
+    with _warned_lock:
+        first = tenant_id not in _warned
+        _warned.add(tenant_id)
+    if first:
+        logger.warning('entitlements_fallback tenant_id=%s plan=%s', tenant_id, result.tier)
+    return result
 
 
-def _verify_customer(route, customer):
-    import psycopg
-    with psycopg.connect(os.environ['CLOUDSAVER_DATABASE_URL'], connect_timeout=5) as db:
-        db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (route['tenant_id'],))
-        row = db.execute('SELECT stripe_subscription_id,stripe_subscription_status FROM organizations WHERE id=%s AND tenant_id=%s AND stripe_customer_id=%s',
-                         (route['organization_id'], route['tenant_id'], customer)).fetchone()
-        if not row:
-            raise ValueError('Customer is not provisioned')
-        if row[0] and row[1] not in ('canceled', 'incomplete_expired'):
-            raise HTTPException(409, 'An existing subscription must be changed through the operator billing workflow')
+def resolve(subject) -> TierEntitlements:
+    """Accepts entitlements, a workspace dict, or a plan code (fallback limits)."""
+    if isinstance(subject, TierEntitlements):
+        return subject
+    if isinstance(subject, dict):
+        return entitlements_for(subject)
+    return fallback_entitlements(subject)
 
 
-def _stripe_checkout(key, parameters, idempotency_key):
-    import stripe
-    return stripe.StripeClient(key).v1.checkout.sessions.create(parameters, {'idempotency_key': idempotency_key})
+def scope_quota_message(plan):
+    return (f'Your {plan.plan_name} plan allows up to {plan.max_subscriptions} cloud scopes. '
+            'Contact your account manager to change your plan.')
+
+
+def enforce_subscription_quota(subject, current_count: int, adding_count: int = 1) -> None:
+    plan = resolve(subject)
+    if current_count + adding_count > plan.max_subscriptions:
+        raise HTTPException(status_code=402, detail=scope_quota_message(plan))
+
+
+def enforce_resource_quota(subject, count: int) -> None:
+    plan = resolve(subject)
+    if count > plan.max_resources_per_scan:
+        raise HTTPException(402, f'This scan found more than {plan.max_resources_per_scan:,} resources, the limit for your '
+                                 f'{plan.plan_name} plan. No partial results were saved. '
+                                 'Contact your account manager to change your plan.')
+
+
+def enforce_terraform_export(subject) -> None:
+    if not resolve(subject).can_export_terraform:
+        raise HTTPException(status_code=403,
+                            detail='Terraform review is available on plans that include it. Contact your account manager.')
+
+
+def enforce_keyvault_access(subject) -> None:
+    if not resolve(subject).can_use_keyvault:
+        raise HTTPException(status_code=403, detail="Key Vault access isn't included in your plan. " + CONTACT)
+
+
+def enforce_scan_frequency(subject, frequency: str) -> None:
+    if frequency not in resolve(subject).allowed_scan_frequencies:
+        raise HTTPException(402, f"{frequency.capitalize()} scans aren't included in your plan. " + CONTACT)
+
+
+def enforce_automated_alerts(subject) -> None:
+    if not resolve(subject).can_dispatch_automated_alerts:
+        raise HTTPException(402, "Automated alerts aren't included in your plan. " + CONTACT)
+
+
+def enforce_providers(subject, providers) -> None:
+    allowed = set(resolve(subject).allowed_providers)
+    for provider in PROVIDERS:
+        if provider in providers and provider not in allowed:
+            raise HTTPException(403, f"{PROVIDER_LABELS[provider]} isn't included in your plan. " + CONTACT)
+
+
+def billing_summary(tenant) -> dict:
+    """GET /api/v1/billing/entitlements; the dashboard Plan tab is built against exactly these fields."""
+    plan = entitlements_for(tenant)
+    return {
+        'tenant_id': tenant['tenant_id'],
+        'tier': plan.tier,
+        'plan_name': plan.plan_name,
+        'billing_state': plan.billing_state,
+        'current_period_end': plan.current_period_end,
+        'grace_ends_at': plan.grace_ends_at,
+        'subscription_plan_name': plan.subscription_plan_name,
+        'manage_billing_url': plan.manage_billing_url,
+        'max_subscriptions': plan.max_subscriptions,
+        'current_subscriptions': sum(len(tenant.get(k) or []) for k in
+                                     ('subscription_ids', 'aws_accounts', 'gcp_projects', 'kubernetes_clusters')),
+        'max_resources_per_scan': plan.max_resources_per_scan,
+        'allowed_scan_frequencies': list(plan.allowed_scan_frequencies),
+        'allowed_providers': list(plan.allowed_providers),
+        'can_export_terraform': plan.can_export_terraform,
+        'can_use_keyvault': plan.can_use_keyvault,
+        'can_dispatch_automated_alerts': plan.can_dispatch_automated_alerts,
+        'retention_days': plan.retention_days,
+        'entitlements_source': 'platform' if plan.source == 'platform' else 'fallback',
+    }

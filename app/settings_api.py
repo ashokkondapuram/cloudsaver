@@ -1,22 +1,23 @@
-"""Workspace settings for tenant admins and tenant management for the platform operator.
+"""Workspace settings for tenant admins.
 
 Tenant admins edit only scopes that their own cloud grants protect (Azure
 subscriptions in their directory, AWS roles that require their tenant ID as the
 external ID, GCP projects reached through their operator-assigned service
 account). Identity bindings and Kubernetes endpoints that reference
-operator secrets are operator-only.
+operator secrets are managed by platform operators in the platform portal.
 """
 import hashlib
-import secrets
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
-from app.auth import Role, operator_dependency, require_workspace_role
+from app.auth import Role, require_workspace_role
+from app.config import directory_mode
+from app.provider_access import narrow
 
-Tier = Literal['STARTER', 'GROWTH', 'ENTERPRISE']
+SCOPES_IN_PORTAL = 'Cloud accounts are managed in the platform portal. Contact your CloudSaver administrator to change them.'
 
 
 class Strict(BaseModel):
@@ -54,39 +55,6 @@ class WorkspaceSettings(Strict):
     alerts: Alerts
 
 
-class KubernetesCluster(Strict):
-    cluster_id: str = Field(max_length=63)
-    prometheus_url: str = Field(max_length=2048)
-    bearer_token_env: str = Field(max_length=120)
-
-
-class Identity(Strict):
-    azure_app_client_id: UUID | None = None
-    gcp_service_account: str | None = Field(None, max_length=120)
-
-
-class TenantCreate(Strict):
-    tenant_id: UUID
-    name: str = Field(min_length=1, max_length=120)
-    plan_tier: Tier = 'STARTER'
-    subscription_ids: list[UUID] = Field(default_factory=list, max_length=100)
-
-
-class TenantPatch(Strict):
-    version: int = Field(ge=1)
-    name: str | None = Field(None, min_length=1, max_length=120)
-    plan_tier: Tier | None = None
-    active: StrictBool | None = None
-    identity: Identity | None = None
-    kubernetes_clusters: list[KubernetesCluster] | None = Field(None, max_length=100)
-
-
-class PlatformPatch(Strict):
-    version: int = Field(ge=0)
-    scheduled_scans_enabled: StrictBool | None = None
-    automated_alerts_enabled: StrictBool | None = None
-
-
 def public_tenant(tenant):
     return {
         'tenant_id': tenant['tenant_id'], 'name': tenant['name'], 'plan_tier': tenant['plan_tier'],
@@ -108,10 +76,10 @@ def actor_for(workspace):
 
 def create_router(settings, current_tenant):
     from app.cloud_identity import onboarding
-    from app.entitlements import get_tier_entitlements
-    from app.tenant_registry import UNSET, TenantExists, VersionConflict
+    from app.entitlements import (enforce_automated_alerts, enforce_providers, enforce_scan_frequency,
+                                  enforce_subscription_quota, entitlements_for)
+    from app.tenant_registry import UNSET, VersionConflict
     router = APIRouter()
-    current_operator = operator_dependency()
 
     def registry():
         if settings.registry is None:
@@ -123,40 +91,44 @@ def create_router(settings, current_tenant):
             return call()
         except VersionConflict:
             raise HTTPException(409, 'Settings changed since you loaded them. Refresh and try again.') from None
-        except TenantExists as exc:
-            raise HTTPException(409, str(exc)) from None
         except KeyError:
-            raise HTTPException(404, 'Tenant not found') from None
+            raise HTTPException(404, 'Workspace not found') from None
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
-    def limits(tier):
-        plan = get_tier_entitlements(tier)
+    def limits(workspace):
+        plan = entitlements_for(workspace)
         return {'max_subscriptions': plan.max_subscriptions, 'allowed_scan_frequencies': plan.allowed_scan_frequencies,
-                'can_dispatch_automated_alerts': plan.can_dispatch_automated_alerts}
+                'can_dispatch_automated_alerts': plan.can_dispatch_automated_alerts,
+                'allowed_providers': plan.allowed_providers}
+
+    def cutover():
+        return directory_mode() == 'cutover'
+
+    def visible(stored, workspace):
+        allowed = workspace.get('allowed_providers')
+        return narrow(stored, allowed) if stored is not None and allowed is not None else stored
 
     @router.get('/api/v1/settings')
     def read_settings(workspace=Depends(current_tenant)):
-        stored = settings.registry.get(workspace['tenant_id']) if settings.registry is not None else None
+        stored = visible(settings.registry.get(workspace['tenant_id']) if settings.registry is not None else None, workspace)
         platform = settings.registry.platform() if settings.registry is not None else None
-        return {'editable': settings.registry is not None and Role.TENANT_ADMIN.value in workspace.get('roles', []),
-                'settings': public_tenant(stored or workspace), 'limits': limits(workspace['plan_tier']),
+        editable = settings.registry is not None and Role.TENANT_ADMIN.value in workspace.get('roles', [])
+        return {'editable': editable, 'scopes_editable': editable and not cutover(), 'directory_mode': directory_mode(),
+                'settings': public_tenant(stored or workspace), 'limits': limits(workspace),
                 'platform': platform, 'identity': onboarding(stored or workspace)}
 
     @router.put('/api/v1/settings')
     def write_settings(payload: WorkspaceSettings, workspace=Depends(current_tenant)):
         require_workspace_role(workspace, Role.TENANT_ADMIN)
         store = registry()
-        plan = get_tier_entitlements(workspace['plan_tier'])
-        if len(payload.subscription_ids) > plan.max_subscriptions:
-            raise HTTPException(402, f'Your plan allows up to {plan.max_subscriptions} Azure subscriptions.')
-        if payload.schedule.frequency not in plan.allowed_scan_frequencies:
-            raise HTTPException(402, f'Your plan does not include {payload.schedule.frequency} scans.')
-        if payload.alerts.enabled and not plan.can_dispatch_automated_alerts:
-            raise HTTPException(402, 'Your plan does not include automated alerts.')
+        plan = entitlements_for(workspace)
         current = store.get(workspace['tenant_id'])
         if current is None:
-            raise HTTPException(404, 'Tenant not found')
+            raise HTTPException(404, 'Workspace not found')
+        enforce_scan_frequency(plan, payload.schedule.frequency)
+        if payload.alerts.enabled:
+            enforce_automated_alerts(plan)
         alerts = payload.alerts
         webhook = UNSET
         if alerts.remove_webhook:
@@ -172,54 +144,31 @@ def create_router(settings, current_tenant):
             raise HTTPException(422, 'Enter the webhook URL for the new channel.')
         if alerts.enabled and not keeps_webhook:
             raise HTTPException(422, 'Add a webhook URL before you turn on alerts.')
-        changes = {
+        scopes = {
             'subscription_ids': [str(s) for s in payload.subscription_ids],
             'aws_accounts': [a.model_dump() for a in payload.aws_accounts],
             'gcp_projects': [p.model_dump() for p in payload.gcp_projects],
-            'schedule': payload.schedule.model_dump(),
-            'alerts': {'enabled': alerts.enabled, 'channel': alerts.channel},
         }
+        allowed = workspace.get('allowed_providers')
+        shown = visible(current, workspace)
+        if cutover():
+            if any(scopes[k] != shown.get(k, []) for k in scopes):
+                raise HTTPException(403, SCOPES_IN_PORTAL)
+            scopes = {}
+        elif allowed is not None:
+            # Scopes of providers outside the key are preserved and never shown.
+            provider_of = {'subscription_ids': 'azure', 'aws_accounts': 'aws', 'gcp_projects': 'gcp'}
+            scopes = {k: (v if provider_of[k] in allowed else current.get(k, [])) for k, v in scopes.items()}
+        if scopes:
+            provider_of = {'subscription_ids': 'azure', 'aws_accounts': 'aws', 'gcp_projects': 'gcp'}
+            enforce_providers(plan, [provider_of[k] for k, v in scopes.items() if v and v != current.get(k, [])])
+            total = sum(len(v) for v in scopes.values())
+            # A downgraded workspace can still edit its schedule or remove scopes; it just can't add more.
+            if total > sum(len(current.get(k, [])) for k in scopes):
+                enforce_subscription_quota(plan, total + len(current.get('kubernetes_clusters', [])), adding_count=0)
+        changes = dict(scopes, schedule=payload.schedule.model_dump(),
+                       alerts={'enabled': alerts.enabled, 'channel': alerts.channel})
         tenant = save(lambda: store.update(workspace['tenant_id'], changes, payload.version, actor_for(workspace), webhook=webhook))
-        return {'settings': public_tenant(tenant)}
-
-    @router.get('/api/v1/admin/tenants')
-    def list_tenants(operator=Depends(current_operator)):
-        store = registry()
-        return {'tenants': [public_tenant(t) for t in store.all()], 'platform': store.platform(),
-                'identity': onboarding()}
-
-    @router.post('/api/v1/admin/tenants', status_code=201)
-    def create_tenant(payload: TenantCreate, operator=Depends(current_operator)):
-        store = registry()
-        plan = get_tier_entitlements(payload.plan_tier)
-        if len(payload.subscription_ids) > plan.max_subscriptions:
-            raise HTTPException(402, f'The {payload.plan_tier.title()} plan allows up to {plan.max_subscriptions} Azure subscriptions.')
-        key = secrets.token_urlsafe(32)
-        raw = dict(tenant_id=str(payload.tenant_id), name=payload.name, plan_tier=payload.plan_tier,
-                   subscription_ids=[str(s) for s in payload.subscription_ids],
-                   api_key_sha256=hashlib.sha256(key.encode()).hexdigest())
-        tenant = save(lambda: store.create(raw, operator['actor']))
-        return {'tenant': public_tenant(tenant), 'workspace_key': key}
-
-    @router.patch('/api/v1/admin/tenants/{tenant_id}')
-    def update_tenant(tenant_id: UUID, payload: TenantPatch, operator=Depends(current_operator)):
-        store = registry()
-        changes = payload.model_dump(exclude_none=True, exclude={'version', 'identity', 'kubernetes_clusters'})
-        if payload.identity is not None:
-            changes['identity'] = {k: str(v) for k, v in payload.identity.model_dump(exclude_none=True).items()}
-        if payload.kubernetes_clusters is not None:
-            changes['kubernetes_clusters'] = [c.model_dump() for c in payload.kubernetes_clusters]
-        tenant = save(lambda: store.update(str(tenant_id), changes, payload.version, operator['actor']))
-        return {'tenant': public_tenant(tenant)}
-
-    @router.get('/api/v1/admin/settings')
-    def read_platform(operator=Depends(current_operator)):
-        return {'platform': registry().platform(), 'identity': onboarding()}
-
-    @router.put('/api/v1/admin/settings')
-    def write_platform(payload: PlatformPatch, operator=Depends(current_operator)):
-        store = registry()
-        changes = payload.model_dump(exclude_none=True, exclude={'version'})
-        return {'platform': save(lambda: store.update_platform(changes, payload.version, operator['actor']))}
+        return {'settings': public_tenant(visible(tenant, workspace))}
 
     return router

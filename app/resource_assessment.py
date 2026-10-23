@@ -1,0 +1,200 @@
+"""One deterministic five-pillar assessment per resource, merged from all of its findings."""
+import csv
+import hashlib
+import io
+import json
+from decimal import Decimal
+
+from app.assessment import PILLARS, ai_context, assess
+from app.assessment_policy import POLICY_VERSION
+
+SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
+PRIORITY = ('critical', 'high', 'evidence_required')
+HISTORY_SCANS = 10
+
+
+def identity(finding):
+    provider = finding.get('cloud_provider', 'azure')
+    resource = finding['resource_id'].lower() if provider == 'azure' else finding['resource_id']
+    return provider, resource
+
+
+def resource_key(finding):
+    provider, resource = identity(finding)
+    return hashlib.sha256((provider + '|' + resource).encode()).hexdigest()
+
+
+def group(findings):
+    groups = {}
+    for finding in findings:
+        groups.setdefault(resource_key(finding), []).append(finding)
+    return groups
+
+
+def merge(key, findings, *, observed_at=None, now=None):
+    """Return (assessment, sanitized AI context) for one resource."""
+    findings = sorted(findings, key=lambda f: f['rule_id'])
+    results = [assess(f, observed_at=observed_at, now=now) for f in findings]
+    checks = {}
+    for result in results:
+        for pillar in result['pillars']:
+            for check in pillar['checks']:
+                slot = (check['pillar'], check['code'])
+                current = checks.get(slot)
+                if current is None:
+                    checks[slot] = dict(check, evidence_fields=list(check['evidence_fields']))
+                else:
+                    if SEVERITY[check['status']] > SEVERITY[current['status']]:
+                        current.update(status=check['status'], explanation=check['explanation'])
+                    current['evidence_fields'] = sorted(set(current['evidence_fields']) | set(check['evidence_fields']))
+    merged_checks = list(checks.values())
+    pillars = []
+    for name in PILLARS:
+        items = [c for c in merged_checks if c['pillar'] == name]
+        status = max((c['status'] for c in items), key=SEVERITY.get, default='unknown')
+        pillars.append(dict(pillar=name, status=status, checks=items))
+    guardrails = list(dict.fromkeys(g for r in results for g in r['guardrails']))
+    protected = sorted({reason for r in results for reason in r['protected_reasons']})
+    amounts = [Decimal(str(r['retail_estimate_usd'])) for r in results if r['retail_estimate_usd'] is not None]
+    risk_codes = sorted({c['code'] for c in merged_checks if c['status'] == 'risk'})
+    first = findings[0]
+    provider, _ = identity(first)
+    categories = {r['service_category'] for r in results}
+    category = categories.pop() if len(categories) == 1 else 'mixed'
+    observation = results[0]['observation']
+    assessment = dict(
+        resource_key=key, provider=provider, resource_id=first['resource_id'], resource_name=first.get('resource_name', ''),
+        resource_type=first.get('resource_type', ''), resource_group=first.get('resource_group', ''),
+        scope_id=first.get('scope_id') or first.get('subscription_id', ''), service_category=category,
+        finding_count=len(findings), rule_ids=[f['rule_id'] for f in findings], policy_version=POLICY_VERSION,
+        observation=observation, review_priority=min((r['review_priority'] for r in results), key=PRIORITY.index),
+        disposition='protected' if protected else 'requires_review', protected_reasons=protected,
+        risk_level='high' if risk_codes else 'unknown', risk_check_codes=risk_codes,
+        evidence_gap_codes=sorted({c['code'] for c in merged_checks if c['status'] == 'unknown'}),
+        pillars=pillars, guardrails=guardrails,
+        evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
+        retail_estimate_usd=float(sum(amounts).quantize(Decimal('0.01'))) if amounts else None,
+        billed_cost_usd=None, realizable_savings_usd=None, automatic_execution=False)
+    context = dict(
+        resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,
+        findings=[dict(rule_id=f['rule_id'], facts=ai_context(f, r)['facts']) for f, r in zip(findings, results)],
+        observation=observation, risk_floor=assessment['risk_level'],
+        checks=[dict(pillar=c['pillar'], code=c['code'], status=c['status']) for c in merged_checks],
+        protected=bool(protected), guardrails=guardrails,
+        observed_check_codes=sorted({c['code'] for c in merged_checks if c['status'] != 'unknown'}))
+    # Freshness status changes with wall-clock time; only the saved observation time is fingerprinted.
+    stable = dict(context, observation=dict(observed_at=observation['observed_at']),
+                  guardrails=[g for g in guardrails if g != 'REFRESH_OBSERVATION'])
+    assessment['evidence_digest'] = hashlib.sha256(json.dumps(
+        dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
+        sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return assessment, context
+
+
+def assessments(scan, *, now=None):
+    return {key: merge(key, items, observed_at=scan.get('timestamp'), now=now) for key, items in group(scan['findings']).items()}
+
+
+def row(assessment):
+    """The list projection: pillar statuses without check detail."""
+    keys = ('resource_key', 'provider', 'resource_id', 'resource_name', 'resource_type', 'resource_group', 'scope_id',
+            'service_category', 'finding_count', 'rule_ids', 'review_priority', 'disposition', 'protected_reasons',
+            'risk_level', 'risk_check_codes', 'evidence_gap_codes', 'evidence_coverage', 'retail_estimate_usd', 'evidence_digest')
+    return dict({k: assessment[k] for k in keys}, pillars={p['pillar']: p['status'] for p in assessment['pillars']})
+
+
+def ai_state(assessment, result, item):
+    """Combine the latest AI result and batch item into one display state."""
+    if item and item['status'] in ('queued', 'running'):
+        status = item['status']
+    elif result and result['evidence_digest'] == assessment['evidence_digest']:
+        status = 'completed'
+    elif item and item['status'] in ('failed', 'uncertain', 'skipped') and not result:
+        status = 'failed'
+    elif result:
+        status = 'stale'
+    else:
+        status = 'not_run'
+    return dict(status=status, risk_level=result['risk_level'] if result else None,
+                summary=result['summary'] if result else None, actions=result['actions'] if result else [],
+                assessment_id=result['assessment_id'] if result else None, created_at=result['created_at'] if result else None,
+                evidence_digest=result['evidence_digest'] if result else None,
+                reason=item.get('reason') if item and status == 'failed' else None)
+
+
+def decision_state(assessment, decision):
+    if not decision:
+        return None
+    return dict(decision, evidence_changed=decision['evidence_digest'] != assessment['evidence_digest'])
+
+
+FILTERS = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision')
+
+
+def matches(item, filters):
+    checks = dict(provider=item['provider'], service_category=item['service_category'], review_priority=item['review_priority'],
+                  ai_status=item['ai']['status'], ai_risk=item['ai']['risk_level'] or 'none',
+                  decision=(item['decision'] or {}).get('decision', 'none'))
+    return all(not filters.get(name) or checks[name] == filters[name] for name in FILTERS)
+
+
+def history(scans, key):
+    """Deterministic assessments of one resource across the most recent completed scans, newest first."""
+    entries = []
+    for scan in scans[:HISTORY_SCANS]:
+        items = [f for f in scan.get('findings', []) if resource_key(f) == key]
+        if not items:
+            entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=False))
+            continue
+        merged, _ = merge(key, items, observed_at=scan.get('timestamp'))
+        entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=True,
+                            review_priority=merged['review_priority'], risk_level=merged['risk_level'],
+                            rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},
+                            evidence_digest=merged['evidence_digest'], retail_estimate_usd=merged['retail_estimate_usd']))
+    for newer, older in zip(entries, entries[1:]):
+        newer['changes'] = changes(older, newer)
+    if entries:
+        entries[-1].setdefault('changes', [])
+    return entries
+
+
+def changes(older, newer):
+    if not older['present'] and newer['present']:
+        return ['appeared']
+    if older['present'] and not newer['present']:
+        return ['no_longer_flagged']
+    if not newer['present']:
+        return []
+    found = []
+    if older['risk_level'] != newer['risk_level']:
+        found.append('risk_changed')
+    if older['review_priority'] != newer['review_priority']:
+        found.append('priority_changed')
+    found += [f'{pillar}_changed' for pillar in PILLARS if older['pillars'][pillar] != newer['pillars'][pillar]]
+    if older['rule_ids'] != newer['rule_ids']:
+        found.append('findings_changed')
+    if older['evidence_digest'] != newer['evidence_digest'] and not found:
+        found.append('evidence_changed')
+    return found
+
+
+def csv_report(items):
+    fields = ['provider', 'scope_id', 'resource_name', 'resource_type', 'resource_group', 'resource_id', 'service_category',
+              'rule_ids', 'review_priority', 'disposition', *PILLARS, 'retail_estimate_usd', 'ai_status', 'ai_risk',
+              'ai_summary', 'decision', 'decision_at', 'evidence_digest']
+
+    def cell(value):
+        text = '' if value is None else str(value)
+        return "'" + text if text[:1] in ('=', '+', '-', '@', '\t', '\r') else text
+
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator='\r\n')
+    writer.writerow(fields)
+    for item in items:
+        decision = item['decision'] or {}
+        values = dict({k: item[k] for k in fields if k in item}, rule_ids=';'.join(item['rule_ids']),
+                      **{p: item['pillars'][p] for p in PILLARS}, ai_status=item['ai']['status'],
+                      ai_risk=item['ai']['risk_level'], ai_summary=item['ai']['summary'],
+                      decision=decision.get('decision'), decision_at=decision.get('created_at'))
+        writer.writerow([cell(values.get(f)) for f in fields])
+    return '\ufeff' + out.getvalue()

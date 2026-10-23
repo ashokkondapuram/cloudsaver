@@ -48,7 +48,7 @@ def test_viewer_reads_but_cannot_scan_export_or_checkout(context):
         assert client.get('/api/v1/me', headers=headers(['Viewer'])).json()['tenant_id'] == TENANT
         assert client.post('/api/v1/scans', headers=headers(['Viewer'])).status_code == 403
         assert client.post('/api/v1/billing/checkout', headers=headers(['Viewer']),
-                           json={'target_tier':'GROWTH','idempotency_key':'test-key-12345678'}).status_code == 403
+                           json={'target_tier':'GROWTH','idempotency_key':'test-key-12345678'}).status_code == 410
         assert client.get('/api/v1/me', headers={'X-Workspace-Key':'anything','X-Tenant-ID':TENANT}).status_code == 401
         assert client.get('/api/v1/me', headers={'Authorization':'Bearer '+KEY}).status_code == 401
 
@@ -75,7 +75,7 @@ def test_billing_admin_cannot_scan_and_workspace_key_has_no_entra_fallback(conte
     with TestClient(create_app(settings, scanner=lambda _: [], identity_validator=validator)) as client:
         assert client.post('/api/v1/scans', headers=headers(['BillingAdmin'])).status_code == 403
         assert client.post('/api/v1/billing/checkout', headers=headers(['BillingAdmin']),
-                           json={'target_tier':'GROWTH','idempotency_key':'test-key-12345678'}).status_code == 503
+                           json={'target_tier':'GROWTH','idempotency_key':'test-key-12345678'}).status_code == 410
 
 
 def test_delivery_viewer_and_billing_roles_cannot_enqueue_or_replay(context):

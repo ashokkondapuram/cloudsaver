@@ -96,6 +96,22 @@ def azure_credential(tenant):
         raise CredentialError('The Azure credential could not be initialized.') from None
 
 
+def platform_credential():
+    """CloudSaver's own identity, for platform-hosted services such as the AI Foundry model. The caller closes it."""
+    try:
+        if identity_mode() == 'developer':
+            from azure.identity import AzureCliCredential
+            return AzureCliCredential(process_timeout=30)
+        from azure.identity import ManagedIdentityCredential
+        client_id = os.getenv('AZURE_CLIENT_ID') or None
+        options = {'client_id': _uuid(client_id, 'AZURE_CLIENT_ID must be the managed identity client ID.')} if client_id else {}
+        return ManagedIdentityCredential(**options)
+    except CredentialError:
+        raise
+    except Exception:
+        raise CredentialError('The platform credential could not be initialized.') from None
+
+
 def _assume(sts, source, session_name):
     options = {'RoleArn': source['role_arn'], 'RoleSessionName': session_name, 'DurationSeconds': 3600}
     if source.get('external_id'):

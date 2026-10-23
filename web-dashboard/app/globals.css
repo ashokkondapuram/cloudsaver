@@ -54,7 +54,7 @@
 /* Counts on the slate surface meet WCAG AA for small text. */
 .count-badge { color:var(--slate-700); }
 
-/* Editable workspace settings and the operator console. */
+/* Editable workspace settings. */
 .settings-form { display:flex; flex-direction:column; gap:16px; }
 .settings-fieldset { border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; margin:0; }
 .settings-fieldset legend { display:flex; align-items:center; gap:8px; padding:0 6px; font-size:13px; font-weight:600; color:var(--slate-700); }
@@ -70,15 +70,7 @@
 .identity-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
 .identity-grid article { border:1px solid var(--border); border-radius:10px; padding:14px; display:flex; flex-direction:column; gap:8px; }
 .identity-grid article p { font-size:12px; color:var(--muted); margin:0; }
-.identity-grid code, .issued-key code { word-break:break-all; font-size:11px; }
-.issued-key { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
-.operator-page { min-height:100vh; background:var(--slate-50); }
-.operator-signin { min-height:100vh; display:grid; place-items:center; padding:24px; }
-.operator-signin .connection-form { max-width:440px; width:100%; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; }
-.operator-console { max-width:1180px; margin:0 auto; padding:32px 24px; display:flex; flex-direction:column; gap:20px; }
-.operator-header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
-.operator-header h1 { font-size:26px; margin:4px 0; }
-.operator-header p { color:var(--muted); margin:0; }
+.identity-grid code { word-break:break-all; font-size:11px; }
 @media (max-width:720px) { .settings-row .wide { grid-column:auto; } }
 
 /* Evidence-led architectural review and optional AI advisory. */
@@ -108,3 +100,4 @@
 
 /* Billing and inference evidence use the existing semantic color tokens. */
 .enterprise-filters{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:20px 24px}.enterprise-filters label{display:flex;flex:1 1 155px;min-width:0;flex-direction:column;gap:7px;font-size:12px;color:var(--muted)}.enterprise-filters input{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--slate-700)}.enterprise-filters .button{flex-shrink:0}.billing-evidence>.notice,.ai-history>.notice,.billing-evidence>.loading-state,.ai-history>.loading-state{margin:18px 24px}.billing-evidence>.allocation-metrics,.ai-history>.allocation-metrics{margin:20px 24px}.enterprise-amount{font-size:20px!important;overflow-wrap:anywhere}.billing-evidence>.raw-evidence{margin:18px 24px}.billing-evidence>.raw-evidence .summary-table-scroll{max-height:340px;overflow:auto}.billing-evidence>.drawer-section,.ai-history>.drawer-section{margin:24px;padding:0}.enterprise-file{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:15px 0;font-size:13px;color:var(--slate-700)}.enterprise-file input{max-width:100%;min-width:0;font-size:12px}.enterprise-file input::file-selector-button{border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--slate-700);padding:8px 10px;cursor:pointer}.billing-evidence .checkbox-row{margin:15px 0}.ai-history>.button{margin:18px 24px}.ai-history .drawer-section h4{margin-top:18px}.ai-history .drawer-section>p{line-height:1.7;margin:12px 0}.page-tabs{max-width:100%;overflow-x:auto}.page-tabs>button{flex-shrink:0}@media(max-width:600px){.enterprise-filters{margin:18px;gap:14px}.enterprise-filters label{flex-basis:100%}.enterprise-filters .button{width:100%}.billing-evidence>.notice,.ai-history>.notice,.billing-evidence>.allocation-metrics,.ai-history>.allocation-metrics{margin-left:18px;margin-right:18px}.billing-evidence>.drawer-section,.ai-history>.drawer-section{margin:18px}.billing-evidence>.raw-evidence{margin:18px}}
+.billing-banner{align-items:center}.billing-banner>div{flex:1}.billing-banner>.icon-button{flex-shrink:0}.settings-notice>p{flex:1}.settings-notice>.button{flex-shrink:0;align-self:center}

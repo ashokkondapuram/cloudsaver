@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v1.0.0."""
+"""Runnable CloudSaver enterprise API service v1.3.0."""
 import hashlib
 import hmac
 import logging
@@ -14,15 +14,17 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings
 from app.store import Store, PostgresStore
-from app.schemas import ScanSummary, RemediationRequest, BillingCheckoutRequest, MultiCloudScanRequest
+from app.schemas import ScanSummary, RemediationRequest, MultiCloudScanRequest
 
 logger = logging.getLogger('cloudsaver')
+CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
 auth = HTTPBearer(auto_error=False)
 
 
 def create_app(settings=None, scanner=None, identity_validator=None, gitops_config=None, gitops_client=None, delivery_targets=None, delivery_repository=None, job_repository=None, ai_gateway=None):
     settings = settings or Settings.load()
-    store = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
+    from app.provider_access import ScopedStore
+    store = ScopedStore(PostgresStore(settings.database_url) if settings.database_url else Store(settings.database))
 
     @asynccontextmanager
     async def lifespan(_):
@@ -32,7 +34,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.0.0', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.3.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
         'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS')))
@@ -47,7 +49,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     evidence_store=EnterpriseStore(settings)
     api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
     from app.assessment_api import create_router as assessment_router
-    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, InferenceLedger(evidence_store)))
+    from app.ai_advisory import AIGateway
+    ledger = InferenceLedger(evidence_store)
+    ai_gateway = ai_gateway or AIGateway(budget=ledger)
+    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
+    from app.resource_api import create_router as resource_router
+    api.include_router(resource_router(settings, store, current_tenant, ai_gateway, evidence_store))
     from app.jobs_api import create_router as jobs_router
     api.include_router(jobs_router(settings, current_tenant, repository=job_repository))
     from app.gitops_api import create_router
@@ -69,12 +76,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.0.0'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.3.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
-        raise HTTPException(501, 'Interactive consent onboarding is not implemented; provision tenant subscriptions through the operator configuration')
+        raise HTTPException(501, 'Interactive consent onboarding is not implemented; ask your platform operator to add cloud accounts in the platform portal')
 
     @api.get('/api/v1/me')
     def me(tenant=Depends(current_tenant)):
@@ -99,34 +106,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/api/v1/billing/entitlements')
     def entitlements(tenant=Depends(current_tenant)):
-        tier_name = tenant.get('plan_tier', 'STARTER')
-        from app.entitlements import checkout_configured, get_tier_entitlements
-        tier_info = get_tier_entitlements(tier_name)
-        return {
-            'tenant_id': tenant['tenant_id'],
-            'checkout_available': checkout_configured(),
-            'tier': tier_info.tier.value,
-            'max_subscriptions': tier_info.max_subscriptions,
-            'current_subscriptions': len(tenant.get('subscription_ids', [])),
-            'can_export_terraform': tier_info.can_export_terraform,
-            'can_use_keyvault': tier_info.can_use_keyvault,
-            'can_dispatch_automated_alerts': tier_info.can_dispatch_automated_alerts,
-            'retention_days': tier_info.retention_days
-        }
+        from app.entitlements import billing_summary
+        return billing_summary(tenant)
 
     @api.post('/api/v1/billing/checkout')
-    def checkout(payload: BillingCheckoutRequest, tenant=Depends(current_tenant)):
-        require_workspace_role(tenant, Role.BILLING_ADMIN)
-        from app.entitlements import create_checkout_session
-        session = create_checkout_session(
-            target_tier=payload.target_tier,
-            tenant_id=tenant['tenant_id'],
-            organization_id=tenant.get('name', 'CloudSaver Org'),
-            success_url=payload.success_url,
-            cancel_url=payload.cancel_url,
-            idempotency_key=payload.idempotency_key
-        )
-        return session
+    def checkout():
+        raise HTTPException(410, CHECKOUT_GONE)
 
     @api.get('/api/v1/scans', response_model=list[ScanSummary])
     def history(tenant=Depends(current_tenant), limit: int = 50):
@@ -150,18 +135,21 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @api.post('/api/v1/scans/multi-cloud', status_code=201, response_model=ScanSummary)
     def run_multi_cloud(payload: MultiCloudScanRequest, tenant=Depends(current_tenant)):
         from app.cloud_scope import configured_providers
+        from app.provider_access import require_providers
+        require_providers(tenant, payload.providers)
         if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant)):
             raise HTTPException(422, 'Select unique providers configured for this workspace')
         return perform_scan(tenant, payload.providers)
 
     def perform_scan(tenant, providers=None):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
-        tier_name = tenant.get('plan_tier', 'STARTER')
-        from app.entitlements import enforce_subscription_quota
+        from app.entitlements import enforce_providers, enforce_resource_quota, enforce_subscription_quota, entitlements_for
+        plan = entitlements_for(tenant)
+        enforce_providers(plan, providers or ['azure'])
         scope_count = (len(tenant.get('subscription_ids', [])) if not providers else sum(
             len(tenant.get(key, [])) for p, key in [('azure','subscription_ids'),('aws','aws_accounts'),
             ('gcp','gcp_projects'),('kubernetes','kubernetes_clusters')] if p in providers))
-        enforce_subscription_quota(tier_name, scope_count, adding_count=0)
+        enforce_subscription_quota(plan, scope_count, adding_count=0)
 
         tenant_id = tenant['tenant_id']
         lock = locks.setdefault(tenant_id, threading.Lock())
@@ -187,9 +175,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             else:
                 raw_findings = scanner(tenant) if scanner else scan_live(tenant)
 
-            from app.entitlements import get_tier_entitlements
-            if len(raw_findings) > get_tier_entitlements(tier_name).max_resources_per_scan:
-                raise HTTPException(402, 'Scan exceeds the workspace resource quota; no partial results were saved')
+            enforce_resource_quota(plan, len(raw_findings))
 
             from app.cloud_scope import validate_finding_scope
             for finding in raw_findings:
@@ -239,7 +225,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             raise
         except Exception as exc:
             logger.warning('Scan failed (%s)', type(exc).__name__)
-            raise HTTPException(502, f'Scan failed. Check cloud credentials, subscription access and server configuration: {type(exc).__name__}') from None
+            raise HTTPException(502, f'Scan failed. Check cloud credentials, cloud account access and server configuration: {type(exc).__name__}') from None
         finally:
             if heartbeat:
                 heartbeat.stop()
@@ -271,9 +257,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @api.post('/api/v1/scans/{scan_id}/remediation-terraform')
     def remediation_terraform(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
-        tier_name = tenant.get('plan_tier', 'STARTER')
         from app.entitlements import enforce_terraform_export
-        enforce_terraform_export(tier_name)
+        enforce_terraform_export(tenant)
         from app.remediation_terraform import generate_cloud_terraform_hcl
         result = store.get(tenant['tenant_id'], scan_id)
         if result is None:
@@ -294,6 +279,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.0.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.3.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

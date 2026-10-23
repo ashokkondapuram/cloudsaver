@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import re
 from contextvars import ContextVar
 from http import HTTPStatus
 from urllib.parse import urlsplit
@@ -15,6 +16,61 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 request_id = ContextVar('cloudsaver_request_id', default=None)
+client_ip = ContextVar('cloudsaver_client_ip', default=None)
+CLIENT_IP_HEADER = 'X-CloudSaver-Client-IP'
+# Workspace keys (cs_live_/cs_test_), plus legacy 43-character URL-safe and 64-character hex keys.
+KEY_PATTERN = re.compile(r'cs_(?:live|test)_[0-9a-z]{12}_[0-9A-Za-z]{43}'
+                         r'|(?<![A-Za-z0-9_-])(?:[A-Za-z0-9_-]{43}|[0-9a-fA-F]{64})(?![A-Za-z0-9_-])')
+_proxy_cache = {}
+
+
+def redact(text):
+    return KEY_PATTERN.sub('[redacted]', text) if isinstance(text, str) else text
+
+
+def _trusted(peer, entries):
+    import ipaddress
+    import socket
+    import time
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    for entry in entries:
+        try:
+            if address in ipaddress.ip_network(entry, strict=False):
+                return True
+            continue
+        except ValueError:
+            pass
+        cached = _proxy_cache.get(entry)
+        if not cached or cached[0] < time.monotonic():
+            try:
+                resolved = {info[4][0] for info in socket.getaddrinfo(entry, None)}
+            except OSError:
+                resolved = set()
+            cached = (time.monotonic() + 60, resolved)
+            _proxy_cache[entry] = cached
+        if peer in cached[1]:
+            return True
+    return False
+
+
+def resolve_client_ip(request):
+    """The socket peer, unless the peer is a configured proxy or internal caller that reports the client."""
+    import ipaddress
+    peer = request.client.host if request.client else '0.0.0.0'
+    candidate = None
+    callers = [x.strip() for x in os.getenv('CLOUDSAVER_TRUSTED_CALLERS', '').split(',') if x.strip()]
+    proxies = [x.strip() for x in os.getenv('CLOUDSAVER_TRUSTED_PROXIES', '').split(',') if x.strip()]
+    if request.headers.get(CLIENT_IP_HEADER) and callers and _trusted(peer, callers):
+        candidate = request.headers[CLIENT_IP_HEADER]
+    elif request.headers.get('X-Forwarded-For') and proxies and _trusted(peer, proxies):
+        candidate = request.headers['X-Forwarded-For'].split(',')[-1].strip()
+    try:
+        return str(ipaddress.ip_address(candidate)) if candidate else str(ipaddress.ip_address(peer))
+    except ValueError:
+        return '0.0.0.0'
 
 
 def problem(request, status, detail, headers=None):
@@ -25,7 +81,26 @@ def problem(request, status, detail, headers=None):
     }, status_code=status, media_type='application/problem+json', headers=headers)
 
 
+def install_log_redaction():
+    """Mask anything shaped like a workspace key before a log record is formatted or shipped."""
+    factory = logging.getLogRecordFactory()
+    if getattr(factory, 'cloudsaver_redacts', False):
+        return
+
+    def record(*args, **kwargs):
+        item = factory(*args, **kwargs)
+        if isinstance(item.msg, str):
+            item.msg = redact(item.msg)
+        if item.args:
+            item.args = tuple(redact(a) if isinstance(a, str) else a for a in item.args) \
+                if isinstance(item.args, tuple) else item.args
+        return item
+    record.cloudsaver_redacts = True
+    logging.setLogRecordFactory(record)
+
+
 def install(app, settings, *, redis_required=False, targets=()):
+    install_log_redaction()
     origins = [x.strip() for x in os.getenv('CLOUDSAVER_ALLOWED_ORIGINS', '').split(',') if x.strip()]
     for origin in origins:
         parsed = urlsplit(origin)
@@ -54,6 +129,7 @@ def install(app, settings, *, redis_required=False, targets=()):
         except (ValueError, TypeError):
             value = str(uuid4())
         token = request_id.set(value)
+        client_ip.set(resolve_client_ip(request))
         try:
             try:
                 response = await call_next(request)

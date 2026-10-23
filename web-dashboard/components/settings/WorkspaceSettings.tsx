@@ -3,6 +3,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {Bell, CalendarClock, Fingerprint, Plus, Save, Trash2} from 'lucide-react';
 import {api} from '../../lib/api';
+import {NOT_INCLUDED} from '../../lib/plan';
 import type {AwsAccount, Frequency, SettingsResponse, TenantSettings} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading, Notice, ProviderBadge, SectionTitle} from '../ui/shared';
@@ -58,6 +59,7 @@ function ReadOnlyNotice({data}: {data: SettingsResponse}) {
 
 export function CloudScopesEditor() {
   const {data, error, reload} = useSettings();
+  const {workspace, planProviders} = useWorkspace();
   const {save, saving, error: saveError} = useSave(data, reload);
   const [subscriptions, setSubscriptions] = useState('');
   const [aws, setAws] = useState<AwsAccount[]>([]);
@@ -70,7 +72,8 @@ export function CloudScopesEditor() {
   }, [data]);
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!data) return <Loading label="Loading cloud accounts…"/>;
-  const editable = data.editable;
+  const editable = data.scopes_editable ?? data.editable;
+  const allowed = planProviders(workspace?.allowed_providers ?? ['azure', 'aws', 'gcp', 'kubernetes']);
   const subscriptionList = subscriptions.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -81,16 +84,17 @@ export function CloudScopesEditor() {
     }, 'Cloud accounts saved. Changes apply to your next scan.');
   }
   return <form className="panel settings-form" onSubmit={submit}>
-    <SectionTitle title="Authorized cloud scopes" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose which subscriptions, accounts, and projects CloudSaver scans</SectionTitle>
-    <ReadOnlyNotice data={data}/>
+    <SectionTitle title="Authorized cloud scopes" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose which cloud accounts, projects, and clusters CloudSaver scans</SectionTitle>
+    {data.directory_mode === 'cutover' ? <Notice>Your CloudSaver administrator manages cloud accounts in the platform portal. Contact them to add or remove accounts.</Notice> : <ReadOnlyNotice data={data}/>}
     {saveError && <Notice tone="error">{saveError}</Notice>}
-    <fieldset className="settings-fieldset" disabled={!editable || saving}>
+    {!allowed.length && <Notice tone="warning">This workspace key doesn&apos;t include any cloud providers. Ask your administrator for a new key.</Notice>}
+    {allowed.includes('azure') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
       <legend><ProviderBadge provider="azure"/>Azure subscriptions</legend>
       <label className="field-label" htmlFor="azure-subscriptions">Subscription IDs, one per line</label>
       <textarea id="azure-subscriptions" rows={4} value={subscriptions} onChange={e => setSubscriptions(e.target.value)} placeholder="00000000-0000-0000-0000-000000000000"/>
       <p className="inline-help">{subscriptionList.length} of {data.limits.max_subscriptions} subscriptions allowed on your plan.</p>
-    </fieldset>
-    <fieldset className="settings-fieldset" disabled={!editable || saving}>
+    </fieldset>}
+    {allowed.includes('aws') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
       <legend><ProviderBadge provider="aws"/>AWS accounts</legend>
       {aws.map((account, index) => <div className="settings-row" key={index}>
         <label><span className="field-label">Account ID</span><input type="text" inputMode="numeric" value={account.account_id} onChange={e => setAws(aws.map((a, i) => i === index ? {...a, account_id: e.target.value} : a))} placeholder="123456789012" required/></label>
@@ -98,22 +102,22 @@ export function CloudScopesEditor() {
         <label className="wide"><span className="field-label">Reader role ARN</span><input type="text" value={account.role_arn} onChange={e => setAws(aws.map((a, i) => i === index ? {...a, role_arn: e.target.value} : a))} placeholder="arn:aws:iam::123456789012:role/CloudSaverReader" required/></label>
         <button type="button" className="icon-button" aria-label={`Remove AWS account ${account.account_id || index + 1}`} onClick={() => setAws(aws.filter((_, i) => i !== index))}><Trash2 size={16}/></button>
       </div>)}
-      <button type="button" className="button secondary" onClick={() => setAws([...aws, {account_id: '', region: '', role_arn: ''}])}><Plus size={15}/>Add account</button>
-    </fieldset>
-    <fieldset className="settings-fieldset" disabled={!editable || saving}>
+      {editable && <button type="button" className="button secondary" onClick={() => setAws([...aws, {account_id: '', region: '', role_arn: ''}])}><Plus size={15}/>Add account</button>}
+    </fieldset>}
+    {allowed.includes('gcp') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
       <legend><ProviderBadge provider="gcp"/>Google Cloud projects</legend>
       {gcp.map((project, index) => <div className="settings-row" key={index}>
         <label><span className="field-label">Project ID</span><input type="text" value={project.project_id} onChange={e => setGcp(gcp.map((p, i) => i === index ? {...p, project_id: e.target.value} : p))} placeholder="customer-project" required/></label>
         <label className="wide"><span className="field-label">Regions, comma-separated</span><input type="text" value={project.regions} onChange={e => setGcp(gcp.map((p, i) => i === index ? {...p, regions: e.target.value} : p))} placeholder="us-central1, europe-west1" required/></label>
         <button type="button" className="icon-button" aria-label={`Remove project ${project.project_id || index + 1}`} onClick={() => setGcp(gcp.filter((_, i) => i !== index))}><Trash2 size={16}/></button>
       </div>)}
-      <button type="button" className="button secondary" onClick={() => setGcp([...gcp, {project_id: '', regions: ''}])}><Plus size={15}/>Add project</button>
-    </fieldset>
-    <fieldset className="settings-fieldset" disabled>
+      {editable && <button type="button" className="button secondary" onClick={() => setGcp([...gcp, {project_id: '', regions: ''}])}><Plus size={15}/>Add project</button>}
+    </fieldset>}
+    {allowed.includes('kubernetes') && <fieldset className="settings-fieldset" disabled>
       <legend><ProviderBadge provider="kubernetes"/>Kubernetes clusters</legend>
       {data.settings.kubernetes_clusters.length ? <div className="subscription-list">{data.settings.kubernetes_clusters.map(c => <div key={c.cluster_id}><code>{c.cluster_id}</code><span className="inline-help">{c.prometheus_url}</span></div>)}</div> : <p className="inline-help">No clusters are connected.</p>}
       <p className="inline-help">Your platform operator manages cluster endpoints because they use operator-held tokens.</p>
-    </fieldset>
+    </fieldset>}
   </form>;
 }
 
@@ -153,6 +157,7 @@ export function ScheduleAlertsEditor() {
   if (!data) return <Loading label="Loading schedule and alerts…"/>;
   const {limits, platform, settings} = data;
   const editable = data.editable;
+  const excluded = (['daily', 'hourly'] as Frequency[]).filter(value => !limits.allowed_scan_frequencies.includes(value));
   function submit(event: React.FormEvent) {
     event.preventDefault();
     save({schedule: {frequency}, alerts: {enabled: alerts.enabled, channel: alerts.channel, ...(webhook.trim() ? {webhook_url: webhook.trim()} : {})}}, 'Schedule and alerts saved.');
@@ -168,13 +173,14 @@ export function ScheduleAlertsEditor() {
       <legend><CalendarClock size={16}/>Scheduled scans</legend>
       <label className="field-label" htmlFor="scan-frequency">Scan frequency</label>
       <select id="scan-frequency" value={frequency} onChange={e => setFrequency(e.target.value as Frequency)}>
-        {(['manual', 'daily', 'hourly'] as Frequency[]).map(value => <option key={value} value={value} disabled={!limits.allowed_scan_frequencies.includes(value)}>{frequencyLabels[value]}{limits.allowed_scan_frequencies.includes(value) ? '' : ' (not in your plan)'}</option>)}
+        {(['manual', 'daily', 'hourly'] as Frequency[]).map(value => <option key={value} value={value} disabled={!limits.allowed_scan_frequencies.includes(value)}>{frequencyLabels[value]}{limits.allowed_scan_frequencies.includes(value) ? '' : ` · ${NOT_INCLUDED}`}</option>)}
       </select>
+      {excluded.length > 0 && <p className="inline-help">{excluded.join(' and ').replace(/^./, c => c.toUpperCase())} scans: {NOT_INCLUDED}</p>}
       {platform && !platform.scheduled_scans_enabled && <p className="inline-help">Scheduled scans are paused for all workspaces by your platform operator. Your choice is saved and applies when they resume.</p>}
     </fieldset>
     <fieldset className="settings-fieldset" disabled={!editable || saving || !limits.can_dispatch_automated_alerts}>
       <legend><Bell size={16}/>Scan alerts</legend>
-      {!limits.can_dispatch_automated_alerts && <p className="inline-help">Automated alerts are available on Growth and Enterprise plans.</p>}
+      {!limits.can_dispatch_automated_alerts && <p className="inline-help">{NOT_INCLUDED}</p>}
       <label className="checkbox-row"><input type="checkbox" checked={alerts.enabled} onChange={e => setAlerts({...alerts, enabled: e.target.checked})}/>Send a summary when a scheduled scan completes</label>
       <div className="settings-row">
         <label><span className="field-label">Channel</span><select value={alerts.channel || ''} onChange={e => setAlerts({...alerts, channel: (e.target.value || null) as Alerts['channel']})}><option value="">Choose a channel</option><option value="slack">Slack</option><option value="teams">Microsoft Teams</option></select></label>

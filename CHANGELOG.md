@@ -1,5 +1,25 @@
 # CloudSaver changelog
 
+## v1.3.0 — Platform separation and platform-managed plans (Oct 23, 2026)
+
+- Move identity-service, the platform database, the platform portal and their tests into `platform/`, a separate
+  product (platform 1.0.0) with its own compose project, images, `.env` and Redis. CloudSaver reaches
+  identity-service only over the internal, external-named network `platform-link`.
+- Stop sharing code with the platform in both directions. Boundary tests fail on cross-imports, and the
+  versioned HTTP contract `platform/contracts/identity-v1.md` has shared JSON fixtures.
+- Replace the Redis revocation subscriber with the identity-service long-poll endpoint `/internal/v1/events`.
+  The grant cache turns off while polling fails, and directory events trigger an immediate projector sync.
+- Take plan limits from platform entitlements (verify response and directory projection) instead of the
+  hard-coded plan table, which remains only as a logged fallback. Migration `0013_billing_projection` adds the
+  projected billing columns.
+- Remove Stripe from CloudSaver: the checkout and webhook endpoints return `410`, and the `stripe` dependency,
+  settings and code are gone. `scripts/export_billing.py` exports existing billing data for the platform
+  importer. The old Stripe columns and `stripe_events` become read-only and are dropped in 1.4.0.
+- Dashboard: a Plan tab with Manage billing or "Contact your account manager", past-due and lapsed banners,
+  "Not included in your plan" gates, and "Cloud billing data" naming.
+- `scripts/setup_compose.py` keeps only CloudSaver's caller tokens and adds `--prune-platform`. Start the
+  platform first with `make platform-up` (or `make up` for both).
+
 ## v1.0.0 — Durable AI evidence and billing-backed FinOps
 
 - Apply the exact Drive v1.0.0 master guide to the current verified code, preserving the original Drive artifact and documenting the inspected ZIP's older implementation.

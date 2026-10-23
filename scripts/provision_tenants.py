@@ -17,13 +17,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tenant-id', help='Provision only this configured Azure tenant')
     parser.add_argument('--organization-id', help='Explicit organization UUID; requires --tenant-id')
-    parser.add_argument('--stripe-customer-id', help='Trusted existing Stripe customer binding; requires --tenant-id')
     parser.add_argument('--activate', action='store_true', help='Mark configured subscriptions active and tenant connected for scheduled scans')
     args = parser.parse_args()
-    if (args.organization_id or args.stripe_customer_id) and not args.tenant_id:
-        parser.error('Explicit organization/customer binding requires --tenant-id')
-    if args.stripe_customer_id and (not args.stripe_customer_id.startswith('cus_') or len(args.stripe_customer_id) > 255):
-        parser.error('Stripe customer ID must start with cus_')
+    if args.organization_id and not args.tenant_id:
+        parser.error('Explicit organization binding requires --tenant-id')
     settings = Settings.load()
     if not settings.database_url:
         parser.error('CLOUDSAVER_DATABASE_URL must select the restricted PostgreSQL application role')
@@ -61,11 +58,6 @@ def main():
                            (identity, tid, sid, 'Configured subscription', args.activate))
                 if args.activate:
                     db.execute('UPDATE subscriptions SET active=true WHERE tenant_id=%s AND subscription_id=%s', (tid, sid))
-            if args.stripe_customer_id:
-                previous = db.execute('SELECT stripe_customer_id FROM organizations WHERE id=%s AND tenant_id=%s', (oid, tid)).fetchone()[0]
-                if previous and previous != args.stripe_customer_id:
-                    raise RuntimeError('Organization has a different Stripe customer; no reassignment performed')
-                db.execute('UPDATE organizations SET stripe_customer_id=%s WHERE id=%s AND tenant_id=%s', (args.stripe_customer_id, oid, tid))
         print('Provisioned configured tenant ' + tid + ' with organization ' + oid + (' (active)' if args.activate else ' (pending)'))
 
 
