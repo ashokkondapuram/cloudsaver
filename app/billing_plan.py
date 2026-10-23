@@ -54,3 +54,33 @@ def list_plans():
             'allowed_providers': list(ent.allowed_providers),
         })
     return items
+
+
+def _identity_problem(response):
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
+    detail = body.get('detail') or 'The platform could not process this plan request.'
+    if response.status_code == 409:
+        return detail
+    if response.status_code == 404:
+        return 'Workspace not found on the platform.'
+    return detail
+
+
+def submit_plan_change_request(client, tenant_id, plan_code, requested_by):
+    response = client.request('POST', f'/internal/v1/tenants/{tenant_id}/plan-change-requests', json={
+        'requested_plan_code': plan_code, 'requested_by': requested_by,
+    })
+    if response.status_code == 201:
+        return response.json()
+    raise ValueError(_identity_problem(response))
+
+
+def pending_plan_change_request(client, tenant_id):
+    response = client.get(f'/internal/v1/tenants/{tenant_id}/plan-change-requests/pending')
+    if response.status_code != 200:
+        return None
+    body = response.json()
+    return body if body.get('id') else None

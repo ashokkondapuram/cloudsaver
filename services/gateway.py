@@ -82,9 +82,13 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def billing_plans(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'tenant', '/api/v1/billing/plans', authorization)
 
-    @app.put('/api/v1/billing/plan')
-    async def billing_plan_change(request: Request, row=Depends(allowed), authorization: str = Header()):
-        return await tenant_write('PUT', '/api/v1/billing/plan', request, authorization)
+    @app.get('/api/v1/billing/plan-requests')
+    async def billing_plan_requests(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'tenant', '/api/v1/billing/plan-requests', authorization)
+
+    @app.post('/api/v1/billing/plan-requests')
+    async def billing_plan_request_submit(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await tenant_write('POST', '/api/v1/billing/plan-requests', request, authorization)
 
     @app.get('/api/v1/me')
     async def me(row=Depends(allowed), authorization: str = Header()):

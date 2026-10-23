@@ -81,13 +81,21 @@ function Plan() {
   const {workspace, entitlements: plan, canBill, planName, token, reloadProfile, notify} = useWorkspace();
   const [options, setOptions] = useState<PlanOption[]>([]);
   const [selected, setSelected] = useState('');
+  const [pending, setPending] = useState<{requested_plan_code: string; status: string} | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!canBill || !token) return;
     const controller = new AbortController();
-    api<{items: PlanOption[]; current_tier: string}>('/billing/plans', token, {signal: controller.signal})
-      .then(result => {setOptions(result.items); setSelected(result.current_tier);})
-      .catch(() => {});
+    api<{items: PlanOption[]; current_tier: string; pending_request?: {requested_plan_code: string; status: string}}>(
+      '/billing/plans', token, {signal: controller.signal})
+      .then(result => {
+        setOptions(result.items);
+        setSelected(result.current_tier);
+        setPending(result.pending_request?.status ? result.pending_request : null);
+        setLoadError('');
+      })
+      .catch(() => { if (!controller.signal.aborted) setLoadError('Plans could not be loaded. Try again.'); });
     return () => controller.abort();
   }, [canBill, token, plan?.tier]);
   if (!plan) return <Loading label="Loading your plan…"/>;
@@ -97,19 +105,20 @@ function Plan() {
   const frequencies = plan.allowed_scan_frequencies || [];
   const features: [string, boolean][] = [['Daily scheduled scans', frequencies.includes('daily')], ['Hourly scheduled scans', frequencies.includes('hourly')], ['Terraform review', plan.can_export_terraform], ['Key Vault', plan.can_use_keyvault], ['Automatic alerts', plan.can_dispatch_automated_alerts]];
   async function savePlan() {
-    if (!plan || selected === plan.tier || saving) return;
+    if (!plan || selected === plan.tier || saving || pending) return;
     setSaving(true);
     try {
-      await api<{entitlements: Entitlements}>('/billing/plan', token, {method: 'PUT', body: {plan_tier: selected, version: plan.settings_version}});
-      await reloadProfile();
-      notify(`Your plan is now ${options.find(item => item.code === selected)?.name || selected}.`);
+      const request = await api<{requested_plan_code: string; status: string}>('/billing/plan-requests', token,
+        {method: 'POST', body: {plan_tier: selected, version: plan.settings_version}});
+      setPending(request);
+      notify(`Your request to move to ${options.find(item => item.code === selected)?.name || selected} was sent for approval.`);
     } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'Plan could not be updated.', 'error');
+      notify(cause instanceof Error ? cause.message : 'Plan request could not be sent.', 'error');
     } finally {
       setSaving(false);
     }
   }
-  return <><section className="panel billing-panel"><div className="billing-plan"><span className="eyebrow">Your current plan</span><h2>{planName}</h2><p>{period ? `${plan.billing_state === 'active' ? 'Renews on' : 'Ended on'} ${period}` : 'Your workspace limits and included features.'}</p><span className="plan-badge">{billingStateLabels[plan.billing_state] || plan.billing_state}</span></div><div className="billing-details"><h3>Cloud scopes</h3><div className="quota-value"><strong>{plan.current_subscriptions.toLocaleString('en-US')}<span> / {plan.max_subscriptions.toLocaleString('en-US')}</span></strong><span>{Math.round(quota)}% used</span></div><div className="quota-meter" role="meter" aria-label="Cloud scopes used" aria-valuemin={0} aria-valuemax={plan.max_subscriptions} aria-valuenow={plan.current_subscriptions}><i style={{width: `${quota}%`}}/></div><p>{plan.current_subscriptions.toLocaleString('en-US')} of {plan.max_subscriptions.toLocaleString('en-US')} cloud scopes used.</p><div className="plan-features">{features.map(([name, included]) => <div key={name}>{included ? <CheckCircle2 size={16}/> : <MinusCircle size={16}/>}<span>{name}</span><strong>{included ? 'Included' : 'Not included'}</strong></div>)}</div></div></section><section className="panel"><SectionTitle title="Plan limits">Allowances for this workspace and current runtime settings</SectionTitle><dl className="settings-key-values"><div><dt>Resources per scan</dt><dd>{plan.max_resources_per_scan.toLocaleString('en-US')}</dd></div><div><dt>Scan frequencies</dt><dd>{frequencies.map(f => frequencyNames[f] || f).join(', ') || 'Manual'}</dd></div><div><dt>Cloud providers</dt><dd>{(plan.allowed_providers || []).map(p => providerNames[p] || p).join(', ') || 'None'}</dd></div><div><dt>Retention</dt><dd>{plan.retention_days.toLocaleString('en-US')} days</dd></div><div><dt>Scheduled scans</dt><dd>{workspace?.scheduled_scans_enabled ? `On · ${workspace.scan_frequency === 'hourly' ? 'hourly' : 'daily'}` : workspace?.platform_scheduled_scans_enabled === false ? 'Paused by your platform operator' : 'Off'}</dd></div><div><dt>Automatic alerts</dt><dd>{workspace?.automated_alerts_enabled ? 'On' : workspace?.platform_automated_alerts_enabled === false ? 'Paused by your platform operator' : 'Off'}</dd></div></dl>{canBill && plan.plan_change_allowed ? <div className="settings-notice"><CreditCard size={17}/><div><p>Choose a plan for this workspace. Changes apply immediately to limits and included features.</p>{options.length ? <div className="plan-change-row"><label className="field"><span>Plan</span><select value={selected} onChange={event => setSelected(event.target.value)}>{options.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label><button className="button" disabled={saving || selected === plan.tier} onClick={savePlan}>{saving ? 'Saving…' : 'Update plan'}</button></div> : <Loading label="Loading plans…"/>}{billingUrl ? <a className="text-link" href={billingUrl} target="_blank" rel="noopener noreferrer">Manage billing<ExternalLink size={14}/></a> : null}</div></div> : billingUrl ? <div className="settings-notice"><CreditCard size={17}/><p>Update payment details and view invoices with your billing provider.</p><a className="button secondary" href={billingUrl} target="_blank" rel="noopener noreferrer">Manage billing<ExternalLink size={15}/></a></div> : <div className="settings-notice"><CreditCard size={17}/><p>{CONTACT_ACCOUNT_MANAGER}</p></div>}</section></>;
+  return <><section className="panel billing-panel"><div className="billing-plan"><span className="eyebrow">Your current plan</span><h2>{planName}</h2><p>{period ? `${plan.billing_state === 'active' ? 'Renews on' : 'Ended on'} ${period}` : 'Your workspace limits and included features.'}</p><span className="plan-badge">{billingStateLabels[plan.billing_state] || plan.billing_state}</span></div><div className="billing-details"><h3>Cloud scopes</h3><div className="quota-value"><strong>{plan.current_subscriptions.toLocaleString('en-US')}<span> / {plan.max_subscriptions.toLocaleString('en-US')}</span></strong><span>{Math.round(quota)}% used</span></div><div className="quota-meter" role="meter" aria-label="Cloud scopes used" aria-valuemin={0} aria-valuemax={plan.max_subscriptions} aria-valuenow={plan.current_subscriptions}><i style={{width: `${quota}%`}}/></div><p>{plan.current_subscriptions.toLocaleString('en-US')} of {plan.max_subscriptions.toLocaleString('en-US')} cloud scopes used.</p><div className="plan-features">{features.map(([name, included]) => <div key={name}>{included ? <CheckCircle2 size={16}/> : <MinusCircle size={16}/>}<span>{name}</span><strong>{included ? 'Included' : 'Not included'}</strong></div>)}</div></div></section><section className="panel"><SectionTitle title="Plan limits">Allowances for this workspace and current runtime settings</SectionTitle><dl className="settings-key-values"><div><dt>Resources per scan</dt><dd>{plan.max_resources_per_scan.toLocaleString('en-US')}</dd></div><div><dt>Scan frequencies</dt><dd>{frequencies.map(f => frequencyNames[f] || f).join(', ') || 'Manual'}</dd></div><div><dt>Cloud providers</dt><dd>{(plan.allowed_providers || []).map(p => providerNames[p] || p).join(', ') || 'None'}</dd></div><div><dt>Retention</dt><dd>{plan.retention_days.toLocaleString('en-US')} days</dd></div><div><dt>Scheduled scans</dt><dd>{workspace?.scheduled_scans_enabled ? `On · ${workspace.scan_frequency === 'hourly' ? 'hourly' : 'daily'}` : workspace?.platform_scheduled_scans_enabled === false ? 'Paused by your platform operator' : 'Off'}</dd></div><div><dt>Automatic alerts</dt><dd>{workspace?.automated_alerts_enabled ? 'On' : workspace?.platform_automated_alerts_enabled === false ? 'Paused by your platform operator' : 'Off'}</dd></div></dl>{canBill && plan.plan_change_allowed ? <div className="settings-notice"><CreditCard size={17}/><div><p>Submit a plan change for platform approval. When Stripe billing is enabled, payment will be collected after approval.</p>{loadError && <Notice tone="error">{loadError}</Notice>}{pending ? <p><strong>Pending:</strong> {options.find(item => item.code === pending.requested_plan_code)?.name || pending.requested_plan_code} ({pending.status === 'pending_payment' ? 'awaiting payment' : 'awaiting approval'})</p> : options.length ? <div className="plan-change-row"><label className="field"><span>Plan</span><select value={selected} onChange={event => setSelected(event.target.value)} disabled={!!pending}>{options.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label><button className="button" disabled={saving || !!pending || selected === plan.tier} onClick={savePlan}>{saving ? 'Sending…' : 'Request plan change'}</button></div> : loadError ? null : <Loading label="Loading plans…"/>}{billingUrl ? <a className="text-link" href={billingUrl} target="_blank" rel="noopener noreferrer">Manage billing<ExternalLink size={14}/></a> : null}</div></div> : billingUrl ? <div className="settings-notice"><CreditCard size={17}/><p>Update payment details and view invoices with your billing provider.</p><a className="button secondary" href={billingUrl} target="_blank" rel="noopener noreferrer">Manage billing<ExternalLink size={15}/></a></div> : <div className="settings-notice"><CreditCard size={17}/><p>{CONTACT_ACCOUNT_MANAGER}</p></div>}</section></>;
 }
 
 function Preferences() {

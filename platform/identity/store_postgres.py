@@ -398,6 +398,31 @@ class PostgresTx:
                         '(tenant_id IS NOT DISTINCT FROM %s) AND requested_at >= %s', (tenant_id, since))
         return int(row['count'])
 
+    def insert_plan_change_request(self, row):
+        self._insert('billing.plan_change_requests', row)
+
+    def get_plan_change_request(self, request_id, lock=False):
+        row = self._one('SELECT * FROM billing.plan_change_requests WHERE id=%s' + (' FOR UPDATE' if lock else ''),
+                        (request_id,))
+        return _text(dict(row), 'id', 'customer_id', 'tenant_id') if row else None
+
+    def pending_plan_request_for_tenant(self, tenant_id):
+        row = self._one("SELECT * FROM billing.plan_change_requests WHERE tenant_id=%s AND status IN "
+                        "('pending_approval', 'pending_payment') ORDER BY created_at DESC LIMIT 1", (tenant_id,))
+        return _text(dict(row), 'id', 'customer_id', 'tenant_id') if row else None
+
+    def list_plan_change_requests(self, status=None, limit=50):
+        if status:
+            rows = self._all('SELECT * FROM billing.plan_change_requests WHERE status=%s ORDER BY created_at DESC LIMIT %s',
+                             (status, limit))
+        else:
+            rows = self._all('SELECT * FROM billing.plan_change_requests ORDER BY created_at DESC LIMIT %s', (limit,))
+        return [_text(dict(r), 'id', 'customer_id', 'tenant_id') for r in rows]
+
+    def update_plan_change_request(self, request_id, expected_version, fields):
+        row = self._update('billing.plan_change_requests', 'id', request_id, expected_version, fields)
+        return self.get_plan_change_request(request_id) if row else None
+
     def append_cache_event(self, tenant_id, key_id, event, directory, payload=None):
         from psycopg.types.json import Jsonb
         return self._one('INSERT INTO identity.cache_events (tenant_id, key_id, event, directory, payload) '

@@ -865,6 +865,142 @@ class IdentityService:
                 'platform': {k: platform[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled',
                                                        'resource_access', 'version')}}
 
+    # ----- plan change requests (CloudSaver billing admin → operator approval; Stripe-ready) ------------
+    def _plan_request_view(self, row, tx=None):
+        workspace = customer = None
+        if tx:
+            workspace = tx.get_workspace(row['tenant_id'])
+            customer = tx.get_customer(row['customer_id'])
+        return {
+            'id': str(row['id']), 'customer_id': str(row['customer_id']),
+            'customer_name': customer['name'] if customer else None, 'tenant_id': str(row['tenant_id']),
+            'workspace_name': workspace['name'] if workspace else None,
+            'current_plan_code': row['current_plan_code'], 'requested_plan_code': row['requested_plan_code'],
+            'status': row['status'], 'payment_provider': row['payment_provider'],
+            'stripe_checkout_url': None,
+            'requested_by': row['requested_by'], 'reviewed_by': row.get('reviewed_by'),
+            'review_note': row.get('review_note'), 'created_at': iso(row['created_at']),
+            'updated_at': iso(row['updated_at']), 'version': row['version'],
+        }
+
+    def _payment_provider_for_new_request(self):
+        if flag('BILLING_ENABLED') and env('BILLING_PROVIDER', 'manual') == 'stripe':
+            return 'stripe'
+        return 'manual'
+
+    def create_plan_change_request(self, tenant_id, payload, caller, correlation_id=None):
+        tenant_id = uuid_text(tenant_id)
+        requested = payload.get('requested_plan_code') or payload.get('plan_tier')
+        if requested not in TIERS:
+            raise IdentityError('Choose a valid plan.')
+        requested_by = text(payload.get('requested_by'), 'Requested by', 120)
+        note = payload.get('review_note')
+        if note is not None:
+            note = text(note, 'Note', 500)
+        now = self.now()
+        with self.store.transaction() as tx:
+            workspace = tx.get_workspace(tenant_id)
+            if not workspace or workspace['status'] == 'deleted':
+                raise NotFound('Workspace not found.')
+            if tx.pending_plan_request_for_tenant(tenant_id):
+                raise Conflict('A plan change request is already pending for this workspace.')
+            if requested == workspace['plan_tier']:
+                raise IdentityError('Choose a different plan than the current one.')
+            customer = tx.get_customer(workspace['customer_id'])
+            if not customer or customer['status'] == 'deleted':
+                raise IdentityError('This workspace is not linked to an active customer.')
+            row = {'id': str(uuid4()), 'customer_id': workspace['customer_id'], 'tenant_id': tenant_id,
+                   'current_plan_code': workspace['plan_tier'], 'requested_plan_code': requested,
+                   'status': 'pending_approval', 'payment_provider': self._payment_provider_for_new_request(),
+                   'stripe_checkout_session_id': None, 'requested_by': requested_by, 'reviewed_by': None,
+                   'review_note': note, 'created_at': now, 'updated_at': now, 'version': 1}
+            tx.insert_plan_change_request(row)
+            actor = {'actor': requested_by, 'actor_type': 'service'}
+            self._event(tx, actor, 'plan_change_requested', tenant_id,
+                        details={'request_id': row['id'], 'from': row['current_plan_code'], 'to': requested},
+                        request_id=correlation_id)
+            return self._plan_request_view(row, tx)
+
+    def pending_plan_change_request(self, tenant_id):
+        tenant_id = uuid_text(tenant_id)
+        with self.store.transaction() as tx:
+            row = tx.pending_plan_request_for_tenant(tenant_id)
+            if not row:
+                return None
+            return self._plan_request_view(row, tx)
+
+    def list_plan_change_requests(self, status=None, limit=50):
+        if status and status not in ('pending_approval', 'pending_payment', 'approved', 'rejected', 'canceled'):
+            raise IdentityError('Choose a valid status.')
+        with self.store.transaction() as tx:
+            rows = tx.list_plan_change_requests(status, limit)
+            return {'items': [self._plan_request_view(r, tx) for r in rows]}
+
+    def approve_plan_change_request(self, request_id, payload, actor, correlation_id=None):
+        request_id = uuid_text(request_id, 'Enter a valid request ID.')
+        expected = self._version(payload)
+        note = payload.get('review_note')
+        if note is not None:
+            note = text(note, 'Note', 500)
+        now = self.now()
+        messages = []
+        with self.store.transaction() as tx:
+            req = tx.get_plan_change_request(request_id, lock=True)
+            if not req:
+                raise NotFound('Plan change request not found.')
+            if req['version'] != expected:
+                raise StaleVersion()
+            if req['status'] != 'pending_approval':
+                raise Conflict('This request is no longer waiting for approval.')
+            stripe_next = (req['payment_provider'] == 'stripe' and flag('BILLING_ENABLED')
+                           and env('BILLING_PROVIDER', 'manual') == 'stripe')
+            if stripe_next:
+                updated = tx.update_plan_change_request(request_id, req['version'], {
+                    'status': 'pending_payment', 'reviewed_by': actor['actor'][:120], 'updated_at': now,
+                    'review_note': note})
+                self._event(tx, actor, 'plan_change_pending_payment', req['tenant_id'],
+                            details={'request_id': request_id}, request_id=correlation_id)
+                return self._plan_request_view(updated, tx)
+            workspace = tx.get_workspace(req['tenant_id'], lock=True)
+            if not workspace or workspace['status'] == 'deleted':
+                raise NotFound('Workspace not found.')
+            row = tx.update_workspace(workspace['tenant_id'], workspace['version'], {
+                'plan_tier': req['requested_plan_code'], 'updated_at': now, 'updated_by': actor['actor'][:120]})
+            if row is None:
+                raise StaleVersion()
+            customer = tx.get_customer(row['customer_id'])
+            self._changed(tx, row, customer)
+            self._event(tx, actor, 'workspace_updated', req['tenant_id'],
+                        details={'plan_tier': row['plan_tier'], 'plan_change_request_id': request_id},
+                        request_id=correlation_id)
+            updated = tx.update_plan_change_request(request_id, req['version'], {
+                'status': 'approved', 'reviewed_by': actor['actor'][:120], 'updated_at': now, 'review_note': note})
+            messages.append({'directory': True, 'event': 'directory_changed'})
+            view = self._plan_request_view(updated, tx)
+        self._publish(messages, None)
+        return view
+
+    def reject_plan_change_request(self, request_id, payload, actor, correlation_id=None):
+        request_id = uuid_text(request_id, 'Enter a valid request ID.')
+        expected = self._version(payload)
+        note = payload.get('review_note')
+        if note is not None:
+            note = text(note, 'Note', 500)
+        now = self.now()
+        with self.store.transaction() as tx:
+            req = tx.get_plan_change_request(request_id, lock=True)
+            if not req:
+                raise NotFound('Plan change request not found.')
+            if req['version'] != expected:
+                raise StaleVersion()
+            if req['status'] not in ('pending_approval', 'pending_payment'):
+                raise Conflict('This request can no longer be rejected.')
+            updated = tx.update_plan_change_request(request_id, req['version'], {
+                'status': 'rejected', 'reviewed_by': actor['actor'][:120], 'updated_at': now, 'review_note': note})
+            self._event(tx, actor, 'plan_change_rejected', req['tenant_id'],
+                        details={'request_id': request_id}, request_id=correlation_id)
+            return self._plan_request_view(updated, tx)
+
     @staticmethod
     def _page(cursor, limit):
         try:

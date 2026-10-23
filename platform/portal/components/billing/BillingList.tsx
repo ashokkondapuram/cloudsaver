@@ -11,6 +11,7 @@ import type {BillingRow, Page, Plan} from '../../lib/types';
 import {useLoad} from '../../lib/useLoad';
 import {EmptyState, Loading, Notice, PageHeading, BillingStateBadge} from '../ui/shared';
 import {BillingOffNotice, customerBillingHref} from './common';
+import {PlanChangeQueue} from './PlanChangeQueue';
 
 export function BillingList() {
   const router = useRouter();
@@ -40,6 +41,7 @@ export function BillingList() {
       Subscriptions and payments for every customer. Each customer’s plan applies to all of its workspaces.
     </PageHeading>
     <BillingOffNotice/>
+    <PlanChangeQueue onChanged={() => void reload()}/>
     <section className="panel">
       <div className="section-title"><div><h2>All customers</h2></div></div>
       <div className="filter-bar">

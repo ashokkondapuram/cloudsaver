@@ -31,6 +31,8 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [/^plans$/, ['GET', 'POST']],
   [new RegExp(`^plans/${ID}$`), ['GET', 'PATCH']],
   [new RegExp(`^plans/${ID}/retire$`), ['POST']],
+  [/^plan-change-requests$/, ['GET']],
+  [new RegExp(`^plan-change-requests/${ID}/(approve|reject)$`), ['POST']],
   [/^billing\/customers$/, ['GET']],
   [/^billing\/settings$/, ['GET', 'PUT']],
   [new RegExp(`^subscriptions/${ID}$`), ['GET', 'PATCH']],

@@ -8,6 +8,9 @@ from app.operations import scheduled_interval, workspace_operations
 from app.tenant_config import normalize_tenant
 from app.tenant_registry import MemoryRegistry, VersionConflict
 from services.tenant import create_app as tenant_service
+from tests.identity_fake import FakeIdentity
+
+CID = '22222222-2222-4222-8222-222222222222'
 
 KEY = 'test-workspace-key-with-32-characters'
 TID = '11111111-1111-4111-8111-111111111111'
@@ -19,14 +22,15 @@ SLACK = 'https://hooks.slack.com/services/T000/B000/abcdef'
 
 def tenant(**changes):
     return normalize_tenant(dict(tenant_id=TID, name='Workspace', subscription_ids=[SID], plan_tier='ENTERPRISE',
-                                 api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest(), **changes))
+                                 customer_id=CID, api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest(), **changes))
 
 
 @pytest.fixture
 def stack(tmp_path):
     registry = MemoryRegistry((tenant(),), platform={'scheduled_scans_enabled': True, 'automated_alerts_enabled': True})
     settings = Settings('azure', str(tmp_path / 'db.sqlite3'), registry.bootstrap, None, registry)
-    return TestClient(tenant_service(settings)), registry, settings
+    fake = FakeIdentity()
+    return TestClient(tenant_service(settings, identity_client=fake.client())), registry, settings, fake
 
 
 def as_workspace(key=KEY):
@@ -38,13 +42,17 @@ def body(**changes):
                 schedule={'frequency': 'daily'}, alerts={'enabled': False, 'channel': None}) | changes
 
 
-def test_billing_admin_changes_plan(stack):
-    client, registry, _settings = stack
+def test_billing_admin_submits_plan_change_request(stack):
+    client, registry, _settings, fake = stack
     plans = client.get('/api/v1/billing/plans', headers=as_workspace()).json()
     assert plans['current_tier'] == 'ENTERPRISE' and len(plans['items']) == 3
-    updated = client.put('/api/v1/billing/plan', headers=as_workspace(), json={'version': 1, 'plan_tier': 'GROWTH'}).json()
-    assert updated['entitlements']['tier'] == 'GROWTH'
-    assert registry.get(TID)['plan_tier'] == 'GROWTH'
+    assert plans.get('pending_request') is None
+    submitted = client.post('/api/v1/billing/plan-requests', headers=as_workspace(),
+                            json={'version': 1, 'plan_tier': 'GROWTH'})
+    assert submitted.status_code == 202, submitted.text
+    assert submitted.json()['status'] == 'pending_approval'
+    assert registry.get(TID)['plan_tier'] == 'ENTERPRISE'
+    assert fake.plan_requests[TID]['requested_plan_code'] == 'GROWTH'
 
 
 def test_tenant_admin_changes_scopes_and_schedule_without_restart(stack):

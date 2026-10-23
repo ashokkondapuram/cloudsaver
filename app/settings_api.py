@@ -79,7 +79,7 @@ def actor_for(workspace):
     return 'principal:' + hashlib.sha256(principal.encode()).hexdigest()
 
 
-def create_router(settings, current_tenant):
+def create_router(settings, current_tenant, identity_client=None):
     from app.cloud_identity import onboarding
     from app.entitlements import (enforce_automated_alerts, enforce_providers, enforce_scan_frequency,
                                   enforce_subscription_quota, entitlements_for)
@@ -90,6 +90,12 @@ def create_router(settings, current_tenant):
         if settings.registry is None:
             raise HTTPException(503, 'Runtime settings require CLOUDSAVER_TENANT_REGISTRY=database')
         return settings.registry
+
+    def identity():
+        if identity_client is not None:
+            return identity_client
+        from app.identity_client import shared_client
+        return shared_client()
 
     def save(call):
         try:
@@ -179,16 +185,41 @@ def create_router(settings, current_tenant):
     @router.get('/api/v1/billing/plans')
     def billing_plans(workspace=Depends(current_tenant)):
         require_workspace_role(workspace, Role.BILLING_ADMIN)
-        from app.billing_plan import list_plans
-        return {'items': list_plans(), 'current_tier': entitlements_for(workspace).tier}
+        from app.billing_plan import list_plans, pending_plan_change_request
+        from app.identity_client import IdentityUnavailable
+        pending = None
+        try:
+            pending = pending_plan_change_request(identity(), workspace['tenant_id'])
+        except IdentityUnavailable:
+            pass
+        return {'items': list_plans(), 'current_tier': entitlements_for(workspace).tier, 'pending_request': pending}
 
-    @router.put('/api/v1/billing/plan')
-    def billing_plan_change(payload: PlanChange, workspace=Depends(current_tenant)):
+    @router.get('/api/v1/billing/plan-requests')
+    def billing_plan_request_status(workspace=Depends(current_tenant)):
         require_workspace_role(workspace, Role.BILLING_ADMIN)
-        store = registry()
-        stored = save(lambda: store.update_plan(workspace['tenant_id'], payload.plan_tier, payload.version, actor_for(workspace)))
-        from app.entitlements import billing_summary
-        return {'settings_version': stored['version'], 'entitlements': billing_summary(stored, stored)}
+        from app.billing_plan import pending_plan_change_request
+        from app.identity_client import IdentityUnavailable
+        try:
+            pending = pending_plan_change_request(identity(), workspace['tenant_id'])
+        except IdentityUnavailable:
+            raise HTTPException(503, 'Plan requests are unavailable. Try again later.')
+        return pending or {}
+
+    @router.post('/api/v1/billing/plan-requests', status_code=202)
+    def billing_plan_request(payload: PlanChange, workspace=Depends(current_tenant)):
+        require_workspace_role(workspace, Role.BILLING_ADMIN)
+        if not workspace.get('customer_id'):
+            raise HTTPException(422, 'This workspace is not linked to a platform customer. Contact your CloudSaver administrator.')
+        from app.billing_plan import submit_plan_change_request
+        from app.identity_client import IdentityUnavailable
+        actor = actor_for(workspace)
+        try:
+            request = submit_plan_change_request(identity(), workspace['tenant_id'], payload.plan_tier, actor)
+        except IdentityUnavailable:
+            raise HTTPException(503, 'Plan requests are unavailable. Try again later.')
+        except ValueError as exc:
+            raise HTTPException(409 if 'pending' in str(exc).lower() else 422, str(exc)) from None
+        return request
 
     @router.post('/api/v1/settings/access-test')
     def access_test(workspace=Depends(current_tenant)):

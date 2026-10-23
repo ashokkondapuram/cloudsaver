@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from identity.auth import ADMIN_CALLERS, DIRECTORY_CALLERS, VERIFY_CALLERS, OperatorAuth, caller_dependency, load_callers
-from identity.config import env
+from identity.config import billing_session_flags, env
 from identity.domain import IdentityError, Throttled
 from identity.keys import key_prefix
 
@@ -146,12 +146,22 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def complete_access_check(check_id: str, request: Request, payload: dict = Body(...), caller=Depends(verify_caller)):
         return service.complete_access_check(check_id, payload, caller, rid(request))
 
+    @app.post('/internal/v1/tenants/{tenant_id}/plan-change-requests', status_code=201)
+    def create_plan_change_request(tenant_id: str, request: Request, payload: dict = Body(...), caller=Depends(verify_caller)):
+        return service.create_plan_change_request(tenant_id, payload, caller, rid(request))
+
+    @app.get('/internal/v1/tenants/{tenant_id}/plan-change-requests/pending')
+    def pending_plan_change_request(tenant_id: str, caller=Depends(verify_caller)):
+        row = service.pending_plan_change_request(tenant_id)
+        return row or {}
+
     # ----- portal admin API --------------------------------------------------------------------------
     @app.get('/admin/v1/session')
     def session(identity=Depends(operator)):
         return {'actor': identity['actor'], 'display_name': identity['display_name'], 'roles': identity['roles'],
                 'auth_mode': identity['auth_mode'], 'provider_scoped_keys': service.provider_scoped_keys,
-                'environment': service.environment, 'key_prefix': key_prefix(service.environment)}
+                'environment': service.environment, 'key_prefix': key_prefix(service.environment),
+                **billing_session_flags()}
 
     @app.get('/admin/v1/customers')
     def customers(q: str | None = Query(None, max_length=120), status: str | None = None, cursor: str | None = None,
@@ -281,5 +291,18 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
                  reason: str | None = Query(None, max_length=24), start: str | None = Query(None, alias='from'),
                  identity=Depends(operator)):
         return service.failures({'tenant_id': tenant_id, 'source_ip': source_ip, 'reason': reason}, start)
+
+    @app.get('/admin/v1/plan-change-requests')
+    def plan_change_requests(status: str | None = Query(None, max_length=24), limit: int = Query(50, ge=1, le=200),
+                             identity=Depends(operator)):
+        return service.list_plan_change_requests(status or 'pending_approval', limit)
+
+    @app.post('/admin/v1/plan-change-requests/{request_id}/approve')
+    def approve_plan_change_request(request_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.approve_plan_change_request(request_id, payload, identity, rid(request))
+
+    @app.post('/admin/v1/plan-change-requests/{request_id}/reject')
+    def reject_plan_change_request(request_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.reject_plan_change_request(request_id, payload, identity, rid(request))
 
     return app

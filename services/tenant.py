@@ -13,7 +13,7 @@ def create_app(settings=None, identity_client=None):
         raise HTTPException(410, WEBHOOK_GONE)
 
     from app.settings_api import create_router as settings_router
-    app.include_router(settings_router(settings, tenant))
+    app.include_router(settings_router(settings, tenant, identity_client=identity_client))
     from app.config import directory_mode
     if directory_mode() == 'cutover':
         # The tenant-service projector is the only writer of the registry projection after cutover.

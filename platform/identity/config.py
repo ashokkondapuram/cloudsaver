@@ -32,3 +32,12 @@ def integer(name, default, low, high):
     if not low <= value <= high:
         raise ValueError(f'PLATFORM_{name} is outside its supported range')
     return value
+
+
+def billing_session_flags():
+    """Portal session fields; driven only by platform/.env (PLATFORM_BILLING_*), not CloudSaver."""
+    enabled = flag('BILLING_ENABLED')
+    provider = env('BILLING_PROVIDER', 'manual') if enabled else 'manual'
+    if provider not in ('manual', 'stripe'):
+        provider = 'manual'
+    return {'billing_enabled': enabled, 'billing_provider': provider}

@@ -345,6 +345,27 @@ class MemoryTx:
     def cache_oldest(self, since):
         return next((e['seq'] for e in self.s['cache_events'] if e['created_at'] >= since), None)
 
+    # plan change requests
+    def insert_plan_change_request(self, row):
+        self.s['plan_change_requests'][row['id']] = copy.deepcopy(row)
+
+    def get_plan_change_request(self, request_id, lock=False):
+        row = self.s['plan_change_requests'].get(request_id)
+        return copy.deepcopy(row) if row else None
+
+    def pending_plan_request_for_tenant(self, tenant_id):
+        for row in _newest(self.s['plan_change_requests'].values()):
+            if row['tenant_id'] == tenant_id and row['status'] in ('pending_approval', 'pending_payment'):
+                return copy.deepcopy(row)
+        return None
+
+    def list_plan_change_requests(self, status=None, limit=50):
+        rows = [r for r in self.s['plan_change_requests'].values() if not status or r['status'] == status]
+        return copy.deepcopy(_newest(rows)[:limit])
+
+    def update_plan_change_request(self, request_id, expected_version, fields):
+        return _versioned(self.s['plan_change_requests'].get(request_id), expected_version, fields)
+
 
 class MemoryStore:
     def __init__(self):
@@ -356,7 +377,7 @@ class MemoryStore:
                       'usage': {}, 'failures': {}, 'plans': plans, 'subscriptions': {}, 'payments': {},
                       'provider_events': {}, 'cache_events': [], 'cache_seq': 0,
                       'billing_settings': dict(SEED_SETTINGS, version=1, updated_at=now, updated_by='bootstrap'),
-                      'access_checks': {},
+                      'access_checks': {}, 'plan_change_requests': {},
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
                                    'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
         self._lock = threading.RLock()

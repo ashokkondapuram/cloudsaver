@@ -25,6 +25,7 @@ class FakeIdentity:
         self.events = fixture('events')
         self.events_status = 200
         self.requests = []
+        self.plan_requests = {}
         self.transport = httpx.MockTransport(self.handle)
 
     def handle(self, request):
@@ -49,6 +50,30 @@ class FakeIdentity:
             if 'after' not in params:
                 return httpx.Response(200, json={'items': [], 'seq': self.events['seq']})
             return httpx.Response(200, json=copy.deepcopy(self.events))
+        if request.method == 'POST' and path.startswith('/internal/v1/tenants/') and path.endswith('/plan-change-requests'):
+            tenant_id = path.split('/')[4]
+            body = json.loads(request.content.decode())
+            if tenant_id in self.plan_requests and self.plan_requests[tenant_id].get('status') in ('pending_approval', 'pending_payment'):
+                return httpx.Response(409, json={'detail': 'A plan change request is already pending for this workspace.'})
+            row = {
+                'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                'tenant_id': tenant_id,
+                'customer_id': self.snapshot['workspaces'][0]['customer_id'],
+                'current_plan_code': self.snapshot['workspaces'][0]['plan_tier'],
+                'requested_plan_code': body['requested_plan_code'],
+                'status': 'pending_approval',
+                'payment_provider': 'manual',
+                'requested_by': body['requested_by'],
+                'version': 1,
+                'created_at': '2026-01-01T00:00:00Z',
+                'updated_at': '2026-01-01T00:00:00Z',
+            }
+            self.plan_requests[tenant_id] = row
+            return httpx.Response(201, json=row)
+        if path.startswith('/internal/v1/tenants/') and path.endswith('/plan-change-requests/pending'):
+            tenant_id = path.split('/')[4]
+            row = self.plan_requests.get(tenant_id)
+            return httpx.Response(200, json=copy.deepcopy(row) if row else {})
         return httpx.Response(404, json={'detail': 'Not found'})
 
     def client(self, cache_seconds=0):

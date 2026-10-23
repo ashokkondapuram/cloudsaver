@@ -301,3 +301,25 @@ def test_resource_access_validation_and_platform_view(service):
 def test_node_images_are_pinned():
     froms = [line for line in (ROOT / 'portal/Dockerfile').read_text().splitlines() if line.startswith('FROM ')]
     assert froms and all('node:24.22.1-alpine' in line for line in froms)
+
+
+def test_billing_session_flags(monkeypatch):
+    from identity.config import billing_session_flags
+    monkeypatch.delenv('PLATFORM_BILLING_ENABLED', raising=False)
+    monkeypatch.delenv('CLOUDSAVER_BILLING_ENABLED', raising=False)
+    assert billing_session_flags() == {'billing_enabled': False, 'billing_provider': 'manual'}
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    monkeypatch.setenv('PLATFORM_BILLING_PROVIDER', 'manual')
+    assert billing_session_flags() == {'billing_enabled': True, 'billing_provider': 'manual'}
+
+
+def test_plan_change_request_flow(service):
+    workspace(service)
+    created = service.create_plan_change_request(TID, {'requested_plan_code': 'GROWTH', 'requested_by': 'billing@contoso.com'},
+                                                 'tenant-service')
+    assert created['status'] == 'pending_approval'
+    listed = service.list_plan_change_requests('pending_approval', 10)
+    assert any(item['id'] == created['id'] for item in listed['items'])
+    approved = service.approve_plan_change_request(created['id'], {'version': 1}, OPERATOR)
+    assert approved['status'] == 'approved'
+    assert service.get_workspace(TID)['plan_tier'] == 'GROWTH'

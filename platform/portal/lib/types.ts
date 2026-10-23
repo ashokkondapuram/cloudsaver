@@ -141,5 +141,24 @@ export type PlatformSettings = {
   resource_access_effective?: ResourceAccessEffective; version: number; updated_by: string; updated_at: string;
 };
 
+export type PlanChangeRequest = {
+  id: string;
+  customer_id: string;
+  customer_name: string | null;
+  tenant_id: string;
+  workspace_name: string | null;
+  current_plan_code: PlanTier;
+  requested_plan_code: PlanTier;
+  status: 'pending_approval' | 'pending_payment' | 'approved' | 'rejected' | 'canceled';
+  payment_provider: BillingProviderName;
+  stripe_checkout_url: string | null;
+  requested_by: string;
+  reviewed_by: string | null;
+  review_note: string | null;
+  created_at: string;
+  updated_at: string;
+  version: number;
+};
+
 export type Page<T> = {items: T[]; next_cursor: string | null};
 export type IssuedKey = {key: ApiKey; secret: string; previous?: ApiKey};
