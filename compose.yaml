@@ -8,23 +8,38 @@ x-environment: &environment
   CLOUDSAVER_DB_POOL_TIMEOUT: ${CLOUDSAVER_DB_POOL_TIMEOUT:-5}
   CLOUDSAVER_DB_POOL_RECYCLE: ${CLOUDSAVER_DB_POOL_RECYCLE:-1800}
   CLOUDSAVER_MODE: ${CLOUDSAVER_MODE:-azure}
-  CLOUDSAVER_TENANTS: ${CLOUDSAVER_TENANTS:?Set CLOUDSAVER_TENANTS JSON in .env (run scripts/setup_compose.py)}
+  # Bootstrap seed only: rows are inserted once; the dashboard owns them afterwards.
+  CLOUDSAVER_TENANTS: ${CLOUDSAVER_TENANTS:-[]}
+  CLOUDSAVER_TENANT_REGISTRY: database
+  CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
+  CLOUDSAVER_OPERATOR_KEY_SHA256: ${CLOUDSAVER_OPERATOR_KEY_SHA256:-}
   SCANNER_SERVICE_URL: http://scanner-service:8002
   CLOUDSAVER_AUTH_MODE: ${CLOUDSAVER_AUTH_MODE:-workspace}
   CLOUDSAVER_ENTRA_AUDIENCE: ${CLOUDSAVER_ENTRA_AUDIENCE:-}
+  # Seeds for the platform settings row; change them later in the operator console.
   CLOUDSAVER_SCHEDULED_SCANS: ${CLOUDSAVER_SCHEDULED_SCANS:-false}
-  CLOUDSAVER_SCAN_INTERVAL_SECONDS: ${CLOUDSAVER_SCAN_INTERVAL_SECONDS:-3600}
   CLOUDSAVER_AUTOMATED_ALERTS: ${CLOUDSAVER_AUTOMATED_ALERTS:-false}
+  # Keyless cloud identity (non-secret identifiers only).
+  CLOUDSAVER_CLOUD_IDENTITY: ${CLOUDSAVER_CLOUD_IDENTITY:-managed_identity}
+  AZURE_CLIENT_ID: ${AZURE_MANAGED_IDENTITY_CLIENT_ID:-}
+  CLOUDSAVER_AZURE_ACCESS: ${CLOUDSAVER_AZURE_ACCESS:-federated}
+  CLOUDSAVER_AZURE_APP_CLIENT_ID: ${CLOUDSAVER_AZURE_APP_CLIENT_ID:-}
+  CLOUDSAVER_AWS_HUB_ROLE_ARN: ${CLOUDSAVER_AWS_HUB_ROLE_ARN:-}
+  CLOUDSAVER_AWS_TOKEN_AUDIENCE: ${CLOUDSAVER_AWS_TOKEN_AUDIENCE:-api://AzureADTokenExchange}
+  CLOUDSAVER_GCP_WORKLOAD_PROVIDER: ${CLOUDSAVER_GCP_WORKLOAD_PROVIDER:-}
+  CLOUDSAVER_GCP_TOKEN_AUDIENCE: ${CLOUDSAVER_GCP_TOKEN_AUDIENCE:-api://AzureADTokenExchange}
   CLOUDSAVER_DELIVERY_ENABLED: ${CLOUDSAVER_DELIVERY_ENABLED:-false}
   CLOUDSAVER_NOTIFICATION_TARGETS: ${CLOUDSAVER_NOTIFICATION_TARGETS:-[]}
   NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,postgres,redis
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:0.7.3
+  image: cloudsaver-python:0.8.0
   build:
     context: .
     dockerfile: Dockerfile.services
+    args:
+      INSTALL_AZURE_CLI: ${CLOUDSAVER_INSTALL_AZURE_CLI:-false}
   restart: unless-stopped
   init: true
   read_only: true
@@ -36,16 +51,8 @@ x-delivery-environment: &delivery-environment
 
 x-worker-environment: &worker-environment
   <<: [*environment, *delivery-environment]
-  CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
   REDIS_URL: redis://redis:6379/1
-  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
-  AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
-  CLOUDSAVER_CREDENTIAL_PROVIDER: ${CLOUDSAVER_CREDENTIAL_PROVIDER:-env}
-  AZURE_KEYVAULT_URL: ${AZURE_KEYVAULT_URL:-}
-  AZURE_KEYVAULT_AUTH: ${AZURE_KEYVAULT_AUTH:-managed_identity}
-  CLOUDSAVER_SCHEDULED_SCANS: ${CLOUDSAVER_SCHEDULED_SCANS:-false}
-  CLOUDSAVER_SCAN_INTERVAL_SECONDS: ${CLOUDSAVER_SCAN_INTERVAL_SECONDS:-3600}
-  CLOUDSAVER_AUTOMATED_ALERTS: ${CLOUDSAVER_AUTOMATED_ALERTS:-false}
+  CLOUDSAVER_SCHEDULER_TICK_SECONDS: ${CLOUDSAVER_SCHEDULER_TICK_SECONDS:-300}
 
 services:
   migrate:
@@ -80,7 +87,6 @@ services:
     command: [uvicorn, services.tenant:create_app, --factory, --host, 0.0.0.0, --port, '8001']
     environment:
       <<: *environment
-      CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       CLOUDSAVER_STRIPE_CUSTOMERS: ${CLOUDSAVER_STRIPE_CUSTOMERS:-}
       STRIPE_PRICE_TIERS: ${STRIPE_PRICE_TIERS:-}
@@ -94,16 +100,6 @@ services:
     command: [uvicorn, services.scanner:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
     environment:
       <<: [*environment, *delivery-environment]
-      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
-      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
-      CLOUDSAVER_CREDENTIAL_PROVIDER: ${CLOUDSAVER_CREDENTIAL_PROVIDER:-env}
-      AZURE_KEYVAULT_URL: ${AZURE_KEYVAULT_URL:-}
-      AZURE_KEYVAULT_AUTH: ${AZURE_KEYVAULT_AUTH:-managed_identity}
-      AZURE_KEYVAULT_MANAGED_IDENTITY_CLIENT_ID: ${AZURE_KEYVAULT_MANAGED_IDENTITY_CLIENT_ID:-}
-      AWS_PROFILE: ${AWS_PROFILE:-}
-      AWS_SHARED_CREDENTIALS_FILE: ${AWS_SHARED_CREDENTIALS_FILE:-}
-      AWS_CONFIG_FILE: ${AWS_CONFIG_FILE:-}
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
       CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY: ${CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY:-}
       REDIS_URL: redis://redis:6379/1
       CLOUDSAVER_DISTRIBUTED_SCAN_LOCK: 'true'
@@ -116,7 +112,6 @@ services:
       CLOUDSAVER_BILLING_RETURN_URL: ${CLOUDSAVER_BILLING_RETURN_URL:-}
       CLOUDSAVER_STRIPE_CUSTOMERS: ${CLOUDSAVER_STRIPE_CUSTOMERS:-}
       STRIPE_PRICE_TIERS: ${STRIPE_PRICE_TIERS:-}
-      CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}

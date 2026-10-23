@@ -124,19 +124,18 @@ def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
 
 
 def scan_live(tenant: dict) -> list[dict]:
-    """Scan only operator-authorized subscriptions using the explicit customer tenant.
+    """Scan only authorized subscriptions with a keyless credential for the customer tenant.
 
-    Service-principal RBAC scope must be verified by the operator on onboarding.
+    Reader RBAC on each subscription is granted by the customer during onboarding.
     A mid-scan error raises; no partial findings escape or get persisted as complete.
     """
     from azure.mgmt.resourcegraph import ResourceGraphClient
-    from app.keyvault import CredentialError, customer_credential
-    tenant_id = str(UUID(tenant["tenant_id"]))
+    from app.cloud_identity import CredentialError, azure_credential
     subscriptions = [str(UUID(s)) for s in tenant["subscription_ids"]]
     if not subscriptions:
         raise ScanError("No authorized subscriptions configured.")
     try:
-        credential = customer_credential(tenant_id)
+        credential = azure_credential(tenant)
     except CredentialError:
         raise ScanError("The customer Azure credential is unavailable.") from None
     with credential:

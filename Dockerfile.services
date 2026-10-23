@@ -7,6 +7,14 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
     pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home appuser && \
     mkdir -p /app/data && chown appuser:appuser /app/data
+# Developer sign-in only: Azure CLI in an isolated venv so its pins never touch the app.
+ARG INSTALL_AZURE_CLI=false
+RUN --mount=type=secret,id=proxy_ca \
+    if [ "$INSTALL_AZURE_CLI" = "true" ]; then \
+      if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
+      python -m venv /opt/azure-cli && /opt/azure-cli/bin/pip install --no-cache-dir azure-cli && \
+      ln -s /opt/azure-cli/bin/az /usr/local/bin/az; \
+    fi
 # Dockerfile.services.dockerignore strictly whitelists runtime source paths.
 COPY --chown=appuser:appuser . .
 USER appuser

@@ -50,22 +50,35 @@ def target_definitions():
         raise ValueError('Notification target configuration is invalid') from None
 
 
-def load_targets():
+def validate_webhook(url, channel):
     from services.notification import webhook_url
     from urllib.parse import urlsplit
+    if not isinstance(url,str) or len(url)>4096:
+        raise ValueError()
+    webhook_url(url)
+    if (urlsplit(url).hostname=='hooks.slack.com') != (channel=='slack'):
+        raise ValueError()
+    return url
+
+
+def load_targets(settings=None):
+    """Operator env targets plus webhooks that tenant admins saved in the registry."""
     try:
         result=[]
         for row in target_definitions():
-            url=os.getenv(row['url_env'],'')
-            if len(url)>4096:
-                raise ValueError()
-            webhook_url(url)
-            if (urlsplit(url).hostname=='hooks.slack.com') != (row['channel']=='slack'):
-                raise ValueError()
+            url=validate_webhook(os.getenv(row['url_env'],''),row['channel'])
             result.append(Target(row['target_id'],row['tenant_id'],row['channel'],url))
-        return tuple(result)
     except (ValueError,KeyError,TypeError,AttributeError):
         raise ValueError('Notification target configuration is invalid') from None
+    registry=getattr(settings,'registry',None)
+    if registry is not None:
+        for row in registry.webhook_targets():
+            try:
+                url=validate_webhook(row['url'],row['channel'])
+            except (ValueError,TypeError,AttributeError):
+                continue
+            result.append(Target('workspace-'+row['channel'],row['tenant_id'],row['channel'],url))
+    return tuple(result)
 
 
 def enabled():

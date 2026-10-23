@@ -8,7 +8,7 @@ import pytest
 from app.scanner import ScanError
 from app.scanner_aws import scan_account
 
-SOURCE = dict(account_id='123456789012', region='us-east-1', credential_profile='test')
+SOURCE = dict(account_id='123456789012', region='us-east-1', role_arn='arn:aws:iam::123456789012:role/CloudSaverReader')
 
 
 def setup_stack(account='123456789012'):

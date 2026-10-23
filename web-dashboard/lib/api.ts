@@ -2,10 +2,10 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) {super(message);}
 }
 
-export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal} = {}): Promise<T> {
+export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'} = {}): Promise<T> {
   const hasBody = options.body !== undefined || options.rawBody !== undefined;
   const response = await fetch('/api/v1' + path, {
-    method: hasBody ? 'POST' : 'GET',
+    method: options.method ?? (hasBody ? 'POST' : 'GET'),
     headers: {Authorization: 'Bearer ' + token, ...(hasBody ? {'Content-Type': 'application/json'} : {})},
     body: options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     cache: 'no-store', signal: options.signal,

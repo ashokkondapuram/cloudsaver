@@ -301,7 +301,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0007_delivery_outbox',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0008_tenant_registry',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -864,3 +864,29 @@ def test_interactive_http_accepts_without_scanning_and_survives_restart(tenants,
         assert client.get('/api/v1/scan-jobs', headers=auth).json()[0]['poll_url'] == location
         monkeypatch.setenv('CLOUDSAVER_INTERACTIVE_JOBS', 'false')
         assert client.post('/api/v1/scan-jobs', json=payload, headers=auth).status_code == 503
+
+
+def test_tenant_registry_seeds_once_syncs_domain_and_rejects_stale_writes(database):
+    import hashlib
+    from app.tenant_config import normalize_tenant
+    from app.tenant_registry import PostgresRegistry, VersionConflict
+    owner, app, _ = database
+    tid, keep, drop = str(uuid4()), str(uuid4()), str(uuid4())
+    seed = normalize_tenant(dict(tenant_id=tid, name='Registry workspace', plan_tier='GROWTH',
+                                 subscription_ids=[keep, drop], api_key_sha256=hashlib.sha256(tid.encode()).hexdigest()))
+    registry = PostgresRegistry(app, (seed,), ttl=0)
+    assert registry.get(tid)['version'] == 1
+    assert PostgresRegistry(app, (dict(seed, name='Ignored reseed'),), ttl=0).get(tid)['name'] == 'Registry workspace'
+    updated = registry.update(tid, {'subscription_ids': [keep], 'plan_tier': 'ENTERPRISE'}, 1, 'test',
+                              webhook='https://hooks.slack.com/services/T000/B000/abc')
+    assert updated['version'] == 2 and updated['webhook_configured'] is True
+    with pytest.raises(VersionConflict):
+        registry.update(tid, {'name': 'Stale'}, 1, 'test')
+    with psycopg.connect(app) as db:
+        context(db, tid)
+        active = dict(db.execute('SELECT subscription_id::text, active FROM subscriptions').fetchall())
+        assert active == {keep: True, drop: False}
+        assert db.execute('SELECT plan_tier FROM organizations').fetchall() == [('ENTERPRISE',)]
+        assert db.execute('SELECT count(*) FROM settings_audit WHERE tenant_id=%s', (tid,)).fetchone() == (2,)
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute('DELETE FROM settings_audit')

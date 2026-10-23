@@ -7,6 +7,8 @@ PROJECT = r'[a-z][a-z0-9-]{4,28}[a-z0-9]'
 NAME = r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
 POD_NAME = r'[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?'
 REGION = r'[a-z]+(?:-[a-z]+)+-?[0-9]+'
+ROLE_ARN = r'arn:aws:iam::([0-9]{12}):role/[A-Za-z0-9+=,.@_/-]{1,512}'
+SERVICE_ACCOUNT = r'[a-z][a-z0-9-]{4,28}[a-z0-9]@' + PROJECT + r'\.iam\.gserviceaccount\.com'
 
 
 def matches(pattern, value):
@@ -16,7 +18,7 @@ def matches(pattern, value):
 def normalize_sources(tenant):
     result = {}
     specs = (
-        ('aws_accounts', ('account_id', 'region', 'credential_profile')),
+        ('aws_accounts', ('account_id', 'region', 'role_arn')),
         ('gcp_projects', ('project_id', 'regions')),
         ('kubernetes_clusters', ('cluster_id', 'prometheus_url', 'bearer_token_env')),
     )
@@ -31,8 +33,9 @@ def normalize_sources(tenant):
             if key == 'aws_accounts':
                 if not matches(r'[0-9]{12}', entry.get('account_id')) or not matches(REGION, entry.get('region')):
                     raise ValueError('Invalid AWS account/region')
-                if not matches(r'[A-Za-z0-9_-]{1,100}', entry.get('credential_profile')):
-                    raise ValueError('An explicit AWS credential profile is required')
+                role = re.fullmatch(ROLE_ARN, entry.get('role_arn') or '')
+                if not role or role[1] != entry['account_id']:
+                    raise ValueError('Each AWS account requires a reader role ARN in the same account')
                 identity = (entry['account_id'], entry['region'])
             elif key == 'gcp_projects':
                 if not matches(PROJECT, entry.get('project_id')):

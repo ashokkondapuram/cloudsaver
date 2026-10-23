@@ -80,8 +80,10 @@ def dispatch_one(repository,tenant_id,*,targets,publish_scan,client,kinds=('scan
 
 
 def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,should_stop=lambda:False):
+    from app.operations import platform_flags
+    scheduled=platform_flags(settings)[0]
     kinds=[]
-    if any(os.getenv(flag,'false').lower()=='true' for flag in ('CLOUDSAVER_SCHEDULED_SCANS','CLOUDSAVER_INTERACTIVE_JOBS')):
+    if scheduled or os.getenv('CLOUDSAVER_INTERACTIVE_JOBS','false').lower()=='true':
         kinds.append('scan')
     # Explicit manual delivery does not require the automated-alerts switch.
     kinds.append('notification')
@@ -106,8 +108,7 @@ def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,sho
                     origin = event['payload'].get('origin', 'scheduled')
                     if origin == 'interactive':
                         return os.getenv('CLOUDSAVER_INTERACTIVE_JOBS','false').lower() == 'true'
-                    return (os.getenv('CLOUDSAVER_SCHEDULED_SCANS','false').lower() == 'true'
-                            and jobs.plan_tier(tenant_id) in ('GROWTH','ENTERPRISE'))
+                    return scheduled and jobs.plan_tier(tenant_id) in ('GROWTH','ENTERPRISE')
                 if not dispatch_one(repository,tenant_id,targets=targets,publish_scan=publish_scan,client=client,kinds=kinds,authorize_scan=authorize,authorize_job=authorize_job):
                     break
                 processed+=1
@@ -132,9 +133,8 @@ def main():
     from workers.storage import JobRepository
     from workers.tasks import execute_subscription_scan
     settings=Settings.load()
-    targets=load_targets()
     configured={t['tenant_id'] for t in settings.tenants}
-    if any(t.tenant_id not in configured for t in targets):
+    if any(t.tenant_id not in configured for t in load_targets()):
         raise ValueError('Notification targets must belong to configured tenants')
     repository=DeliveryRepository(settings.database_url)
     jobs=JobRepository(settings.database_url)
@@ -146,7 +146,7 @@ def main():
     with httpx.Client(timeout=httpx.Timeout(15,connect=5),follow_redirects=False) as client:
         while not stop.is_set():
             try:
-                count=run_batch(settings,repository,targets=targets,publish_scan=publish,client=client,jobs=jobs,should_stop=stop.is_set)
+                count=run_batch(settings,repository,targets=load_targets(settings),publish_scan=publish,client=client,jobs=jobs,should_stop=stop.is_set)
             except Exception:
                 # Avoid logging a DSN, broker URL or provider exception.
                 logger.error('Delivery batch failed; durable work retained')

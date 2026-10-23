@@ -32,7 +32,11 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
     router=APIRouter()
     # SQLite is deliberately unsupported: operational reliability requires PG.
     repository=repository or (DeliveryRepository(settings.database_url) if settings.database_url else None)
-    targets=load_targets() if targets is None else targets
+    fixed_targets=targets
+
+    def current_targets(tenant_id):
+        rows=load_targets(settings) if fixed_targets is None else fixed_targets
+        return [t for t in rows if t.tenant_id==tenant_id]
 
     def available():
         if repository is None:
@@ -51,7 +55,7 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
         if repository is None:
             return {'available':False,'dispatcher_enabled':False,'targets':[],'counts':[],'oldest_due_seconds':None,'dispatcher':None}
         return {'available':True,'dispatcher_enabled':enabled(),
-                'targets':[t.public() for t in targets if t.tenant_id==tenant['tenant_id']],**repository.summary(tenant['tenant_id'])}
+                'targets':[t.public() for t in current_targets(tenant['tenant_id'])],**repository.summary(tenant['tenant_id'])}
 
     @router.get('/api/v1/operations/deliveries')
     def deliveries(limit:int=Query(50,ge=1,le=100),status:str|None=Query(None,pattern='^(pending|leased|published|delivered|dead_letter)$'),before:UUID|None=None,tenant=Depends(current_tenant)):
@@ -94,7 +98,7 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
         require_workspace_role(tenant,Role.TENANT_ADMIN)
         scan=own_scan(tenant,scan_id)
         available()
-        chosen=[t for t in targets if t.tenant_id==tenant['tenant_id']]
+        chosen=current_targets(tenant['tenant_id'])
         if not enabled() or not chosen:
             raise HTTPException(503,'Tenant notification delivery is not configured or enabled')
         ids=repository.enqueue_notification(tenant['tenant_id'],scan,chosen)

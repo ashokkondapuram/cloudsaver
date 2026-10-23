@@ -217,4 +217,44 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def notify(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'notification', f'/api/v1/notifications/{scan_id}', authorization)
 
+    from app.auth import operator_dependency
+    from app.gitops_api import bounded_json
+    operator = operator_dependency()
+
+    async def operator_allowed(identity=Depends(operator)):
+        await limiter.check('platform-operator')
+        return identity
+
+    async def tenant_write(method, path, request, authorization):
+        return await upstream(method, targets['tenant'], path, authorization,
+                              json=await bounded_json(request), transport=transport)
+
+    @app.get('/api/v1/settings')
+    async def workspace_settings(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'tenant', '/api/v1/settings', authorization)
+
+    @app.put('/api/v1/settings')
+    async def update_workspace_settings(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await tenant_write('PUT', '/api/v1/settings', request, authorization)
+
+    @app.get('/api/v1/admin/tenants')
+    async def admin_tenants(identity=Depends(operator_allowed), authorization: str = Header()):
+        return await forward('GET', 'tenant', '/api/v1/admin/tenants', authorization)
+
+    @app.post('/api/v1/admin/tenants', status_code=201)
+    async def admin_create_tenant(request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
+        return await tenant_write('POST', '/api/v1/admin/tenants', request, authorization)
+
+    @app.patch('/api/v1/admin/tenants/{tenant_id}')
+    async def admin_update_tenant(tenant_id: UUID, request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
+        return await tenant_write('PATCH', f'/api/v1/admin/tenants/{tenant_id}', request, authorization)
+
+    @app.get('/api/v1/admin/settings')
+    async def admin_settings(identity=Depends(operator_allowed), authorization: str = Header()):
+        return await forward('GET', 'tenant', '/api/v1/admin/settings', authorization)
+
+    @app.put('/api/v1/admin/settings')
+    async def admin_update_settings(request: Request, identity=Depends(operator_allowed), authorization: str = Header()):
+        return await tenant_write('PUT', '/api/v1/admin/settings', request, authorization)
+
     return app

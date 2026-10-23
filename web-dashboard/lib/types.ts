@@ -51,6 +51,52 @@ export type Workspace = {
   allowed_scan_frequencies?: string[];
   automated_alerts_enabled?: boolean;
   notification_webhook_configured?: boolean;
+  scan_frequency?: Frequency;
+  platform_scheduled_scans_enabled?: boolean;
+  platform_automated_alerts_enabled?: boolean;
+  settings_editable?: boolean;
+};
+
+export type Frequency = 'manual' | 'daily' | 'hourly';
+export type AwsAccount = {account_id: string; region: string; role_arn: string};
+export type GcpProject = {project_id: string; regions: string[]};
+export type KubernetesCluster = {cluster_id: string; prometheus_url: string; bearer_token_env: string};
+
+export type TenantSettings = {
+  tenant_id: string;
+  name: string;
+  plan_tier: string;
+  active: boolean;
+  version: number;
+  subscription_ids: string[];
+  aws_accounts: AwsAccount[];
+  gcp_projects: GcpProject[];
+  kubernetes_clusters: KubernetesCluster[];
+  identity: {azure_app_client_id?: string; gcp_service_account?: string};
+  schedule: {frequency: Frequency};
+  alerts: {enabled: boolean; channel: 'slack' | 'teams' | null; webhook_configured: boolean};
+};
+
+export type IdentityOnboarding = {
+  identity_mode: string;
+  azure_access: string;
+  azure_app_client_id: string | null;
+  managed_identity_client_id: string | null;
+  aws_hub_role_arn: string | null;
+  aws_token_audience: string;
+  aws_external_id?: string | null;
+  gcp_workload_provider: string | null;
+  gcp_service_account?: string | null;
+};
+
+export type PlatformSettings = {scheduled_scans_enabled: boolean; automated_alerts_enabled: boolean; version: number};
+
+export type SettingsResponse = {
+  editable: boolean;
+  settings: TenantSettings;
+  limits: {max_subscriptions: number; allowed_scan_frequencies: Frequency[]; can_dispatch_automated_alerts: boolean};
+  platform: PlatformSettings | null;
+  identity: IdentityOnboarding;
 };
 
 export type Entitlements = {
@@ -58,7 +104,6 @@ export type Entitlements = {
   max_subscriptions: number;
   current_subscriptions: number;
   can_export_terraform: boolean;
-  can_use_keyvault: boolean;
   can_dispatch_automated_alerts: boolean;
   retention_days: number;
 };

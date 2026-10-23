@@ -144,7 +144,7 @@ def test_identity_metadata_does_not_resolve_webhook_secrets(monkeypatch):
     row={'target_id':'finops','tenant_id':TENANT,'channel':'slack','url_env':'CLOUDSAVER_WEBHOOK_FINOPS'}
     monkeypatch.setenv('CLOUDSAVER_NOTIFICATION_TARGETS',json.dumps([row]))
     monkeypatch.delenv('CLOUDSAVER_WEBHOOK_FINOPS',raising=False)
-    assert workspace_operations(TENANT)['notification_webhook_configured'] is True
-    assert workspace_operations('22222222-2222-4222-8222-222222222222')['notification_webhook_configured'] is False
+    assert workspace_operations({'tenant_id': TENANT})['notification_webhook_configured'] is True
+    assert workspace_operations({'tenant_id': '22222222-2222-4222-8222-222222222222'})['notification_webhook_configured'] is False
     with pytest.raises(ValueError):
         load_targets()

@@ -183,5 +183,5 @@ def test_operator_source_validation(entry):
 
 def test_operator_sources_roundtrip_without_credentials():
     result = normalize_sources(dict(gcp_projects=[GCP], kubernetes_clusters=[CLUSTER],
-              aws_accounts=[dict(account_id='123456789012', region='us-east-1', credential_profile='customer-a')]))
+              aws_accounts=[dict(account_id='123456789012', region='us-east-1', role_arn='arn:aws:iam::123456789012:role/CloudSaverReader')]))
     assert result['gcp_projects'] == [GCP]

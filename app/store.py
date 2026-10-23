@@ -72,7 +72,7 @@ class PostgresStore:
             role = db.execute('SELECT rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = current_user').fetchone()
             if any(role):
                 raise ValueError('Application database role must not be superuser or BYPASSRLS')
-            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings', 'gitops_requests', 'delivery_events', 'delivery_audit', 'delivery_dispatchers') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
+            if db.execute("SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relname IN ('scans', 'organizations', 'tenants', 'subscriptions', 'waste_findings', 'scan_jobs', 'stripe_events', 'cloud_findings', 'gitops_requests', 'delivery_events', 'delivery_audit', 'delivery_dispatchers', 'tenant_registry', 'platform_settings', 'settings_audit') AND pg_has_role(current_user, relowner, 'USAGE') LIMIT 1").fetchone():
                 raise ValueError('Application database role must not own storage tables or inherit their owner role')
             table = db.execute("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'public.scans'::regclass").fetchone()
             if not table or not all(table):
@@ -111,8 +111,9 @@ class PostgresStore:
         from app.cloud_scope import validate_finding_scope
         for finding in scan['findings']:
             validate_finding_scope(finding, workspace)
-        organization_id = uuid5(NAMESPACE_URL, 'cloudsaver:organization:' + tenant_id)
         with self.connection(tenant_id) as db:
+            owner = db.execute('SELECT organization_id FROM public.tenants WHERE tenant_id=%s', (tenant_id,)).fetchone()
+            organization_id = owner[0] if owner else uuid5(NAMESPACE_URL, 'cloudsaver:organization:' + tenant_id)
             db.execute('INSERT INTO public.scans (id, tenant_id, timestamp, payload) VALUES (%s, %s, %s, %s)',
                        (scan['scan_id'], tenant_id, scan['timestamp'], Jsonb(scan)))
             db.execute('INSERT INTO public.organizations (id, tenant_id, name) VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name',

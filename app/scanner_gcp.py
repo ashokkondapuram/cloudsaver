@@ -100,12 +100,13 @@ def scan_gcp_project(source, *, reader=None, now=None):
     project, regions = source['project_id'], source['regions']
     own_reader = reader is None
     if own_reader:
+        from app.cloud_identity import CredentialError, gcp_credentials
         try:
-            import google.auth
-            credentials, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform.read-only'])
-            reader = JSONReader(credentials=credentials)
+            reader = JSONReader(credentials=gcp_credentials(source))
+        except CredentialError:
+            raise ScanError('The GCP workload identity credential is unavailable') from None
         except Exception:
-            raise ScanError('GCP application default credentials are unavailable') from None
+            raise ScanError('The GCP API client could not be initialized') from None
     findings, seen = [], set()
     tenant = {'gcp_projects': [source]}
 

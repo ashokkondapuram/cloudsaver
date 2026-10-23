@@ -27,12 +27,14 @@ def scan_multi_cloud(tenant, providers):
         findings.extend(batch)
     if 'azure' in providers:
         collect(scan_live(tenant))
+    # Identity bindings come from server-owned tenant state, never from the scope entry.
     if 'aws' in providers:
         for source in tenant.get('aws_accounts', []):
-            collect(scan_account(source))
+            collect(scan_account(dict(source, external_id=tenant['tenant_id'])))
     if 'gcp' in providers:
+        account = (tenant.get('identity') or {}).get('gcp_service_account')
         for source in tenant.get('gcp_projects', []):
-            collect(scan_gcp_project(source))
+            collect(scan_gcp_project(dict(source, service_account=account) if account else source))
     if 'kubernetes' in providers:
         for source in tenant.get('kubernetes_clusters', []):
             collect(scan_cluster(source))

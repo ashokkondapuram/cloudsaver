@@ -9,7 +9,7 @@ from services.common import internal_url, service, upstream
 
 
 def webhook_url(value):
-    """Webhooks are operator configuration; visitors cannot supply destinations."""
+    """Only Slack and Teams HTTPS webhook hosts; any other destination is rejected."""
     parsed = urlsplit(value)
     host = (parsed.hostname or '').lower()
     slack = host == 'hooks.slack.com' and parsed.path.startswith('/services/')

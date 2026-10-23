@@ -37,10 +37,8 @@ def create_router(settings, current_tenant, *, repository=None):
         requested = sorted(str(s) for s in payload.subscription_ids)
         if len(set(requested)) != len(requested) or not set(requested) <= set(tenant['subscription_ids']):
             raise HTTPException(422, 'Select unique authorized Azure subscriptions')
-        from app.entitlements import enforce_subscription_quota, enforce_keyvault_access
+        from app.entitlements import enforce_subscription_quota
         enforce_subscription_quota(tenant['plan_tier'], len(requested), adding_count=0)
-        if os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault':
-            enforce_keyvault_access(tenant['plan_tier'])
         try:
             row = repository.submit(tenant['tenant_id'], str(payload.idempotency_key), requested)
         except SubmissionConflict as exc:

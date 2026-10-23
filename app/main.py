@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v0.7.3."""
+"""Runnable CloudSaver enterprise API service v0.8.0."""
 import hashlib
 import hmac
 import logging
@@ -27,12 +27,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @asynccontextmanager
     async def lifespan(_):
         yield
-        from app.keyvault import close_providers
+        from app.cloud_identity import close_providers
         close_providers()
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.7.3', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='0.8.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
         'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS')))
@@ -61,7 +61,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.7.3'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '0.8.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -71,7 +71,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     @api.get('/api/v1/me')
     def me(tenant=Depends(current_tenant)):
         from app.auth import workspace_response
-        return workspace_response(tenant, settings.mode)
+        return workspace_response(tenant, settings.mode, settings)
 
     @api.get('/api/v1/providers')
     def providers(tenant=Depends(current_tenant)):
@@ -153,9 +153,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             len(tenant.get(key, [])) for p, key in [('azure','subscription_ids'),('aws','aws_accounts'),
             ('gcp','gcp_projects'),('kubernetes','kubernetes_clusters')] if p in providers))
         enforce_subscription_quota(tier_name, scope_count, adding_count=0)
-        if settings.mode == 'azure' and (providers is None or 'azure' in providers) and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault':
-            from app.entitlements import enforce_keyvault_access
-            enforce_keyvault_access(tier_name)
 
         tenant_id = tenant['tenant_id']
         lock = locks.setdefault(tenant_id, threading.Lock())
@@ -288,6 +285,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.7.3</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v0.8.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

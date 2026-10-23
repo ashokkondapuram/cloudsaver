@@ -1,11 +1,18 @@
-# Operator-managed cloud connections
+# Cloud connections
 
-v0.7.0 uses the existing workspace UUID and auth roles for every provider.
-Only trusted CLOUDSAVER_TENANTS configuration selects cloud scopes; HTTP requests
-can select provider names but cannot supply projects, accounts, regions, profiles,
-URLs, tokens or arbitrary findings. Cloud sources are not returned by /me.
+Since v0.8.0, workspaces live in the Postgres tenant registry
+(CLOUDSAVER_TENANT_REGISTRY=database, the Compose default). CLOUDSAVER_TENANTS only
+seeds it on first start. After that:
 
-Example tenant configuration (replace identities and hash before use):
+- The platform operator manages workspaces, plans, identity bindings and Kubernetes
+  clusters in the operator console (/admin, operator key).
+- Tenant admins manage their Azure subscriptions, AWS accounts and GCP projects,
+  scan schedule and alerts in Settings. Changes apply within seconds, with no restart.
+
+Scan requests can still select only provider names. They cannot supply projects,
+accounts, regions, roles, URLs, tokens or findings.
+
+Example seed (replace identities and hash before use):
 
 ```json
 {
@@ -15,8 +22,9 @@ Example tenant configuration (replace identities and hash before use):
   "api_key_sha256": "operator-generated-SHA256-hex",
   "plan_tier": "ENTERPRISE",
   "aws_accounts": [
-    {"account_id": "123456789012", "region": "us-east-1", "credential_profile": "customer-a"}
+    {"account_id": "123456789012", "region": "us-east-1", "role_arn": "arn:aws:iam::123456789012:role/CloudSaverReader"}
   ],
+  "identity": {"gcp_service_account": "cloudsaver-reader@customer-project.iam.gserviceaccount.com"},
   "gcp_projects": [
     {"project_id": "customer-project", "regions": ["us-central1"]}
   ],
@@ -34,19 +42,46 @@ finding's provider identity and scope. The existing subscription tier limit also
 bounds selected live source entries (an AWS account/region is one entry); the
 resource limit applies to the combined result.
 
-## Credentials and permissions
+## Keyless identity
 
-- AWS: configure each named SDK credential profile through the deployment's
-  supported credential chain, preferably temporary role credentials. STS caller
-  account must match the configured account. Grant only GetCallerIdentity,
+CloudSaver stores no client secrets, access keys or service-account keys. On Azure
+(CLOUDSAVER_CLOUD_IDENTITY=managed_identity), one user-assigned managed identity is
+the root for every cloud. Set AZURE_MANAGED_IDENTITY_CLIENT_ID to its client ID.
+Each customer can see the values they need under Settings > Cloud accounts. Exact
+roles, trust policies and least-privilege permissions are in
+docs/MANAGED_IDENTITY_ROLES.md.
+
+- Azure: create a multi-tenant app registration with a federated identity credential
+  (issuer: your Entra tenant, subject: the managed identity's object ID, audience
+  api://AzureADTokenExchange). Set CLOUDSAVER_AZURE_APP_CLIENT_ID. Each customer
+  grants admin consent and assigns Reader on the selected subscriptions.
+  CLOUDSAVER_AZURE_ACCESS=direct skips the app and uses the managed identity in its
+  own tenant.
+- AWS: create an IAM OIDC provider for
+  https://login.microsoftonline.com/<entra tenant ID>/v2.0 with audience
+  api://AzureADTokenExchange. Then create a hub role
+  (CLOUDSAVER_AWS_HUB_ROLE_ARN) that trusts it for the managed identity's object ID
+  and can call sts:AssumeRole. Each customer reader role trusts the hub role and
+  requires sts:ExternalId equal to the CloudSaver tenant ID. The server always sends
+  that value, so one tenant cannot use another tenant's role.
+- GCP: create a workload identity pool and an OIDC provider for the same issuer and
+  audience (CLOUDSAVER_GCP_WORKLOAD_PROVIDER). The operator assigns each workspace a
+  reader service account. Grant roles/iam.workloadIdentityUser on it to the
+  managed identity's principal, and grant the service account read access in each
+  project.
+- Local development (CLOUDSAVER_CLOUD_IDENTITY=developer): Azure CLI sign-in
+  (build with CLOUDSAVER_INSTALL_AZURE_CLI=true), the AWS default chain such as an
+  SSO profile followed by the same AssumeRole, and gcloud application default
+  credentials followed by impersonation. See compose.override.example.yaml.
+
+## Permissions
+
+- AWS: STS caller account must match the configured account. Grant only GetCallerIdentity,
   DescribeVolumes, DescribeAddresses and DescribeDBInstances in intended regions.
   EC2/RDS pagination completes or the entire scan fails. Commercial AWS ARN/region
   formats are supported; other partitions need explicit implementation.
-- GCP: use application default credentials with read permissions to Compute,
-  Cloud SQL and Monitoring in each explicit project. Workload Identity is
-  preferred. GOOGLE_APPLICATION_CREDENTIALS may point to an operator-mounted
-  credential configuration; the application never accepts credentials from HTTP.
-  No project discovery is attempted. Zonal disks are inventoried across the
+- GCP: read permissions to Compute, Cloud SQL and Monitoring in each explicit
+  project. No project discovery is attempted. Zonal disks are inventoried across the
   project; regional disks and external addresses are limited to configured
   regions. Global addresses are excluded. Cloud SQL covers the project.
 - Kubernetes: expose a read-only Prometheus HTTPS endpoint with kube-state-metrics
@@ -56,14 +91,8 @@ resource limit applies to the combined result.
   series must be deduplicated by the operator; duplicate series abort the scan.
   No Kubernetes write permissions or in-cluster deployment is required.
 
-Compose does not automatically mount host AWS/GCP credentials or arbitrary token
-environment bindings. Create an operator-reviewed Compose override for credential
-configuration mounts and the referenced environment variables on scanner-service.
-Preserve file permissions, read-only mounts and TLS verification. For example,
-pass GOOGLE_APPLICATION_CREDENTIALS=/run/cloud/gcp-credentials.json and mount its
-operator-supplied credential configuration read-only; mount AWS profile files
-and select their SDK configuration paths separately. Do not commit this override
-if it contains secrets. Scheduled worker services remain Azure-only.
+Prometheus token environment bindings still need an operator-reviewed Compose
+override on scanner-service. Do not commit it. Scheduled worker scans remain Azure-only.
 
 ## Telemetry evidence and limits
 

@@ -18,7 +18,7 @@ type WorkspaceState = {
   notify: (text: string, tone?: 'success' | 'error' | 'info') => void; clearNotice: () => void;
   connect: (token: string) => Promise<void>; disconnect: () => void;
   selectScan: (id: string) => void; runScan: (providers: string[]) => Promise<void>;
-  refresh: () => Promise<void>; checkout: () => Promise<void>;
+  refresh: () => Promise<void>; reloadProfile: () => Promise<void>; checkout: () => Promise<void>;
 };
 
 const Context = createContext<WorkspaceState | null>(null);
@@ -106,6 +106,12 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     finally {if (version === session.current) setBusy('');}
   }
 
+  async function reloadProfile() {
+    const version = session.current;
+    const [me, plan] = await Promise.all([api<Workspace>('/me', token), api<Entitlements>('/billing/entitlements', token)]);
+    if (version === session.current) {setWorkspace(me); setEntitlements(plan);}
+  }
+
   async function checkout() {
     const version = session.current;
     setBusy('Preparing checkout');
@@ -130,5 +136,5 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'),
     scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, openFinding,
     review, openReview, selection, setSelection,
-    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, checkout}}>{children}</Context.Provider>;
+    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, checkout}}>{children}</Context.Provider>;
 }

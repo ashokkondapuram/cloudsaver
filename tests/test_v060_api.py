@@ -22,7 +22,7 @@ def workspace():
                 gcp_projects=[dict(project_id='demo-cloudsaver', regions=['us-central1'])],
                 kubernetes_clusters=[dict(cluster_id='demo-cluster', prometheus_url='https://prom.example',
                                          bearer_token_env='CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY')],
-                aws_accounts=[dict(account_id='123456789012', region='us-east-1', credential_profile='test')])
+                aws_accounts=[dict(account_id='123456789012', region='us-east-1', role_arn='arn:aws:iam::123456789012:role/CloudSaverReader')])
 
 
 def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):

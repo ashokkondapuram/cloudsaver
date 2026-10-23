@@ -23,12 +23,12 @@ celery_app.conf.update(task_serializer='json', accept_content=['json'], result_s
                        broker_connection_timeout=5,
                        broker_transport_options={'visibility_timeout': 900,'socket_timeout':5,'socket_connect_timeout':5,'retry_on_timeout':False},
                        result_expires=86400)
-if enabled('CLOUDSAVER_SCHEDULED_SCANS'):
-    interval = int(os.getenv('CLOUDSAVER_SCAN_INTERVAL_SECONDS', '3600'))
-    if interval < 300:
-        raise ValueError('Scheduled scan interval must be at least 300 seconds')
-    celery_app.conf.beat_schedule = {'scan-authorized-subscriptions': {
-        'task': 'workers.tasks.scheduled_scan_all', 'schedule': float(interval)}}
+# The beat only ticks; platform and tenant settings decide on each tick who is due.
+tick = int(os.getenv('CLOUDSAVER_SCHEDULER_TICK_SECONDS', '300'))
+if not 60 <= tick <= 3600:
+    raise ValueError('Scheduler tick must be between 60 and 3600 seconds')
+celery_app.conf.beat_schedule = {'scan-authorized-subscriptions': {
+    'task': 'workers.tasks.scheduled_scan_all', 'schedule': float(tick)}}
 
 
 class JobBusy(RuntimeError):
@@ -46,7 +46,7 @@ class TerminalJob(RuntimeError):
 @worker_shutdown.connect
 def close_worker_credentials(**kwargs):
     # Resolve this lazily: importing tasks must not create credential clients.
-    from app.keyvault import close_providers
+    from app.cloud_identity import close_providers
     close_providers()
     from database.connection import dispose
     dispose()
@@ -108,8 +108,6 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
     if origin != 'interactive' and entitlements.allowed_scan_frequencies == ['manual']:
         raise UnauthorizedJob('This workspace does not permit scheduled scans')
     enforce_subscription_quota(tier, len(subscriptions), adding_count=0)
-    if settings.mode == 'azure' and os.getenv('CLOUDSAVER_CREDENTIAL_PROVIDER', 'env') == 'keyvault' and not entitlements.can_use_keyvault:
-        raise UnauthorizedJob('Workspace plan does not permit Key Vault credentials')
     repository.queue_job(tenant_id, job_id)
     existing = repository.get_job(tenant_id, job_id)
     if existing and existing['status'] == 'completed':
@@ -180,7 +178,7 @@ def execute_subscription_scan(self, tenant_id, subscription_ids):
     from billiard.exceptions import SoftTimeLimitExceeded
     from app.scanner import ScanError
     from azure.core.exceptions import AzureError
-    from app.keyvault import CredentialError
+    from app.cloud_identity import CredentialError
     job_id = str(UUID(self.request.id))
     repository = None
     lease = None
@@ -191,7 +189,10 @@ def execute_subscription_scan(self, tenant_id, subscription_ids):
             raise UnauthorizedJob('Task does not match durable delivery intent')
         verified = True
         from app.delivery_config import load_targets
-        targets = tuple(t for t in load_targets() if t.tenant_id == tenant_id) if enabled('CLOUDSAVER_AUTOMATED_ALERTS') else ()
+        from app.operations import alerts_enabled
+        workspace = next((t for t in settings.tenants if t['tenant_id'] == tenant_id), None)
+        targets = (tuple(t for t in load_targets(settings) if t.tenant_id == tenant_id)
+                   if workspace and alerts_enabled(settings, workspace, repository.plan_tier(tenant_id)) else ())
         return run_scan_job(settings, tenant_id, subscription_ids, job_id, repository, lease,
                             notification_targets=targets,
                             final_attempt=self.request.retries >= self.max_retries)
@@ -231,21 +232,23 @@ def execute_subscription_scan(self, tenant_id, subscription_ids):
 
 @celery_app.task(name='workers.tasks.scheduled_scan_all')
 def scheduled_scan_all():
-    if not enabled('CLOUDSAVER_SCHEDULED_SCANS'):
+    from app.operations import platform_flags, scheduled_interval
+    if os.getenv('CLOUDSAVER_TENANT_REGISTRY', 'env') != 'database' and not platform_flags()[0]:
         return {'scheduled': 0, 'enabled': False}
     settings, repository, lease = dependencies()
     lease.close()
+    if not platform_flags(settings)[0]:
+        return {'scheduled': 0, 'enabled': False}
     count = 0
     for tenant in settings.tenants:
         active = sorted(set(repository.active_subscriptions(tenant['tenant_id'])) & set(tenant['subscription_ids']))
         if not active:
             continue
-        tier = repository.plan_tier(tenant['tenant_id'])
-        if tier == 'STARTER':
+        interval = scheduled_interval(settings, tenant, repository.plan_tier(tenant['tenant_id']))
+        if not interval:
             continue
-        minimum = 86400 if tier == 'GROWTH' else 3600
         job_id = str(uuid4())
-        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, minimum, active):
+        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, interval, active):
             continue
         # Dispatcher publishes this committed outbox intent; no broker I/O here.
         count += 1

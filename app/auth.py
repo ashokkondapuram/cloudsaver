@@ -100,23 +100,49 @@ def tenant_dependency(settings, validator=None):
     mode = os.getenv('CLOUDSAVER_AUTH_MODE', 'workspace')
     if mode not in ('workspace', 'entra'):
         raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace or entra')
+    own_validator = validator is None
     validator = validator or EntraTokenValidator(EntraIdConfig(allowed_tenants={t['tenant_id'] for t in settings.tenants}))
     bearer = HTTPBearer(auto_error=False)
 
     def current(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
         if not credentials or credentials.scheme.lower() != 'bearer':
             raise HTTPException(401, 'Authentication required', headers={'WWW-Authenticate': 'Bearer'})
+        try:
+            tenants = settings.tenants
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(503, 'Workspace directory is unavailable') from None
         if mode == 'entra':
+            if own_validator:
+                validator.config.allowed_tenants = {t['tenant_id'] for t in tenants}
             claims = validator.verify_token(credentials.credentials)
-            matched = next((t for t in settings.tenants if t['tenant_id'] == claims.tenant_id), None)
+            matched = next((t for t in tenants if t['tenant_id'] == claims.tenant_id), None)
             if matched is None:
                 raise HTTPException(403, 'Workspace is not provisioned')
             return with_plan(settings, dict(matched, roles=[r.value for r in claims.roles], user_id=claims.user_id))
         digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
-        for tenant in settings.tenants:
+        for tenant in tenants:
             if hmac.compare_digest(digest, tenant['api_key_sha256']):
                 return with_plan(settings, dict(tenant, roles=['TenantAdmin', 'BillingAdmin', 'Viewer']))
         raise HTTPException(401, 'Invalid workspace access key', headers={'WWW-Authenticate': 'Bearer'})
+    return current
+
+
+def operator_dependency():
+    """Platform operator access by a separate key whose SHA-256 is operator configuration."""
+    bearer = HTTPBearer(auto_error=False)
+
+    def current(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
+        expected = os.getenv('CLOUDSAVER_OPERATOR_KEY_SHA256', '')
+        if len(expected) != 64:
+            raise HTTPException(503, 'Operator access is not configured')
+        if not credentials or credentials.scheme.lower() != 'bearer':
+            raise HTTPException(401, 'Operator authentication required', headers={'WWW-Authenticate': 'Bearer'})
+        digest = hashlib.sha256(credentials.credentials.encode()).hexdigest()
+        if not hmac.compare_digest(digest, expected.lower()):
+            raise HTTPException(401, 'Invalid operator access key', headers={'WWW-Authenticate': 'Bearer'})
+        return {'actor': 'operator'}
     return current
 
 
@@ -152,7 +178,7 @@ def with_plan(settings, workspace):
         raise HTTPException(503, 'Workspace entitlement state is unavailable') from None
 
 
-def workspace_response(workspace, mode):
+def workspace_response(workspace, mode, settings=None):
     from app.entitlements import get_tier_entitlements
     from app.cloud_scope import configured_providers
     from app.operations import workspace_operations
@@ -166,4 +192,5 @@ def workspace_response(workspace, mode):
         'allowed_scan_frequencies': tier.allowed_scan_frequencies,
         'can_dispatch_automated_alerts': tier.can_dispatch_automated_alerts,
         'retention_days': tier.retention_days,
-    } | workspace_operations(workspace['tenant_id'])
+        'settings_editable': getattr(settings, 'registry', None) is not None,
+    } | workspace_operations(workspace, settings)

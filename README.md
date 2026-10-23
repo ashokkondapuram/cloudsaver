@@ -172,9 +172,10 @@ must separately grant and verify Azure access.
 ## Cloud sources, Stripe and schedules
 
 For live scanning set CLOUDSAVER_MODE=azure (the compatibility live-mode switch),
-explicit authorized tenant scopes and credentials. See docs/CLOUD_SOURCES.md for
-AWS profile, GCP ADC and Prometheus configuration. The imported environment/Key Vault providers fail closed and never
-use mock credentials. Key Vault requires Enterprise entitlement.
+explicit authorized tenant scopes. Cloud access is keyless: an Azure managed identity
+federates into Azure, AWS and GCP (see docs/CLOUD_SOURCES.md). Manage workspaces in the
+operator console (/admin; issue a key with scripts/issue_operator_key.py) and scopes,
+schedules and alerts in Settings.
 
 Checkout requires STRIPE_SECRET_KEY, CLOUDSAVER_BILLING_RETURN_URL (fixed HTTPS),
 trusted CLOUDSAVER_STRIPE_CUSTOMERS and STRIPE_PRICE_TIERS, plus matching persisted

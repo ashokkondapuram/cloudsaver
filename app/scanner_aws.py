@@ -1,4 +1,4 @@
-"""AWS inventory ported from Drive v0.5.0 with scope checks and no demo fallback."""
+"""AWS inventory through a keyless reader role, with scope checks and no demo fallback."""
 from app.cloud_scope import validate_finding_scope
 from app.scanner import ScanError
 
@@ -6,11 +6,14 @@ from app.scanner import ScanError
 def scan_account(source, *, session=None):
     account, region = source['account_id'], source['region']
     clients = []
+    if session is None:
+        from app.cloud_identity import CredentialError, aws_session
+        try:
+            session = aws_session(source)
+        except CredentialError:
+            raise ScanError('The AWS reader role is unavailable') from None
     try:
         from botocore.config import Config
-        if session is None:
-            import boto3
-            session = boto3.Session(profile_name=source['credential_profile'], region_name=region)
         config = Config(connect_timeout=10, read_timeout=45, retries={'max_attempts': 3, 'mode': 'standard'})
         def client(service):
             value = session.client(service, region_name=region, config=config)
