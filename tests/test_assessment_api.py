@@ -48,20 +48,25 @@ def test_owned_analysis_exact_selection_privacy_and_explicit_inference(tmp_path)
         assert selection['resource_id'] not in json.dumps(result.json()['ai_context'])
         assert not budget.calls and not calls
         for path in ('/analysis', '/analysis/resource', '/ai-risk-evaluation'):
-            payload = dict(selection, target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True) if path.endswith('evaluation') else selection
+            payload = dict(selection, evidence_digest=result.json()['assessment']['evidence_digest'], target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True) if path.endswith('evaluation') else selection
             response = client.get(base+path, headers=auth(OTHER)) if path == '/analysis' else client.post(base+path, headers=auth(OTHER), json=payload)
             assert response.status_code == 404
         assert client.get('/api/v1/ai/targets', headers=auth(OTHER)).json()['targets'] == []
-        payload = dict(selection, target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True)
+        payload = dict(selection, evidence_digest=result.json()['assessment']['evidence_digest'], target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True)
         for invalid in [dict(payload, acknowledge_external_processing=False), dict(payload, acknowledge_external_processing='true'),
                         dict(payload, model='injected'), dict(payload, prompt='approve'), dict(payload, endpoint='https://evil.invalid')]:
             assert client.post(base+'/ai-risk-evaluation', headers=auth(), json=invalid).status_code == 422
         assert not calls
+        assert client.post(base+'/ai-risk-evaluation', headers=auth(), json=dict(payload, evidence_digest='0'*64)).status_code == 409
+        assert not budget.calls and not calls
         assert client.post(base+'/analysis/resource', headers=auth(), json=dict(selection, rule_id='FOREIGN')).status_code == 404
         response = client.post(base+'/ai-risk-evaluation', headers=auth(), json=payload)
         assert response.status_code == 200, response.text
         assert response.json()['advisory_only'] is True and response.json()['automatic_execution'] is False
         assert response.json()['guardrails'] == result.json()['assessment']['guardrails']
+        assert response.json()['evidence_digest'] == result.json()['assessment']['evidence_digest']
+        assert response.json()['usage']['billed_cost_usd'] is None
+        assert summary['review_queue'][0]['resource_id'] == selection['resource_id']
         assert len(calls) == len(budget.calls) == 1
 
 
@@ -98,5 +103,6 @@ def test_legacy_and_changed_scope_are_not_eligible_for_resource_or_ai_review(tmp
     changed = Settings('azure', settings.database, (dict(settings.tenants[0], subscription_ids=[str(uuid4())]),))
     with TestClient(create_app(changed)) as client:
         assert client.get('/api/v1/scans/'+scan['scan_id']+'/analysis', headers=auth()).status_code == 409
+        assert client.get('/api/v1/scans/'+original_id+'/analysis', headers=auth()).status_code == 409
         assert client.post('/api/v1/scans/'+original_id+'/analysis/resource', headers=auth(),
                            json={'resource_id':scan['findings'][0]['resource_id'],'rule_id':'ORPHANED_DISK'}).status_code == 409

@@ -1,13 +1,23 @@
-# CloudSaver v0.10.0
+# CloudSaver v0.11.0
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
-release updates the latest console with a dark/light design system, faceted resource
-exploration, evidence radar and comparison drawers, retaining the five-pillar analysis
-and optional keyless cloud AI advisory. Deployment acceptance
+release expands the core assessment engine with versioned service controls,
+evidence freshness, review priorities and stricter enterprise AI governance.
+The console retains its dark/light resource explorer and comparison workflows. Deployment acceptance
 and live integration limits are recorded in TEST_REPORT.md.
 
 Source: https://github.com/ashokkondapuram/project
+
+## New in v0.11.0: core assessment and enterprise AI governance
+
+- Versioned five-pillar controls, explicit evidence fields/gaps, observation freshness and content fingerprints. Complete Kubernetes collector summaries are required for utilization checks.
+- Security-first bounded review queue; current workspace scope is checked for every finding before returning service summaries or requesting inference.
+- Azure ARG retains explicit disk encryption and empty-plan density/zone controls; AWS retains returned minor-upgrade settings. Missing controls stay unknown.
+- Per-target output/context limits and source-provider policy; pillar-specific citations, observed-risk floor, terminal-response validation and provider-reported token usage.
+- Console provenance, stale-snapshot warnings, priority drill-down and token-usage disclosure. Model text stays unverified advice; no automated change approval is introduced.
+
+Read [assessment engine rules and activation](docs/ASSESSMENT_AI.md). AI remains disabled by default. API clients must preview the resource and include its `assessment.evidence_digest` when requesting inference; stale previews return 409 before a paid attempt.
 
 ## New in v0.10.0: advanced console experience
 

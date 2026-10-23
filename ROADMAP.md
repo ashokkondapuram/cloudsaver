@@ -1,9 +1,15 @@
-# CloudSaver roadmap after v0.10.0
+# CloudSaver roadmap after v0.11.0
 
 Source: [Advanced Features & Product Roadmap, v0.6.0–v1.0.0](https://docs.google.com/document/d/1Z-4CAVfSpimqBaxbNGAze_SWsbWdHwFP-bG0rccKK6Y/edit).
 A text snapshot is retained in docs/drive-advanced-roadmap.txt. Its release dates,
 production/compliance language and savings percentages are planning targets,
 not acceptance evidence. The v0.5.0 source/guide was reviewed before development.
+
+## v0.11.0 assessment and enterprise AI milestone
+
+Versioned service controls, freshness/gaps/provenance, risk-prioritized review queues and snapshot-wide current-scope enforcement extend the README's five-pillar matrix. Target context/output budgets, source-provider restrictions, citation/risk-floor validation, terminal-response checks and provider usage metadata strengthen the existing AI gateway.
+
+Next: durable tenant-isolated inference audit/usage ledgers and monetary budgets, authorized staging acceptance of provider/IAM policies, raw telemetry/dependency collection, billing reconciliation and evaluated model quality. Provider-reported tokens in a cached response are not a durable billing ledger. Existing Redis idempotency retention remains 24 hours.
 
 ## v0.10.0 console milestone
 

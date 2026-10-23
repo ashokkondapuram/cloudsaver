@@ -20,7 +20,7 @@ def service(title, settings=None, identity_validator=None):
             await client.aclose()
         from database.connection import dispose
         dispose()
-    app = FastAPI(title=title, version='0.10.0', lifespan=lifespan)
+    app = FastAPI(title=title, version='0.11.0', lifespan=lifespan)
     from app.runtime import install
     install(app, settings, redis_required=title == 'api-gateway')
     from app.auth import tenant_dependency

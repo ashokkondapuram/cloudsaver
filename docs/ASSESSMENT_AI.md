@@ -1,4 +1,4 @@
-# Service architecture assessment and cloud AI advisory (v0.9.0)
+# Service architecture assessment and cloud AI advisory (v0.11.0)
 
 Source: [CloudSaver Enterprise FinOps Platform & Multi-Cloud Optimization Engine — optimization, 360° analysis and AI integration guide](https://docs.google.com/document/d/1u_9HSbjE41srku4ZjDAbkSQ39wmeENOBMn2OGVO3oYs/edit), read October 23, 2026. This release implements an evidence-led milestone from that guide. The guide's full hierarchy, billing pipeline, autonomous operation and performance targets are not release acceptance evidence.
 
@@ -46,7 +46,7 @@ Use separate inference roles/service accounts and restricted model permissions, 
 
 The server selects an exact resource ID **and rule ID** from a tenant-owned completed live scan and revalidates current scope. Users cannot provide prompts, models, endpoints, roles, projects or context. Extra request properties are rejected. The returned context preview contains a SHA-256 resource reference, provider/category/rule codes, bounded numeric/boolean facts, protected boolean, guardrail codes and saved check references. It excludes names, raw resource IDs, raw tags/labels, owner emails, endpoints and free-text findings. This minimizes context but is not a formal anonymity guarantee. A fixed system instruction is also sent.
 
-Responses are bounded to 1,800 requested output tokens and validated against a strict JSON schema: one of each of the five pillars, summary, high/unknown suggested risk and review questions. Extra approval/code/tool properties and fabricated check references are rejected. Schema validation cannot prove text is true or prevent every misleading statement. Render model text as escaped plain React text, label it unverified, and retain deterministic protection and human approval independently.
+Responses use the approved target output ceiling (default 1,800 requested tokens) and validated against a strict JSON schema: one of each of the five pillars, summary, high/unknown suggested risk and review questions. Extra approval/code/tool properties and fabricated check references are rejected. Schema validation cannot prove text is true or prevent every misleading statement. Render model text as escaped plain React text, label it unverified, and retain deterministic protection and human approval independently.
 
 HTTP provider responses have a 64 KiB body bound, no redirects and no automatic HTTP retries. Parsed model JSON is capped at 16 KiB. Raw provider errors, credentials and responses are not exposed as error details. Cloud identity acquisition follows the existing keyless trust chain; no external provider was invoked in the release tests.
 
@@ -54,7 +54,7 @@ HTTP provider responses have a 64 KiB body bound, no redirects and no automatic 
 
 Redis atomically claims a tenant + UUID idempotency key and increments an attempt counter for the Redis server's UTC hour. Default 10 attempts/hour, configurable from 1–100. The same key and fingerprint returns a cached result after success. Different fingerprints conflict. An in-flight, failed, malformed, timed-out or uncertain attempt retains its fence and is not automatically re-invoked. Failure to coordinate returns 503 before inference. Uncertain outcomes can consume both an attempt and provider charges. Rate-limit responses are 429.
 
-Fences and cached advisories expire after 24 hours; UTC-hour counters expire after 3,900 seconds. Cached model text is stored in Redis under tenant-prefixed keys: secure Redis, encrypted transport/network access, persistence, backups and retention according to deployment policy. This is not a durable immutable inference audit, token-cost meter, hard dollar budget, Redis Cluster implementation or an exactly-once guarantee after Redis loss/expiration. Use provider quotas too. Browser retries reuse the key while that finding assessment remains mounted; reopening creates a new user-initiated attempt. An administrator can deliberately submit another UUID, subject to the shared budget. Redis must be healthy for scanner readiness when AI is enabled.
+Fences and cached advisories expire after 24 hours; UTC-hour counters expire after 3,900 seconds. Cached model text is stored in Redis under tenant-prefixed keys: secure Redis, encrypted transport/network access, persistence, backups and retention according to deployment policy. This is not a durable immutable inference audit, reconciled token-cost ledger, hard dollar budget, Redis Cluster implementation or an exactly-once guarantee after Redis loss/expiration. Use provider quotas too. Browser retries reuse the key while that finding assessment remains mounted; reopening creates a new user-initiated attempt. An administrator can deliberately submit another UUID, subject to the shared budget. Redis must be healthy for scanner readiness when AI is enabled.
 
 ## API
 
@@ -65,10 +65,41 @@ All paths retain the existing bearer authentication and tenant ownership:
 | GET `/api/v1/scans/{scan_id}/analysis` | Provider/service summary from saved findings |
 | POST `/api/v1/scans/{scan_id}/analysis/resource` | `{resource_id,rule_id}` → deterministic assessment and context preview |
 | GET `/api/v1/ai/targets` | Enabled flag, attempt limit, public targets for this tenant only |
-| POST `/api/v1/scans/{scan_id}/ai-risk-evaluation` | Admin-only `{resource_id,rule_id,target_id,idempotency_key,acknowledge_external_processing:true}` → advisory-only result |
+| POST `/api/v1/scans/{scan_id}/ai-risk-evaluation` | Admin-only `{resource_id,rule_id,evidence_digest,target_id,idempotency_key,acknowledge_external_processing:true}` → advisory-only result |
 
-Legacy synthetic or incomplete snapshots return 409. Missing or foreign scans/findings return 404. Changed scope rejects resource/AI review with 409. Invalid inputs return 422, unauthorized roles 403. Model/schema failures return sanitized 502. A successful response contains deterministic disposition and required guardrails separately from the unverified advice. No database migration or v2 ownership bypass is introduced.
+Legacy synthetic or incomplete snapshots return 409. Missing or foreign scans/findings return 404. Changed scope rejects summary, resource and AI review with 409. A missing evidence digest returns 422; a stale or mismatched preview digest returns 409 before reserving an inference attempt. Invalid inputs return 422, unauthorized roles 403. Model/schema failures return sanitized 502. A successful response contains deterministic disposition and required guardrails separately from the unverified advice. No database migration or v2 ownership bypass is introduced.
 
 ## Remaining guide milestones
 
-FOCUS billed/effective/amortized cost ingestion; ESR reconciliation; seasonally evaluated anomaly models; complete resource/dependency and SLO telemetry; hierarchy/membership delegation; richer tag and retention policies; durable audited AI usage/cost tracking; conversational retrieval and evaluated accuracy; model-specific cloud staging acceptance. These remain roadmap work. PTU/token governance and “zero hallucinations” are not implemented or claimed. Destructive or autonomous execution remains unavailable.
+FOCUS billed/effective/amortized cost ingestion; ESR reconciliation; seasonally evaluated anomaly models; complete resource/dependency and SLO telemetry; hierarchy/membership delegation; richer tag and retention policies; durable audited AI usage/cost tracking; conversational retrieval and evaluated accuracy; model-specific cloud staging acceptance. These remain roadmap work. PTU capacity optimization, durable token/cost accounting and “zero hallucinations” are not implemented or claimed. Destructive or autonomous execution remains unavailable.
+
+
+## v0.11.0 evidence policy and core improvements
+
+Policy `2026-10-23.1` lives in `app/assessment_policy.py`. Every assessment returns policy version, evaluated evidence fields, explicit gap/risk codes, saved-observation freshness, review priority and an SHA-256 evidence fingerprint. The fingerprint covers the allowlisted context and saved retail estimate; it excludes free text and names and is **not** a signature, independent verification or durable audit record. Fact, policy, timestamp/freshness or protection changes affect the fingerprint. No historical observations are rewritten.
+
+Observations at most 24 hours old are `recent`; older observations are `stale`, future timestamps are `invalid`, missing/naive/malformed timestamps are `unknown`. All except recent add `REFRESH_OBSERVATION`. Risks remain visible on stale evidence; recent still means a saved snapshot, not live state. Before inference, the caller must supply the `assessment.evidence_digest` from the resource-preview response. Mismatches return 409 before the budget/provider is invoked. Refresh the preview and review it again; do not automatically retry paid inference.
+
+Expanded service checks evaluate explicit saved controls: compute metadata-v2/public-admin-ingress/monitoring/patch age; database TLS, engine support and minor upgrades; application health probes, managed secrets and empty-plan density; network flow logging; storage snapshot exposure/age and unattached duration. Patch age over 90 days, snapshot age over 24 hours, unattached duration over 14 days and explicitly empty plans produce review risks. A single hosted application alone is not declared over-provisioned. These are review thresholds, not compliance or action-approval criteria. Fields not collected remain unknown. Azure ARG now projects explicit disk encryption type and App Service plan site count/zone redundancy; known encryption enum values yield observed encryption, absence does not yield false. AWS retains returned `AutoMinorVersionUpgrade`. No extra cloud API calls are added. The remaining expanded controls require future collector coverage or existing saved evidence; this release does not claim new live telemetry integrations.
+
+Kubernetes utilization requires a typed complete collector summary: 14 days, 337 hourly samples including both endpoints, valid ordered UTC-aware boundaries exactly 14 days apart, the current scan within one hour of the end, nearest-rank P95, CPU/cores or memory/bytes and positive requests. Invalid/missing summaries remain unknown. P95 above the saved minimum request produces a request-headroom review risk; requests are not resource limits, and no OOM or dollar-saving conclusion follows. Raw-series completeness is enforced by the collector; assessment does not reconstruct unsaved series.
+
+The service summary retains all provider/category counts and returns a queue capped at 50 findings in memory and response (the UI shows six). Security exposures rank first, then other observed risks, then evidence gaps; equal priority uses the stable resource key, not estimated savings. `review_queue_total` describes all findings. This is not a full-inventory risk score, a deduplicated resource count or an execution plan. All findings must still lie inside the workspace's **current** authorized cloud scope, or the entire request returns 409.
+
+## v0.11.0 enterprise inference controls
+
+Optional operator target fields (defaults preserve existing bindings):
+
+```json
+{
+  "max_output_tokens": 1800,
+  "max_context_bytes": 16384,
+  "allowed_source_providers": ["azure", "aws", "gcp", "kubernetes"]
+}
+```
+
+Output limits accept strict integers 256–4096; context limits accept strict integers 2048–32768 bytes. The context byte limit is a conservative serialized evidence bound, not a tokenizer estimate or a dollar budget. Source-provider policy and context size are checked before a paid attempt. All three adapters send the approved output ceiling. Operator target configuration and instruction version, assessment digest, scan and context are fingerprinted, preventing an old cached result from silently bypassing changed controls.
+
+Advice JSON rejects ambiguous duplicate properties. Citations must be unique, observed, and belong to their pillar. Each pillar with observed risk must cite at least one of its risk checks. The model cannot lower deterministic `high` risk to `unknown`. Azure must finish with `stop`, Bedrock with `end_turn`, Vertex with `STOP`; missing/truncated/filtered/tool responses are rejected and retain the uncertain-attempt fence. Structural validation does not establish that all prose is true. The response explicitly reports `semantic_claims_verified:false`, with independent guardrails retained.
+
+Actual adapters normalize provider-reported input/output token counters into `usage`. Missing/invalid counters remain null, real zero remains zero, and `billed_cost_usd` is always null. Cached responses show original attempt usage and do not invoke another model. This is per-response metadata within the existing 24-hour Redis cache, not durable usage accounting, cost attribution or billing reconciliation. There is no new inference audit table or monetary budget. Live IAM/provider/model acceptance and model-quality evaluation remain required before deployment.

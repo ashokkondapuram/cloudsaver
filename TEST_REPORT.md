@@ -1,38 +1,39 @@
-# CloudSaver v0.10.0 verification report
+# CloudSaver v0.11.0 verification report
 
-Date: October 23, 2026 (UTC). Baseline: latest GitHub `main`, v0.9.0 commit `b61f1b7cdca47e68568f3434dca8a5918ae2bd30`. The newest Drive UI guide and its adaptation are recorded in [SOURCE_CONTEXT.md](SOURCE_CONTEXT.md) and [docs/UI_UX.md](docs/UI_UX.md).
-
-## Executed local checks
+Executed October 23, 2026 against the latest v0.10.0 GitHub baseline, commit `871abc291bb289f4c6de08a0a1748be803c59c67`. Requirements: the Drive optimization, service analysis and enterprise AI integration README linked in SOURCE_CONTEXT.md.
 
 | Check | Result |
 | --- | --- |
-| Dashboard TypeScript check | Passed |
-| Final production `next build --webpack` | Passed, including its TypeScript validation and generated route output |
-| Production browser suite, system Chromium | 24 passed against the final production build |
-| Standalone output with copied static assets | Started successfully; the dark/light accessibility workflow passed against this output |
-| Accessibility coverage | All six operational views in both themes; the assessment dialog; existing navigation and mobile checks |
-| Inventory scale and density | 10,000-finding virtualization workflow passed; compact rows remain 28px, medium is 38px, relaxed is 48px |
-| `git diff --check` | Passed |
+| Complete backend suite via `python scripts/test_postgres.py --tb=short` | **399 passed** with disposable PostgreSQL 16 / Redis 7; temporary containers cleaned up |
+| Python dependency consistency (`python -m pip check`) | Passed |
+| TypeScript and production build (`npx next build --webpack`) | Passed, all nine pages generated; webpack used for the managed host's build environment |
+| Production browser workflows (`npm run test:e2e`) | **25 passed**, Chromium with intercepted test-only APIs |
+| Standalone production deployment artifact | **2 assessment workflows passed**, including axe accessibility in the protected-resource workflow |
+| Whitespace validation (`git diff --check`) | Passed |
 
-The browser suite uses explicitly labeled interface QA observations and intercepted API calls. Screenshots are UI previews, not live customer evidence. The standalone run additionally refreshed the desktop previews using the same API fixtures. The production app never imports these test fixtures.
+## Verified core and inference behavior
 
-## Verified interactions
+- Missing, invalid, infinite, boolean and excessively large numeric inputs remain unknown. Real zero remains zero. Unknown billed costs and realizable savings remain null.
+- The service matrix evaluates explicit saved controls and publishes required evidence fields, gaps and risk codes. Azure ARG retains known encryption enums and returned empty-plan/zone controls; AWS retains returned upgrade configuration without additional reads.
+- Kubernetes utilization requires the actual complete collector summary. Partial counts, mismatched units, missing requests, malformed timestamps, wrong interval/method and old metric windows are not promoted to complete utilization evidence. Tests connect actual injected collector output to assessment.
+- Observation freshness has explicit recent/stale/invalid/unknown states and a 24-hour review window. Stale evidence keeps risks and requires refresh. Policy version and evaluated-evidence digest support traceability without claiming independent verification.
+- Summary review queues retain at most 50 findings, rank observed security exposures ahead of other risk and evidence gaps, and are stable regardless of input order. All summary findings are revalidated against current workspace scope; foreign scans remain inaccessible.
+- Inference requires an exact resource selection, admin role, explicit acknowledgement and the preview evidence digest. Invalid/mismatched previews fail before budget or provider calls. The model cannot remove deterministic protections or approve infrastructure changes.
+- Operator source-provider and context limits reject before paid attempts. Output ceilings are sent by all cloud adapters. Unapproved endpoints/identities and invalid limits are rejected.
+- Advice rejects duplicate JSON properties, duplicate/wrong-pillar/fabricated citations, missing risk citations and risk downgrades. Missing/truncated/filtered/tool provider outcomes are rejected. Semantic prose claims remain unverified.
+- Usage counters come from provider response metadata, separate from model text. Missing/invalid counters remain null; billed cost stays unavailable. Existing Redis concurrency, fencing, uncertain-outcome and tenant-isolation tests pass.
+- Existing remediation Bash safety, PostgreSQL forced RLS, tenant registry, outbox/delivery faults, roles, cloud scope and integrations remain covered by the complete suite.
 
-- Dark is the default. Explicit light preference survives navigation and reload. Browser local storage contains appearance preferences, not the test credential or finding data.
-- Counted provider/category facets, priority/type/scope/tag filters, protected-intent and missing-price lenses combine correctly. A real zero price remains priced. Unknown prices stay outside the known retail subtotal.
-- Command palette quick views open real category/intent/pricing filters. Search matches tokens across resource and scope context. Tag existence and exact-value matching retain their explicit semantics.
-- New category/sizing and review-posture cells retain native observed units and explicit missing values. The floating toolbar labels the priced portion of the selected findings.
-- Comparison follows filtered, sorted finding order. Previous/next preserve the active tab. Closing the drawer restores focus through a stable resource key captured before virtual-row rerenders, including a click without native button focus.
-- Radar axes represent observed evidence coverage, including risks. Pillar buttons open the corresponding checks and scroll within the drawer. No safety percentage, live dependency graph or approval is manufactured.
-- Telemetry renders returned P95, request, unit, window and sample facts. Missing raw series does not produce a flatline or idle-duration claim.
-- Protected intent disables destructive Bash export in the UI while import-only Terraform remains reviewable when permitted. Existing server-side ownership, role and protection checks remain authoritative.
-- Scrollable evidence JSON is keyboard-focusable. Drawer tabs support arrows and Home/End, remain visible while navigating, and fit the mobile viewport.
-- Existing explicit scan submission, selected CSV/JSON, reviewed code, plan upload, GitOps acknowledgement, delivery audit/replay, viewer restrictions and late-AI-response cancellation workflows still pass.
+## Verified console behavior
 
-## Scope and acceptance limits
+All existing dark/light, 10,000-row inventory, filtering/export, comparison/focus, keyboard/mobile, plan review, delivery replay, viewer restrictions and late-response cancellation browser workflows pass. New checks verify priority drill-down, stale-evidence warnings, policy provenance, explicit preview digest submission and token usage. Tests use labeled fixtures and never call cloud inference or product mutation endpoints. The built standalone server was checked separately because `next start` warns for an `output: standalone` deployment.
 
-Backend business logic, dependencies, schema, identity federation and cloud integrations are unchanged; backend edits only advance release metadata. The preceding v0.9.0 CI passed its backend and dashboard gates. GitHub Actions will independently rerun the full backend, dependency and dashboard gates after publication; consult the repository workflow for that subsequent result.
+## Activation and practical limits
 
-Automated axe checks found no serious/critical issues in the tested operational views in either theme, and the assessment-dialog check passed its full tagged rule set. This does not replace manual assistive-technology, usability, broad-device or full WCAG acceptance. No 100,000-row latency target is claimed.
+AI remains opt-in and disabled by default. Existing API clients must fetch `/analysis/resource` and send its `assessment.evidence_digest` to `/ai-risk-evaluation`; missing digests return 422, changed previews return 409. See docs/ASSESSMENT_AI.md for exact target fields, thresholds, API and keyless activation.
 
-No shared Compose stack restart or deployment was attempted for this UI release. No live cloud scan, inference, notification, payment, product change request or remediation was triggered. Real billing normalization, raw telemetry charts, full dependency analysis, ITSM assignment and autonomous execution remain outside this milestone. AI remains opt-in under its existing controls.
+No new database migration is required. The package does not deploy or rebuild the shared Compose stack. No live cloud scan, model invocation, remediation, payment, alert or product GitOps PR was executed. Cloud identities are not configured in this environment, so actual IAM/provider/model compatibility, staging acceptance and inference quality remain unverified.
+
+Expanded optional checks do not imply that every live collector now collects those controls. Full dependency graphs, raw telemetry series, FOCUS reconciliation, durable inference audit/usage ledgers and monetary budgets remain roadmap work. The evidence digest is not a signature. Redis attempts/results retain the existing 24-hour lifetime, with no exactly-once guarantee after loss/expiry. Provider-reported tokens are not a billing ledger. No production/compliance certification, guaranteed savings, semantic truth guarantee or autonomous approval is claimed.
+
+GitHub CI runs on publication; its final status is reported separately rather than modifying the packaged source report after publication. The local release manifest and ZIP contain matching source bytes, excluding local credentials, live databases, build caches and test outputs.

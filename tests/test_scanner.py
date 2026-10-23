@@ -93,3 +93,19 @@ def test_arg_retains_observed_tags_and_size_without_inventing_security_or_backup
     assert 'tags' in client.requests[0].query
     from app.assessment import assess
     assert assess(finding)['disposition'] == 'protected'
+
+
+def test_arg_collects_only_explicit_encryption_app_density_and_zone_controls():
+    disk = dict(row(),encryptionType='EncryptionAtRestWithCustomerKey')
+    app = dict(row('app'),type='microsoft.web/serverfarms',hostedAppCount=0,zoneRedundant=False)
+    pages = [page([disk]),page([]),page([]),page([app]),page([]),page([]),page([])]
+    client=Client(*pages)
+    findings=_findings(client,[SUB])
+    assert findings[0]['evidence']['encrypted'] is True
+    assert findings[1]['evidence']['hosted_app_count']==0
+    assert findings[1]['evidence']['multi_az'] is False
+    assert 'encryptionType' in client.requests[0].query
+    assert 'hostedAppCount' in client.requests[3].query
+    from app.assessment import assess
+    result=assess(findings[1])
+    assert {'APPLICATION_DENSITY','FAILOVER_TOPOLOGY'} <= set(result['risk_check_codes'])

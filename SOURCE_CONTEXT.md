@@ -1,3 +1,12 @@
+# v0.11.0 source context
+
+- Fetched latest GitHub main before development: v0.10.0 commit `871abc291bb289f4c6de08a0a1748be803c59c67`.
+- Re-read the Drive [optimization, service analysis and enterprise AI README](https://docs.google.com/document/d/1u_9HSbjE41srku4ZjDAbkSQ39wmeENOBMn2OGVO3oYs/edit) on October 23, 2026. Sections 4 and 6 guide the expanded service matrix and enterprise inference controls.
+- User requested improvements to core functionality and the enterprise AI assessment engine. This milestone adds evidence quality and bounded inference governance, preserving the latest UI and existing RLS/keyless foundation.
+- Source examples and aspirational targets do not authorize automatic change approval, invented metrics, guaranteed savings or production/compliance claims. Live cloud identities are not configured in this development environment.
+
+## Previous source context
+
 # v0.10.0 source context
 
 - Began from latest GitHub `main`, v0.9.0 commit `b61f1b7cdca47e68568f3434dca8a5918ae2bd30`, and checked for newer commits before implementation.

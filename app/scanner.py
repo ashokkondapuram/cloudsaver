@@ -14,7 +14,7 @@ RULES = (
     ("ORPHANED_DISK", "HIGH", """Resources
 | where type =~ 'microsoft.compute/disks'
 | where tostring(properties.diskState) == 'Unattached'
-""" + _PROJECTION + ", sizeGB=toint(properties.diskSizeGB), skuName=tostring(sku.name)",
+""" + _PROJECTION + ", sizeGB=toint(properties.diskSizeGB), skuName=tostring(sku.name), encryptionType=tostring(properties.encryption.type)",
      "Unattached managed disk. Confirm retention, backup, and recovery requirements before removal."),
     ("UNASSOCIATED_PUBLIC_IP", "MEDIUM", """Resources
 | where type =~ 'microsoft.network/publicipaddresses'
@@ -30,7 +30,7 @@ RULES = (
     ("EMPTY_APP_SERVICE_PLAN", "MEDIUM", """Resources
 | where type =~ 'microsoft.web/serverfarms'
 | where toint(properties.numberOfSites) == 0
-""" + _PROJECTION + ", skuName=tostring(sku.name)",
+""" + _PROJECTION + ", skuName=tostring(sku.name), hostedAppCount=toint(properties.numberOfSites), zoneRedundant=properties.zoneRedundant",
      "App Service plan currently reports no hosted sites. Confirm intended capacity and dependencies before changes."),
     ("ORPHANED_NIC", "LOW", """Resources
 | where type =~ 'microsoft.network/networkinterfaces'
@@ -112,13 +112,20 @@ def _findings(client: Any, subscriptions: list[str]) -> list[dict]:
             for field in ("sizeGB", "skuName", "powerState", "ipConfigs"):
                 if row.get(field) is not None:
                     evidence.append(f"{field}: {str(row[field])[:128]}")
+            controls = {}
+            if row.get('encryptionType') in ('EncryptionAtRestWithPlatformKey', 'EncryptionAtRestWithCustomerKey', 'EncryptionAtRestWithPlatformAndCustomerKeys'):
+                controls['encrypted'] = True
+            if type(row.get('hostedAppCount')) is int and row['hostedAppCount'] >= 0:
+                controls['hosted_app_count'] = row['hostedAppCount']
+            if type(row.get('zoneRedundant')) is bool:
+                controls['multi_az'] = row['zoneRedundant']
             findings.append({
                 "rule_id": rule_id, "severity": severity,
                 "resource_name": row["name"], "resource_type": row["type"],
                 "resource_group": row["resourceGroup"],
                 "subscription_id": row["subscriptionId"], "resource_id": row["id"],
                 "estimated_monthly_waste_usd": None,
-                "evidence": {"source": "Azure Resource Graph", "tags": row.get("tags") or {},
+                "evidence": {"source": "Azure Resource Graph", "tags": row.get("tags") or {}, **controls,
                              **({"size_gb": row["sizeGB"]} if type(row.get("sizeGB")) is int else {})},
                 "details": explanation + (" Evidence: " + "; ".join(evidence) if evidence else ""),
             })

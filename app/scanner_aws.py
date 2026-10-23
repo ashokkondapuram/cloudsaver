@@ -34,7 +34,7 @@ def scan_account(source, *, session=None):
                                  if isinstance(tag, dict) and isinstance(tag.get('Key'), str) and isinstance(tag.get('Value'), str)}}
             for source_key, key in [('Encrypted', 'encrypted'), ('StorageEncrypted', 'encrypted'),
                                     ('MultiAZ', 'multi_az'), ('PubliclyAccessible', 'publicly_accessible'),
-                                    ('DeletionProtection', 'deletion_protection')]:
+                                    ('DeletionProtection', 'deletion_protection'), ('AutoMinorVersionUpgrade', 'auto_minor_upgrade')]:
                 if type(row.get(source_key)) is bool:
                     evidence[key] = row[source_key]
             for source_key, key in [('BackupRetentionPeriod', 'backup_retention_days'), ('Size', 'size_gb'), ('Iops', 'provisioned_iops')]:

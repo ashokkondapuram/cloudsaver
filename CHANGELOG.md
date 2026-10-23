@@ -1,5 +1,13 @@
 # CloudSaver changelog
 
+## v0.11.0 — Core assessment and enterprise AI governance
+
+- Expand saved-evidence service checks with a versioned policy, explicit inputs/gaps, freshness, reproducible fingerprints and bounded risk-prioritized review queues.
+- Require complete typed Kubernetes P95 summaries; retain explicit Azure encryption/plan controls and AWS upgrade configuration without extra cloud calls.
+- Validate current cloud scope across the entire analysis snapshot, including summary requests.
+- Bound target context/output and source providers; validate pillar citations, observed-risk floors and terminal provider responses; expose provider-reported token usage with unknown billed cost.
+- Add console provenance, stale-evidence warnings, review queue drill-down and usage disclosure. Keep independent approval, protected intent and keyless identity.
+
 ## v0.10.0 — Advanced console experience
 
 - Apply the newest Drive UI/UX guide to the latest v0.9.0 code: default dark slate theme, explicit remembered light preference, matching chart colors and 64px collapsed navigation.

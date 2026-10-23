@@ -1,4 +1,5 @@
 """Tenant-owned service analysis and explicit, operator-bound AI advisory requests."""
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +19,7 @@ class Selection(BaseModel):
 
 
 class Evaluation(Selection):
+    evidence_digest: str = Field(pattern=r'^[a-f0-9]{64}$')
     target_id: str = Field(pattern=r'^[a-z0-9-]{1,40}$')
     idempotency_key: UUID
     acknowledge_external_processing: StrictBool
@@ -26,7 +28,7 @@ class Evaluation(Selection):
 async def payload(request, schema):
     try:
         # UUID parsing from JSON is intentional even though the remaining model is strict.
-        return schema.model_validate_json(__import__('json').dumps(await bounded_json(request)))
+        return schema.model_validate_json(json.dumps(await bounded_json(request)))
     except ValidationError:
         raise HTTPException(422, 'Invalid analysis request; exact resource selection and explicit acknowledgement are required') from None
 
@@ -41,6 +43,11 @@ def create_router(settings, store, current_tenant, gateway=None):
             raise HTTPException(404, 'Scan not found')
         if scan['status'] != 'completed' or scan.get('data_origin') == 'legacy_synthetic':
             raise HTTPException(409, 'Analysis requires a completed live scan observation')
+        try:
+            for finding in scan['findings']:
+                validate_finding_scope(finding, tenant)
+        except (ValueError, KeyError):
+            raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
         return scan
 
     def selected(scan, selection, tenant):
@@ -60,8 +67,9 @@ def create_router(settings, store, current_tenant, gateway=None):
     @router.post('/scans/{scan_id}/analysis/resource')
     async def resource_analysis(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):
         selection = await payload(request, Selection)
-        finding = selected(owned(scan_id, tenant), selection, tenant)
-        result = assess(finding)
+        scan = owned(scan_id, tenant)
+        finding = selected(scan, selection, tenant)
+        result = assess(finding, observed_at=scan.get('timestamp'))
         return dict(assessment=result, ai_context=ai_context(finding, result))
 
     @router.get('/ai/targets')
@@ -74,8 +82,11 @@ def create_router(settings, store, current_tenant, gateway=None):
         selection = await payload(request, Evaluation)
         if selection.acknowledge_external_processing is not True:
             raise HTTPException(422, 'Acknowledge external processing of the displayed sanitized context')
-        finding = selected(owned(scan_id, tenant), selection, tenant)
-        result = assess(finding)
+        scan = owned(scan_id, tenant)
+        finding = selected(scan, selection, tenant)
+        result = assess(finding, observed_at=scan.get('timestamp'))
+        if selection.evidence_digest != result['evidence_digest']:
+            raise HTTPException(409, 'Assessment evidence changed; refresh and acknowledge the updated context')
         from starlette.concurrency import run_in_threadpool
         try:
             return await run_in_threadpool(gateway.evaluate, tenant, selection.target_id, selection.idempotency_key,

@@ -26,6 +26,7 @@ test('five-pillar assessment preserves protection and gates explicit AI processi
   await expect(drawer.getByRole('heading',{name:'Protected resource',exact:true})).toBeVisible();
   const first=mutations.find(m=>m.path.endsWith('ai-risk-evaluation'))!;
   expect(first.body.acknowledge_external_processing).toBe(true);
+  expect(first.body.evidence_digest).toBe('b'.repeat(64));
   expect(first.body).not.toHaveProperty('prompt');
   await drawer.getByRole('button',{name:'Read cached advisory',exact:true}).click();
   await expect.poll(()=>mutations.filter(m=>m.path.endsWith('ai-risk-evaluation')).length).toBe(2);
@@ -71,4 +72,22 @@ test('late AI response cannot appear in another finding after the drawer closes'
   await expect(page.getByRole('button',{name:'Request AI advisory',exact:true})).toBeVisible();
   await expect(page.getByText('STALE OLD RESOURCE RESPONSE')).toHaveCount(0);
   await expect(page.getByRole('checkbox',{name:/I acknowledge external processing/})).not.toBeChecked();
+});
+
+test('review priorities open saved findings and stale evidence exposes provenance',async({page})=>{
+  const {mutations}=await mockWorkspace(page,{ai:true,protected:true});
+  await navigate(page,'Cost allocation');
+  const panel=page.locator('.service-analysis');
+  await expect(panel.getByRole('heading',{name:'Review priorities',exact:true})).toBeVisible();
+  await panel.getByRole('button',{name:'archive-data-01 · high',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
+  await drawer.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  await expect(drawer.getByRole('heading',{name:'Assessment provenance',exact:true})).toBeVisible();
+  await expect(drawer.getByText(/Policy 2026-10-23.1/)).toBeVisible();
+  await expect(drawer.getByText(/Refresh the scan before planning a change/)).toBeVisible();
+  await drawer.getByRole('checkbox',{name:/I acknowledge external processing/}).check();
+  await drawer.getByRole('button',{name:'Request AI advisory',exact:true}).click();
+  await expect(drawer.getByText(/Provider-reported usage: 300 input tokens/)).toBeVisible();
+  expect(mutations.filter(m=>m.path.endsWith('ai-risk-evaluation'))).toHaveLength(1);
+  await page.screenshot({path:test.info().outputPath('assessment-engine-v0110.png'),fullPage:true});
 });

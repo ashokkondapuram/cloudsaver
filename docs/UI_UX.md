@@ -40,3 +40,8 @@ Playwright uses explicitly labeled interface QA fixtures and intercepted APIs. N
 ## Earlier source
 
 The v0.7.2 light console was developed from [Detailed UI/UX Improvement Specification & Design System Guide](https://docs.google.com/document/d/1ewfeSv9580SHLb1vN4OGqwX2NZ5fUmBFvsOmPNxMQeU/edit), read October 22, 2026. Its normalized reference is retained in `drive-ui-ux-v0.7.1.txt`. Existing GitOps, delivery audit/replay, settings and billing permissions continue to use their established backend controls.
+
+
+## v0.11.0 assessment workflow
+
+The existing resource drawer now shows policy version, saved-observation age/status, evidence fingerprint, review priority and missing-evidence count. Stale/unknown/future observations prompt a refresh. Checks disclose their expected evidence fields. Cost allocation shows the first six entries from the server's bounded review queue and opens the actual saved finding. AI requests carry the preview digest; the server rejects stale previews before budget reservation. Operator token ceilings and source-provider restrictions are disclosed, and completed advisories show provider-reported input/output tokens with unknown billed cost. None of these labels is an action approval or verified prose claim.

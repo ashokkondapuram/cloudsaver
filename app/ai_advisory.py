@@ -1,4 +1,5 @@
 """Opt-in, tenant-bound cloud inference. The model has no tools or execution authority."""
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -23,6 +24,9 @@ class Target(BaseModel):
     tenant_id: UUID
     provider: Literal['azure', 'aws', 'gcp']
     model: str = Field(pattern=r'^[A-Za-z0-9._:-]{1,160}$')
+    max_output_tokens: int = Field(default=1800, ge=256, le=4096, strict=True)
+    max_context_bytes: int = Field(default=16384, ge=2048, le=32768, strict=True)
+    allowed_source_providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(default_factory=lambda: ['azure', 'aws', 'gcp', 'kubernetes'], min_length=1, max_length=4)
     endpoint: str | None = None
     region: str | None = None
     role_arn: str | None = None
@@ -80,18 +84,36 @@ Never claim an action is approved or safe. Do not generate code, commands, IaC, 
 Protected recovery/witness/retention resources must remain protected. No savings or dependency claims beyond supplied facts.
 Return only a JSON object: summary (string), risk_level (high or unknown), pillars (exactly five objects with pillar
 cost/reliability/performance/security/operations, observation string, evidence_codes list drawn ONLY from observed_check_codes),
-review_questions (1-6 strings). State evidence gaps and independent verification questions. No additional properties.'''
+review_questions (1-6 strings). Each citation must belong to that pillar in checks.
+Risk_level must never be lower than risk_floor. Every pillar with observed risk must cite at least one of its risk checks.
+Observation freshness is explicit: stale, invalid or unknown timestamps require refresh; recent is not live.
+State evidence gaps and independent verification questions. No additional properties.'''
 
 
 def parse_advice(raw, context):
     if not isinstance(raw, str) or len(raw.encode()) > 16000:
         raise AIError('AI response exceeded the allowed schema', 502)
     try:
-        result = Advice.model_validate_json(raw)
+        def unique_pairs(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError('Duplicate AI response property')
+                value[key] = item
+            return value
+        result = Advice.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
         allowed = set(context['observed_check_codes'])
-        if any(not set(p.evidence_codes) <= allowed for p in result.pillars):
-            raise ValueError('Unsupported evidence citation')
-    except (ValueError, TypeError):
+        checks = context['checks']
+        if context['risk_floor'] == 'high' and result.risk_level != 'high':
+            raise ValueError('Observed risk cannot be downgraded')
+        for pillar in result.pillars:
+            cited = set(pillar.evidence_codes)
+            matching = {c['code'] for c in checks if c['pillar'] == pillar.pillar and c['status'] != 'unknown'}
+            risks = {c['code'] for c in checks if c['pillar'] == pillar.pillar and c['status'] == 'risk'}
+            if (len(cited) != len(pillar.evidence_codes) or not cited <= allowed & matching
+                    or (risks and not cited & risks)):
+                raise ValueError('Unsupported or missing pillar evidence citation')
+    except (ValueError, TypeError, RecursionError):
         raise AIError('AI response failed validation; no approval or artifact was produced', 502) from None
     return result.model_dump()
 
@@ -110,6 +132,21 @@ def post_json(url, token, payload, *, transport=None):
             return json.loads(body)
 
 
+@dataclass(frozen=True)
+class InferenceResult:
+    advice: dict
+    usage: dict
+
+
+def token_usage(value, input_key, output_key):
+    # Usage is provider-reported; absent or invalid counters never become zero.
+    def count(key):
+        item = value.get(key) if isinstance(value, dict) else None
+        return item if type(item) is int and 0 <= item <= 10_000_000 else None
+    return dict(input_tokens=count(input_key), output_tokens=count(output_key),
+                source='provider_reported', billed_cost_usd=None)
+
+
 class CloudAdapter:
     def __call__(self, target, tenant, context):
         payload = json.dumps(context, sort_keys=True, separators=(',', ':'))
@@ -120,8 +157,12 @@ class CloudAdapter:
                     token = credential.get_token('https://cognitiveservices.azure.com/.default').token
                     result = post_json(target.endpoint.rstrip('/') + '/openai/deployments/' + target.model + '/chat/completions?api-version=2024-10-21', token,
                         {'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': payload}],
-                         'max_tokens': 1800, 'temperature': 0, 'response_format': {'type': 'json_object'}})
-                raw = result['choices'][0]['message']['content']
+                         'max_tokens': target.max_output_tokens, 'temperature': 0, 'response_format': {'type': 'json_object'}})
+                choice = result['choices'][0]
+                if choice.get('finish_reason') != 'stop' or choice['message'].get('tool_calls'):
+                    raise AIError('AI response was incomplete, filtered or requested unsupported tools', 502)
+                raw = choice['message']['content']
+                usage = token_usage(result.get('usage'), 'prompt_tokens', 'completion_tokens')
             elif target.provider == 'aws':
                 from app.cloud_identity import aws_session
                 from botocore.config import Config
@@ -130,8 +171,12 @@ class CloudAdapter:
                         config=Config(connect_timeout=5, read_timeout=35, retries={'total_max_attempts': 1})) as client:
                     result = client.converse(modelId=target.model, system=[{'text': SYSTEM}],
                         messages=[{'role': 'user', 'content': [{'text': payload}]}],
-                        inferenceConfig={'maxTokens': 1800, 'temperature': 0})
-                raw = ''.join(part['text'] for part in result['output']['message']['content'] if 'text' in part)
+                        inferenceConfig={'maxTokens': target.max_output_tokens, 'temperature': 0})
+                parts = result['output']['message']['content']
+                if result.get('stopReason') != 'end_turn' or any(set(part) != {'text'} for part in parts):
+                    raise AIError('AI response was incomplete, filtered or requested unsupported tools', 502)
+                raw = ''.join(part['text'] for part in parts)
+                usage = token_usage(result.get('usage'), 'inputTokens', 'outputTokens')
             else:
                 from app.cloud_identity import gcp_credentials
                 from google.auth.transport.requests import Request
@@ -144,9 +189,14 @@ class CloudAdapter:
                 url = f'https://{target.region}-aiplatform.googleapis.com/v1/projects/{target.project}/locations/{target.region}/publishers/google/models/{target.model}:generateContent'
                 result = post_json(url, credential.token, {'systemInstruction': {'parts': [{'text': SYSTEM}]},
                     'contents': [{'role': 'user', 'parts': [{'text': payload}]}],
-                    'generationConfig': {'maxOutputTokens': 1800, 'temperature': 0, 'responseMimeType': 'application/json'}})
-                raw = ''.join(part['text'] for part in result['candidates'][0]['content']['parts'] if 'text' in part)
-            return parse_advice(raw, context)
+                    'generationConfig': {'maxOutputTokens': target.max_output_tokens, 'temperature': 0, 'responseMimeType': 'application/json'}})
+                candidate = result['candidates'][0]
+                parts = candidate['content']['parts']
+                if candidate.get('finishReason') != 'STOP' or any(set(part) != {'text'} for part in parts):
+                    raise AIError('AI response was incomplete, filtered or requested unsupported tools', 502)
+                raw = ''.join(part['text'] for part in parts)
+                usage = token_usage(result.get('usageMetadata'), 'promptTokenCount', 'candidatesTokenCount')
+            return InferenceResult(parse_advice(raw, context), usage)
         except AIError:
             raise
         except Exception:
@@ -227,21 +277,32 @@ class AIGateway:
 
     def available(self, tenant):
         return {'enabled': self.enabled, 'hourly_attempt_limit': self.limit, 'advisory_only': True,
-                'targets': [dict(target_id=t.target_id, provider=t.provider, model=t.model)
+                'targets': [dict(target_id=t.target_id, provider=t.provider, model=t.model,
+                                 max_output_tokens=t.max_output_tokens, max_context_bytes=t.max_context_bytes,
+                                 allowed_source_providers=t.allowed_source_providers)
                             for t in self.targets if self.enabled and str(t.tenant_id) == tenant['tenant_id']]}
 
     def evaluate(self, tenant, target_id, key, scan_id, context, assessment):
         target = next((t for t in self.targets if str(t.tenant_id) == tenant['tenant_id'] and t.target_id == target_id), None)
         if not self.enabled or target is None:
             raise AIError('AI target is unavailable for this workspace', 404)
+        if context['provider'] not in target.allowed_source_providers:
+            raise AIError('AI target policy does not permit this source provider', 403)
+        if len(json.dumps(context, sort_keys=True).encode()) > target.max_context_bytes:
+            raise AIError('Sanitized evidence exceeds the AI target context limit', 422)
         fingerprint = hashlib.sha256(json.dumps({'target': target.model_dump(mode='json'), 'scan': scan_id,
-                                                'context': context, 'schema': 1}, sort_keys=True).encode()).hexdigest()
+                                                'context': context, 'evidence_digest': assessment['evidence_digest'], 'schema': 2, 'instruction_digest': hashlib.sha256(SYSTEM.encode()).hexdigest()}, sort_keys=True).encode()).hexdigest()
         def invoke():
-            advice = self.adapter(target, tenant, context)
+            inferred = self.adapter(target, tenant, context)
+            advice = inferred.advice if isinstance(inferred, InferenceResult) else inferred
+            usage = inferred.usage if isinstance(inferred, InferenceResult) else token_usage(None, '', '')
             # Revalidate dependency-injected adapters as well. Citations must reference saved evidence.
             advice = parse_advice(json.dumps(advice), context)
             return dict(advisory_only=True, automatic_execution=False, target_id=target_id, provider=target.provider,
                         model=target.model, scan_id=scan_id, resource_reference=context['resource_reference'],
                         deterministic_disposition=assessment['disposition'], guardrails=assessment['guardrails'],
+                        assessment_policy_version=assessment['policy_version'], evidence_digest=assessment['evidence_digest'],
+                        observation=assessment['observation'], usage=usage,
+                        validation=dict(schema=True, pillar_citations=True, risk_floor=True, semantic_claims_verified=False),
                         advice=advice, warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
         return self.budget.run(tenant['tenant_id'], str(key), fingerprint, self.limit, invoke)

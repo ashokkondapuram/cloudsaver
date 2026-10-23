@@ -135,6 +135,8 @@ def test_kubernetes_p95_and_full_window_evidence():
     for result in results:
         evidence = result['evidence']
         assert evidence['samples'] == 337 and evidence['p95_usage'] == .4
+        from app.assessment import assess
+        assert assess(result, observed_at=NOW.isoformat())['pillars'][2]['status'] == 'observed'
         assert evidence['suggested_request_with_50pct_headroom'] == pytest.approx(.6)
         assert result['estimated_monthly_waste_usd'] is None
     assert scan_cluster(CLUSTER, reader=metric_reader(samples=336), now=NOW) == []
