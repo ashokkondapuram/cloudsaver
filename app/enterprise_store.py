@@ -6,7 +6,8 @@ import sqlite3
 from uuid import UUID
 
 TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
-          'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics')
+          'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics',
+          'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions')
 
 
 class Connection:
@@ -37,11 +38,38 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0010_resource_assessment before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0016_nextgen_savings before startup ({table})')
         else:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
                 db.db.executescript('''
+                CREATE TABLE IF NOT EXISTS savings_cases (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,baseline_scan_id TEXT NOT NULL,request_key TEXT NOT NULL,fingerprint TEXT NOT NULL,
+                    state TEXT NOT NULL,version INTEGER NOT NULL,payload TEXT NOT NULL,verification TEXT,
+                    actor TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(tenant_id,request_key));
+                CREATE TABLE IF NOT EXISTS savings_case_events (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,case_id TEXT NOT NULL,action TEXT NOT NULL,
+                    version INTEGER NOT NULL,payload TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(case_id,version));
+                CREATE TABLE IF NOT EXISTS savings_evidence_receipts (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,receipt_key TEXT NOT NULL,source_id TEXT NOT NULL,provider TEXT NOT NULL,
+                    scope_id TEXT NOT NULL,resource_id TEXT NOT NULL,kind TEXT NOT NULL,fingerprint TEXT NOT NULL,payload TEXT NOT NULL,
+                    issued_at TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,source_id,receipt_key));
+                CREATE TRIGGER IF NOT EXISTS savings_events_no_update BEFORE UPDATE ON savings_case_events
+                    BEGIN SELECT RAISE(ABORT,'Savings events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_events_no_delete BEFORE DELETE ON savings_case_events
+                    BEGIN SELECT RAISE(ABORT,'Savings events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_receipts_no_update BEFORE UPDATE ON savings_evidence_receipts
+                    BEGIN SELECT RAISE(ABORT,'Evidence receipts are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_receipts_no_delete BEFORE DELETE ON savings_evidence_receipts
+                    BEGIN SELECT RAISE(ABORT,'Evidence receipts are append-only'); END;
+                CREATE TABLE IF NOT EXISTS savings_verified_actions (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,case_id TEXT NOT NULL,event_key TEXT NOT NULL,
+                    receipt_id TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,event_key));
+                CREATE TRIGGER IF NOT EXISTS savings_actions_no_update BEFORE UPDATE ON savings_verified_actions
+                    BEGIN SELECT RAISE(ABORT,'Verified actions are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_actions_no_delete BEFORE DELETE ON savings_verified_actions
+                    BEGIN SELECT RAISE(ABORT,'Verified actions are append-only'); END;
                 CREATE TABLE IF NOT EXISTS ai_connection_diagnostics (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,target_id TEXT NOT NULL,
                     actor TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);

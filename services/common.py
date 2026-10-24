@@ -49,7 +49,7 @@ def internal_url(name, default):
     return value
 
 
-async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None):
+async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None, evidence_signature=None):
     """Only callers supply fixed routes; never proxy visitor-provided URLs."""
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5),
@@ -60,6 +60,7 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
                 headers['X-Request-ID'] = request_id.get()
             if client_ip.get():
                 headers[CLIENT_IP_HEADER] = client_ip.get()
+            if evidence_signature:headers['X-Evidence-Signature']=evidence_signature
             response = await client.request(method, base + path, params=params, json=json, headers=headers)
         if response.status_code >= 400:
             status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 410, 413, 422, 429, 501, 503) else 502

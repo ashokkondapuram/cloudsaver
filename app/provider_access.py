@@ -136,6 +136,8 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
         coverage=None, coverage_manifest=None, rule_evaluations=evaluations_in_scope,
         source_ledger=[source for source in scan.get('source_ledger', [])
                        if (source.get('provider'),source.get('scope_id')) in visible_scopes],
+        scope_results=[row for row in scan.get('scope_results',[]) if row.get('provider') in allowed
+                       and finding_in_scope({'cloud_provider':row.get('provider'),'scope_id':row.get('scope_id'),'subscription_id':row.get('scope_id')},scopes)],
         subscriptions_scanned_scope='filtered_count_unavailable',
         provider_filtered=True, scope_filtered=bool(scopes))
 

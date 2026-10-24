@@ -237,6 +237,8 @@ def evaluate_plan(plan, *, policy=None, infracost=None):
                     issue('COST_BUDGET_EXCEEDED','plan','Estimated monthly increase exceeds the operator budget.')
     if policy.max_monthly_increase_usd is not None and cost['status'] == 'unknown':
         issue('COST_EVIDENCE_REQUIRED','plan','The configured budget requires complete supported USD Infracost evidence.')
+    from app.commitment_arbitrage import commitment_firewall
+    issues.extend(commitment_firewall(plan))
     return dict(schema_version='1', decision='fail' if issues else 'pass', issues=issues,
                 resources_checked=len(records), cost=cost,
                 limits=['Static supported association checks only; external, dynamic and indirect relationships need review.',

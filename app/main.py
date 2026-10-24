@@ -48,6 +48,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     from app.focus import FocusRepository
     from app.finops_api import create_router as finops_router
     evidence_store=EnterpriseStore(settings)
+    from app.savings_store import SavingsRepository
+    savings_repository=SavingsRepository(evidence_store)
+    from app.nextgen_api import create_router as nextgen_router
+    api.include_router(nextgen_router(store,savings_repository,current_tenant))
     api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
     from app.assessment_api import create_router as assessment_router
     from app.ai_advisory import AIGateway
@@ -72,7 +76,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     from app.service_analysis_api import create_router as service_analysis_router
     api.include_router(service_analysis_router(store, current_tenant))
     from app.kubernetes_api import create_router as kubernetes_router
-    api.include_router(kubernetes_router(store, current_tenant))
+    api.include_router(kubernetes_router(store, current_tenant, savings_repository=savings_repository))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -219,6 +223,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             inventory = canonical_inventory(inventory, observation_time)
             from app.collectors.provenance import compact
             source_ledger = compact(inventory, enriched_findings, observation_time)
+            from app.scan_scope_manifest import completed_scopes
             enriched_findings = group_opportunities(enriched_findings, inventory)
             from app.pricing import opportunity_totals
             opportunity = opportunity_totals(enriched_findings)
@@ -248,6 +253,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 findings=enriched_findings,
                 inventory=inventory,
                 source_ledger=source_ledger,
+                scope_results=completed_scopes(tenant,providers or ['azure'],source_ledger) if providers or scanner is None else [],
                 opportunity_summary=opportunity,
                 rule_evaluations=evaluations,
                 rule_manifest={'version': rule_version, 'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None,
@@ -265,6 +271,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             if heartbeat:
                 heartbeat.ensure_owned()
             store.save(tenant_id, validated, workspace=tenant)
+            try:
+                savings_repository.reconcile_regressions(tenant,validated)
+            except Exception:
+                logger.error('Savings regression reconciliation failed; retry through the saved-case verifier.')
             return validated
         except HTTPException:
             raise

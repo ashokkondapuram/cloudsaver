@@ -1,5 +1,6 @@
 """Opt-in Celery ingestion. Import creates configuration, never cloud/DB clients."""
 import os
+import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4, uuid5
 
@@ -35,6 +36,9 @@ if not 10 <= ai_tick <= 3600:
 if enabled('CLOUDSAVER_AI_ENABLED'):
     celery_app.conf.beat_schedule['process-ai-batches'] = {
         'task': 'workers.tasks.process_ai_batches', 'schedule': float(ai_tick), 'options': {'expires': ai_tick}}
+if enabled('CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED'):
+    celery_app.conf.beat_schedule['reconcile-savings-regressions']={
+        'task':'workers.tasks.reconcile_savings_regressions','schedule':float(tick),'options':{'expires':tick}}
 
 
 class JobBusy(RuntimeError):
@@ -175,6 +179,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         inventory = canonical_inventory(inventory, observed_at)
         from app.collectors.provenance import compact
         source_ledger = compact(inventory, findings, observed_at)
+        from app.scan_scope_manifest import completed_scopes
         findings = group_opportunities(findings, inventory)
         policies = {item['id']: item for item in (policy or {}).get('items', [])}
         if rule_ids is not None:
@@ -188,6 +193,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
             total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
             cloud_providers=['azure'], source_ledger=source_ledger,
+            scope_results=completed_scopes(tenant,['azure'],source_ledger) if scanner is None else [],
             scope_fingerprint=scope_fingerprint(tenant, ['azure']),
             total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
             opportunity_summary=opportunity, rule_evaluations=outcomes,
@@ -198,6 +204,12 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         )).model_dump()
         heartbeat.ensure_owned()
         repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token, notification_targets=notification_targets)
+        try:
+            from app.savings_store import SavingsRepository
+            from app.enterprise_store import EnterpriseStore
+            SavingsRepository(EnterpriseStore(settings)).reconcile_regressions(tenant,scan)
+        except Exception:
+            logging.getLogger('cloudsaver.savings').error('Savings regression reconciliation failed after a completed scan; saved cases require retry.')
     except TerminalJob:
         raise
     except Exception:
@@ -334,3 +346,23 @@ def process_ai_batches():
             client.close()
         except Exception:
             pass
+
+
+@celery_app.task(name='workers.tasks.reconcile_savings_regressions')
+def reconcile_savings_regressions():
+    """Retry saved-snapshot regression checks; performs no provider, AI or billing API calls."""
+    if not enabled('CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED'):return {'enabled':False,'reopened':0}
+    from app.enterprise_store import EnterpriseStore
+    from app.savings_store import SavingsRepository
+    from app.store import Store,PostgresStore
+    settings=Settings.load()
+    scans=PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
+    repository=SavingsRepository(EnterpriseStore(settings));reopened=0;failed=0
+    for tenant in settings.tenants:
+        try:
+            latest=scans.list(tenant['tenant_id'],1)
+            if latest:reopened+=repository.reconcile_regressions(tenant,latest[0])
+        except Exception:
+            failed+=1
+            logging.getLogger('cloudsaver.savings').error('Saved-case regression reconciliation requires retry.')
+    return {'enabled':True,'reopened':reopened,'failed_workspaces':failed}

@@ -363,7 +363,30 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0015_ai_foundry_diagnostics',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0016_nextgen_savings',)]
+
+
+def test_savings_case_receipts_and_audit_are_forced_rls_and_append_only(database):
+    from app.enterprise_store import EnterpriseStore
+    from app.savings_store import SavingsRepository
+    from types import SimpleNamespace
+    _,app,store=database
+    tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    repository=SavingsRepository(EnterpriseStore(SimpleNamespace(database_url=app,database='unused')))
+    resource=snapshot['findings'][0]
+    case=repository.create(tenant,snapshot,resource,str(uuid4()),'retirement','Synthetic PostgreSQL isolation test')
+    assert repository.get(workspace(),case['id']) is None
+    with psycopg.connect(app) as db:
+        for table in ('savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions'):
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+    with psycopg.connect(app) as db:
+        db.execute("SELECT set_config('app.current_tenant_id',%s,true)",(tenant['tenant_id'],))
+        assert db.execute('SELECT count(*) FROM savings_case_events WHERE case_id=%s',(case['id'],)).fetchone()[0]==1
+    for statement in ('UPDATE savings_case_events SET action=action','DELETE FROM savings_case_events','UPDATE savings_evidence_receipts SET payload=payload','DELETE FROM savings_evidence_receipts'):
+        with psycopg.connect(app) as db:
+            db.execute("SELECT set_config('app.current_tenant_id',%s,true)",(tenant['tenant_id'],))
+            with pytest.raises(errors.InsufficientPrivilege):db.execute(statement)
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):

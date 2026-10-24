@@ -14,6 +14,10 @@ Kubernetes federation now adds API inventory, guarded five-minute analysis, sour
 cross-source conflict detection and a dedicated `/kubernetes` workspace. See
 [Kubernetes setup and implementation boundaries](docs/KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md).
 
+The new `/optimization` studio adds causal financial scenarios, SLO safety, network/batch analysis,
+clean commitment planning and an auditable signed-evidence savings lifecycle. See
+[next-generation features and collector setup](docs/NEXT_GEN_IMPLEMENTATION.md) before activation.
+
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
 release applies the new v1.0.0 master guide to the latest

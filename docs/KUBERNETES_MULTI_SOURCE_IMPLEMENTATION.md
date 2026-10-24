@@ -1,5 +1,9 @@
 # Kubernetes and multi-source analysis implementation
 
+The subsequent [next-generation implementation](NEXT_GEN_IMPLEMENTATION.md) adds a mandatory fresh,
+signed SLO receipt for every replica before a request-reduction patch can be generated. The original
+utilization/protection gates below still apply; a planning upload cannot bypass the new SLO requirement.
+
 Engineering source: [Kubernetes and multi-source analysis guide](https://docs.google.com/document/d/11i_KWMhkr0u1Ug1N0ZR2D_kQC_-A_FCwEURUfT2WmWE).
 Baseline: `ad56ea9f6e8f8c4d0b0e3e9905bf1dcca58f794b` on GitHub `main`.
 

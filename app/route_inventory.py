@@ -12,6 +12,15 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/optimization/scans/{scan_id}'):'scoped_read',
+    ('GET','/api/v1/optimization/scans/{scan_id}/topology/{root_key}'):'scoped_read',
+    ('POST','/api/v1/optimization/simulate/{engine}'):'agnostic',
+    ('GET','/api/v1/optimization/cases'):'scoped_read',
+    ('POST','/api/v1/optimization/cases'):'scoped_read',
+    ('GET','/api/v1/optimization/cases/{case_id}'):'scoped_read',
+    ('PATCH','/api/v1/optimization/cases/{case_id}'):'scoped_read',
+    ('POST','/api/v1/optimization/cases/{case_id}/verify'):'scoped_read',
+    ('POST','/api/v1/optimization/receipts'):'agnostic',
     ('GET', '/api/v1/scans/{scan_id}/kubernetes'): 'scoped_read',
     ('POST', '/api/v1/scans/{scan_id}/kubernetes/patch-preview'): 'scan_write',
     ('GET', '/api/v1/rules/effective'): 'agnostic',

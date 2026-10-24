@@ -266,9 +266,7 @@ def test_workspace_and_patch_preview_use_saved_evidence_and_no_live_cluster_muta
     assert len(view['rule_matrix'])==8 and row['costs']['billed_node_cost_usd'] is None
     body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
     preview=api.post(path+'/patch-preview',headers=headers,json=body)
-    assert preview.status_code==200,preview.text
-    assert preview.json()['automatic_execution'] is False and '--dry-run=server' in preview.json()['review_commands'][0]
-    assert 'limits' not in preview.json()['content']
+    assert preview.status_code==409 and 'SLO' in preview.json()['detail']
     assert api.post(path+'/patch-preview',headers=headers,json=dict(body,evidence_digest='0'*64)).status_code==409
     assert api.get(f'/api/v1/scans/{uuid4()}/kubernetes',headers=headers).status_code==404
 
@@ -398,3 +396,28 @@ def test_collection_duration_does_not_turn_shared_provenance_into_source_conflic
     ledger=compact(values,[],NOW.isoformat())
     assert len(ledger)==1 and ledger[0]['status']=='available'
     assert not any(r.get('reconciliation_status')=='source_conflict' for r in values)
+
+
+def test_signed_fresh_slo_proof_enables_review_patch_and_revocation_blocks_it(tmp_path,monkeypatch):
+    from test_high_impact_improvements import slo
+    from app.nextgen_evidence import canonical
+    import hmac
+    api,headers,scan_id=api_client(tmp_path,monkeypatch)
+    tid=api.get('/api/v1/me',headers=headers).json()['tenant_id']
+    path=f'/api/v1/scans/{scan_id}/kubernetes'
+    row=next(r for r in api.get(path,headers=headers).json()['resources'] if r['resource_type']=='kubernetes.io/Container')
+    case=api.post('/api/v1/optimization/cases',headers=headers,json=dict(scan_id=scan_id,resource_id=row['resource_id'],request_key=str(uuid4()),action='rightsizing'))
+    assert case.status_code==201,case.text
+    secret='synthetic-signature-key-'+'x'*32
+    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_KEY_FIXTURE',secret)
+    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_SOURCES',json.dumps([dict(tenant_id=tid,source_id='fixture',providers=['kubernetes'],scope_ids=[CLUSTER],kinds=['slo'],key_env='CLOUDSAVER_EVIDENCE_KEY_FIXTURE')]))
+    receipt=dict(receipt_id=str(uuid4()),source_id='fixture',tenant_id=tid,provider='kubernetes',scope_id=CLUSTER,resource_id=row['resource_id'],kind='slo',issued_at=datetime.now(timezone.utc).isoformat(),payload=slo())
+    signature=hmac.new(secret.encode(),canonical(receipt),hashlib.sha256).hexdigest()
+    stored=api.post('/api/v1/optimization/receipts',headers=dict(headers,**{'X-Evidence-Signature':signature}),json=receipt)
+    assert stored.status_code==201,stored.text
+    body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
+    result=api.post(path+'/patch-preview',headers=headers,json=body)
+    assert result.status_code==200,result.text
+    assert result.json()['automatic_execution'] is False and 'limits' not in result.json()['content']
+    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_SOURCES','[]')
+    assert api.post(path+'/patch-preview',headers=headers,json=body).status_code==409

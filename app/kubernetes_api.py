@@ -57,7 +57,7 @@ def workspace(scan):
         financial_note='Container allocation opportunities are not additive to node consolidation or verified bill savings.')
 
 
-def create_router(store,current_tenant):
+def create_router(store,current_tenant,*,savings_repository=None):
     router=APIRouter(prefix='/api/v1/scans')
     def owned(scan_id,tenant):
         scan=store.get(tenant['tenant_id'],str(scan_id))
@@ -111,6 +111,12 @@ def create_router(store,current_tenant):
         key='cpu_request_cores' if dimension=='cpu' else 'memory_request_bytes'
         import math
         amount=max(p[key] for p in proposals)
+        if savings_repository is None:
+            raise HTTPException(409,'A trusted SLO evidence source is required before generating a capacity-reduction patch.')
+        for sibling in siblings:
+            gate=savings_repository.slo_gate(tenant,sibling)
+            if not gate or gate.get('status')!='review_eligible':
+                raise HTTPException(409,'Complete trusted SLO, latency and error-budget evidence is required for every replica before reducing capacity.')
         rounded=math.ceil(amount*1000)/1000 if dimension=='cpu' else math.ceil(amount/1024**2)*1024**2
         if rounded>=min(r['evidence'][dimension+'_request'] for r in siblings):
             raise HTTPException(409,'A single safe lower request could not be established across all replicas.')

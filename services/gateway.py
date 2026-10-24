@@ -254,6 +254,45 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'q', 'limit', 'offset')
     resource_key = Path(pattern=r'^[a-f0-9]{64}$')
 
+    @app.get('/api/v1/optimization/scans/{scan_id}')
+    async def optimization_overview(scan_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/optimization/scans/{scan_id}',authorization)
+
+    @app.get('/api/v1/optimization/scans/{scan_id}/topology/{root_key}')
+    async def optimization_topology(scan_id:UUID,root_key:str=Path(pattern=r'^[a-f0-9]{64}$'),row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/optimization/scans/{scan_id}/topology/{root_key}',authorization)
+
+    @app.post('/api/v1/optimization/simulate/{engine}')
+    async def optimization_simulation(engine:str,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post(f'/api/v1/optimization/simulate/{engine}',request,authorization)
+
+    @app.get('/api/v1/optimization/cases')
+    async def optimization_cases(row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/optimization/cases',authorization)
+
+    @app.post('/api/v1/optimization/cases',status_code=201)
+    async def optimization_create(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post('/api/v1/optimization/cases',request,authorization)
+
+    @app.get('/api/v1/optimization/cases/{case_id}')
+    async def optimization_case(case_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/optimization/cases/{case_id}',authorization)
+
+    @app.patch('/api/v1/optimization/cases/{case_id}')
+    async def optimization_transition(case_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('PATCH',targets['scanner'],f'/api/v1/optimization/cases/{case_id}',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.post('/api/v1/optimization/cases/{case_id}/verify')
+    async def optimization_verify(case_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post(f'/api/v1/optimization/cases/{case_id}/verify',request,authorization)
+
+    @app.post('/api/v1/optimization/receipts',status_code=201)
+    async def optimization_receipt(request:Request,row=Depends(allowed),authorization:str=Header(),x_evidence_signature:str=Header(default='')):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],'/api/v1/optimization/receipts',authorization,
+            json=await bounded_json(request),transport=transport,evidence_signature=x_evidence_signature)
+
     @app.get('/api/v1/scans/{scan_id}/kubernetes')
     async def kubernetes_view(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/kubernetes', authorization)
