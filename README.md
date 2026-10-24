@@ -32,6 +32,8 @@ Tenant isolation uses PostgreSQL forced RLS and scoped application queries. Do n
 
 Use the existing deployment configuration and the separate platform project. `.env.example` documents non-secret settings and required secret references. Do not commit `.env`, cloud credentials or workspace keys.
 
+On Windows, follow the [PowerShell setup without installing Python](#windows-powershell-setup-without-installing-python) below.
+
 ```bash
 # New installation: generate private env files rather than copying blank templates.
 python3 scripts/setup_compose.py
@@ -55,6 +57,48 @@ docker compose --env-file .env config --quiet
 ```
 
 An existing PostgreSQL volume needs its original `POSTGRES_PASSWORD` and `CLOUDSAVER_DB_PASSWORD`. Editing `.env` does not change database role passwords. Recover those existing values from your deployment's secret store instead of initializing replacements. Run Compose from the repository root or supply its `.env` path explicitly.
+
+### Windows PowerShell: setup without installing Python
+
+Start Docker Desktop with Linux containers, then open **PowerShell**. These commands run the setup scripts inside a temporary Python container; Windows does not need Python or Make installed. They assume the repository was extracted to your Downloads folder; adjust `Set-Location` if necessary.
+
+Use this workflow for a **fresh installation**. If database volumes already contain data, restore the original environment files and credentials instead of generating replacements. The setup scripts refuse to overwrite existing `.env` files.
+
+```powershell
+Set-Location "$HOME\Downloads\cloudsaver"
+$mount = "type=bind,source=$($PWD.Path),target=/work"
+
+# Create cloudsaver\.env with generated database passwords and service tokens.
+docker run --rm --mount $mount -w /work python:3.12-alpine python scripts/setup_compose.py
+
+# Create platform\.env. Skip this command if that file already exists.
+docker run --rm --mount $mount -w /work/platform python:3.12-alpine python scripts/setup_platform.py
+
+# Register CloudSaver service-token digests with the platform.
+docker run --rm --mount $mount -w /work/platform python:3.12-alpine python scripts/setup_platform.py --add-callers ../.env
+
+# Start the platform first; it creates the shared platform-link network.
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml up --build -d
+
+# Validate the root environment, then start CloudSaver.
+docker compose --env-file .\.env config --quiet
+docker compose --env-file .\.env up --build -d
+```
+
+Save the operator key printed once during platform setup. The platform portal is at `http://localhost:3100`; CloudSaver is at `http://localhost:3000`.
+
+The root file is `cloudsaver\.env`, **not** `cloudsaver.env` or `.env.txt`. The second project uses `cloudsaver\platform\.env`; the explicit `--env-file` arguments select the correct file for each project. A Windows “Python was not found” message means a host-side setup command did not run; use the Docker commands above.
+
+For a **new, empty database** where you already copied a template into the root `.env`, run this from the same PowerShell session to fill blank database passwords without replacing configured values:
+
+```powershell
+docker run --rm --mount $mount -w /work python:3.12-alpine python scripts/setup_compose.py --init-db-passwords
+docker compose --env-file .\.env config --quiet
+```
+
+If the copied template also has blank service tokens, use the same Docker command with `--add-identity`, then repeat the platform `--add-callers ../.env` command before starting services. None of these helpers changes passwords stored in an existing PostgreSQL volume.
+
+### Upgrade an existing installation
 
 For an existing installation, apply platform revision `i0013_multicloud_analysis_catalog` and core revision `0019_multicloud_governance_and_pillars` using their schema-owner migration jobs. Rebuild the stack and remove the obsolete tenant/analytics/notification containers with `docker compose up -d --remove-orphans` after checking this deployment's orphan list. This does not remove database volumes. The core service now owns the directory projector; only one core replica should run it.
 
