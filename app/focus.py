@@ -174,6 +174,65 @@ class FocusRepository:
                      row['BillingCurrency'],row['ChargePeriodStart'],row['ChargePeriodEnd'],row['ResourceId'],row['ChargeCategory'],row['BilledCost'],row['EffectiveCost'],row['ListCost']))
         return dict(import_id=batch_id,records=len(raw['records']),inserted=len(pending),cached=False)
 
+    def resource_costs(self, tenant, resource_ids, window_days=30, *, as_of=None):
+        """Exact resource/scope/currency attribution; never spread account totals across resources."""
+        if type(window_days) is not int or not 1 <= window_days <= 90:
+            raise FocusError('Resource billing requires a 1–90 day window')
+        ids = set(resource_ids)
+        if len(ids) > 100000 or any(not isinstance(v,str) or len(v)>2048 for v in ids):
+            raise FocusError('Invalid resource billing selection')
+        finish = (as_of or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(hour=0,minute=0,second=0,microsecond=0)
+        begin = finish - timedelta(days=window_days)
+        scopes = [('azure',v) for v in tenant.get('subscription_ids',[])] + [('aws',a['account_id']) for a in tenant.get('aws_accounts',[])] + [('gcp',a['project_id']) for a in tenant.get('gcp_projects',[])]
+        allowed = tenant.get('allowed_providers')
+        scopes = sorted(set((p,a) for p,a in scopes if allowed is None or p in allowed))
+        if not ids or not scopes:return {}
+        normalized = {v.lower() if v.lower().startswith('/subscriptions/') else v for v in ids}
+        fence = ' OR '.join('(provider=%s AND sub_account=%s)' for _ in scopes)
+        args = [v for pair in scopes for v in pair]
+        totals = {}
+        with self.store.transaction(tenant['tenant_id']) as db:
+            coverage = db.execute('SELECT provider,sub_account,period_start,period_end,complete FROM focus_imports WHERE tenant_id=%s AND currency=%s AND ('+fence+') AND period_start<%s AND period_end>%s ORDER BY created_at,id LIMIT 50001',
+                [tenant['tenant_id'],'USD',*args,finish.date().isoformat(),begin.date().isoformat()]).fetchall()
+            if len(coverage)>50000:raise FocusError('Narrow the resource billing import window')
+            days={}
+            for provider,account,a,b,complete in coverage:
+                day=max(date.fromisoformat(str(a)),begin.date());end=min(date.fromisoformat(str(b)),finish.date())
+                while day<end:
+                    days.setdefault((provider,account),{})[day]=bool(complete);day+=timedelta(days=1)
+            for offset in range(0,len(normalized),300):
+                selected=sorted(normalized)[offset:offset+300]
+                marks=','.join('%s' for _ in selected)
+                rows=db.execute('SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category FROM focus_charges WHERE tenant_id=%s AND currency=%s AND ('+fence+') AND resource_id IN ('+marks+') AND period_start>=%s AND period_end<=%s ORDER BY id LIMIT 50001',
+                    [tenant['tenant_id'],'USD',*args,*selected,begin.isoformat(),finish.isoformat()]).fetchall()
+                if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
+                for provider,account,rid,billed,effective,list_cost,category in rows:
+                    key=(provider,rid.lower() if provider=='azure' else rid)
+                    value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account))
+                    value['billed']+=Decimal(billed);value['effective']+=Decimal(effective)
+                    if list_cost is None:value['list_complete']=False
+                    else:value['list']+=Decimal(list_cost)
+                    value['locked'] |= category=='Purchase' or Decimal(effective)>Decimal(billed)
+        return {key:dict(billed_cost_usd=float(v['billed']),effective_cost_usd=float(v['effective']),list_cost_usd=float(v['list']) if v['list_complete'] else None,
+            commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency='USD',billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
+            billing_window_start=begin.isoformat(),billing_window_end=finish.isoformat(),billing_basis='imported_FOCUS_not_provider_reconciled') for key,v in totals.items()}
+
+    def attach(self, tenant, scan):
+        from copy import deepcopy
+        result=deepcopy(scan)
+        rows=[*result.get('inventory',[]),*result.get('findings',[])]
+        stamp=utc(scan['timestamp'])
+        costs=self.resource_costs(tenant,[r['resource_id'] for r in rows],as_of=stamp)
+        inventory={(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id']):r for r in result.get('inventory',[])}
+        for r in rows:
+            key=(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id'])
+            # Findings inherit observed inventory evidence before billing is attached.
+            e=dict((inventory.get(key) or {}).get('evidence') or {},**(r.get('evidence') or {}))
+            e.update(costs.get(key,{}));r['evidence']=e
+        from app.k8s_cost_reconciler import attach_node_costs
+        attach_node_costs(result.get('inventory',[]))
+        return result
+
     def imports(self,tenant,limit=25):
         with self.store.transaction(tenant['tenant_id']) as db:
             rows=db.execute('SELECT id,source_id,provider,sub_account,currency,period_start,period_end,complete,records,inserted,created_at FROM focus_imports WHERE tenant_id=%s ORDER BY created_at DESC,id DESC LIMIT %s',(tenant['tenant_id'],limit)).fetchall()

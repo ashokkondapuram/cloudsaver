@@ -9,14 +9,15 @@ DEFAULT_POLICY = dict(enabled=False, allowed_providers=['azure', 'aws', 'gcp'],
     disabled_providers=[], allowed_models={'azure': [], 'aws': [], 'gcp': []},
     allowed_regions={'azure': [], 'aws': [], 'gcp': []}, allow_cross_provider=False,
     max_input_tokens_per_request=4000, max_output_tokens_per_request=1200,
-    hourly_attempt_ceiling=10, monthly_token_ceiling=1000000, allow_knowledge_candidates=False,
+    hourly_attempt_ceiling=10, monthly_token_ceiling=1000000,
     data_governance=copy.deepcopy(DEFAULT_DATA_GOVERNANCE))
 
 
 def validate_policy(value):
+    if isinstance(value,dict):value={k:v for k,v in value.items() if k != 'allow_knowledge_candidates'}
     if not isinstance(value, dict) or set(value)-{'data_governance'} != set(DEFAULT_POLICY)-{'data_governance'}:
         raise IdentityError('Provide the complete supported AI policy.')
-    for field in ('enabled', 'allow_cross_provider', 'allow_knowledge_candidates'):
+    for field in ('enabled', 'allow_cross_provider'):
         if type(value[field]) is not bool:
             raise IdentityError('AI policy switches must be booleans.')
     providers = {'azure', 'aws', 'gcp'}

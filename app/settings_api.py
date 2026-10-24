@@ -12,7 +12,7 @@ import hashlib
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Header, APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.auth import Role, require_workspace_role
@@ -92,7 +92,7 @@ def actor_for(workspace):
     return 'principal:' + hashlib.sha256(principal.encode()).hexdigest()
 
 
-def create_router(settings, current_tenant, identity_client=None):
+def create_router(settings, current_tenant, identity_client=None, scan_store=None):
     from app.cloud_identity import onboarding
     from app.entitlements import (enforce_automated_alerts, enforce_providers, enforce_scan_frequency,
                                   enforce_subscription_quota, entitlements_for)
@@ -271,4 +271,73 @@ def create_router(settings, current_tenant, identity_client=None):
         from app.access_probe import run_probe
         return run_probe(tenant, store.platform())
 
+    def current_policy(tenant, authorization, *, management=False):
+        path = (f'/customer/v1/workspaces/{tenant["tenant_id"]}/analysis-rules' if management else
+                f'/internal/v1/tenants/{tenant["tenant_id"]}/analysis-rules/effective')
+        return _call('GET', path, authorization=authorization)
+
+    @router.get('/api/v1/rules/effective')
+    def effective(tenant=Depends(current_tenant), authorization: str = Header()):
+        return current_policy(tenant, authorization)
+
+    @router.put('/api/v1/rules/overrides')
+    def save_rules(body: PolicyChange, tenant=Depends(current_tenant), authorization: str = Header()):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        return _call('PUT', f'/customer/v1/workspaces/{tenant["tenant_id"]}/analysis-rules',
+                     authorization=authorization, json=body.model_dump())
+
+    @router.post('/api/v1/rules/preview')
+    def preview_rules(body: PolicyChange, tenant=Depends(current_tenant), authorization: str = Header()):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        policy = current_policy(tenant, authorization, management=True)
+        if body.version != policy['version']:
+            raise HTTPException(409, 'Rule policy changed. Refresh before previewing again.')
+        before = {row['id']: row for row in policy['items']}
+        after = {key: dict(value) for key, value in before.items()}
+        ids = [row.rule_id for row in body.rules]
+        if len(ids) != len(set(ids)):
+            raise HTTPException(422, 'Include each rule only once.')
+        for row in body.rules:
+            if row.rule_id not in after or after[row.rule_id]['status'] != 'published':
+                raise HTTPException(422, 'Choose a published rule.')
+            try:
+                if row.rule_id in {item[0] for item in RULES}:
+                    parameters(row.rule_id, row.parameters)
+                else:
+                    from app.resource_catalog import definitions
+                    bounds={r[0]:r[6] for r in definitions()}.get(row.rule_id,{})
+                    if set(row.parameters)-set(bounds) or any(type(v) is not int or not bounds[k][1]<=v<=bounds[k][2] for k,v in row.parameters.items()):
+                        raise ValueError('Rule parameters are outside published delegated bounds.')
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from None
+            after[row.rule_id].update(enabled=row.enabled, parameters=row.parameters)
+        scans = scan_store.list(tenant['tenant_id'], 1)
+        scan = scans[0] if scans else None
+        changes = set()
+        if scan and scan['status'] == 'completed':
+            old = evaluate_inventory(scan.get('inventory', []), policies=before, observed_at=scan['timestamp'])
+            new = evaluate_inventory(scan.get('inventory', []), policies=after, observed_at=scan['timestamp'])
+            changes |= {a['resource_id'] for a, b in zip(old, new) if a['outcome'] != b['outcome']}
+            changes |= {f['resource_id'] for f in scan['findings'] if f['rule_id'] in after
+                        and before[f['rule_id']]['enabled'] != after[f['rule_id']]['enabled']}
+        return dict(version=policy['version'], proposed=body.model_dump()['rules'],
+                    scan_id=scan['scan_id'] if scan else None, resources_changed=len(changes) if scan else None,
+                    message='Saved-observation preview only; no live cloud action or policy change was performed.')
+
     return router
+
+
+from app.analysis_rules import RULES, evaluate_inventory, parameters
+from app.onboarding_api import _call
+
+class RuleChange(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    rule_id: str = Field(min_length=1, max_length=80)
+    enabled: StrictBool
+    parameters: dict[str, int] = Field(default_factory=dict)
+
+
+class PolicyChange(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    version: int = Field(ge=1)
+    rules: list[RuleChange] = Field(min_length=1, max_length=100)

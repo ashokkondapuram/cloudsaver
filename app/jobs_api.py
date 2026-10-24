@@ -1,4 +1,4 @@
-"""Durable interactive Azure submission: API never executes a background scan."""
+"""Durable interactive multi-cloud submission: API never executes a background scan."""
 import os
 from uuid import UUID, uuid4
 
@@ -10,7 +10,8 @@ from app.auth import Role, require_workspace_role
 
 class ScanSubmission(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    subscription_ids: list[UUID] = Field(min_length=1, max_length=100)
+    subscription_ids: list[UUID] | None = Field(default=None,min_length=1, max_length=100)
+    providers: list[str] | None = Field(default=None,min_length=1,max_length=4)
     idempotency_key: UUID
 
 
@@ -34,11 +35,22 @@ def create_router(settings, current_tenant, *, repository=None):
         if (os.getenv('CLOUDSAVER_INTERACTIVE_JOBS', '').lower() != 'true'
                 or os.getenv('CLOUDSAVER_DELIVERY_ENABLED', '').lower() != 'true'):
             raise HTTPException(503, 'Interactive jobs and the delivery dispatcher must be enabled')
-        requested = sorted(str(s) for s in payload.subscription_ids)
-        if len(set(requested)) != len(requested) or not set(requested) <= set(tenant['subscription_ids']):
-            raise HTTPException(422, 'Select unique authorized Azure subscriptions')
-        from app.entitlements import enforce_subscription_quota
-        enforce_subscription_quota(tenant, len(requested), adding_count=0)
+        from app.scan_selection import normalize,select,count
+        from app.cloud_scope import configured_providers
+        from app.entitlements import enforce_subscription_quota,enforce_providers
+        try:
+            if (payload.subscription_ids is None)==(payload.providers is None):
+                raise ValueError('Select providers or Azure subscriptions, not both')
+            if payload.providers is not None:
+                if not set(payload.providers)<=set(configured_providers(tenant)):raise ValueError('Select configured providers')
+                requested=select(tenant,payload.providers)
+            else:
+                requested=normalize([str(s) for s in payload.subscription_ids])
+                if not set(requested)<=set(tenant['subscription_ids']):raise ValueError('Select authorized subscriptions')
+        except (ValueError,KeyError,TypeError) as error:
+            raise HTTPException(422,str(error)) from None
+        enforce_providers(tenant,payload.providers or ['azure'])
+        enforce_subscription_quota(tenant,count(requested),adding_count=0)
         try:
             row = repository.submit(tenant['tenant_id'], str(payload.idempotency_key), requested)
         except SubmissionConflict as exc:

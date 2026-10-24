@@ -12,10 +12,10 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 from app.ai_advisory import AIError
 from app.auth import Role, require_workspace_role
 from app.cloud_scope import validate_finding_scope
-from app.gitops_api import bounded_json
+from app.schemas import bounded_json
 from app.inference_ledger import attribution
 from app.resource_assessment import (FILTERS, ai_state, assessments, csv_report, decision_state, group, history,
-                                     inventory_observation, merge_inventory,
+                                     inventory_observation, merge_inventory, planning_summary,
                                      matches, merge, resource_key, row)
 from app.resource_store import ResourceConflict, ResourceStore
 
@@ -66,6 +66,8 @@ def actor_for(tenant):
 def create_router(settings, store, current_tenant, gateway, evidence_store):
     router = APIRouter(prefix='/api/v1')
     repo = ResourceStore(evidence_store)
+    from app.inference_ledger import InferenceLedger
+    ledger = InferenceLedger(evidence_store)
 
     def owned(scan_id, tenant):
         scan = store.get(tenant['tenant_id'], str(scan_id))
@@ -78,17 +80,22 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 validate_finding_scope(finding, tenant)
         except (ValueError, KeyError):
             raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
-        return scan
+        from app.focus import FocusRepository
+        return FocusRepository(evidence_store).attach(tenant, scan)
 
     def inventory(scan, tenant):
         merged = assessments(scan)
+        from app.resource_assessment import lifecycle
+        previous=next((s for s in store.list(tenant['tenant_id'],100) if s['status']=='completed' and s.get('data_origin')!='legacy_synthetic' and s['scan_id']!=scan['scan_id'] and s['timestamp']<scan['timestamp'] and s.get('scope_fingerprint') and s.get('scope_fingerprint')==scan.get('scope_fingerprint')),None)
+        deltas,comparison=lifecycle(merged,previous)
+        scan['_lifecycle_comparison']=comparison
         keys = set(merged)
         results = repo.results(tenant['tenant_id'], keys)
         states = repo.item_states(tenant['tenant_id'], scan['scan_id'])
         decisions = repo.latest_decisions(tenant['tenant_id'], keys)
         items = []
         for key, (assessment, _) in merged.items():
-            items.append(dict(row(assessment), ai=ai_state(assessment, results.get(key), states.get(key)),
+            items.append(dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
                               decision=decision_state(assessment, decisions.get(key))))
         order = {'critical': 0, 'high': 1, 'evidence_required': 2}
         items.sort(key=lambda i: (order[i['review_priority']], -(i['retail_estimate_usd'] or 0), i['resource_name'], i['resource_key']))
@@ -99,14 +106,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         return [i for i in items if matches(i, filters) and (not needle or needle in (i['resource_name'] + ' ' + i['resource_id']).casefold())]
 
     def one(scan, key):
-        findings = group(scan['findings']).get(key)
-        if findings:
-            return findings, *merge(key, findings, observed_at=scan.get('timestamp'))
-        for obs in scan.get('inventory') or []:
-            pseudo = inventory_observation(obs)
-            if resource_key(pseudo) == key:
-                return [], *merge_inventory(key, pseudo, observed_at=scan.get('timestamp'))
-        raise HTTPException(404, 'Resource not found in this scan')
+        pair=assessments(scan).get(key)
+        if pair is None:raise HTTPException(404,'Resource not found in this scan')
+        return group(scan['findings']).get(key,[]), *pair
 
     def summary(items):
         counts = lambda field: {k: sum(1 for i in items if field(i) == k) for k in sorted({field(i) for i in items})}
@@ -114,38 +116,38 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     decision=counts(lambda i: (i['decision'] or {}).get('decision', 'none')),
                     review_priority=counts(lambda i: i['review_priority']))
 
-    def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision):
-        return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision)))
+    def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status):
+        return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)))
 
     filter_params = dict(
         provider=Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'), service_category=Query(None, max_length=40),
         review_priority=Query(None, pattern=r'^(critical|high|evidence_required)$'),
         ai_status=Query(None, pattern=r'^(not_run|queued|running|completed|stale|failed)$'),
         ai_risk=Query(None, pattern=r'^(low|medium|high|critical|none)$'),
-        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'))
+        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'))
 
     @router.get('/scans/{scan_id}/resources')
     def resources(scan_id: UUID, provider: str | None = filter_params['provider'],
                   service_category: str | None = filter_params['service_category'],
                   review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
-                  ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],
+                  ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
                   q: str | None = Query(None, max_length=200), limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0),
                   tenant=Depends(current_tenant)):
         scan = owned(scan_id, tenant)
         _, items = inventory(scan, tenant)
-        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision), q)
-        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=summary(items),
+        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q)
+        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summary(items),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
                     total=len(selected), items=selected[offset:offset + limit])
 
     @router.get('/scans/{scan_id}/resources/export')
     def export(scan_id: UUID, provider: str | None = filter_params['provider'],
                service_category: str | None = filter_params['service_category'],
                review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
-               ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],
+               ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
                q: str | None = Query(None, max_length=200), tenant=Depends(current_tenant)):
         scan = owned(scan_id, tenant)
         _, items = inventory(scan, tenant)
-        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision), q)
+        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q)
         return dict(filename=f"cloudsaver-resources-{scan['scan_id']}.csv", rows=len(selected), content=csv_report(selected))
 
     @router.get('/scans/{scan_id}/resources/{resource_key}')
@@ -166,10 +168,10 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         overlaps = [dict(resource_id=row['resource_id'], resource_name=row.get('resource_name'), rule_id=row['rule_id'])
                     for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_id(row['resource_id']) != selected_id]
         from app.pricing import opportunity_totals
-        costs = dict(billed_cost_usd=None, retail_estimate_usd=assessment['retail_estimate_usd'], modeled_future_cost_usd=None,
+        costs = dict(billed_cost_usd=assessment.get('billed_cost_usd'), effective_cost_usd=assessment.get('effective_cost_usd'),retail_estimate_usd=assessment['retail_estimate_usd'], modeled_future_cost_usd=None,
                      opportunity_usd=opportunity_totals(findings, realized=True)['total_monthly_opportunity_usd'],
                      verified_realized_savings_usd=None, currency='USD',
-                     explanation='Retail estimates are advisory. Resource-period billing allocation, target costs and post-change savings are not established here.')
+                     explanation='Billed/effective values are exact resource-period USD FOCUS imports where available; inspect coverage. Retail opportunities are estimates and post-change savings remain unverified.')
         return dict(scan_id=scan['scan_id'], assessment=assessment, findings=findings, ai_context=context,
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,
@@ -287,5 +289,32 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         return repo.decide(tenant['tenant_id'], key=resource_key, scan_id=scan['scan_id'], decision=body.decision,
                            note=body.note.strip(), defer_until=body.defer_until, evidence_digest=assessment['evidence_digest'],
                            actor=actor_for(tenant))
+
+    @router.get('/ai/targets')
+    def ai_targets(tenant=Depends(current_tenant)):
+        return gateway.available(tenant)
+
+    @router.get('/ai/assessments')
+    def assessment_history(limit: int = Query(25,ge=1,le=50), before: UUID | None = None,
+                           scan_id: UUID | None = None, resource_reference: str | None = Query(None,pattern=r'^[a-f0-9]{64}$'),
+                           tenant=Depends(current_tenant)):
+        try:
+            return ledger.page(tenant['tenant_id'],limit,str(before) if before else None,str(scan_id) if scan_id else None,resource_reference)
+        except AIError as error:
+            raise HTTPException(error.status,str(error)) from None
+
+    @router.get('/ai/assessments/{assessment_id}')
+    def assessment_record(assessment_id: UUID,tenant=Depends(current_tenant)):
+        result=ledger.get(tenant['tenant_id'],str(assessment_id))
+        if result is None:
+            raise HTTPException(404,'Assessment not found')
+        return result
+
+    @router.get('/ai/usage')
+    def usage(days: int = Query(30,ge=1,le=90),tenant=Depends(current_tenant)):
+        try:
+            return ledger.usage(tenant['tenant_id'],days)
+        except AIError as error:
+            raise HTTPException(error.status,str(error)) from None
 
     return router

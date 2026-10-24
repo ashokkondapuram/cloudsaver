@@ -209,19 +209,12 @@ def test_finance_routes_and_durable_history_through_real_api(evidence):
         assert summary.status_code==200 and summary.json()['billed_cost']=='210.00000000'
         assert client.get('/api/v1/finops/summary?budget=nan',headers=AUTH).status_code==422
         scan=client.post('/api/v1/scans',headers=AUTH).json();base='/api/v1/scans/'+scan['scan_id']
-        selection={k:scan['findings'][0][k] for k in ('resource_id','rule_id')}
-        preview=client.post(base+'/analysis/resource',headers=AUTH,json=selection).json()
-        request=dict(selection,target_id='review',evidence_digest=preview['assessment']['evidence_digest'],idempotency_key=str(uuid4()),acknowledge_external_processing=True)
-        response=client.post(base+'/ai-risk-evaluation',headers=AUTH,json=request)
-        assert response.status_code==200,response.text
-        second=client.post(base+'/ai-risk-evaluation',headers=AUTH,json=request)
-        assert second.json()['cached'] and second.json()['assessment_id']==response.json()['assessment_id']
-        history=client.get('/api/v1/ai/assessments',headers=AUTH).json()
-        assert len(history['items'])==1
-        detail=client.get('/api/v1/ai/assessments/'+response.json()['assessment_id'],headers=AUTH).json()
-        assert detail['response']['evidence_digest']==request['evidence_digest']
-        assert client.get('/api/v1/ai/usage',headers=AUTH).json()['groups'][0]['attempts']==1
-
+        resources=client.get(base+'/resources',headers=AUTH)
+        assert resources.status_code==200,resources.text
+        assert resources.json()['items']
+        history=client.get('/api/v1/ai/assessments',headers=AUTH)
+        assert history.status_code==200 and history.json()['items']==[]
+        assert client.post(base+'/ai-risk-evaluation',headers=AUTH,json={}).status_code==404
 
 def test_viewer_cannot_import_or_read_billing_while_history_is_tenant_scoped(evidence,monkeypatch):
     from app.auth import Role,UserClaims

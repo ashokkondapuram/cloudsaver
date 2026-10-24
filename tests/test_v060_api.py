@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.remediation_terraform import generate_cloud_terraform_hcl
 from app.trends import calculate_trend
 from tests.fixtures.synthetic_findings import demo_cloud_findings, demo_workspace
 
@@ -50,7 +49,7 @@ def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):
         assert client.get('/api/v1/trends?scan_id='+str(uuid4()), headers=auth).status_code == 404
         export = client.post('/api/v1/scans/'+first['scan_id']+'/remediation-terraform', headers=auth,
                              json={'resource_ids':[first['findings'][0]['resource_id']]})
-        assert export.status_code == 200
+        assert export.status_code == 404
     with TestClient(create_app(settings)) as client:
         monkeypatch.setattr('app.multi_cloud.scan_multi_cloud', synthetic_scan)
         assert client.get('/api/v1/scans/'+second['scan_id'], headers=auth).json() == second
@@ -70,27 +69,6 @@ def test_multi_cloud_live_failure_does_not_persist_partial(tmp_path, monkeypatch
         assert client.get('/api/v1/scans', headers=auth).json() == []
 
 
-@pytest.mark.parametrize('provider,expected', [('aws','aws_ebs_volume'),('gcp','google_compute_disk')])
-def test_import_review_requires_owned_live_scope(provider, expected):
-    tenant = demo_workspace(workspace())
-    findings = demo_cloud_findings(tenant, [provider])
-    scan = dict(mode='multi-cloud', status='completed', findings=findings)
-    result = generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], tenant)
-    assert expected in result and 'import {' in result and 'resource "' not in result
-    assert 'delete' not in result and 'destroy' not in result
-    if provider == 'aws':
-        assert 'allowed_account_ids' in result
-    else:
-        assert 'projects/demo-cloudsaver/zones/us-central1-a/disks/archive' in result
-    other = dict(tenant, aws_accounts=[], gcp_projects=[])
-    with pytest.raises(ValueError, match='scope'):
-        generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], other)
-    with pytest.raises(ValueError, match='live'):
-        generate_cloud_terraform_hcl(dict(scan, data_origin='legacy_synthetic'), [findings[0]['resource_id']], tenant)
-    findings[0]['resource_name'] = 'foreign-name'
-    if provider == 'aws':
-        with pytest.raises(ValueError, match='identity'):
-            generate_cloud_terraform_hcl(scan, [findings[0]['resource_id']], tenant)
 
 
 def test_trend_compares_resource_identity_instead_of_count_and_isolates_scope():

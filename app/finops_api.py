@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from app.auth import Role, require_workspace_role
 from app.focus import FocusError, FocusRepository, ImportRequest, money
-from app.gitops_api import bounded_json
+from app.schemas import bounded_json
 
 
 def create_router(repository, current_tenant):

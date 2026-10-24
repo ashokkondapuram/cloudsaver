@@ -25,7 +25,8 @@ export function createFindings(count=12){
   });
 }
 
-export async function mockWorkspace(page:Page,options:{role?:string;count?:number;legacy?:boolean;publishing?:boolean;ai?:boolean;protected?:boolean;zeroPrice?:boolean}={}){
+export async function mockWorkspace(page:Page,options:{role?:string;human?:boolean;count?:number;legacy?:boolean;publishing?:boolean;ai?:boolean;protected?:boolean;zeroPrice?:boolean}={}){
+  page.on('pageerror',error=>console.error('Browser runtime:',error.message));
   const findings=createFindings(options.count??12);
   if(options.zeroPrice)findings[0].estimated_monthly_waste_usd=0;
   if(options.protected)(findings[0].evidence.tags as Record<string,string>).Role='DR-Standby';
@@ -35,9 +36,14 @@ export async function mockWorkspace(page:Page,options:{role?:string;count?:numbe
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
-    if(path==='/api/v1/me')response={name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
+    if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
     else if(path===`/api/v1/scans/${scanId}/resources`)response={scan_id:scanId,observed_at:scanTime,total:0,items:[],summary:{total:0,ai_status:{},ai_risk:{},decision:{},review_priority:{}}};
     else if(path==='/api/v1/rules/effective')response={version:1,items:[]};
+    else if(path==='/api/v1/billing/plans')response={items:[],current_tier:'GROWTH',pending_request:null};
+    else if(path==='/api/v1/billing/plan-requests')response={};
+    else if(path.startsWith('/api/v1/customer/'))response={items:[]};
+    else if(path==='/api/v1/ai-batches')response={items:[]};
+    else if(path==='/api/v1/ai/governance')response={policy:{status:'processing_blocked',processors:[]},records:[],active_holds:[],events:[],counts:{}};
     else if(path==='/api/v1/settings/ai')response=foundryView(false);
     else if(path.startsWith('/api/v1/services/'))response={latest:null,history:[],resources:[]};
     else if(path==='/api/v1/scans')response=[current];
@@ -91,8 +97,13 @@ export async function mockWorkspace(page:Page,options:{role?:string;count?:numbe
 }
 
 export async function navigate(page:Page,label:string){
+  const settings:Record<string,string>={'Analysis rules':'Analysis rules','AI data governance':'AI & data governance','People & access':'Access & API keys','Cost allocation':'Cloud scopes & billing','Activity & delivery':'Cloud scopes & billing'};
+  const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Resource analysis':'Resources & 5-Pillar','Settings & integrations':'Settings & governance'};
+  const target=settings[label]?'Settings & governance':aliases[label]||label;
   if(await page.getByRole('button',{name:'Open navigation'}).isVisible()){
     await page.getByRole('button',{name:'Open navigation'}).click();
-    await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:new RegExp('^'+label)}).click();
-  }else await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:new RegExp('^'+label)}).click();
+    await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:target,exact:true}).click();
+  }else await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:target,exact:true}).click();
+  if(settings[label])await page.getByRole('tab',{name:settings[label],exact:true}).click();
+  if(label==='Activity & delivery')await page.getByText('Workspace activity and delivery',{exact:true}).click();
 }

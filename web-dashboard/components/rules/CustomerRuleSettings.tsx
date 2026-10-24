@@ -7,7 +7,7 @@ import {Loading, Notice, SectionTitle} from '../ui/shared';
 import {Dialog} from '../ui/dialog';
 
 type Rule = {id: string; name: string; description: string; provider: string; resource_type: string;
-  enabled: boolean; status: string; parameters: Record<string, number>;
+  service_category?:string; enabled: boolean; status: string; parameters: Record<string, number>;
   allowed_override_bounds: Record<string, {minimum: number; maximum: number}>; unavailable_reason: string | null};
 type Policy = {version: number; items: Rule[]};
 type Change = {rule_id: string; enabled: boolean; parameters: Record<string, number>};
@@ -23,6 +23,7 @@ export function CustomerRuleSettings() {
     catch (cause) {if (!signal?.aborted) setError((cause as Error).message);}
   }, [token]);
   useEffect(() => {setData(null); setDraft({}); setPreview(null); const c = new AbortController(); void load(c.signal); return () => c.abort();}, [load, workspace?.tenant_id]);
+  const [service,setService]=useState(''),[search,setSearch]=useState('');
   const restricted = !!workspace?.scope_restrictions;
   const canEdit = canAdmin && !restricted;
   function edit(rule: Rule, changes: Partial<Change>) {
@@ -49,8 +50,10 @@ export function CustomerRuleSettings() {
       {!data ? <Loading label="Loading published rules…"/> : <>
         <label className="field-label">Provider<select value={provider} onChange={e => setProvider(e.target.value)}>
           <option value="">All providers</option>{[...new Set(data.items.map(r => r.provider))].sort().map(p => <option key={p}>{p}</option>)}</select></label>
+        <div className="optimization-form"><label>Service category<select value={service} onChange={e=>setService(e.target.value)}><option value="">All services</option>{[...new Set(data.items.map(r=>r.service_category).filter(Boolean))].sort().map(c=><option key={c}>{c}</option>)}</select></label>
+          <label>Find a resource rule<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rule name, ID or resource type"/></label></div>
         <div className="summary-table-scroll"><table className="summary-table"><thead><tr><th>Rule and service</th><th>Effective state</th><th>Delegated parameters</th></tr></thead><tbody>
-          {data.items.filter(r => !provider || r.provider === provider).map(rule => <tr key={rule.id}>
+          {data.items.filter(r => (!provider || r.provider === provider)&&(!service||r.service_category===service)&&(!search||[r.id,r.name,r.resource_type].join(' ').toLowerCase().includes(search.toLowerCase()))).map(rule => <tr key={rule.id}>
             <td><strong>{rule.name}</strong><p>{rule.provider} · {rule.resource_type}</p><small>{rule.description}</small></td>
             <td><label><input type="checkbox" aria-label={`Enable ${rule.name}`} checked={draft[rule.id]?.enabled ?? rule.enabled}
               disabled={!canEdit || busy || rule.status !== 'published' || !!rule.unavailable_reason} onChange={e => edit(rule, {enabled: e.target.checked})}/>

@@ -5,7 +5,6 @@ import copy
 import pytest
 from app.commitment_arbitrage import parse_strict_monetary_decimal,calculate_clean_commitment_baseline,hourly_p10
 from app.causal_topology_simulator import simulate_cascading_topology_savings,evaluate_slo_bounded_rightsizing,analyze_cross_az_and_nat_hairpin_waste,analyze_ephemeral_batch_waste
-from app.realized_savings_verifier import evaluate_realized_savings
 
 NOW=datetime.now(timezone.utc).replace(second=0,microsecond=0)
 NOW-=timedelta(minutes=NOW.minute%5)
@@ -122,73 +121,20 @@ def test_ephemeral_batch_slack_is_not_realized_cash():
     with pytest.raises(ValueError):analyze_ephemeral_batch_waste([dict(job_id='batch-a',duration_minutes=20,active_compute_minutes=21,billed_cost_usd='4')])
 
 
-def verification():
-    action=NOW-timedelta(days=61)
-    case=dict(provider='azure',scope_id='scope',resource_id='disk',resource_type='disk',state='scheduled',action='retirement',scheduled_at=action.isoformat(),baseline_rule_ids=['ORPHANED_DISK'])
-    scan=dict(scan_id='latest',timestamp=NOW.isoformat(),status='completed',inventory=[],findings=[],scope_results=[dict(provider='azure',scope_id='scope',status='completed',supported_inventory_complete=True,supported_resource_types=['disk'])])
-    audit=dict(trusted=True,operation='delete',status='Succeeded',occurred_at=(action+timedelta(hours=1)).isoformat())
-    billing=dict(trusted=True,provider_reconciled=True,coverage_complete=True,overhead_inventory_complete=True,currency='USD',
-        baseline_start=(action-timedelta(days=30)).date().isoformat(),baseline_end=action.date().isoformat(),
-        observation_start=(action+timedelta(days=1)).date().isoformat(),observation_end=(action+timedelta(days=31)).date().isoformat(),
-        baseline_monthly_cost_usd='100',post_resource_cost_usd='0',new_backup_or_snapshot_overhead_usd='15',one_time_transition_cost_usd='0')
-    return case,scan,audit,billing
 
 
-def test_verified_retirement_needs_complete_scope_audit_and_net_reconciled_billing():
-    case,scan,audit,billing=verification()
-    assert evaluate_realized_savings(case,scan,audit=audit,billing=billing,now=NOW)['verified_realized_savings_usd']=='85'
-    for changed in (dict(billing,trusted=False),dict(billing,overhead_inventory_complete=False),dict(billing,provider_reconciled=False)):
-        assert evaluate_realized_savings(case,scan,audit=audit,billing=changed,now=NOW)['state']=='scheduled'
-    scan['scope_results']=[]
-    result=evaluate_realized_savings(case,scan,audit=audit,billing=billing,now=NOW)
-    assert result['reasons']==['unverified_scope_missing'] and result['verified_realized_savings_usd'] is None
 
 
-def test_post_change_regression_reopens_and_never_reuses_the_prior_savings_claim():
-    case,scan,audit,billing=verification();case.update(state='verified_completed',previous_verified_savings='85')
-    scan['inventory']=[{'cloud_provider':'azure','resource_id':'disk','evidence':{}}]
-    result=evaluate_realized_savings(case,scan,now=NOW)
-    assert result['state']=='reopened_on_regression' and Decimal(result['verified_realized_savings_usd'])==0
 
 
-def test_cost_increase_is_not_hidden_by_zero_clamping():
-    case,scan,audit,billing=verification();billing['new_backup_or_snapshot_overhead_usd']='120'
-    assert Decimal(evaluate_realized_savings(case,scan,audit=audit,billing=billing,now=NOW)['verified_realized_savings_usd'])==-20
 
 
-def test_privacy_scrubbing_never_enables_client_derived_publication():
-    from app.knowledge_pipeline import scrub_and_validate_knowledge_candidate
-    value='Account 123456789012 disk /subscriptions/11111111-1111-4111-8111-111111111111/disks/secret contact owner@client.internal address 10.1.2.3'
-    result=scrub_and_validate_knowledge_candidate(value,origin='synthetic')
-    assert '123456789012' not in result['scrubbed_text'] and 'owner@' not in result['scrubbed_text'] and '10.1.2.3' not in result['scrubbed_text']
-    assert result['publication_eligible'] is False and result['dual_review_required'] is True
-    with pytest.raises(ValueError):scrub_and_validate_knowledge_candidate(value,origin='tenant_observation')
-    with pytest.raises(ValueError):scrub_and_validate_knowledge_candidate('private-client-code',origin='synthetic',tenant_tokens=['private-client-code'])
 
 
-@pytest.mark.parametrize('kind,values',[('google_compute_region_commitment',{}),('aws_savingsplans_savings_plan',{}),
-    ('azurerm_cognitive_deployment',{'sku':[{'name':'ProvisionedManaged'}]}),('azurerm_cognitive_deployment',{})])
-def test_commitment_firewall_requires_independent_baseline_approval(kind,values):
-    from test_plan_policy import resource,plan
-    from app.plan_policy import evaluate_plan
-    result=evaluate_plan(plan(resource(kind+'.review',kind,values=values)))
-    assert result['decision']=='fail' and 'CLEAN_BASELINE_APPROVAL_REQUIRED' in {r['code'] for r in result['issues']}
 
 
-def test_known_payg_deployment_and_cost_category_are_not_commitment_purchases():
-    from test_plan_policy import resource,plan
-    from app.plan_policy import evaluate_plan
-    for kind,values in [('azurerm_cognitive_deployment',{'sku':[{'name':'Standard'}]}),('aws_ce_cost_category',{})]:
-        assert evaluate_plan(plan(resource(kind+'.review',kind,values=values)))['decision']=='pass'
 
 
-def test_account_scan_in_another_region_cannot_verify_missing_resource():
-    from app.realized_savings_verifier import scope_is_complete
-    case,scan,_,_=verification();case.update(provider='aws',region='us-west-2',resource_type='aws:ec2:volume')
-    scan['scope_results']=[dict(provider='aws',scope_id=case['scope_id'],status='completed',supported_inventory_complete=True,supported_resource_types=['aws:ec2:volume'],regions=['us-east-1'])]
-    assert scope_is_complete(case,scan) is False
-    scan['scope_results'][0]['regions'].append('us-west-2')
-    assert scope_is_complete(case,scan) is True
 
 
 if __name__=='__main__':

@@ -16,6 +16,7 @@ RESOURCES = (
     ('/api/v1/pods', 'Pod'), ('/api/v1/nodes', 'Node'), ('/api/v1/namespaces', 'Namespace'),
     ('/apis/apps/v1/deployments', 'Deployment'), ('/apis/apps/v1/statefulsets', 'StatefulSet'),
     ('/apis/apps/v1/daemonsets', 'DaemonSet'), ('/apis/apps/v1/replicasets', 'ReplicaSet'),
+    ('/apis/batch/v1/jobs','Job'),
     ('/apis/batch/v1/cronjobs', 'CronJob'), ('/apis/autoscaling/v2/horizontalpodautoscalers', 'HorizontalPodAutoscaler'),
     ('/apis/policy/v1/poddisruptionbudgets', 'PodDisruptionBudget'),
     ('/api/v1/persistentvolumeclaims', 'PersistentVolumeClaim'), ('/api/v1/persistentvolumes', 'PersistentVolume'),

@@ -31,11 +31,16 @@ def process_item(tenant, scans, repo, gateway, item):
     """Returns False when the batch must wait for the next budget hour."""
     tenant_id = tenant['tenant_id']
     scan = scans.get(tenant_id, item['scan_id'])
-    findings = group(scan['findings']).get(item['resource_key']) if scan else None
-    if not findings:
-        repo.finish(tenant_id, item['id'], 'skipped', reason='resource_missing')
+    if scan:
+        from app.focus import FocusRepository
+        scan=FocusRepository(repo.store).attach(tenant,scan)
+    from app.resource_assessment import assessments,inventory_observation
+    pair=assessments(scan).get(item['resource_key']) if scan else None
+    if pair is None:
+        repo.finish(tenant_id,item['id'],'skipped',reason='resource_missing')
         return True
-    assessment, context = merge(item['resource_key'], findings, observed_at=scan.get('timestamp'))
+    assessment,context=pair
+    findings=group(scan['findings']).get(item['resource_key']) or [inventory_observation(r) for r in scan.get('inventory',[]) if r['resource_id']==assessment['resource_id']]
     if assessment['evidence_digest'] != item['evidence_digest']:
         repo.finish(tenant_id, item['id'], 'skipped', reason='evidence_changed')
         return True

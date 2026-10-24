@@ -39,29 +39,42 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0018_ai_data_governance before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0019_multicloud_governance_and_pillars before startup ({table})')
+                if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
+                    raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
                 existing=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_inference_attempts'").fetchone()
                 if existing and 'content_erased_at' not in {r[1] for r in db.execute('PRAGMA table_info(ai_inference_attempts)').fetchall()}:
                     db.execute('ALTER TABLE ai_inference_attempts ADD COLUMN content_erased_at TEXT')
+                for table,columns in (('ai_data_events',('cloud_provider','scope_id')),('ai_data_holds',('released_at','released_by','release_reason','review_ticket'))):
+                    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=%s",(table,)).fetchone():
+                        present={r[1] for r in db.execute('PRAGMA table_info('+table+')').fetchall()}
+                        for column in columns:
+                            if column not in present:db.execute('ALTER TABLE '+table+' ADD COLUMN '+column+' TEXT')
                 db.db.executescript('''
                 CREATE TABLE IF NOT EXISTS ai_data_events (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,purpose TEXT NOT NULL,decision TEXT NOT NULL,
-                    reason TEXT NOT NULL,policy_digest TEXT NOT NULL,target_id TEXT,metadata TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                    reason TEXT NOT NULL,policy_digest TEXT NOT NULL,target_id TEXT,metadata TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,cloud_provider TEXT,scope_id TEXT);
                 CREATE TABLE IF NOT EXISTS ai_data_retention (
                     attempt_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,purpose TEXT NOT NULL,policy_digest TEXT NOT NULL,
                     expires_at TEXT NOT NULL,erased_at TEXT,created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS ai_data_holds (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,attempt_id TEXT NOT NULL,review_reference TEXT NOT NULL,
-                    hold_until TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                    hold_until TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,released_at TEXT,released_by TEXT,release_reason TEXT,review_ticket TEXT);
+                CREATE TABLE IF NOT EXISTS _ai_hold_release_permits(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS _ai_erasure_permits (attempt_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL);
                 CREATE TRIGGER IF NOT EXISTS ai_data_events_no_update BEFORE UPDATE ON ai_data_events
                     BEGIN SELECT RAISE(ABORT,'Data-use audit is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS ai_data_events_no_delete BEFORE DELETE ON ai_data_events
                     BEGIN SELECT RAISE(ABORT,'Data-use audit is append-only'); END;
-                CREATE TRIGGER IF NOT EXISTS ai_data_holds_no_update BEFORE UPDATE ON ai_data_holds
+                DROP TRIGGER IF EXISTS ai_data_holds_no_update;
+                CREATE TRIGGER ai_data_holds_no_update BEFORE UPDATE ON ai_data_holds
+                    WHEN NOT(OLD.released_at IS NULL AND NEW.released_at IS NOT NULL AND OLD.id=NEW.id AND OLD.tenant_id=NEW.tenant_id
+                      AND OLD.attempt_id=NEW.attempt_id AND OLD.hold_until=NEW.hold_until AND OLD.review_reference=NEW.review_reference
+                      AND OLD.actor=NEW.actor AND OLD.created_at=NEW.created_at
+                      AND EXISTS(SELECT 1 FROM _ai_hold_release_permits WHERE id=OLD.id AND tenant_id=OLD.tenant_id))
                     BEGIN SELECT RAISE(ABORT,'Legal holds are append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS ai_data_holds_no_delete BEFORE DELETE ON ai_data_holds
                     BEGIN SELECT RAISE(ABORT,'Legal holds are append-only'); END;

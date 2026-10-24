@@ -7,10 +7,8 @@ from fastapi.routing import APIRoute
 from app.config import Settings
 from app.main import create_app as scanner
 from app.route_inventory import ROUTES, classify
-from services.analytics import create_app as analytics
 from services.gateway import create_app as gateway
-from services.notification import create_app as notification
-from services.tenant import create_app as tenant_service
+from app.main import create_app as tenant_service
 from services.agent_gateway import create_app as agent_gateway
 
 TID = '11111111-1111-4111-8111-111111111111'
@@ -48,10 +46,7 @@ def apps(tmp_path):
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}))
     return {
         'gateway': gateway(config, Limiter(), transport),
-        'tenant': tenant_service(config),
         'scanner': scanner(config, scanner=lambda tenant: []),
-        'analytics': analytics(config, transport),
-        'notification': notification(config, transport),
         'agent': agent_gateway(config),
     }
 

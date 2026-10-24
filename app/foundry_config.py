@@ -47,7 +47,6 @@ class Providers(Strict):
 
 class FoundryPolicy(Strict):
     advisory_enabled: bool = False
-    allow_anonymized_knowledge_candidates: bool = False
     routing_mode: Literal['same_cloud_only', 'workspace_default_provider'] = 'same_cloud_only'
     primary_provider: Literal['azure', 'aws', 'gcp'] = 'azure'
     max_input_tokens_per_request: int = Field(4000, ge=256, le=16000)
@@ -62,7 +61,10 @@ class FoundrySettings(Strict):
 
 
 def normalize(value):
-    return FoundrySettings.model_validate({} if value is None else value).model_dump()
+    value = dict(value or {})
+    if isinstance(value.get('policy'), dict):
+        value['policy'] = {k:v for k,v in value['policy'].items() if k != 'allow_anonymized_knowledge_candidates'}
+    return FoundrySettings.model_validate(value).model_dump()
 
 
 def provider_fields(target, tenant_id):

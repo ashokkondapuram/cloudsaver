@@ -118,6 +118,16 @@ def project(cluster, objects, metrics, sources, now):
                 evidence.update(replicas=spec.get('replicas'), available_replicas=status.get('availableReplicas'),
                     desired_replicas=status.get('desiredNumberScheduled') if kind=='DaemonSet' else spec.get('replicas',1),
                     template_generation=meta.get('generation'))
+                if kind=='StatefulSet':
+                    labels=spec.get('template',{}).get('metadata',{}).get('labels',{});pdbs=objects.get('PodDisruptionBudget')
+                    evidence.update(volume_claim_templates=[dict(name=t.get('metadata',{}).get('name'),storage_class=t.get('spec',{}).get('storageClassName'),requested_bytes=quantity(t.get('spec',{}).get('resources',{}).get('requests',{}).get('storage'))) for t in spec.get('volumeClaimTemplates',[])],
+                        topology_spread_constraints_present=bool(spec.get('template',{}).get('spec',{}).get('topologySpreadConstraints')),
+                        pdb_inventory_complete=pdbs is not None,pdb_present=None if pdbs is None else any(p['metadata']['namespace']==meta['namespace'] and not p.get('spec',{}).get('selector',{}).get('matchExpressions') and all(labels.get(k)==v for k,v in p.get('spec',{}).get('selector',{}).get('matchLabels',{}).items()) for p in pdbs))
+            elif kind in ('CronJob','Job'):
+                jobs=objects.get('Job');owned=[j for j in jobs or [] if j['metadata'].get('namespace')==meta['namespace'] and (kind=='Job' and j['metadata']['uid']==meta['uid'] or kind=='CronJob' and any(o.get('uid')==meta['uid'] and o.get('controller') is True for o in j['metadata'].get('ownerReferences',[])))]
+                job_spec=spec.get('jobTemplate',{}).get('spec',{}) if kind=='CronJob' else spec
+                evidence.update(job_inventory_complete=jobs is not None,ttl_seconds_after_finished=job_spec.get('ttlSecondsAfterFinished'),
+                    completed_jobs=sum(bool(j.get('status',{}).get('completionTime')) for j in owned),backoff_exceeded_jobs=sum(any(c.get('reason')=='BackoffLimitExceeded' and c.get('status')=='True' for c in j.get('status',{}).get('conditions',[])) for j in owned))
             elif kind == 'PersistentVolume':
                 evidence.update(phase=status.get('phase'), storage_class=spec.get('storageClassName'), csi_driver=spec.get('csi',{}).get('driver'),csi_volume_handle=spec.get('csi',{}).get('volumeHandle'))
             elif kind == 'StorageClass':
@@ -156,4 +166,15 @@ def project(cluster, objects, metrics, sources, now):
                 capacity['requested_'+dimension]=sum(r['evidence']['requests'][dimension] for r in members)
                 capacity['daemon_'+dimension]=sum(r['evidence']['requests']['daemon_'+dimension] for r in members)
         for row in members:row['evidence']['pool_capacity']=dict(capacity,complete=known,node_count=len(members))
+    for parent in rows:
+        if parent['resource_type']!='kubernetes.io/DaemonSet':continue
+        e=parent['evidence'];containers=[r['evidence'] for r in rows if r['resource_type']=='kubernetes.io/Container' and (r['evidence'].get('controller') or {}).get('uid')==e['uid']]
+        nodes={v.get('node') for v in containers};complete=bool(containers) and None not in nodes and len(nodes)==e.get('desired_replicas')
+        slack=0.
+        for c in containers:
+            metrics=c.get('metrics') or {};cpu=metrics.get('cpu') or {};request=metrics.get('cpu_request') or {};throttle=metrics.get('throttling') or {};current=c.get('cpu_request')
+            valid=all(v.get('sufficient') is True for v in (cpu,request,throttle)) and type(current) in (int,float) and request.get('minimum')==request.get('maximum')==current and throttle.get('p95',1)<=.02
+            complete=complete and valid
+            if valid:slack+=max(0,current-cpu['p95']*1.5)
+        e['daemonset_allocation']=dict(complete=complete,cpu_slack_cores=slack if complete else None,observed_node_count=len(nodes))
     return rows

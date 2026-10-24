@@ -47,6 +47,8 @@ def workspace(scan):
                 actual_p95=None,physical=None)
         clusters.append(dict(cluster_id=cluster,coverage=coverage(selected,[f for f in scan['findings'] if f['resource_id'] in ids],[r for r in outcomes if r['resource_id'] in ids]),
             sources=list(source_map.values()),capacity=capacity,
+            billed_node_cost_usd=sum(r['evidence']['billed_node_cost_usd'] for r in nodes) if nodes and all(r['evidence'].get('billed_node_cost_usd') is not None for r in nodes) else None,
+            realizable_node_savings_usd=sum(next(iter(v)) for v in {pool:{r['evidence'].get('realizable_node_savings_usd') for r in nodes if r['evidence'].get('node_pool')==pool} for pool in {r['evidence'].get('node_pool') for r in nodes}}.values()) if nodes and all(r['evidence'].get('realizable_node_savings_usd') is not None for r in nodes) else None,
             reconciliation_status='source_conflict' if any(r.get('reconciliation_status')=='source_conflict' for r in selected) else 'partial_telemetry'))
     return dict(scan_id=scan['scan_id'],observed_at=scan['timestamp'],clusters=clusters,
         rule_matrix=[dict(rule_id=r[0],name=r[2],pillar=r[3],outcomes=dict(Counter(o['outcome'] for o in outcomes if o['rule_id']==r[0]))) for r in DEFINITIONS],
@@ -57,7 +59,7 @@ def workspace(scan):
         financial_note='Container allocation opportunities are not additive to node consolidation or verified bill savings.')
 
 
-def create_router(store,current_tenant,*,savings_repository=None):
+def create_router(store,current_tenant,*,evidence_store=None):
     router=APIRouter(prefix='/api/v1/scans')
     def owned(scan_id,tenant):
         scan=store.get(tenant['tenant_id'],str(scan_id))
@@ -68,7 +70,11 @@ def create_router(store,current_tenant,*,savings_repository=None):
 
     @router.get('/{scan_id}/kubernetes')
     def view(scan_id:UUID,tenant=Depends(current_tenant)):
-        return workspace(owned(scan_id,tenant))
+        scan=owned(scan_id,tenant)
+        if evidence_store is not None:
+            from app.focus import FocusRepository
+            scan=FocusRepository(evidence_store).attach(tenant,scan)
+        return workspace(scan)
 
     @router.post('/{scan_id}/kubernetes/patch-preview')
     def preview(scan_id:UUID,body:Preview,tenant=Depends(current_tenant)):
@@ -111,12 +117,15 @@ def create_router(store,current_tenant,*,savings_repository=None):
         key='cpu_request_cores' if dimension=='cpu' else 'memory_request_bytes'
         import math
         amount=max(p[key] for p in proposals)
-        if savings_repository is None:
-            raise HTTPException(409,'A trusted SLO evidence source is required before generating a capacity-reduction patch.')
+        from app.causal_topology_simulator import evaluate_slo_bounded_rightsizing
         for sibling in siblings:
-            gate=savings_repository.slo_gate(tenant,sibling)
+            slo=(sibling.get('evidence') or {}).get('slo_evidence')
+            try:
+                gate=evaluate_slo_bounded_rightsizing(slo)
+            except (ValueError,TypeError):
+                gate=None
             if not gate or gate.get('status')!='review_eligible':
-                raise HTTPException(409,'Complete trusted SLO, latency and error-budget evidence is required for every replica before reducing capacity.')
+                raise HTTPException(409,'Complete saved SLO, latency and error-budget evidence is required for every replica before reducing capacity.')
         rounded=math.ceil(amount*1000)/1000 if dimension=='cpu' else math.ceil(amount/1024**2)*1024**2
         if rounded>=min(r['evidence'][dimension+'_request'] for r in siblings):
             raise HTTPException(409,'A single safe lower request could not be established across all replicas.')

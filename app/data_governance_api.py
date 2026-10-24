@@ -25,6 +25,11 @@ class HoldRequest(PrivacyRequest):
         return value.astimezone(timezone.utc)
 
 
+class ReleaseRequest(Strict):
+    release_reason:str=Field(min_length=3,max_length=500)
+    review_ticket:str=Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]{2,119}$')
+
+
 def create_router(store,current_tenant,governor=None):
     router=APIRouter(prefix='/api/v1/ai/governance');retention=DataRetention(store);governor=governor or DataGovernor(store)
     def owner(tenant):
@@ -36,7 +41,8 @@ def create_router(store,current_tenant,governor=None):
 
     @router.get('')
     def view(tenant=Depends(current_tenant)):
-        retention.purge(tenant['tenant_id'])
+        from app.data_scope import restricted
+        if not restricted(tenant):retention.purge(tenant['tenant_id'])
         return dict(policy=governor.view(tenant),**retention.view(tenant))
 
     @router.post('/records/{attempt_id}/erase')
@@ -48,5 +54,13 @@ def create_router(store,current_tenant,governor=None):
     def hold(attempt_id:UUID,body:HoldRequest,tenant=Depends(current_tenant)):
         owner(tenant)
         return call(retention.hold,tenant,str(attempt_id),body.hold_until,body.review_reference)
+
+    @router.post('/holds/{hold_id}/release')
+    def release(hold_id:UUID,body:ReleaseRequest,tenant=Depends(current_tenant)):
+        owner(tenant)
+        from app.data_scope import restricted
+        if tenant.get('key_id') or restricted(tenant) or not (tenant.get('user_id') or tenant.get('subject_type')=='user' and tenant.get('subject_id')):
+            raise HTTPException(403,'A full-workspace human administrator session is required to release preservation.')
+        return call(retention.release,tenant,str(hold_id),body.release_reason,body.review_ticket)
 
     return router

@@ -13,13 +13,13 @@ import {AIRisk, AIStatusBadge, DecisionBadge, PillarDots} from './ResourceParts'
 import {ResourceDrawer} from './ResourceDrawer';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 
-type Filters = {provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string};
-const empty: Filters = {provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: ''};
+type Filters = {service_category:string;pillar_status:string;provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string};
+const empty: Filters = {service_category:'',pillar_status:'',provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: ''};
 const priorityRank: Record<string, number> = {critical: 0, high: 1, evidence_required: 2};
 
 function matches(row: ResourceRow, filters: Filters, query: string) {
   const needle = query.trim().toLowerCase();
-  return (!filters.provider || row.provider === filters.provider) && (!filters.review_priority || row.review_priority === filters.review_priority)
+  return (!filters.service_category||row.service_category===filters.service_category)&&(!filters.pillar_status||Object.values(row.pillars).includes(filters.pillar_status as 'observed'|'risk'|'unknown'))&&(!filters.provider || row.provider === filters.provider) && (!filters.review_priority || row.review_priority === filters.review_priority)
     && (!filters.ai_status || row.ai.status === filters.ai_status) && (!filters.ai_risk || (row.ai.risk_level || 'none') === filters.ai_risk)
     && (!filters.decision || (row.decision?.decision || 'none') === filters.decision)
     && (!needle || `${row.resource_name} ${row.resource_id}`.toLowerCase().includes(needle));
@@ -94,6 +94,7 @@ export function ResourcesView() {
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
   const deferred = useDeferredValue(query);
   const openKey = params.get('resource');
+  useEffect(()=>{setFilters(f=>({...f,provider:params.get('provider')||'',service_category:params.get('service')||''}));},[params]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id]);
   const rows = useMemo(() => (page?.items || []).filter(r => matches(r, filters, deferred)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred]);
   const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)), [page, selected]);
@@ -128,7 +129,7 @@ export function ResourcesView() {
   const toggle = (key: string) => setSelected(previous => {const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next;});
   const select = (name: keyof Filters, options: [string, string][], aria: string) => <label><span className="sr-only">{aria}</span><select aria-label={aria} value={filters[name]} onChange={e => setFilters(f => ({...f, [name]: e.target.value}))}>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>;
   return <>
-    <div className="resource-summary">
+    <p className="inline-help">{summary.resolved_count??'Unknown'} previously flagged resources now have no findings; {summary.no_longer_observed_count??'unknown'} are no longer observed. Absence does not prove deletion or savings.</p><div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
       <article><span>AI assessed</span><strong>{(summary.ai_status.completed || 0).toLocaleString()}</strong><small>{(summary.ai_status.stale || 0).toLocaleString()} stale · {(summary.ai_status.not_run || 0).toLocaleString()} not run</small></article>
       <article><span>High or critical AI risk</span><strong>{((summary.ai_risk.high || 0) + (summary.ai_risk.critical || 0)).toLocaleString()}</strong><small>Unverified model suggestions</small></article>
@@ -139,12 +140,13 @@ export function ResourcesView() {
       <div className="grid-heading"><div><h2>Resource analysis <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One assessment per resource, merged from all of its findings · observed {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
-          <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           {canAdmin && <button className="button primary" disabled={!!batch && ACTIVE_BATCH.includes(batch.status)} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
         </div></div>
       <div className="grid-filters">
         <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search resource names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
         {select('provider', [['', 'All clouds'], ...[...new Set(page.items.map(r => r.provider))].sort().map(p => [p, providerNames[p] || p] as [string, string])], 'Cloud provider')}
+        {select('service_category',[['','All services'],...[...new Set(page.items.map(r=>r.service_category))].sort().map(v=>[v,sentence(v)] as [string,string])],'Service category')}
+        {select('pillar_status',[['','All pillar statuses'],['observed','Observed'],['risk','Risk'],['unknown','Unknown']],'Pillar status')}
         {select('review_priority', [['', 'All priorities'], ['critical', 'Critical'], ['high', 'High'], ['evidence_required', 'Evidence required']], 'Review priority')}
         {select('ai_status', [['', 'All AI statuses'], ...Object.entries(aiStatusLabels)], 'AI status')}
         {select('ai_risk', [['', 'All AI risks'], ['critical', 'Critical'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['unknown', 'Unknown'], ['none', 'Not assessed']], 'AI risk')}
@@ -152,16 +154,17 @@ export function ResourcesView() {
       </div>
       <div className="grid-scroll" tabIndex={0} aria-label="Scrollable resource table">
         <table className="data-table resource-table">
-          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>Retail estimate</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
+          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
           <tbody>{rows.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key)}>
             <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.resource_name}`} checked={selected.has(r.resource_key)} onChange={() => toggle(r.resource_key)}/></td>
-            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]}</small></button></td>
+            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]} {r.lifecycle_delta&&<span className="mini-badge">{r.lifecycle_delta}</span>}</small></button></td>
             <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
+            <td className="money-cell">{money(r.billed_cost_usd??null)}</td><td className="money-cell">{money(r.effective_cost_usd??null)}</td>
             <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'}>{money(r.retail_estimate_usd)}</td>
             <td><AIRisk ai={r.ai}/></td><td><AIStatusBadge ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
             <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key);}}><ChevronRight size={16}/></button></td>
           </tr>)}
-          {!rows.length && <tr><td colSpan={11}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery('');}}>Reset filters</button></EmptyState></td></tr>}</tbody>
+          {!rows.length && <tr><td colSpan={13}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery('');}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
       <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length.toLocaleString()} matching resources</span>{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
@@ -169,28 +172,4 @@ export function ResourcesView() {
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
     <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} onClose={() => open(null)} onChange={reload}/>
   </>;
-}
-
-export function ResourceReport() {
-  const {scan, token, workspace} = useWorkspace();
-  const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
-  const {page, error} = useResources(scan?.scan_id, token, live);
-  if (!live) return <EmptyState icon={Server} title="A live scan is required">Select a completed live scan to print its resource report.</EmptyState>;
-  if (error) return <Notice tone="error">{error}</Notice>;
-  if (!page) return <Loading label="Preparing your report…"/>;
-  const rows = [...page.items].sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]);
-  return <article className="resource-report">
-    <div className="report-actions"><Link className="button secondary" href="/resources">Back</Link><button className="button primary" onClick={() => window.print()}><Printer size={15}/>Print</button></div>
-    <header><h1>Resource analysis report</h1><p>{workspace?.name} · Scan {scan.scan_id.slice(0, 8)} · Observed {dateTime(page.observed_at)} · Generated {dateTime(new Date().toISOString())}</p>
-      <p>{page.summary.total.toLocaleString()} resources · {(page.summary.ai_status.completed || 0).toLocaleString()} with current AI assessments · {(page.summary.total - (page.summary.decision.none || 0)).toLocaleString()} with decisions</p></header>
-    {rows.map(r => <section key={r.resource_key} className="report-resource">
-      <h2>{r.resource_name || r.resource_id} <small>{providerNames[r.provider] || r.provider} · {sentence(r.review_priority)} · {money(r.retail_estimate_usd)}</small></h2>
-      <p className="report-id">{r.resource_id}</p>
-      <p>Pillars: {Object.entries(r.pillars).map(([p, s]) => `${p} ${s}`).join(' · ')}</p>
-      <p>AI: {aiStatusLabels[r.ai.status]}{r.ai.risk_level ? ` · suggested risk ${r.ai.risk_level}` : ''}{r.ai.summary ? ` — ${r.ai.summary}` : ''}</p>
-      {!!r.ai.actions.length && <ol>{r.ai.actions.map((a, i) => <li key={i}><strong>{a.title}</strong> ({sentence(a.kind)}, effort {a.effort}, change risk {a.change_risk}) — {a.rationale}</li>)}</ol>}
-      {r.decision && <p>Decision: {decisionLabels[r.decision.decision]} · {dateTime(r.decision.created_at)}{r.decision.note ? ` — ${r.decision.note}` : ''}{r.decision.evidence_changed ? ' (evidence changed since)' : ''}</p>}
-    </section>)}
-    <footer>AI text is unverified advice. It doesn’t approve actions or establish dependencies, billed cost or live state. Guardrails in CloudSaver remain required.</footer>
-  </article>;
 }

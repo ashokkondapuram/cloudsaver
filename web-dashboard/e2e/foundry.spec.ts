@@ -14,7 +14,7 @@ test('AI configuration needs explicit opt-in without enabling knowledge sharing'
     }
     return route.fulfill({json: view});
   });
-  await page.goto('/settings/ai');
+  await page.goto('/settings?tab=ai');
   await expect(page.getByRole('heading', {name: 'AI Foundry configuration'})).toBeVisible();
   await page.getByLabel('Azure AI Foundry binding', {exact: true}).selectOption('review');
   const azure = page.locator('article').filter({has: page.getByRole('heading', {name: 'Azure AI Foundry', exact: true})});
@@ -27,7 +27,7 @@ test('AI configuration needs explicit opt-in without enabling knowledge sharing'
   expect(writes[0].version).toBe(1);
   expect(writes[0].acknowledge_external_processing).toBe(true);
   expect(writes[0].ai_foundry.policy.advisory_enabled).toBe(true);
-  expect(writes[0].ai_foundry.policy.allow_anonymized_knowledge_candidates).toBe(false);
+  expect(writes[0].ai_foundry.policy).not.toHaveProperty('allow_anonymized_knowledge_candidates');
   expect(JSON.stringify(writes[0])).not.toContain('api_key');
   await expect(page.getByRole('checkbox', {name: /I acknowledge the selected provider/})).not.toBeChecked();
 });
@@ -40,7 +40,7 @@ test('metadata diagnostics do not display invocation RBAC as verified', async ({
   await page.route('**/api/v1/settings/ai/test-connection', route => route.fulfill({json: {
     status: 'inconclusive', latency_ms: 3, failure_category: null, remediation_hint: 'Metadata reads do not prove inference permissions.',
     stages: [{check: 'federated_identity', status: 'verified'}, {check: 'model_invocation_permissions_and_quota', status: 'not_tested'}], inference_invoked: false}}));
-  await page.goto('/settings/ai');
+  await page.goto('/settings?tab=ai');
   await page.getByRole('button', {name: 'Test Azure AI Foundry connection'}).click();
   await expect(page.getByRole('status').filter({hasText: 'inference permission unverified'})).toBeVisible();
   await expect(page.getByText('model invocation permissions and quota: not tested')).toBeVisible();
@@ -50,7 +50,7 @@ test('metadata diagnostics do not display invocation RBAC as verified', async ({
 test('viewer AI settings have no mutation or connection-check controls', async ({page}) => {
   await mockWorkspace(page, {role: 'Viewer'});
   await page.route('**/api/v1/settings/ai', route => route.fulfill({json: foundryView(false)}));
-  await page.goto('/settings/ai');
+  await page.goto('/settings?tab=ai');
   await expect(page.getByLabel('Azure AI Foundry binding', {exact: true})).toBeDisabled();
   await expect(page.getByRole('button', {name: 'Save AI configuration'})).toHaveCount(0);
   await expect(page.getByRole('button', {name: /Test.*connection/})).toHaveCount(0);
@@ -78,9 +78,9 @@ test('resource drawer separates evidence, rules, dependencies and unknown financ
   await navigate(page, 'Resource analysis');
   await page.getByRole('button', {name: 'View analysis for fixture-disk'}).click();
   const drawer = page.getByRole('dialog', {name: 'Resource analysis'});
-  await expect(drawer.getByRole('tab')).toHaveCount(8);
+  await expect(drawer.getByRole('tab')).toHaveCount(9);
   await drawer.getByRole('tab', {name: 'Cost', exact: true}).click();
-  await expect(drawer.getByText('Unknown', {exact: true})).toHaveCount(5);
+  await expect(drawer.getByText('Unknown', {exact: true})).toHaveCount(6);
   await drawer.getByRole('tab', {name: 'Rules', exact: true}).click();
   await expect(drawer.getByText('Retention history is missing.')).toBeVisible();
   await drawer.getByRole('tab', {name: 'Dependencies', exact: true}).click();

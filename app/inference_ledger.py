@@ -40,6 +40,8 @@ class InferenceLedger:
                    (str(uuid4()),tenant_id,attempt_id,action,now.isoformat()))
 
     def run(self,tenant_id,key,fingerprint,limit,invoke,*,metadata,monthly_token_limit=None,token_reservation=None,data_governance=None):
+        if data_governance:
+            metadata=dict(metadata,source_provider=data_governance.get('source_provider'),scope_id=data_governance.get('scope_id'))
         from app.ai_advisory import AIError
         attempt_id=str(uuid4())
         tenant_id,key=str(UUID(tenant_id)),str(UUID(key))

@@ -98,33 +98,8 @@ def test_no_default_key_or_live_fallback(monkeypatch):
         Settings.load()
 
 
-def test_remediation_download_respects_ownership(settings):
-    with TestClient(create_app(settings, scanner=stub_scanner)) as client:
-        scan = client.post('/api/v1/scans', headers=headers()).json()
-        path = f"/api/v1/scans/{scan['scan_id']}/remediation"
-        selection = {'resource_ids': [scan['findings'][0]['resource_id']]}
-        assert client.post(path, headers=headers(KEY_B), json=selection).status_code == 404
-        owned = client.post(path, headers=headers(), json=selection)
-        assert owned.status_code == 200
-        assert 'read -r confirmation' in owned.json()['script']
 
 
-def test_live_remediation_is_download_only(settings):
-    sub = settings.tenants[0]['subscription_ids'][0]
-    rid = f'/subscriptions/{sub}/resourceGroups/review/providers/Microsoft.Compute/disks/archive'
-    finding = dict(rule_id='ORPHANED_DISK', severity='HIGH', resource_name='archive',
-                   resource_type='Microsoft.Compute/disks', resource_group='review',
-                   subscription_id=sub, resource_id=rid, estimated_monthly_waste_usd=None,
-                   details='Verify retention before deletion')
-    live = Settings('azure', settings.database, settings.tenants)
-    with TestClient(create_app(live, scanner=lambda _: [finding])) as client:
-        scan = client.post('/api/v1/scans', headers=headers()).json()
-        response = client.post(f"/api/v1/scans/{scan['scan_id']}/remediation",
-                               headers=headers(), json={'resource_ids': [rid]})
-        assert response.status_code == 200
-        assert response.json()['filename'].endswith('.sh')
-        assert 'read -r confirmation' in response.json()['script']
-        assert len(client.get('/api/v1/scans', headers=headers()).json()) == 1
 
 
 def test_api_respects_scheduled_worker_distributed_lease(settings, monkeypatch):

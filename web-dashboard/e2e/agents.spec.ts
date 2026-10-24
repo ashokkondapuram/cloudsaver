@@ -13,7 +13,7 @@ function task(state='awaiting_approval'){
 async function mocks(page:import('@playwright/test').Page,state='awaiting_approval'){
   let current=task(state);const reviews:Record<string,unknown>[]=[];
   await page.route('**/api/v1/agents/catalog',r=>r.fulfill({json:{enabled:true,connectors:[connector]}}));
-  await page.route(`**/api/v1/optimization/scans/${scanId}`,r=>r.fulfill({json:{resources:[resource]}}));
+  await page.route(`**/api/v1/scans/${scanId}/resources?limit=1000`,r=>r.fulfill({json:{items:[{...resource,provider:resource.cloud_provider}]}}));
   await page.route('**/api/v1/agents/tasks',r=>r.fulfill({json:{items:[current]}}));
   await page.route('**/api/v1/agents/tasks/'+id,r=>r.fulfill({json:current}));
   await page.route('**/api/v1/agents/tasks/'+id+'/review',r=>{
@@ -23,7 +23,7 @@ async function mocks(page:import('@playwright/test').Page,state='awaiting_approv
 }
 
 test('administrator reviews exact connector arguments and explicitly approves a versioned plan',async({page})=>{
-  await mockWorkspace(page,{ai:true});const reviews=await mocks(page);
+  await mockWorkspace(page,{ai:true,human:true});const reviews=await mocks(page);
   await navigate(page,'Agent workspace');await page.getByRole('button',{name:/Set CostCenter to FINOPS-42/}).click();
   const review=page.getByRole('region',{name:'Agent plan review'});
   await expect(review.getByText('Apply the requested allocation tag.')).toBeVisible();
@@ -47,7 +47,7 @@ test('viewer can inspect plans without assigning or approving tasks on mobile',a
 });
 
 test('uncertain actions expose reconciliation without replay controls',async({page})=>{
-  await mockWorkspace(page);const reviews=await mocks(page,'needs_reconciliation');
+  await mockWorkspace(page,{human:true});const reviews=await mocks(page,'needs_reconciliation');
   await navigate(page,'Agent workspace');await page.getByRole('button',{name:/Set CostCenter to FINOPS-42/}).click();
   await expect(page.getByText(/This task will not replay automatically/)).toBeVisible();
   await expect(page.getByRole('button',{name:'Request new AI draft'})).toHaveCount(0);
@@ -55,7 +55,7 @@ test('uncertain actions expose reconciliation without replay controls',async({pa
 });
 
 test('task assignment sends the selected owned resource, explicit connectors and task instruction',async({page})=>{
-  await mockWorkspace(page,{ai:true});await mocks(page);let submitted:Record<string,unknown>|null=null;
+  await mockWorkspace(page,{ai:true,human:true});await mocks(page);let submitted:Record<string,unknown>|null=null;
   await page.route('**/api/v1/agents/tasks',r=>{
     if(r.request().method()==='POST'){submitted=r.request().postDataJSON();return r.fulfill({status:201,json:{...task('draft_queued'),payload:{...task().payload,plan:null,plan_hash:null}}});}
     return r.fulfill({json:{items:[]}});
@@ -69,7 +69,7 @@ test('task assignment sends the selected owned resource, explicit connectors and
 });
 
 test('completed drafting updates the open review panel when queue polling stops',async({page})=>{
-  await mockWorkspace(page,{ai:true});await mocks(page);let ready=false;
+  await mockWorkspace(page,{ai:true,human:true});await mocks(page);let ready=false;
   const current=()=>ready?task():{...task('drafting'),payload:{...task().payload,plan:null,plan_hash:null}};
   await page.route('**/api/v1/agents/tasks',r=>r.fulfill({json:{items:[current()]}}));
   await page.route('**/api/v1/agents/tasks/'+id,r=>r.fulfill({json:current()}));

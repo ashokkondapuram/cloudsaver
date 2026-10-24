@@ -6,7 +6,7 @@ import json
 from decimal import Decimal
 
 from app.assessment import PILLARS, ai_context, assess, category as service_category
-from app.assessment_policy import POLICY_VERSION
+from app.assessment_policy import POLICY_VERSION,MODEL_BASE_CODES
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
 PRIORITY = ('critical', 'high', 'evidence_required')
@@ -69,21 +69,21 @@ def merge(key, findings, *, observed_at=None, now=None):
         finding_count=len(findings), rule_ids=[f['rule_id'] for f in findings], policy_version=POLICY_VERSION,
         observation=observation, review_priority=min((r['review_priority'] for r in results), key=PRIORITY.index),
         disposition='protected' if protected else 'requires_review', protected_reasons=protected,
-        risk_level='high' if risk_codes else 'unknown', risk_check_codes=risk_codes,
+        risk_level='high' if any(code!='OBSERVATION_FRESHNESS' for code in risk_codes) else 'unknown', risk_check_codes=risk_codes,
         evidence_gap_codes=sorted({c['code'] for c in merged_checks if c['status'] == 'unknown'}),
         pillars=pillars, guardrails=guardrails,
         evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
         retail_estimate_usd=float(max(amounts).quantize(Decimal('0.01'))) if amounts else None,
-        billed_cost_usd=None, realizable_savings_usd=None, automatic_execution=False)
+        billed_cost_usd=results[0].get('billed_cost_usd'), effective_cost_usd=results[0].get('effective_cost_usd'), commitment_locked=results[0].get('commitment_locked',False), realizable_savings_usd=None, automatic_execution=False)
     context = dict(
         resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,
         findings=[dict(rule_id=f['rule_id'], facts=ai_context(f, r)['facts']) for f, r in zip(findings, results)],
         observation=observation, risk_floor=assessment['risk_level'],
-        checks=[dict(pillar=c['pillar'], code=c['code'], status=c['status']) for c in merged_checks],
+        checks=[dict(pillar=c['pillar'], code=c['code'], status=c['status']) for c in merged_checks if c['status']!='unknown' or c['code'] in MODEL_BASE_CODES],
         protected=bool(protected), guardrails=guardrails,
         observed_check_codes=sorted({c['code'] for c in merged_checks if c['status'] != 'unknown'}))
     # Freshness status changes with wall-clock time; only the saved observation time is fingerprinted.
-    stable = dict(context, observation=dict(observed_at=observation['observed_at']),
+    stable = dict(context, observation=dict(observed_at=observation['observed_at']),checks=[c for c in context['checks'] if c['code']!='OBSERVATION_FRESHNESS'],
                   guardrails=[g for g in guardrails if g != 'REFRESH_OBSERVATION'])
     assessment['evidence_digest'] = hashlib.sha256(json.dumps(
         dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
@@ -104,13 +104,17 @@ def inventory_observation(obs):
         rule_id='INVENTORY_OBSERVATION',
         severity='LOW',
         details='Resource observed in inventory scan.',
-        evidence={},
+        evidence=obs.get('evidence') or {},
         estimated_monthly_waste_usd=None,
     )
 
 
 def merge_inventory(key, obs, *, observed_at=None, now=None):
     """Assessment for a resource present in inventory but without a finding rule hit."""
+    if obs.get('evidence'):
+        result,context=merge(key,[inventory_observation(obs)],observed_at=observed_at,now=now)
+        result.update(finding_count=0,rule_ids=[],disposition='protected' if result['protected_reasons'] else 'inventory_only')
+        return result,context
     provider = obs.get('cloud_provider', 'azure')
     kind = service_category(obs)
     observation = dict(observed_at=observed_at, source='inventory_scan')
@@ -152,7 +156,7 @@ def row(assessment):
     keys = ('resource_key', 'provider', 'resource_id', 'resource_name', 'resource_type', 'resource_group', 'scope_id',
             'service_category', 'finding_count', 'rule_ids', 'review_priority', 'disposition', 'protected_reasons',
             'risk_level', 'risk_check_codes', 'evidence_gap_codes', 'evidence_coverage', 'retail_estimate_usd', 'evidence_digest')
-    return dict({k: assessment[k] for k in keys}, pillars={p['pillar']: p['status'] for p in assessment['pillars']})
+    return dict({k: assessment[k] for k in keys}, billed_cost_usd=assessment.get('billed_cost_usd'),effective_cost_usd=assessment.get('effective_cost_usd'),commitment_locked=assessment.get('commitment_locked',False), pillars={p['pillar']: p['status'] for p in assessment['pillars']})
 
 
 def ai_state(assessment, result, item):
@@ -174,19 +178,21 @@ def ai_state(assessment, result, item):
                 reason=item.get('reason') if item and status == 'failed' else None)
 
 
-def decision_state(assessment, decision):
+def decision_state(assessment, decision, *, now=None):
     if not decision:
         return None
-    return dict(decision, evidence_changed=decision['evidence_digest'] != assessment['evidence_digest'])
+    from datetime import datetime, timezone, date
+    expired = decision.get('decision') == 'defer' and decision.get('defer_until') and date.fromisoformat(str(decision['defer_until'])) <= (now or datetime.now(timezone.utc)).date()
+    return dict(decision, decision='none' if expired else decision['decision'],reopened=bool(expired),previous_decision=decision['decision'],evidence_changed=decision['evidence_digest'] != assessment['evidence_digest'])
 
 
-FILTERS = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision')
+FILTERS = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status')
 
 
 def matches(item, filters):
     checks = dict(provider=item['provider'], service_category=item['service_category'], review_priority=item['review_priority'],
                   ai_status=item['ai']['status'], ai_risk=item['ai']['risk_level'] or 'none',
-                  decision=(item['decision'] or {}).get('decision', 'none'))
+                  decision=(item['decision'] or {}).get('decision', 'none'),pillar_status=filters.get('pillar_status') if filters.get('pillar_status') in item['pillars'].values() else None)
     return all(not filters.get(name) or checks[name] == filters[name] for name in FILTERS)
 
 
@@ -232,7 +238,7 @@ def changes(older, newer):
 
 def csv_report(items):
     fields = ['provider', 'scope_id', 'resource_name', 'resource_type', 'resource_group', 'resource_id', 'service_category',
-              'rule_ids', 'review_priority', 'disposition', *PILLARS, 'retail_estimate_usd', 'ai_status', 'ai_risk',
+              'rule_ids', 'review_priority', 'disposition', *PILLARS, 'billed_cost_usd', 'effective_cost_usd', 'retail_estimate_usd', 'lifecycle_delta', 'ai_status', 'ai_risk',
               'ai_summary', 'decision', 'decision_at', 'evidence_digest']
 
     def cell(value):
@@ -250,3 +256,32 @@ def csv_report(items):
                       decision=decision.get('decision'), decision_at=decision.get('created_at'))
         writer.writerow([cell(values.get(f)) for f in fields])
     return '\ufeff' + out.getvalue()
+
+
+def lifecycle(current, previous):
+    """Compare only an already authorized, comparable saved observation."""
+    if previous is None:return {key:'new' for key in current},dict(comparison_scan_id=None,resolved_count=None,no_longer_observed_count=None)
+    older=assessments(previous)
+    states={key:'new' if key not in older else 'regressed' if set(value[0]['rule_ids'])-set(older[key][0]['rule_ids']) or set(value[0]['risk_check_codes'])-set(older[key][0]['risk_check_codes']) else 'persisting' for key,value in current.items()}
+    resolved=sum(bool(value[0]['rule_ids']) and key in current and not current[key][0]['rule_ids'] for key,value in older.items())
+    return states,dict(comparison_scan_id=previous['scan_id'],resolved_count=resolved,no_longer_observed_count=len(set(older)-set(current)))
+
+
+def planning_summary(scan):
+    """Run clean-before-commit math automatically only over saved homogeneous hourly evidence."""
+    from app.commitment_arbitrage import calculate_clean_commitment_baseline,hourly_p10
+    from app.nextgen_engines import hourly_profile
+    result=dict(status='insufficient_evidence',purchase_authorized=False,clean_steady_state_hr=None,recommended_new_commitment_hr=None,
+        warning='A monthly total cannot establish a steady hourly commitment floor. Complete hourly billing, compatible cleanup and existing-commitment coverage are required.')
+    evidence=scan.get('commitment_evidence')
+    if not isinstance(evidence,dict) or evidence.get('source_verified') is not True:return result
+    try:
+        hours=hourly_profile(evidence['usage_series'])
+        clean=hourly_profile(evidence['cleanup_series'])
+        if hours[:2]!=clean[:2] or evidence.get('commitment_coverage_verified') is not True:return result
+        # Compute the percentile after hour-by-hour cleanup, avoiding percentile subtraction.
+        if any(w>v for v,w in zip(hours[2],clean[2])):return result
+        values=[format(v-w,'f') for v,w in zip(hours[2],clean[2])]
+        result=calculate_clean_commitment_baseline(hourly_p10(values),'0',evidence['existing_commitments_hr'])
+        return dict(result,status='modeled_saved_hourly_evidence',verified_realized_savings_usd=None)
+    except (ValueError,TypeError,KeyError):return result

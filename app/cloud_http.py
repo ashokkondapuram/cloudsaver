@@ -40,6 +40,25 @@ class JSONReader:
     def close(self):
         self.client.close()
 
+    def post_read(self,url,body):
+        # Google's log search is a read operation exposed as POST. Keep this
+        # helper restricted to that exact API; it is not a generic action client.
+        if url!='https://logging.googleapis.com/v2/entries:list':raise ScanError('Unsupported read-only POST endpoint')
+        headers={}
+        if self.credentials:
+            from google.auth.transport.requests import Request
+            self.credentials.before_request(Request(),'POST',url,headers)
+        if self.token:headers['Authorization']='Bearer '+self.token
+        with self.client.stream('POST',url,json=body,headers=headers) as response:
+            if response.status_code!=200:raise ScanError('Cloud audit reader rejected the query')
+            content=bytearray()
+            for chunk in response.iter_bytes():
+                content.extend(chunk)
+                if len(content)>8_000_000:raise ScanError('Cloud audit page bound exceeded')
+        value=json.loads(content)
+        if not isinstance(value,dict) or value.get('error'):raise ScanError('Invalid cloud audit response')
+        return value
+
 
 def pages(reader, url, params=None, *, token_key='nextPageToken', param_key='pageToken'):
     params, seen = dict(params or {}), set()

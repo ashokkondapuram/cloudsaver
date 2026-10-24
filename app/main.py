@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v1.3.0."""
+"""Runnable CloudSaver enterprise API service v1.4.0."""
 import hashlib
 import hmac
 import logging
@@ -14,7 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings
 from app.store import Store, PostgresStore
-from app.schemas import ScanSummary, RemediationRequest, MultiCloudScanRequest
+from app.schemas import ScanSummary, MultiCloudScanRequest
 from app.scanner import ScanError
 
 logger = logging.getLogger('cloudsaver')
@@ -22,20 +22,34 @@ CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
 auth = HTTPBearer(auto_error=False)
 
 
-def create_app(settings=None, scanner=None, identity_validator=None, gitops_config=None, gitops_client=None, delivery_targets=None, delivery_repository=None, job_repository=None, ai_gateway=None):
+def create_app(settings=None, scanner=None, identity_validator=None, delivery_targets=None, delivery_repository=None, job_repository=None, ai_gateway=None, identity_client=None):
     settings = settings or Settings.load()
     from app.provider_access import ScopedStore
     store = ScopedStore(PostgresStore(settings.database_url) if settings.database_url else Store(settings.database))
 
     @asynccontextmanager
     async def lifespan(_):
-        yield
+        projector = None
+        from app.config import directory_mode
+        if directory_mode() == 'cutover':
+            from app.directory_projector import DirectoryProjector
+            from app.identity_client import shared_client
+            client = identity_client or shared_client()
+            projector = DirectoryProjector(settings.registry, client)
+            client.directory_listeners.append(projector.nudge)
+            api.state.projector = projector.start()
+        try:
+            yield
+        finally:
+            if projector:
+                projector.stop()
+                client.directory_listeners.remove(projector.nudge)
         from app.cloud_identity import close_providers
         close_providers()
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.3.0', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.4.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
         'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS')))
@@ -50,36 +64,27 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     evidence_store=EnterpriseStore(settings)
     from app.data_governance_api import create_router as governance_router
     api.include_router(governance_router(evidence_store,current_tenant))
-    from app.savings_store import SavingsRepository
-    savings_repository=SavingsRepository(evidence_store)
-    from app.nextgen_api import create_router as nextgen_router
-    api.include_router(nextgen_router(store,savings_repository,current_tenant))
     api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
-    from app.assessment_api import create_router as assessment_router
     from app.ai_advisory import AIGateway
     ledger = InferenceLedger(evidence_store)
     ai_gateway = ai_gateway or AIGateway(budget=ledger, settings=settings)
     from app.foundry_api import create_router as foundry_router
     from app.foundry import FoundryController
     api.include_router(foundry_router(getattr(ai_gateway, 'foundry', None) or FoundryController(settings, ledger=ledger), current_tenant))
-    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
     from app.resource_api import create_router as resource_router
     api.include_router(resource_router(settings, store, current_tenant, ai_gateway, evidence_store))
     from app.jobs_api import create_router as jobs_router
     api.include_router(jobs_router(settings, current_tenant, repository=job_repository))
-    from app.gitops_api import create_router
-    api.include_router(create_router(settings,store,current_tenant,config=gitops_config,client=gitops_client))
 
     from app.delivery_api import create_router as delivery_router
     api.include_router(delivery_router(settings,store,current_tenant,targets=delivery_targets,repository=delivery_repository))
     from app.onboarding_api import onboarding_router, customer_access_router
     api.include_router(onboarding_router())
     api.include_router(customer_access_router(current_tenant))
-    from app.service_analysis_api import create_router as service_analysis_router
-    api.include_router(service_analysis_router(store, current_tenant))
+    from app.settings_api import create_router as settings_router
+    api.include_router(settings_router(settings, current_tenant, identity_client=identity_client, scan_store=store))
     from app.kubernetes_api import create_router as kubernetes_router
-    api.include_router(kubernetes_router(store, current_tenant, savings_repository=savings_repository))
-
+    api.include_router(kubernetes_router(store, current_tenant, evidence_store=evidence_store))
     @api.middleware('http')
     async def response_headers(request, call_next):
         response = await call_next(request)
@@ -93,7 +98,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.3.0'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.4.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -104,6 +109,15 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     def me(tenant=Depends(current_tenant)):
         from app.auth import workspace_response
         return workspace_response(tenant, settings.mode, settings)
+
+    @api.get('/api/v1/analytics')
+    def analytics(tenant=Depends(current_tenant)):
+        from app.analytics import summarize
+        return summarize(store.list(tenant['tenant_id'],1))
+
+    @api.post('/api/v1/billing/webhook')
+    def billing_webhook():
+        raise HTTPException(410,'Billing webhooks are handled by the platform.')
 
     @api.get('/api/v1/providers')
     def providers(tenant=Depends(current_tenant)):
@@ -213,12 +227,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 validate_finding_scope(finding, tenant)
 
             from app.pricing import attribute_finding_cost
-            enriched_findings = []
-            for finding in raw_findings:
-                if finding.get('cloud_provider', 'azure') == 'azure':
-                    enriched_findings.append(attribute_finding_cost(finding))
-                else:
-                    enriched_findings.append(finding)
+            enriched_findings = [attribute_finding_cost(finding) for finding in raw_findings]
 
             from app.dependencies import canonical_inventory, group_opportunities
             observation_time = datetime.now(timezone.utc).isoformat()
@@ -238,9 +247,16 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
             if rule_ids is not None:
                 from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
-                for rid, *_ in (*RULES, *KUBERNETES_RULES):
+                from app.resource_catalog import definitions
+                for rid, *_ in (*RULES, *KUBERNETES_RULES, *definitions()):
                     policies.setdefault(rid, {'enabled': rid in rule_ids})
             evaluations = evaluate_inventory(inventory, observed_at=observation_time, policies=policies)
+            from app.multicloud_rules import materialize
+            enriched_findings=group_opportunities(materialize(enriched_findings,inventory,evaluations),inventory)
+            for finding in enriched_findings:validate_finding_scope(finding,tenant)
+            opportunity=opportunity_totals(enriched_findings)
+            total_waste=opportunity['total_monthly_opportunity_usd']
+            realizable_savings=opportunity_totals(enriched_findings,realized=True)['total_monthly_opportunity_usd']
             result = dict(
                 scan_id=str(uuid4()),
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -273,10 +289,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             if heartbeat:
                 heartbeat.ensure_owned()
             store.save(tenant_id, validated, workspace=tenant)
-            try:
-                savings_repository.reconcile_regressions(tenant,validated)
-            except Exception:
-                logger.error('Savings regression reconciliation failed; retry through the saved-case verifier.')
             return validated
         except HTTPException:
             raise
@@ -301,34 +313,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                     pass
             lock.release()
 
-    @api.post('/api/v1/scans/{scan_id}/remediation')
-    def remediation(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
-        require_workspace_role(tenant, Role.TENANT_ADMIN)
-        from app.remediation import generate_script
-        result = store.get(tenant['tenant_id'], scan_id)
-        if result is None:
-            raise HTTPException(404, 'Scan not found')
-        try:
-            script = generate_script(result, payload.resource_ids, tenant['tenant_id'], tenant['subscription_ids'])
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
-        return {'filename': 'cloudsaver-review-remediation.sh', 'script': script}
 
-    @api.post('/api/v1/scans/{scan_id}/remediation-terraform')
-    def remediation_terraform(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
-        require_workspace_role(tenant, Role.TENANT_ADMIN)
-        from app.entitlements import enforce_terraform_export
-        enforce_terraform_export(tenant)
-        from app.remediation_terraform import generate_cloud_terraform_hcl
-        result = store.get(tenant['tenant_id'], scan_id)
-        if result is None:
-            raise HTTPException(404, 'Scan not found')
-        try:
-            hcl_scan = dict(result)
-            hcl = generate_cloud_terraform_hcl(hcl_scan, payload.resource_ids, tenant)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
-        return {'filename': f'cloudsaver-remediation-{scan_id[:8]}.tf', 'hcl': hcl}
 
     @api.post('/api/v1/scans/{scan_id}/cancel')
     def cancel_scan(scan_id: str, tenant=Depends(current_tenant)):
@@ -339,6 +324,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.3.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.4.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     return api

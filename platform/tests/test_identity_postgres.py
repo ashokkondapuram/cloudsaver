@@ -34,45 +34,6 @@ TABLES = ('directory.customers', 'directory.workspaces', 'directory.workspace_az
           'identity.workspace_memberships', 'identity.users', 'directory.ai_foundry_policy')
 
 
-def test_separate_knowledge_database_governance(token_db):
-    """Real migrations, separate credentials, forced RLS and independent publication reviews."""
-    from sqlalchemy.engine import make_url
-    from identity.knowledge.store import PostgresKnowledgeStore
-    from test_identity import build
-    privileged = os.environ['CLOUDSAVER_TEST_PRIVILEGED_URL']
-    name = 'knowledge_test_' + uuid4().hex
-    password = secrets.token_urlsafe(24)
-    base = make_url(privileged).set(database=name)
-    owner = base.set(username='knowledge_owner', password=password).render_as_string(hide_password=False)
-    runtime = base.set(username='knowledge_app', password=password).render_as_string(hide_password=False)
-    with psycopg.connect(privileged, autocommit=True) as admin:
-        for role in ('knowledge_owner', 'knowledge_app'):
-            admin.execute(sql.SQL('CREATE ROLE {} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD {}')
-                          .format(sql.Identifier(role), sql.Literal(password)))
-        admin.execute(sql.SQL('CREATE DATABASE {} OWNER knowledge_owner').format(sql.Identifier(name)))
-        admin.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(name)))
-        admin.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO knowledge_app').format(sql.Identifier(name)))
-    try:
-        env = dict(os.environ, PLATFORM_KNOWLEDGE_MIGRATION_URL=owner, PLATFORM_IDENTITY_MIGRATION_URL=token_db[0])
-        subprocess.run([sys.executable, '-m', 'alembic', '-c', 'knowledge_alembic.ini', 'upgrade', 'head'],
-                       cwd=ROOT, env=env, check=True, capture_output=True)
-        service = build()
-        service.knowledge_store = PostgresKnowledgeStore(runtime, token_db[1])
-        created = service.create_knowledge_publication({'title': 'Public storage guidance',
-            'summary': 'Verify recovery before any storage change.', 'body': 'Independent synthetic guidance.'}, OPERATOR)
-        for version, kind, role in ((1, 'technical', 'KnowledgeReviewer'), (2, 'privacy', 'PrivacyReviewer')):
-            service.review_knowledge_publication(created['id'], {'version': version, 'review': kind},
-                {'actor': kind, 'actor_type': 'operator', 'roles': [role]})
-        service.update_knowledge_publication(created['id'], {'version': 3, 'status': 'published'}, OPERATOR)
-        assert service.knowledge_metrics()['active_published'] == 1
-        assert service.retrieve_knowledge('azure', 'storage')['items'][0]['publication_id'] == created['id']
-        with psycopg.connect(runtime) as db:
-            flags = db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='knowledge.publications'::regclass").fetchone()
-            assert flags == (True, True)
-            assert db.execute("SELECT to_regclass('directory.customers')").fetchone()[0] is None
-    finally:
-        with psycopg.connect(privileged, autocommit=True) as admin:
-            admin.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
 
 
 @pytest.fixture(scope='module')

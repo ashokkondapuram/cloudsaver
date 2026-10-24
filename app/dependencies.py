@@ -64,12 +64,12 @@ def group_opportunities(findings, inventory):
     adjacency = defaultdict(set)
     for row in inventory:
         provider = row.get('cloud_provider', 'azure')
-        if provider != 'azure':
+        if provider not in ('azure','aws','gcp'):
             continue
         for edge in row.get('dependency_refs', []):
             if edge['verification_state'] != 'verified' or edge['relationship'] not in ('vm_to_disk', 'vm_to_nic', 'nic_to_ip'):
                 continue
-            a, b = (provider, edge['from_resource_id'].lower()), (provider, edge['to_resource_id'].lower())
+            a, b = (provider, edge['from_resource_id'].lower() if provider=='azure' else edge['from_resource_id']), (provider, edge['to_resource_id'].lower() if provider=='azure' else edge['to_resource_id'])
             if a in nodes and b in nodes:
                 adjacency[a].add(b)
                 adjacency[b].add(a)
@@ -85,7 +85,7 @@ def group_opportunities(findings, inventory):
             component.add(key)
             pending.extend(adjacency[key] - component)
         visited |= component
-        parents = [key for key in component if nodes[key]['resource_type'].lower() == 'microsoft.compute/virtualmachines']
+        parents = [key for key in component if nodes[key]['resource_type'].lower() in ('microsoft.compute/virtualmachines','aws:ec2:instance','compute.googleapis.com/instance')]
         if len(parents) == 1:
             for key in component:
                 groups[key] = 'workload:' + hashlib.sha256((parents[0][0] + '|' + parents[0][1]).encode()).hexdigest()

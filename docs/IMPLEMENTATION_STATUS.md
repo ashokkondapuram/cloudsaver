@@ -1,3 +1,5 @@
+> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+
 # README-driven engineering improvements
 
 This implementation follows [the supplied engineering guide](https://docs.google.com/document/d/1oYrx3weFUJMQiB-e8JA-bJoC4uRd0OHUtnlT1er_zOQ) against Git baseline `6e0de85fe321aa51d97c8dfb734c3e9532e85a71`.

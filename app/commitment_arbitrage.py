@@ -34,22 +34,3 @@ def hourly_p10(samples):
         raise ValueError('Supply 30–90 days of hourly observations.')
     values=sorted(parse_strict_monetary_decimal(v) for v in samples)
     return decimal_text(values[math.ceil(.1*len(values))-1])
-
-
-def commitment_firewall(plan,*,open_waste=None,clean_baseline=None):
-    """Known commitments and AI provisioned capacity need an independently reviewed clean baseline."""
-    from app.plan_policy import INDEX
-    findings=[]
-    for resource in plan.get('resource_changes',[]):
-        kind=resource.get('type','');change=resource.get('change') or {};actions=change.get('actions',[])
-        if resource.get('mode')!='managed' or not any(a in actions for a in ('create','update')):continue
-        after=change.get('after') or {}
-        unknown=change.get('after_unknown') or {}
-        sku=after.get('sku')
-        commitment=(kind.startswith('aws_savingsplans_') or kind in ('google_compute_region_commitment','azurerm_reservation','aws_ec2_capacity_reservation')
-            or kind=='azurerm_cognitive_deployment' and (sku is None or bool(unknown.get('sku')) or 'provisioned' in str(sku).lower()))
-        if not commitment:continue
-        # Body-supplied context cannot constitute an operator approval of a plan hash.
-        findings.append(dict(code='CLEAN_BASELINE_APPROVAL_REQUIRED',severity='error',address=INDEX.sub('[*]',resource['address']),
-            message='Commitment/provisioned capacity change requires an independently reviewed clean usage baseline and commitment authorization.'))
-    return findings

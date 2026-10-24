@@ -53,7 +53,7 @@ def test_settings_save_is_versioned_and_independently_consented(foundry):
         controller.save(tenant, 1, config, False)
     saved = controller.save(tenant, 1, config, True)
     assert saved['version'] == 2
-    assert saved['ai_foundry']['policy']['allow_anonymized_knowledge_candidates'] is False
+    assert 'allow_anonymized_knowledge_candidates' not in saved['ai_foundry']['policy']
     with pytest.raises(AIError) as stale:
         controller.save(tenant, 1, config, True)
     assert stale.value.status == 409

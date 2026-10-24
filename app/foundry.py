@@ -65,8 +65,6 @@ class FoundryController:
         if policy['routing_mode'] != 'same_cloud_only':
             # A workspace key does not prove fresh human reauthentication. Do not silently substitute a checkbox.
             raise AIError('Cross-provider routing requires verified human step-up authentication; it is unavailable here.', 403)
-        if policy['allow_anonymized_knowledge_candidates'] and not platform['allow_knowledge_candidates']:
-            raise AIError('Knowledge candidate consent is disabled by platform policy.', 403)
         for provider, selected in config['providers'].items():
             if selected['target_id'] is not None:
                 self.binding(tenant, provider, config, platform)
@@ -142,7 +140,6 @@ class FoundryController:
             directory_mode=directory_mode(), catalog=[template(target, tenant['tenant_id']) for target in self.catalog(tenant)],
             usage=self.ledger.window_summary(tenant['tenant_id']) if self.ledger else None,
             diagnostics=self.diagnostics(tenant['tenant_id']),
-            knowledge_retrieval='configured' if os.getenv('CLOUDSAVER_KNOWLEDGE_ENABLED') == 'true' else 'disabled',
             candidate_pipeline_enabled=False,
             message='Only operator-approved tenant bindings may be selected. Diagnostics never invoke a model or prove inference RBAC.')
 

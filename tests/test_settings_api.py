@@ -7,7 +7,7 @@ from app.config import Settings
 from app.operations import scheduled_interval, workspace_operations
 from app.tenant_config import normalize_tenant
 from app.tenant_registry import MemoryRegistry, VersionConflict
-from services.tenant import create_app as tenant_service
+from app.main import create_app as tenant_service
 from tests.identity_fake import FakeIdentity
 
 CID = '22222222-2222-4222-8222-222222222222'

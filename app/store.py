@@ -82,6 +82,7 @@ class PostgresStore:
                 raise ValueError('Apply domain migrations with forced row-level security first')
             if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='waste_findings' AND column_name='scan_id'").fetchone():
                 raise ValueError('Apply Alembic migration 0002_scan_findings before starting the scanner')
+            self.has_analysis_audit=bool(db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='waste_findings' AND column_name='opportunity_group_id'").fetchone())
             cloud_table = db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass('public.cloud_findings')").fetchone()
             if cloud_table != (True, True):
                 raise ValueError('Apply migration 0005_cloud_findings with forced RLS')
@@ -125,21 +126,23 @@ class PostgresStore:
                 db.execute('INSERT INTO public.subscriptions (id, tenant_id, subscription_id, display_name) VALUES (%s, %s, %s, %s) ON CONFLICT (tenant_id, subscription_id) DO NOTHING',
                            (uuid4(), tenant_id, subscription, subscription))
             with db.cursor() as cursor:
-                cursor.executemany('''INSERT INTO public.waste_findings
+                audit_columns=',opportunity_group_id,slo_burn_rate' if self.has_analysis_audit else ''
+                audit_values=',%s,%s' if self.has_analysis_audit else ''
+                cursor.executemany(f'''INSERT INTO public.waste_findings
                     (id, tenant_id, subscription_id, scan_id, resource_id, resource_name,
                      resource_type, resource_group, rule_id, severity, details, evidence,
-                     estimated_monthly_waste_usd, observed_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                     estimated_monthly_waste_usd, observed_at{audit_columns})
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s{audit_values})''',
                     [(uuid4(), tenant_id, f['subscription_id'], scan['scan_id'], f['resource_id'],
                       f['resource_name'], f['resource_type'], f['resource_group'], f['rule_id'],
                       f['severity'], f['details'], Jsonb({'mode': scan['mode']}),
-                      f['estimated_monthly_waste_usd'], scan['timestamp']) for f in scan['findings']
+                      f['estimated_monthly_waste_usd'], scan['timestamp'],*(_analysis_audit(f) if self.has_analysis_audit else ())) for f in scan['findings']
                      if f.get('cloud_provider', 'azure') == 'azure'])
-                cursor.executemany('''INSERT INTO public.cloud_findings
-                    (id,tenant_id,scan_id,cloud_provider,scope_id,resource_id,rule_id,payload,observed_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)''',
+                cursor.executemany(f'''INSERT INTO public.cloud_findings
+                    (id,tenant_id,scan_id,cloud_provider,scope_id,resource_id,rule_id,payload,observed_at{audit_columns})
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s{audit_values})''',
                     [(uuid4(),tenant_id,scan['scan_id'],f['cloud_provider'],f['scope_id'],f['resource_id'],
-                      f['rule_id'],Jsonb(f),scan['timestamp']) for f in scan['findings']
+                      f['rule_id'],Jsonb(f),scan['timestamp'],*(_analysis_audit(f) if self.has_analysis_audit else ())) for f in scan['findings']
                      if f.get('cloud_provider', 'azure') != 'azure'])
 
     def get(self, tenant_id, scan_id):
@@ -157,3 +160,11 @@ class PostgresStore:
         with self.connection(tenant_id) as db:
             rows = db.execute('SELECT payload FROM public.scans WHERE tenant_id=%s ORDER BY timestamp DESC LIMIT %s', (tenant_id, limit)).fetchall()
         return [normalize_legacy_scan(row[0]) for row in rows]
+
+
+def _analysis_audit(finding):
+    import math
+    group=finding.get('opportunity_group_id');burn=(finding.get('evidence') or {}).get('slo_burn_rate')
+    if group is not None and (not isinstance(group,str) or len(group)>160):raise ValueError('Invalid opportunity group metadata')
+    burn=burn if type(burn) in (int,float) and math.isfinite(burn) and 0<=burn<1000000 else None
+    return group,burn

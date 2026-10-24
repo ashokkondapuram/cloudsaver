@@ -11,7 +11,8 @@ from fastapi import Header, HTTPException, Request
 from identity.config import env
 
 VERIFY_CALLERS = frozenset({'gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent'})
-DIRECTORY_CALLERS = frozenset({'tenant'})
+# The consolidated core now owns directory projection; tenant remains an upgrade alias.
+DIRECTORY_CALLERS = frozenset({'scanner', 'tenant'})
 ADMIN_CALLERS = frozenset({'portal'})
 OPERATOR, AUDITOR = 'PlatformOperator', 'PlatformAuditor'
 

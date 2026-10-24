@@ -13,7 +13,7 @@ from app.directory_projector import DirectoryProjector
 from app.identity_client import IdentityClient, reset_shared_client
 from app.main import create_app as scanner_app
 from app.tenant_registry import MemoryRegistry
-from services.tenant import create_app as tenant_service
+from app.main import create_app as tenant_service
 from tests.identity_fake import TID, FakeIdentity
 
 SID = '33333333-3333-4333-8333-333333333333'
@@ -50,8 +50,8 @@ def cutover(fake, tmp_path, monkeypatch):
     settings = Settings('azure', str(tmp_path / 'cutover.sqlite3'), (), None, registry)
     reset_shared_client(fake.client())
     tenant_app = tenant_service(settings, identity_client=fake.client())
-    yield settings, TestClient(tenant_app)
-    tenant_app.state.projector.stop()
+    with TestClient(tenant_app) as client:
+        yield settings, client
 
 
 def test_caller_sends_its_service_token_and_the_key_only_in_the_body(fake, secret):
@@ -344,7 +344,7 @@ def test_directory_events_wake_the_tenant_projector(cutover, fake):
     settings, _ = cutover
     client = fake.client()
     tenant_app = tenant_service(settings, identity_client=client)
-    try:
+    with TestClient(tenant_app):
         assert tenant_app.state.projector.nudge in client.directory_listeners
         woken = []
         client.directory_listeners.append(lambda: woken.append(True))
@@ -353,5 +353,3 @@ def test_directory_events_wake_the_tenant_projector(cutover, fake):
         assert woken == []
         poller.poll_once()
         assert woken == [True]
-    finally:
-        tenant_app.state.projector.stop()

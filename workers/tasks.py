@@ -36,9 +36,6 @@ if not 10 <= ai_tick <= 3600:
 if enabled('CLOUDSAVER_AI_ENABLED'):
     celery_app.conf.beat_schedule['process-ai-batches'] = {
         'task': 'workers.tasks.process_ai_batches', 'schedule': float(ai_tick), 'options': {'expires': ai_tick}}
-if enabled('CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED'):
-    celery_app.conf.beat_schedule['reconcile-savings-regressions']={
-        'task':'workers.tasks.reconcile_savings_regressions','schedule':float(tick),'options':{'expires':tick}}
 
 
 class JobBusy(RuntimeError):
@@ -92,15 +89,15 @@ def authorized_tenant(settings, repository, tenant_id, requested):
     tenant = next((t for t in settings.tenants if t['tenant_id'] == tenant_id), None)
     if tenant is None:
         raise UnauthorizedJob('Worker tenant is not configured')
-    if not isinstance(requested, list) or not 1 <= len(requested) <= 100:
-        raise UnauthorizedJob('Invalid subscription selection')
-    requested = [str(UUID(s)) for s in requested]
-    if len(set(requested)) != len(requested):
-        raise UnauthorizedJob('Duplicate subscription selection')
-    allowed = set(tenant['subscription_ids']) & set(repository.active_subscriptions(tenant_id))
-    if not set(requested) <= allowed:
-        raise UnauthorizedJob('Worker subscription scope is not currently authorized')
-    return dict(tenant, subscription_ids=requested)
+    from app.scan_selection import normalize,restrict,azure_ids
+    try:
+        requested=normalize(requested)
+        result=restrict(tenant,requested)
+    except (ValueError,TypeError,KeyError):
+        raise UnauthorizedJob('Worker scope selection is invalid or revoked') from None
+    if not set(azure_ids(requested))<=set(repository.active_subscriptions(tenant_id)):
+        raise UnauthorizedJob('Worker Azure subscription is not currently connected')
+    return result
 
 
 def workspace_entitlements(tenant, repository):
@@ -119,12 +116,15 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
     job_id = str(UUID(job_id))
     tenant = authorized_tenant(settings, repository, tenant_id, subscriptions)
     tenant_id = tenant['tenant_id']
-    from app.entitlements import enforce_subscription_quota
+    from app.entitlements import enforce_subscription_quota,enforce_providers
+    from app.scan_selection import count,providers,azure_ids
     entitlements = workspace_entitlements(tenant, repository)
     origin = repository.job_origin(tenant_id, job_id) if hasattr(repository, 'job_origin') else 'scheduled'
     if origin != 'interactive' and entitlements.allowed_scan_frequencies == ['manual']:
         raise UnauthorizedJob('This workspace does not permit scheduled scans')
-    enforce_subscription_quota(entitlements, len(subscriptions), adding_count=0)
+    enforce_subscription_quota(entitlements, count(subscriptions), adding_count=0)
+    selected_providers=providers(subscriptions)
+    enforce_providers(entitlements,selected_providers)
     repository.queue_job(tenant_id, job_id)
     existing = repository.get_job(tenant_id, job_id)
     if existing and existing['status'] == 'completed':
@@ -158,18 +158,25 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             else:
                 findings = scanned
         else:
-            findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
+            if isinstance(subscriptions,dict):
+                from app.multi_cloud import scan_multi_cloud
+                findings,inventory=scan_multi_cloud(tenant,selected_providers,enabled_rule_ids=rule_ids)
+            else:
+                findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
         resource_count = len(inventory) if inventory else len(findings)
         if resource_count > entitlements.max_resources_per_scan:
             raise UnauthorizedJob('Scan exceeds workspace resource quota')
         enriched = []
         for finding in findings:
-            enriched.append(attribute_finding_cost(finding) if finding.get('cloud_provider', 'azure') == 'azure' else finding)
+            enriched.append(attribute_finding_cost(finding))
         findings = enriched
-        for finding in findings:
-            sub = str(UUID(finding['subscription_id']))
-            if sub not in tenant['subscription_ids'] or not finding['resource_id'].lower().startswith(f'/subscriptions/{sub}/'):
-                raise UnauthorizedJob('Scanner returned an unauthorized resource')
+        from app.cloud_scope import validate_finding_scope
+        try:
+            for finding in findings:validate_finding_scope(finding,tenant)
+        except (ValueError,KeyError):
+            raise UnauthorizedJob('Scanner returned an unauthorized resource') from None
+        for observation in inventory:
+            validate_finding_scope(dict(observation,rule_id=observation.get('inventory_rule_id','INVENTORY')),tenant)
         from app.multi_cloud import scope_fingerprint
         from app.analysis_rules import evaluate_inventory, RULES, VERSION
         from app.inventory import coverage, coverage_manifest
@@ -184,17 +191,22 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         policies = {item['id']: item for item in (policy or {}).get('items', [])}
         if rule_ids is not None:
             from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
-            for rid, *_ in (*RULES, *KUBERNETES_RULES):
+            from app.resource_catalog import definitions
+            for rid, *_ in (*RULES, *KUBERNETES_RULES, *definitions()):
                 policies.setdefault(rid, {'enabled': rid in rule_ids})
         outcomes = evaluate_inventory(inventory, policies=policies, observed_at=observed_at)
+        from app.multicloud_rules import materialize
+        findings=group_opportunities(materialize(findings,inventory,outcomes),inventory)
+        from app.cloud_scope import validate_finding_scope
+        for finding in findings:validate_finding_scope(finding,tenant)
         opportunity = opportunity_totals(findings)
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
-            mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
+            mode=settings.mode, status='completed', subscriptions_scanned=len(azure_ids(subscriptions)),
             total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
-            cloud_providers=['azure'], source_ledger=source_ledger,
-            scope_results=completed_scopes(tenant,['azure'],source_ledger) if scanner is None else [],
-            scope_fingerprint=scope_fingerprint(tenant, ['azure']),
+            cloud_providers=selected_providers, source_ledger=source_ledger,
+            scope_results=completed_scopes(tenant,selected_providers,source_ledger) if scanner is None else [],
+            scope_fingerprint=scope_fingerprint(tenant, selected_providers),
             total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
             opportunity_summary=opportunity, rule_evaluations=outcomes,
             rule_manifest={'version': VERSION, 'policies': policies, 'workspace_version': (policy or {}).get('version'),
@@ -203,13 +215,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             coverage_manifest=coverage_manifest(inventory, findings, outcomes),
         )).model_dump()
         heartbeat.ensure_owned()
-        repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token, notification_targets=notification_targets)
-        try:
-            from app.savings_store import SavingsRepository
-            from app.enterprise_store import EnterpriseStore
-            SavingsRepository(EnterpriseStore(settings)).reconcile_regressions(tenant,scan)
-        except Exception:
-            logging.getLogger('cloudsaver.savings').error('Savings regression reconciliation failed after a completed scan; saved cases require retry.')
+        repository.complete_job(tenant_id, job_id, scan, subscriptions, token=token, notification_targets=notification_targets)
     except TerminalJob:
         raise
     except Exception:
@@ -303,13 +309,17 @@ def scheduled_scan_all():
     count = 0
     for tenant in settings.tenants:
         active = sorted(set(repository.active_subscriptions(tenant['tenant_id'])) & set(tenant['subscription_ids']))
-        if not active:
-            continue
+        from app.scan_selection import select
+        from app.cloud_scope import configured_providers
+        authorized=dict(tenant,subscription_ids=active)
+        selected=configured_providers(authorized)
+        if not selected:continue
+        selection=active if selected==['azure'] else select(authorized,selected)
         interval = scheduled_interval(settings, tenant, workspace_entitlements(tenant, repository))
         if not interval:
             continue
         job_id = str(uuid4())
-        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, interval, active):
+        if not repository.reserve_scheduled_job(tenant['tenant_id'], job_id, interval, selection):
             continue
         # Dispatcher publishes this committed outbox intent; no broker I/O here.
         count += 1
@@ -346,23 +356,3 @@ def process_ai_batches():
             client.close()
         except Exception:
             pass
-
-
-@celery_app.task(name='workers.tasks.reconcile_savings_regressions')
-def reconcile_savings_regressions():
-    """Retry saved-snapshot regression checks; performs no provider, AI or billing API calls."""
-    if not enabled('CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED'):return {'enabled':False,'reopened':0}
-    from app.enterprise_store import EnterpriseStore
-    from app.savings_store import SavingsRepository
-    from app.store import Store,PostgresStore
-    settings=Settings.load()
-    scans=PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
-    repository=SavingsRepository(EnterpriseStore(settings));reopened=0;failed=0
-    for tenant in settings.tenants:
-        try:
-            latest=scans.list(tenant['tenant_id'],1)
-            if latest:reopened+=repository.reconcile_regressions(tenant,latest[0])
-        except Exception:
-            failed+=1
-            logging.getLogger('cloudsaver.savings').error('Saved-case regression reconciliation requires retry.')
-    return {'enabled':True,'reopened':reopened,'failed_workspaces':failed}

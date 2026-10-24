@@ -120,6 +120,14 @@ def scan_gcp_project(source, *, reader=None, now=None):
         if result['resource_id'] in seen:
             return
         seen.add(result['resource_id'])
+        if kind=='instances':
+            import re
+            settings=row.get('settings') or {};tier=settings.get('tier','');custom=re.fullmatch(r'db-custom-(\d+)-(\d+)',tier)
+            result['evidence'].update(allocated_storage_gb=int(settings['dataDiskSizeGb']) if str(settings.get('dataDiskSizeGb','')).isdigit() else None,storage_type=settings.get('dataDiskType'),availability_type=settings.get('availabilityType'),
+                vcpu_count=int(custom[1]) if custom else None,memory_gb=int(custom[2])/1024 if custom else None)
+        result['evidence'].update(disk_state=row.get('status') if kind=='disks' else None,association_verified=bool(row.get('users')),
+            disk_type=(row.get('type') or '').rsplit('/',1)[-1],provisioned_iops=row.get('provisionedIops'),provisioned_throughput=row.get('provisionedThroughput'),
+            created_at=row.get('creationTimestamp'),size_gb=int(row['sizeGb']) if str(row.get('sizeGb','')).isdigit() else None)
         inventory.append(observation(result))
         if len(seen) > 100000:
             raise ScanError('GCP inventory resource limit exceeded')
@@ -172,6 +180,11 @@ def scan_gcp_project(source, *, reader=None, now=None):
                     validate_finding_scope(result, tenant)
                     result['evidence'].update(evidence)
                     findings.append(result)
+        from app.collectors.live_common import enabled
+        if enabled():
+            from app.collectors.gcp_live import extra_inventory,enrich
+            inventory += extra_inventory(reader,project,regions)
+            enrich(reader,project,inventory,now)
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

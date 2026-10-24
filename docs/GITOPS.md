@@ -1,3 +1,5 @@
+> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+
 # v0.7.0 GitOps and pre-merge guardrails
 
 The product never runs Terraform, applies a plan or deletes cloud resources.

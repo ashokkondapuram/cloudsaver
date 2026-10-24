@@ -1,3 +1,5 @@
+> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+
 # Next-generation CloudSaver implementation
 
 Source: [next-generation differentiation guide](https://docs.google.com/document/d/10scEX0pN62_XvvjJiQMDvxQ19xr9KpbEpx9tEcnRxTs).

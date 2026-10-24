@@ -78,3 +78,5 @@ def service_checks(kind, evidence, add):
         age = number(evidence.get('snapshot_age_hours'))
         add('reliability', 'SNAPSHOT_FRESHNESS', 'unknown' if age is None else 'risk' if age > 24 else 'observed',
             'Snapshot age is unavailable.' if age is None else f'Observed snapshot age: {age:g} hours; restore acceptance is unverified.', ['snapshot_age_hours'])
+
+MODEL_BASE_CODES={r[2] for r in BOOLEAN_RULES}|{'RETAIL_ESTIMATE','BILLED_COST','RECOVERY_SNAPSHOT','FAILOVER_TOPOLOGY','DATABASE_RECOVERY','UTILIZATION_WINDOW','ENCRYPTION_AT_REST','PUBLIC_DATABASE','APPLICATION_DENSITY','PATCH_CURRENCY','UNATTACHED_DURATION','SNAPSHOT_FRESHNESS','OWNERSHIP','DEPENDENCY_GRAPH','PROTECTED_INTENT','REQUEST_HEADROOM'}

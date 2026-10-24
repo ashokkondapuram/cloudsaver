@@ -47,10 +47,6 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [/^failures$/, ['GET']],
   [/^analysis\/rules$/, ['GET']],
   [new RegExp(`^workspaces/${ID}/analysis-rules$`), ['GET', 'PUT']],
-  [/^knowledge\/publications$/, ['GET', 'POST']],
-  [/^knowledge\/metrics$/, ['GET']],
-  [new RegExp(`^knowledge/publications/${ID}/review$`), ['POST']],
-  [new RegExp(`^knowledge/publications/${ID}$`), ['PATCH']],
 ];
 
 const STEP_UP: Array<[RegExp, Method]> = [
@@ -77,9 +73,7 @@ async function forward(request: NextRequest, context: {params: Promise<{path: st
   const session = readSession(request);
   if (!session) return sessionEnded();
   if (STEP_UP.some(([pattern, m]) => m === method && pattern.test(path)) && !hasRecentSignIn(session)) return stepUpRequired();
-  const knowledgeReview = method === 'POST' && new RegExp(`^knowledge/publications/${ID}/review$`).test(path)
-    && session.profile.roles.some(role => ['KnowledgeReviewer', 'PrivacyReviewer'].includes(role));
-  if (method !== 'GET' && !session.profile.roles.includes('PlatformOperator') && !knowledgeReview) {
+  if (method !== 'GET' && !session.profile.roles.includes('PlatformOperator')) {
     return problem(403, "You don't have permission to make changes. Ask a platform operator for help.");
   }
   if (!(await ensureFreshCredential(session))) {

@@ -46,11 +46,13 @@ def dispatch_one(repository,tenant_id,*,targets,publish_scan,client,kinds=('scan
     outcome,error,delay='retry','transport_unavailable',min(30*2**(event['attempts']-1),1800)+random.uniform(0,10)
     try:
         if event['kind']=='scan':
-            if ((authorize_scan and not authorize_scan(tenant_id,event['payload'].get('subscription_ids')))
+            from app.scan_selection import from_payload
+            selection=from_payload(event['payload'])
+            if ((authorize_scan and not authorize_scan(tenant_id,selection))
                     or (authorize_job and not authorize_job(event))):
                 outcome,error='dead_letter','scope_revoked'
             else:
-                publish_scan(tenant_id,event['payload']['subscription_ids'],event['job_id'])
+                publish_scan(tenant_id,selection,event['job_id'])
                 outcome,error='published',None
         else:
             target=next((t for t in targets if t.tenant_id==tenant_id and t.target_id==event['target_id']),None)

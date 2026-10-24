@@ -51,7 +51,6 @@ def target_definitions():
 
 
 def validate_webhook(url, channel):
-    from services.notification import webhook_url
     from urllib.parse import urlsplit
     if not isinstance(url,str) or len(url)>4096:
         raise ValueError()
@@ -83,3 +82,16 @@ def load_targets(settings=None):
 
 def enabled():
     return os.getenv('CLOUDSAVER_DELIVERY_ENABLED','false').lower() == 'true'
+
+
+from urllib.parse import urlsplit
+
+def webhook_url(value):
+    """Only Slack and Teams HTTPS webhook hosts; any other destination is rejected."""
+    parsed = urlsplit(value)
+    host = (parsed.hostname or '').lower()
+    slack = host == 'hooks.slack.com' and parsed.path.startswith('/services/')
+    teams = host.endswith('.webhook.office.com') or host.endswith('.environment.api.powerplatform.com')
+    if parsed.scheme != 'https' or parsed.port not in (None, 443) or parsed.username or parsed.password or parsed.fragment or not (slack or teams):
+        raise ValueError('Only configured HTTPS Slack or Teams webhook endpoints are allowed')
+    return value

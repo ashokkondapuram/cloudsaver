@@ -14,7 +14,7 @@ class ReplayRequest(BaseModel):
 
 
 async def replay_payload(request:Request):
-    from app.plan_policy import InvalidPlan,load_json
+    from app.schemas import InvalidJSON,load_json
     raw=bytearray()
     async for chunk in request.stream():
         raw.extend(chunk)
@@ -22,7 +22,7 @@ async def replay_payload(request:Request):
             raise HTTPException(413,'Replay request exceeds the 1 KB limit')
     try:
         return ReplayRequest.model_validate(load_json(bytes(raw)))
-    except (InvalidPlan,ValidationError):
+    except (InvalidJSON,ValidationError):
         raise HTTPException(422,'Invalid replay acknowledgment') from None
 
 

@@ -19,9 +19,9 @@ Human APIs are forwarded through the existing edge gateway/BFF. Worker APIs are 
 2. In **Agent workspace**, select an approved same-cloud Foundry target and connector permissions. Enter an explicit instruction, for example `Inspect the tags, then set CostCenter to FINOPS-42.`
 3. A worker claims the drafting assignment and requests inference through the gateway. Planning uses existing AI Foundry platform/workspace policy, plan entitlement, same-cloud routing, hourly limits and durable monthly token reservations. Existing advisory endpoints keep their prohibition on executable instructions.
 4. The model returns structured steps, not arbitrary executable source. Validation rejects unsupported operations/arguments, more than eight steps, multiple writes, and tag mutations without a preceding inspection. Each step must explain its purpose, verification and recovery limitations.
-5. The task waits in `awaiting_approval`. A human `TenantAdmin` reviews the resource, exact arguments, connector destinations and TypeScript, then approves the displayed version/hash for 1–60 minutes (15 default). Service-account principals cannot approve. Viewers can inspect scoped plans and history.
+5. The task waits in `awaiting_approval`. A human `TenantAdmin` reviews the resource, exact arguments, connector destinations and TypeScript, then approves the displayed version/hash for 1–60 minutes (15 default). API keys and service-account principals cannot approve; a verified human session is required. Viewers can inspect scoped plans and history.
 6. The gateway assigns execution only for the approved plan. Before **every call**, it durably records an ordered, single-use step permit. Expiry, cancellation, changed connector bindings, revoked worker grants, mismatched hashes and lost leases prevent new calls.
-7. The worker makes the connector request once and reports its outcome. Task success establishes completion of the connector contract; financial savings still require the separate verified-savings workflow and independent evidence.
+7. The worker makes the connector request once and reports its outcome. Task success establishes completion of the connector contract; financial savings remain unverified and require independently reconciled billing evidence.
 
 ## TypeScript `runCode`
 
@@ -37,15 +37,19 @@ export async function run(ctx: AgentContext): Promise<unknown[]> {
 }
 ```
 
-The approved structured plan defines each index's exact connector, operation and arguments. Its SHA-256 binds the plan, generated source, task/resource/tenant/scope and connector configuration. The worker compares assigned connector bindings with its independently deployed catalog, and compares source byte for byte with its own compiler before using Node's `stripTypeScriptTypes` and importing the generated program. Context calls must be sequential and obtain gateway permits.
+The approved structured plan defines each index's exact connector, operation and arguments. Approval hash schema 4 binds saved expected state as part of the plan. Its SHA-256 binds the plan, generated source, task/resource/tenant/scope and connector configuration. The worker compares assigned connector bindings with its independently deployed catalog, and compares source byte for byte with its own compiler before using Node's `stripTypeScriptTypes` and importing the generated program. Context calls must be sequential and obtain gateway permits.
 
 This is a limited connector runtime, not a general code sandbox. The compiler inserts numeric indices only; model strings never enter executable source. Free-form model code, imports, shell commands, dependency installation, filesystem tools, browser automation and unrestricted network tools are not exposed. Adding arbitrary code later requires a separate disposable execution boundary; Node `vm` alone is insufficient isolation.
 
-## Initial direct connectors
+## Direct connectors
+
+v1.4 adds AWS inspection/tags/KMS safety snapshots, GCP inspection/labels/snapshots, Kubernetes inspection/recommendation annotations, and Azure managed-disk snapshots. Read [supported targets, identity requirements and approval invalidation](LEAN_CORE_IMPLEMENTATION.md#execution-and-data-governance) before configuring them. Use a tag-only Azure binding for non-disk targets; snapshot-enabled bindings require managed disks.
+
+The following Azure tag semantics remain in place.
 
 ### Azure ARM tags
 
-An `azure_arm` binding supports `resource.inspect` (read current tags through the ARM tags-at-scope API) and `tags.merge` (merge up to ten explicit tags after inspection, preserve other keys, and read back the requested values). Inspection is limited to tags; it is not a full resource safety assessment. Reserved Microsoft/Azure/hidden tag prefixes and unbounded keys/values are rejected. Models cannot provide alternative ARM URLs, resource IDs or API versions.
+An `azure_arm` binding supports `resource.inspect` (read current supported resource metadata and tags through fixed ARM APIs) and `tags.merge` (merge up to ten explicit tags after inspection, preserve other keys, and read back the requested values). Inspection now reads supported resource metadata as well as tags, compares the saved expected disk/VM/application state, and rechecks metadata before mutation. Unsupported metadata resource types fail closed. This is not a complete resource safety assessment. Reserved Microsoft/Azure/hidden tag prefixes and unbounded keys/values are rejected. Models cannot provide alternative ARM URLs, resource IDs or API versions.
 
 The worker uses managed identity or workload identity, fixed `management.azure.com` endpoints, exact subscription/resource matching, bounded responses, TLS and no redirects. Dot-segment paths are rejected. It re-reads tags before mutation and refuses drift from the earlier inspection. An ETag is sent as `If-Match` when returned; this is a best-effort check, not a universal atomic concurrency guarantee from ARM. Post-write readback is required for success.
 
@@ -53,11 +57,11 @@ Disk deletion, VM stop/delete, resizing, Kubernetes patching, Terraform apply an
 
 ### HTTP JSON compatibility schema
 
-The configuration schema still recognizes historical `http_json` bindings, but data governance blocks their assignment, plan approval and worker invocation before resolving credentials or sending HTTP. Human approval cannot enable this transfer. Use the reviewed typed Azure adapter for currently supported operations.
+The configuration schema still recognizes historical `http_json` bindings, but data governance blocks their assignment, plan approval and worker invocation before resolving credentials or sending HTTP. Human approval cannot enable this transfer. Use the reviewed typed Azure, AWS, GCP or Kubernetes adapter for supported operations.
 
 ## Deployment configuration
 
-Apply migration through `0018_ai_data_governance` before starting upgraded services, following the retention review steps in the data governance guide:
+Apply migration through `0019_multicloud_governance_and_pillars` before starting upgraded services, following the retention review steps in the data governance guide:
 
 ```bash
 docker compose build migrate agent-gateway agent-worker
@@ -90,7 +94,7 @@ python platform/scripts/setup_platform.py --add-callers .env
 
 The helpers update untracked local configuration. Restart affected identity services after changing allowed digests. `CLOUDSAVER_IDENTITY_TOKEN_AGENT` authenticates the gateway to the identity service; it is distinct from the worker token. The separate platform project must remain reachable over `platform-link`.
 
-Planning requires `CLOUDSAVER_AI_ENABLED=true`, a permitted subscription plan, existing Foundry consent and a reviewed Azure managed-identity processor approved specifically for `agent_planning`. Matching logical ownership identifiers must be deployed. Other model providers remain blocked under the current data-use contract. Model invocation stays in the gateway's existing provider adapter, so the TypeScript worker needs no model key. Failed/uncertain model attempts remain in the durable AI ledger. A human can request a new draft after inspecting the cause, up to five drafts per task.
+Planning requires `CLOUDSAVER_AI_ENABLED=true`, a permitted subscription plan, existing Foundry consent and a reviewed processor approved specifically for `agent_planning`. Matching logical ownership identifiers must be deployed. A reviewed keyless Bedrock or Vertex processor can also be approved for this purpose under the v1.4 provider-specific registration contract; existing source-cloud routing still applies. Model invocation stays in the gateway's existing provider adapter, so the TypeScript worker needs no model key. Failed/uncertain model attempts remain in the durable AI ledger. A human can request a new draft after inspecting the cause, up to five drafts per task.
 
 Planning attempts count toward shared AI usage/budgets but are excluded from advisory assessment history/detail APIs because their response schema is a task plan. Review their plan and lifecycle in the Agent workspace.
 

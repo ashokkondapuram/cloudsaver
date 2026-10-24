@@ -2,6 +2,7 @@ from database.connection import connect as pooled_connect
 """Tenant-scoped durable worker state and atomic ingestion transactions."""
 from contextlib import contextmanager
 from uuid import UUID, uuid5
+from app.scan_selection import normalize,azure_ids,payload,from_payload
 
 
 class SubmissionConflict(ValueError):
@@ -53,9 +54,7 @@ class JobRepository:
         return rows[0][0]
 
     def reserve_scheduled_job(self, tenant_id, job_id, minimum_seconds, subscription_ids):
-        subscription_ids = [str(UUID(s)) for s in subscription_ids]
-        if not 1 <= len(subscription_ids) <= 100 or len(set(subscription_ids)) != len(subscription_ids):
-            raise ValueError("Invalid scheduled subscription selection")
+        subscription_ids=normalize(subscription_ids)
         with self.transaction(tenant_id) as db:
             db.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', (tenant_id,))
             recent = db.execute("SELECT 1 FROM scan_jobs WHERE tenant_id=%s AND created_at > clock_timestamp() - make_interval(secs => %s) LIMIT 1", (tenant_id, minimum_seconds)).fetchone()
@@ -63,7 +62,7 @@ class JobRepository:
                 return False
             db.execute("INSERT INTO scan_jobs(id,tenant_id,status) VALUES (%s,%s,'queued')", (job_id,tenant_id))
             from database.delivery import enqueue
-            enqueue(db,tenant_id,'scan',job_id=job_id,payload={'subscription_ids':subscription_ids})
+            enqueue(db,tenant_id,'scan',job_id=job_id,payload=payload(subscription_ids))
             return True
 
     def queue_job(self, tenant_id, job_id):
@@ -73,22 +72,24 @@ class JobRepository:
 
     def submit(self, tenant_id, key, subscriptions):
         """Idempotency, authorization, backlog bound and delivery commit together."""
+        subscriptions=normalize(subscriptions)
+        intent=dict(payload(subscriptions),origin='interactive')
         job_id = str(uuid5(UUID(tenant_id), 'interactive-scan:' + key))
         with self.transaction(tenant_id) as db:
             db.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))', (tenant_id,))
             existing = db.execute("SELECT payload FROM delivery_events WHERE tenant_id=%s AND job_id=%s AND kind='scan'", (tenant_id, job_id)).fetchone()
             if existing:
-                if existing[0] != {'subscription_ids': subscriptions, 'origin': 'interactive'}:
+                if existing[0] != intent:
                     raise SubmissionConflict('Idempotency key already belongs to another subscription selection')
             else:
-                if not set(subscriptions) <= set(self._active(db, tenant_id)):
+                if not set(azure_ids(subscriptions)) <= set(self._active(db, tenant_id)):
                     raise SubmissionConflict('Subscriptions must be provisioned and connected before submitting jobs')
                 pending = db.execute("SELECT count(*) FROM scan_jobs WHERE tenant_id=%s AND status IN ('queued','running')", (tenant_id,)).fetchone()[0]
                 if pending >= 5:
                     raise SubmissionConflict('Workspace already has five unfinished scan jobs')
                 db.execute("INSERT INTO scan_jobs(id,tenant_id,status) VALUES (%s,%s,'queued')", (job_id, tenant_id))
                 from database.delivery import enqueue
-                enqueue(db, tenant_id, 'scan', job_id=job_id, payload={'subscription_ids': subscriptions, 'origin': 'interactive'})
+                enqueue(db, tenant_id, 'scan', job_id=job_id, payload=intent)
         return self.job_status(tenant_id, job_id)
 
     def job_origin(self, tenant_id, job_id):
@@ -117,18 +118,12 @@ class JobRepository:
 
     def verify_delivery(self, tenant_id, job_id, subscriptions):
         """Broker arguments must match a previously committed tenant job intent."""
-        if not isinstance(subscriptions,list) or not 1<=len(subscriptions)<=100:
-            return False
         try:
-            normalized=[str(UUID(s)) for s in subscriptions]
-            job_id=str(UUID(job_id))
-        except (ValueError,TypeError,AttributeError):
-            return False
-        if len(set(normalized))!=len(normalized):
-            return False
+            normalized=normalize(subscriptions);job_id=str(UUID(job_id))
+        except (ValueError,TypeError,AttributeError):return False
         with self.transaction(tenant_id) as db:
             row=db.execute("SELECT payload FROM delivery_events WHERE tenant_id=%s AND job_id=%s AND kind='scan'",(tenant_id,job_id)).fetchone()
-            return bool(row and sorted(row[0].get('subscription_ids',[]))==sorted(normalized))
+            return bool(row and normalize(from_payload(row[0]))==normalized)
 
     def start_job(self, tenant_id, job_id, token):
         with self.transaction(tenant_id) as db:
@@ -165,12 +160,24 @@ class JobRepository:
             if row[0] != 'running' or str(row[1]) != token:
                 raise ValueError('Stale worker cannot commit job results')
             active = set(self._active(db, tenant_id))
-            if not set(subscriptions) <= active or any(f['subscription_id'] not in active for f in scan['findings']):
+            if not set(azure_ids(subscriptions)) <= active or any(f['subscription_id'] not in active for f in scan['findings'] if f.get('cloud_provider','azure')=='azure'):
                 raise ValueError('Subscription authorization changed during the scan')
+            if isinstance(subscriptions,dict):
+                from app.scan_selection import restrict
+                from app.cloud_scope import validate_finding_scope
+                binding=db.execute('SELECT config,active FROM tenant_registry WHERE tenant_id=%s FOR SHARE',(tenant_id,)).fetchone()
+                if not binding or not binding[1]:raise ValueError('Multi-cloud worker requires a current active registry projection')
+                workspace=restrict(dict(binding[0],tenant_id=tenant_id),subscriptions)
+                for finding in [*scan.get('inventory',[]),*scan['findings']]:
+                    validate_finding_scope(dict(finding,rule_id=finding.get('rule_id',finding.get('inventory_rule_id','INVENTORY'))),workspace)
             db.execute('INSERT INTO public.scans (id,tenant_id,timestamp,payload) VALUES (%s,%s,%s,%s) '
                        'ON CONFLICT (id) DO NOTHING',
                        (scan['scan_id'], tenant_id, scan['timestamp'], Jsonb(scan)))
             for finding in scan['findings']:
+                if finding.get('cloud_provider','azure')!='azure':
+                    db.execute('INSERT INTO cloud_findings(id,tenant_id,scan_id,cloud_provider,scope_id,resource_id,rule_id,payload,observed_at,opportunity_group_id,slo_burn_rate) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO NOTHING',
+                        (uuid5(UUID(job_id),finding['resource_id']+'|'+finding['rule_id']),tenant_id,scan['scan_id'],finding['cloud_provider'],finding['scope_id'],finding['resource_id'],finding['rule_id'],Jsonb(finding),scan['timestamp'],finding.get('opportunity_group_id'),(finding.get('evidence') or {}).get('slo_burn_rate')))
+                    continue
                 finding_id = uuid5(UUID(job_id), finding['resource_id'].lower() + '|' + finding['rule_id'])
                 db.execute('INSERT INTO public.waste_findings '
                            '(id,tenant_id,subscription_id,resource_id,resource_name,resource_type,resource_group,'

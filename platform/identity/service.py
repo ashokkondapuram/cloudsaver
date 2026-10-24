@@ -11,7 +11,6 @@ from identity.analysis.admin import AnalysisOps
 from identity.ai_policy import AIPolicyOps
 from identity.billing.admin import BillingOps
 from identity.customer.admin import CustomerOps
-from identity.knowledge.admin import KnowledgeOps
 from identity.billing.domain import ISSUANCE_BLOCKED, billing_state
 from identity.domain import (CUSTOMER_DEFAULTS, DEFAULT_EXPIRY_DAYS, EXPIRING_SOON_DAYS, KEY_DEFAULTS, MAX_ACTIVE_KEYS,
                              MAX_EXPIRY_DAYS, PROVIDERS, SCOPE_KEYS, STATUSES, TIERS, Conflict, IdentityError, NotFound,
@@ -63,9 +62,9 @@ def snapshot(workspace, customer, plan=None):
     return row
 
 
-class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPolicyOps):
+class IdentityService(CustomerOps, AnalysisOps, BillingOps, AIPolicyOps):
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
-                 cache_seconds=None, provider_scoped_keys=None, knowledge_store=None):
+                 cache_seconds=None, provider_scoped_keys=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage
         self.environment = environment or env('ENVIRONMENT', 'development')
         self.now = clock
@@ -74,11 +73,6 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             raise ValueError('PLATFORM_IDENTITY_CACHE_SECONDS must be between 0 and 30')
         self.provider_scoped_keys = flag('PROVIDER_SCOPED_KEYS') if provider_scoped_keys is None else provider_scoped_keys
         self.metrics = {}
-        from identity.knowledge.store import DisabledStore
-        if knowledge_store is None and type(store).__name__ == 'MemoryStore':
-            from identity.store_memory import MemoryStore
-            knowledge_store = MemoryStore()
-        self.knowledge_store = knowledge_store or DisabledStore()
 
     def _count(self, *labels):
         self.metrics[labels] = self.metrics.get(labels, 0) + 1

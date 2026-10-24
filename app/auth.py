@@ -215,7 +215,7 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         if matched is None:
             raise HTTPException(403, 'Workspace is not provisioned')
         return with_plan(settings, dict(matched, roles=[r.value for r in claims.roles], user_id=claims.user_id,
-                                        allowed_providers=None))
+                                        subject_type='user',subject_id=claims.user_id,allowed_providers=None))
 
     def workspace(token, ip, rid):
         if verifier == 'identity':

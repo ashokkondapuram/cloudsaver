@@ -9,7 +9,8 @@ DEFINITIONS = (
     ('AZURE_ASP_EMPTY_PAID_PLAN', 'application', 'microsoft.web/serverfarms', 'Empty paid App Service plan review', {'minimum_days': (7, 7, 90)}),
     ('AZURE_ASP_UNDERUTILIZED_SKU', 'application', 'microsoft.web/serverfarms', 'App Service capacity review', {'cpu_percent': (15, 1, 30), 'memory_percent': (30, 1, 40)}),
 )
-BOUNDS = {row[0]: row[4] for row in DEFINITIONS}
+from identity.analysis.multicloud import definitions
+BOUNDS = {r[0]:r[6] for r in definitions()} | {row[0]: row[4] for row in DEFINITIONS}
 
 
 def validate_parameters(rule_id, supplied):

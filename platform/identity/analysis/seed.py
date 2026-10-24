@@ -20,3 +20,7 @@ from identity.analysis.contracts import DEFINITIONS
 RULE_SEED += tuple((rid, 'azure', category, kind, name, 'cost') for rid, category, kind, name, _ in DEFINITIONS)
 from identity.analysis.kubernetes import DEFINITIONS as KUBERNETES_RULES
 RULE_SEED += tuple((rid, 'kubernetes', category, kind, name, pillar) for rid,category,kind,name,pillar in KUBERNETES_RULES)
+
+from identity.analysis.multicloud import definitions
+_existing={r[0] for r in RULE_SEED}
+RULE_SEED += tuple(row[:6] for row in definitions() if row[0] not in _existing)

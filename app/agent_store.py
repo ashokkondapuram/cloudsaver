@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from app.agent_contract import binding, digest, program_hash, render_code, validate_plan
 from app.enterprise_store import decode
-from app.savings_store import actor, visible
+from app.principals import actor, visible
 from app.telemetry_contract import moment
 
 COLUMNS = 'id,tenant_id,provider,scope_id,resource_id,scan_id,state,version,payload,created_at,updated_at'
@@ -81,6 +81,8 @@ class AgentRepository:
             payload = dict(intent=request['intent'],connector_ids=sorted(request['connector_ids']),target_id=request['target_id'],
                 resource_type=resource['resource_type'],draft_key=str(uuid4()),draft_attempts=0,plan=None,plan_hash=None,
                 approval=None,steps=[],data_notice='The explicit task instruction and resource type go to the approved model; credentials and resource identifiers are excluded.')
+            from app.agent_contract import expected_state
+            payload['expected_state']=expected_state(resource)
             payload['data_retention_expires_at']=(self.clock()+timedelta(days=request.get('_retention_days',7))).isoformat()
             db.execute('''INSERT INTO agent_tasks(id,tenant_id,provider,scope_id,resource_id,scan_id,request_key,fingerprint,state,version,payload,actor,created_at,updated_at)
                 VALUES(%s,%s,%s,%s,%s,%s,%s,%s,'draft_queued',1,%s,%s,%s,%s)''',
@@ -124,7 +126,7 @@ class AgentRepository:
                 return self.public(self._save(db,task,state,'cancellation_requested',actor(tenant)))
             if decision == 'redraft':
                 if moment(p.get('data_retention_expires_at')) and moment(p['data_retention_expires_at'])<=self.clock():raise AgentConflict('Task data expired. Create a new explicit instruction instead of reusing expired content.')
-                attempted_write = p.get('plan') and any(s['state']!='pending' and p['plan']['steps'][i]['operation']!='resource.inspect' for i,s in enumerate(p['steps']))
+                attempted_write = p.get('plan') and any(s['state']!='pending' and p['plan']['steps'][i]['operation'] not in ('resource.inspect','workload.inspect') for i,s in enumerate(p['steps']))
                 if task['state'] not in {'awaiting_approval','rejected','failed','approval_expired'} or any(s['state']=='started' for s in p['steps']) or attempted_write:
                     raise AgentConflict('This task cannot be redrafted; reconcile any uncertain action independently.')
                 if p['draft_attempts'] >= 5: raise AgentConflict('Draft limit reached for this task.')

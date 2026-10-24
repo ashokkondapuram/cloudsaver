@@ -28,7 +28,7 @@ test('viewer cannot upload billing data and reads saved assessments without infe
   const {mutations}=await mockWorkspace(page,{role:'Viewer'});await mockEnterprise(page);
   await navigate(page,'Cost allocation');await expect(page.getByRole('heading',{name:'Finance access required'})).toBeVisible();
   await expect(page.getByLabel('Choose billing JSON',{exact:false})).toHaveCount(0);
-  await navigate(page,'Activity & delivery');await page.getByRole('tab',{name:'AI assessments',exact:true}).click();
+  await navigate(page,'Activity & delivery');
   await page.getByRole('button',{name:'Inspect assessment 55555555'}).click();
   await expect(page.getByText('TEST FIXTURE: Retained advisory for independent evidence review.',{exact:true})).toBeVisible();
   expect(mutations).toHaveLength(0);
@@ -36,7 +36,7 @@ test('viewer cannot upload billing data and reads saved assessments without infe
 
 test('durable AI history exposes outcomes, usage and lifecycle without action approval',async({page})=>{
   const {mutations}=await mockWorkspace(page);await mockEnterprise(page);
-  await navigate(page,'Activity & delivery');await page.getByRole('tab',{name:'AI assessments',exact:true}).click();
+  await navigate(page,'Activity & delivery');
   const panel=page.locator('.ai-history');await expect(panel.getByRole('heading',{name:'AI assessment history'})).toBeVisible();
   await expect(panel.getByRole('cell',{name:'300',exact:true})).toBeVisible();
   await panel.getByRole('button',{name:'Inspect assessment 55555555'}).click();
@@ -49,17 +49,9 @@ test('durable AI history exposes outcomes, usage and lifecycle without action ap
 
 test('uncertain inference retains the fence and unknown usage on a mobile viewport',async({page})=>{
   await page.setViewportSize({width:390,height:844});await mockWorkspace(page);await mockEnterprise(page,'uncertain');
-  await navigate(page,'Activity & delivery');await page.getByRole('tab',{name:'AI assessments',exact:true}).click();
+  await navigate(page,'Activity & delivery');
   const panel=page.locator('.ai-history');await panel.getByRole('button',{name:'Inspect assessment 55555555'}).click();
   await expect(panel.getByText(/No completed advisory is stored/)).toBeVisible();
   await expect(panel.getByRole('button',{name:/retry|approve|execute/i})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
-});
-
-test('a late assessment detail cannot appear after changing activity tabs',async({page})=>{
-  await mockWorkspace(page);await mockEnterprise(page);let release:()=>void=()=>{};const gate=new Promise<void>(resolve=>release=resolve);
-  await page.route('**/api/v1/ai/assessments/'+assessmentId,async route=>{await gate;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({id:assessmentId,metadata:{},events:[],response:{advice:{summary:'STALE ASSESSMENT DETAIL'},guardrails:[],warning:'test'}})}).catch(()=>{});});
-  await navigate(page,'Activity & delivery');await page.getByRole('tab',{name:'AI assessments',exact:true}).click();await page.getByRole('button',{name:'Inspect assessment 55555555'}).click();
-  await expect(page.getByText('Loading assessment record…',{exact:true})).toBeVisible();await page.getByRole('tab',{name:'Scan history',exact:true}).click();release();
-  await expect(page.getByText('STALE ASSESSMENT DETAIL',{exact:true})).toHaveCount(0);
 });

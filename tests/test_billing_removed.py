@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.main import create_app as scanner
 from services.gateway import create_app as gateway
-from services.tenant import create_app as tenant_service
+from app.main import create_app as tenant_service
 
 ROOT = Path(__file__).resolve().parents[1]
 TID = '11111111-1111-4111-8111-111111111111'

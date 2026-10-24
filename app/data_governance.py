@@ -22,14 +22,16 @@ IDENTIFIERS=[re.compile(p,re.I) for p in (
     r'\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b',
     r'\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b',r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b',
     r'\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b',r'\b(?:[a-z0-9-]+\.)+(?:internal|corp|local)\b')]
-TOP_FIELDS={'assessment':{'resource_reference','provider','service_category','rule_id','facts','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','knowledge'},
-    'resource_assessment':{'resource_reference','provider','service_category','findings','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','knowledge'},
+TOP_FIELDS={'assessment':{'resource_reference','provider','service_category','rule_id','facts','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','evidence_gap_codes'},
+    'resource_assessment':{'resource_reference','provider','service_category','findings','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','evidence_gap_codes'},
     'followup':{'resource','question','prior_summary','prior_assessment'},'agent_planning':{'instruction','resource_type','connectors'}}
 FACT_FIELDS={'encrypted','multi_az','publicly_accessible','deletion_protection','recent_snapshot_verified','imds_v2_required',
     'public_admin_ingress','monitoring_enabled','tls_required','engine_supported','auto_minor_upgrade','health_probes_enabled',
     'managed_secrets','flow_logs_enabled','public_snapshot','p95_usage','window_days','backup_retention_days','size_gb',
     'provisioned_iops','minimum_request','hosted_app_count','patch_age_days','unattached_days','snapshot_age_hours',
-    'window_start','window_end','samples','step_seconds','percentile_method','dimension','unit'}
+    'window_start','window_end','samples','step_seconds','percentile_method','dimension','unit',
+    'stopped_days','cfs_throttling_p95_pct','oom_kill_count_30d','burst_credit_balance_min','surplus_credits_charged',
+    'disk_queue_length_p99','throttle_events','http_429_count','slo_burn_rate','cpu_latency_correlation_r','disruptions_allowed','commitment_lock_conflict'}
 
 
 class DataDenied(ValueError):
@@ -136,57 +138,71 @@ class DataGovernor:
         policy=validate_data_governance(row['policy'].get('data_governance',DEFAULT_DATA_GOVERNANCE))
         return row['version'],policy,fingerprint(policy)
 
-    def event(self,tenant,purpose,decision,reason,*,policy_digest=None,target_id=None,counts=None):
+    def event(self,tenant,purpose,decision,reason,*,policy_digest=None,target_id=None,counts=None,source_provider=None,scope_id=None):
         if self.store is None:raise DataDenied('GOVERNANCE_AUDIT_UNAVAILABLE')
-        from app.savings_store import actor
+        from app.principals import actor
         with self.store.transaction(tenant['tenant_id'],write=True) as db:
-            db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at,cloud_provider,scope_id) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                 (str(uuid4()),tenant['tenant_id'],purpose,decision,reason,policy_digest or fingerprint('unavailable'),target_id,
-                 db.json(counts or {}),actor(tenant),self.clock().isoformat()))
+                 db.json(counts or {}),actor(tenant),self.clock().isoformat(),source_provider,scope_id))
 
     def check_processor(self,tenant,target,purpose,expected_digest=None):
         revision,policy,digest=self.policy()
         if expected_digest is not None and expected_digest!=digest:raise DataDenied('DATA_POLICY_CHANGED')
-        if (not policy['environment_id'] or policy['environment_id']!=os.getenv('CLOUDSAVER_DATA_ENVIRONMENT_ID')
-                or not policy['azure_tenant_id'] or policy['azure_tenant_id']!=os.getenv('CLOUDSAVER_DATA_AZURE_TENANT_ID')):
+        if not policy['environment_id'] or policy['environment_id']!=os.getenv('CLOUDSAVER_DATA_ENVIRONMENT_ID'):
             raise DataDenied('PROCESSING_ENVIRONMENT_NOT_REGISTERED')
-        if target.provider!='azure' or target.auth!='managed_identity':raise DataDenied('PROCESSOR_OUTSIDE_ENVIRONMENT')
         if str(target.tenant_id)!=tenant['tenant_id']:raise DataDenied('PROCESSOR_WORKSPACE_MISMATCH')
         record=next((r for r in policy['processors'] if r['workspace_id']==tenant['tenant_id'] and r['target_id']==target.target_id),None)
         if not record or purpose not in record['purposes']:raise DataDenied('PROCESSOR_PURPOSE_NOT_APPROVED')
-        if not target.azure_resource_id or record['azure_resource_id'].lower()!=target.azure_resource_id.lower():raise DataDenied('PROCESSOR_RESOURCE_MISMATCH')
-        if not target.endpoint or record['endpoint_url'].rstrip('/')!=target.endpoint.rstrip('/') or record['deployment_name']!=target.model:raise DataDenied('PROCESSOR_DESTINATION_MISMATCH')
+        if record.get('provider','azure')!=target.provider:raise DataDenied('PROCESSOR_PROVIDER_MISMATCH')
+        if target.provider=='azure':
+            if not policy['azure_tenant_id'] or policy['azure_tenant_id']!=os.getenv('CLOUDSAVER_DATA_AZURE_TENANT_ID'):raise DataDenied('PROCESSING_ENVIRONMENT_NOT_REGISTERED')
+            if target.auth!='managed_identity':raise DataDenied('PROCESSOR_OUTSIDE_ENVIRONMENT')
+            if not target.azure_resource_id or record['azure_resource_id'].lower()!=target.azure_resource_id.lower():raise DataDenied('PROCESSOR_RESOURCE_MISMATCH')
+            if not target.endpoint or record['endpoint_url'].rstrip('/')!=target.endpoint.rstrip('/') or record['deployment_name']!=target.model:raise DataDenied('PROCESSOR_DESTINATION_MISMATCH')
+        elif target.provider=='aws':
+            if target.auth!='customer_federated' or any((record['aws_role_arn']!=target.role_arn,record['aws_region']!=target.region,record['model_id']!=target.model,
+                    record['guardrail_id']!=target.guardrail_id,record['guardrail_version']!=target.guardrail_version)):
+                raise DataDenied('PROCESSOR_DESTINATION_MISMATCH')
+        elif target.provider=='gcp':
+            if target.auth!='customer_federated' or record['vpc_sc_enforced'] is not True or any((record['gcp_project_id']!=target.project,
+                    record['gcp_location']!=target.region,record['gcp_service_account']!=target.service_account,record['model_id']!=target.model)):
+                raise DataDenied('PROCESSOR_DESTINATION_MISMATCH')
+        else:raise DataDenied('PROCESSOR_OUTSIDE_ENVIRONMENT')
         expiry=datetime.fromisoformat(record['review_expires_at'].replace('Z','+00:00'))
         if expiry<=self.clock():raise DataDenied('PROCESSOR_REVIEW_EXPIRED')
         return revision,policy,digest,record
 
-    def prepare(self,tenant,target,purpose,message):
+    def prepare(self,tenant,target,purpose,message,*,source_provider=None,scope_id=None):
         digest=None
         try:
             revision,policy,digest,record=self.check_processor(tenant,target,purpose)
             cleaned,counts=sanitize(message,purpose=purpose)
-            metadata=dict(classification='sanitized_operational',purpose=purpose,policy_revision=revision,
+            metadata=dict(classification='sanitized_operational',purpose=purpose,policy_revision=revision,source_provider=source_provider,scope_id=scope_id,
                 policy_digest=digest,processor_target_id=target.target_id,removed_fields=counts['removed_fields'],
                 redacted_values=counts['redacted_values'],response_expires_at=(self.clock()+timedelta(days=policy['response_retention_days'])).isoformat())
-            self.event(tenant,purpose,'allowed','MINIMIZED_DATA_APPROVED',policy_digest=digest,target_id=target.target_id,counts=counts)
+            self.event(tenant,purpose,'allowed','MINIMIZED_DATA_APPROVED',policy_digest=digest,target_id=target.target_id,counts=counts,source_provider=source_provider,scope_id=scope_id)
             grant=ProcessingGrant(self,tenant['tenant_id'],target.target_id,digest,fingerprint(cleaned),purpose,
                 self.clock()+timedelta(seconds=60),policy['response_retention_days'],metadata)
             return cleaned,grant
         except DataDenied as error:
-            self.event(tenant,purpose,'blocked',error.code,policy_digest=digest,target_id=target.target_id)
+            self.event(tenant,purpose,'blocked',error.code,policy_digest=digest,target_id=target.target_id,source_provider=source_provider,scope_id=scope_id)
             raise
 
     def clean_output(self,tenant,grant,value):
         try:return sanitize(value,output=True)[0]
         except DataDenied as error:
-            self.event(tenant,grant.purpose,'blocked','MODEL_OUTPUT_'+error.code,policy_digest=grant.policy_digest,target_id=grant.target_id)
+            self.event(tenant,grant.purpose,'blocked','MODEL_OUTPUT_'+error.code,policy_digest=grant.policy_digest,target_id=grant.target_id,source_provider=grant.metadata.get('source_provider'),scope_id=grant.metadata.get('scope_id'))
             raise
 
     def view(self,tenant):
         try:
             revision,policy,digest=self.policy()
             processors=[{k:v for k,v in r.items() if k!='workspace_id'} for r in policy['processors'] if r['workspace_id']==tenant['tenant_id']]
-            configured=bool(policy['environment_id'] and policy['environment_id']==os.getenv('CLOUDSAVER_DATA_ENVIRONMENT_ID') and policy['azure_tenant_id']==os.getenv('CLOUDSAVER_DATA_AZURE_TENANT_ID'))
+            from app.data_scope import restricted
+            if restricted(tenant):processors=[]
+            configured=bool(policy['environment_id'] and policy['environment_id']==os.getenv('CLOUDSAVER_DATA_ENVIRONMENT_ID') and
+                (not policy['azure_tenant_id'] or policy['azure_tenant_id']==os.getenv('CLOUDSAVER_DATA_AZURE_TENANT_ID')))
             return dict(status='enforced' if configured else 'processing_blocked',policy_revision=revision,policy_digest=digest,
                 environment_id=policy['environment_id'],response_retention_days=policy['response_retention_days'],processors=processors,
                 allowed_data_classes=['public','sanitized_operational'],raw_inventory_and_credentials_allowed=False,training_allowed=False,

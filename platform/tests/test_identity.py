@@ -637,28 +637,3 @@ def test_workspace_analysis_rules_default_enabled_and_overridable(service, clock
         service.update_workspace_analysis_rules(TID, {'version': updated['version'], 'rules': [{'rule_id': 'bogus'}]}, OPERATOR)
     with pytest.raises(StaleVersion):
         service.update_workspace_analysis_rules(TID, {'version': 1, 'rules': [{'rule_id': rule_id, 'enabled': True}]}, OPERATOR)
-
-
-def test_knowledge_publication_lifecycle_and_pagination(service, clock):
-    created = [service.create_knowledge_publication(
-        {'title': f'Pattern {i}', 'summary': 'Observed across fleet', 'body': 'Generalized guidance.'}, OPERATOR)
-        for i in range(3)]
-    page = service.list_knowledge_publications(limit=2)
-    assert len(page['items']) == 2 and page['next_cursor'] == '2'
-    rest = service.list_knowledge_publications(limit=2, cursor=page['next_cursor'])
-    assert len(rest['items']) == 1 and rest['next_cursor'] is None
-    pub = created[0]
-    with pytest.raises(IdentityError, match='Independent'):
-        service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'published'}, OPERATOR)
-    technical = {'actor': 'technical', 'actor_type': 'operator', 'roles': ['KnowledgeReviewer']}
-    privacy = {'actor': 'privacy', 'actor_type': 'operator', 'roles': ['PrivacyReviewer']}
-    service.review_knowledge_publication(pub['id'], {'version': 1, 'review': 'technical'}, technical)
-    service.review_knowledge_publication(pub['id'], {'version': 2, 'review': 'privacy'}, privacy)
-    updated = service.update_knowledge_publication(pub['id'], {'version': 3, 'status': 'published', 'quality_score': 80}, OPERATOR)
-    assert updated['status'] == 'published' and updated['quality_score'] == 80
-    with pytest.raises(StaleVersion):
-        service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'deprecated'}, OPERATOR)
-    with pytest.raises(IdentityError, match='valid publication status'):
-        service.update_knowledge_publication(pub['id'], {'version': 2, 'status': 'bogus'}, OPERATOR)
-    with pytest.raises(NotFound):
-        service.update_knowledge_publication('00000000-0000-0000-0000-000000000000', {'version': 1, 'status': 'published'}, OPERATOR)

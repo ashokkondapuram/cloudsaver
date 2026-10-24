@@ -6,12 +6,13 @@ from app.ai_advisory import AIError
 
 
 def validate(value):
+    if isinstance(value,dict):value={k:v for k,v in value.items() if k != 'allow_knowledge_candidates'}
     required = {'enabled', 'allowed_providers', 'disabled_providers', 'allowed_models', 'allowed_regions',
         'allow_cross_provider', 'max_input_tokens_per_request', 'max_output_tokens_per_request',
-        'hourly_attempt_ceiling', 'monthly_token_ceiling', 'allow_knowledge_candidates'}
+        'hourly_attempt_ceiling', 'monthly_token_ceiling'}
     if not isinstance(value, dict) or set(value)-{'data_governance'} != required:
         raise ValueError('Incomplete policy')
-    for key in ('enabled', 'allow_cross_provider', 'allow_knowledge_candidates'):
+    for key in ('enabled', 'allow_cross_provider'):
         if type(value[key]) is not bool:
             raise ValueError('Invalid switch')
     for key, low, high in (('max_input_tokens_per_request', 256, 16000), ('max_output_tokens_per_request', 256, 4096),

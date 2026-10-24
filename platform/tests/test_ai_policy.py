@@ -13,7 +13,7 @@ def test_operator_policy_defaults_to_no_inference_and_updates_are_versioned_and_
     service = build()
     row = service.get_ai_policy()
     assert row['policy']['enabled'] is False
-    assert row['policy'] == json.loads((Path(__file__).resolve().parents[1] / 'contracts/fixtures/ai-policy-v1.json').read_text())['policy']
+    assert row['policy'] == json.loads((Path(__file__).resolve().parents[1] / 'contracts/fixtures/ai-policy-v2.json').read_text())['policy']
     assert all(not items for items in row['policy']['allowed_models'].values())
     policy = copy.deepcopy(row['policy'])
     policy['allowed_regions']['azure'] = ['eastus']

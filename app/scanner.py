@@ -110,7 +110,12 @@ INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
     ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)'
     ', resourceLocation=location, managedBy=tostring(managedBy), osDiskId=tostring(properties.storageProfile.osDisk.managedDisk.id)'
     ', dataDisks=properties.storageProfile.dataDisks, networkInterfaces=properties.networkProfile.networkInterfaces'
-    ', nicIpConfigurations=properties.ipConfigurations, serverFarmId=tostring(properties.serverFarmId)')
+    ', nicIpConfigurations=properties.ipConfigurations, serverFarmId=tostring(properties.serverFarmId)'
+    ', sizeGB=toint(properties.diskSizeGB), provisionedIops=toint(properties.diskIOPSReadWrite)'
+    ', encryptionType=tostring(properties.encryption.type), minimumTlsVersion=tostring(properties.minimumTlsVersion)'
+    ', backupRetentionDays=toint(properties.backupRetentionDays), highAvailability=properties.highAvailability.mode'
+    ', disableLocalAuth=properties.disableLocalAuth, allowBlobPublicAccess=properties.allowBlobPublicAccess'
+    ', zoneRedundant=properties.zoneRedundant, zones=zones')
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
@@ -124,6 +129,12 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
                 evidence[target] = row[source]
         if type(row.get('hostedAppCount')) is int and row['hostedAppCount'] >= 0:
             evidence['hosted_app_count'] = row['hostedAppCount']
+        for source,target in (('sizeGB','size_gb'),('provisionedIops','provisioned_iops'),('backupRetentionDays','backup_retention_days')):
+            if type(row.get(source)) is int and row[source]>=0:evidence[target]=row[source]
+        if row.get('encryptionType') in ('EncryptionAtRestWithPlatformKey','EncryptionAtRestWithCustomerKey','EncryptionAtRestWithPlatformAndCustomerKeys'):evidence['encrypted']=True
+        for source,target in (('zoneRedundant','multi_az'),('disableLocalAuth','managed_secrets'),('allowBlobPublicAccess','publicly_accessible')):
+            if type(row.get(source)) is bool:evidence[target]=row[source]
+        if row.get('minimumTlsVersion') in ('1.2','1.3','TLS1_2','TLS1_3'):evidence['tls_required']=True
         edges = []
         def edge(kind, source, target):
             if isinstance(source, str) and isinstance(target, str) and source and target:
@@ -208,4 +219,11 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None) -> tupl
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
             inventory = scan_inventory_observations(client, subscriptions)
+            from app.collectors.live_common import enabled
+            if enabled():
+                from app.collectors.azure_live import enrich
+                from app.cloud_http import JSONReader
+                reader=JSONReader(headers_factory=lambda _: {'Authorization':'Bearer '+credential.get_token('https://management.azure.com/.default').token})
+                try:inventory=enrich(reader,inventory)
+                finally:reader.close()
             return _findings(client, subscriptions, enabled_rule_ids), inventory

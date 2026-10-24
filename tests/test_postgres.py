@@ -79,6 +79,8 @@ def context(db, tenant):
     db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (tenant,))
 
 
+
+
 def test_ai_token_reservation_and_diagnostics_use_real_tenant_rls(tenants):
     from app.enterprise_store import EnterpriseStore
     from app.inference_ledger import InferenceLedger
@@ -363,30 +365,9 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0018_ai_data_governance',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0019_multicloud_governance_and_pillars',)]
 
 
-def test_savings_case_receipts_and_audit_are_forced_rls_and_append_only(database):
-    from app.enterprise_store import EnterpriseStore
-    from app.savings_store import SavingsRepository
-    from types import SimpleNamespace
-    _,app,store=database
-    tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
-    repository=SavingsRepository(EnterpriseStore(SimpleNamespace(database_url=app,database='unused')))
-    resource=snapshot['findings'][0]
-    case=repository.create(tenant,snapshot,resource,str(uuid4()),'retirement','Synthetic PostgreSQL isolation test')
-    assert repository.get(workspace(),case['id']) is None
-    with psycopg.connect(app) as db:
-        for table in ('savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions'):
-            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
-            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
-    with psycopg.connect(app) as db:
-        db.execute("SELECT set_config('app.current_tenant_id',%s,true)",(tenant['tenant_id'],))
-        assert db.execute('SELECT count(*) FROM savings_case_events WHERE case_id=%s',(case['id'],)).fetchone()[0]==1
-    for statement in ('UPDATE savings_case_events SET action=action','DELETE FROM savings_case_events','UPDATE savings_evidence_receipts SET payload=payload','DELETE FROM savings_evidence_receipts'):
-        with psycopg.connect(app) as db:
-            db.execute("SELECT set_config('app.current_tenant_id',%s,true)",(tenant['tenant_id'],))
-            with pytest.raises(errors.InsufficientPrivilege):db.execute(statement)
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):
@@ -466,7 +447,7 @@ def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_priv
     rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
     assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
     with psycopg.connect(database[0]) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0018_ai_data_governance'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0019_multicloud_governance_and_pillars'
         assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
 
 
@@ -835,33 +816,6 @@ def test_delivery_list_pagination_and_foreign_cursors(delivery):
         repository.page(str(uuid4()),2,None,page['next_cursor'])
 
 
-def test_gitops_requests_rls_foreign_keys_and_durable_fencing(database):
-    from app.gitops_store import ReviewRepository,ReviewConflict
-    owner,app,store=database
-    a,b=workspace(),workspace()
-    sa,sb=scan(a),scan(b)
-    store.save(a['tenant_id'],sa,workspace=a)
-    store.save(b['tenant_id'],sb,workspace=b)
-    repository=ReviewRepository(store)
-    package=dict(scan_id=sa['scan_id'],fingerprint='a'*64,target_id='infra',repository='example/infra',branch='cloudsaver/review-test')
-    id=repository.reserve(a['tenant_id'],'test-key-12345678',package)
-    assert repository.reserve(a['tenant_id'],'test-key-12345678',package)==id
-    assert repository.get(b['tenant_id'],id) is None
-    with psycopg.connect(app) as db:
-        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='gitops_requests'::regclass").fetchone()==(True,True)
-        assert db.execute('SELECT count(*) FROM gitops_requests').fetchone()[0]==0
-    with pytest.raises(errors.ForeignKeyViolation):
-        repository.reserve(a['tenant_id'],'foreign-scan-key-12345678',dict(package,scan_id=sb['scan_id']))
-    old,new=str(uuid4()),str(uuid4())
-    assert repository.claim(a['tenant_id'],id,old)
-    with pytest.raises(ReviewConflict):repository.claim(a['tenant_id'],id,new)
-    with psycopg.connect(owner) as db:
-        context(db,a['tenant_id'])
-        db.execute('UPDATE gitops_requests SET lease_until=0 WHERE id=%s',(id,))
-    assert repository.claim(a['tenant_id'],id,new)
-    with pytest.raises(ReviewConflict):repository.finish(a['tenant_id'],id,old,{'pr_number':7})
-    repository.finish(a['tenant_id'],id,new,{'pr_number':7})
-    assert ReviewRepository(PostgresStore(app)).get(a['tenant_id'],id)['status']=='open'
 
 
 def test_multi_cloud_findings_are_atomic_and_rls_isolated(database):
@@ -1164,10 +1118,9 @@ def test_architecture_analysis_reads_use_runtime_rls_and_preserve_saved_evidence
     settings = Settings('azure', ':memory:', (a,b), database_url=app)
     with TestClient(create_app(settings, ai_gateway=AIGateway(enabled=False))) as client:
         path = '/api/v1/scans/' + sa['scan_id']
-        assert client.get(path+'/analysis', headers={'Authorization':'Bearer '+key_b}).status_code == 404
-        result = client.post(path+'/analysis/resource', headers={'Authorization':'Bearer '+key_a},
-                             json={'resource_id':sa['findings'][0]['resource_id'],'rule_id':'ORPHANED_DISK'})
-        assert result.status_code == 200 and result.json()['assessment']['retail_estimate_usd'] is None
+        assert client.get(path+'/resources', headers={'Authorization':'Bearer '+key_b}).status_code == 404
+        result=client.get(path+'/resources',headers={'Authorization':'Bearer '+key_a})
+        assert result.status_code==200 and result.json()['items'][0]['retail_estimate_usd'] is None
         assert store.get(a['tenant_id'],sa['scan_id']) == sa
 
 
@@ -1262,3 +1215,60 @@ def test_resource_batches_followups_and_decisions_use_forced_rls(tenants):
         with pytest.raises(errors.InsufficientPrivilege):
             db.execute("""INSERT INTO resource_decisions(id,tenant_id,resource_key,scan_id,decision,evidence_digest,actor)
                 VALUES (%s,%s,%s,%s,'accept',%s,%s)""", (uuid4(), b['tenant_id'], 'a' * 64, sa['scan_id'], 'b' * 64, 'c' * 64))
+
+
+def test_v140_hold_release_preserves_restricted_runtime_privileges_and_audit(database):
+    from types import SimpleNamespace
+    from datetime import timedelta
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.data_retention import DataRetention,RetentionConflict
+    _,url,store=database;tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    persistence=EnterpriseStore(SimpleNamespace(database_url=url,database='unused'));ledger=InferenceLedger(persistence)
+    result=ledger.run(tenant['tenant_id'],str(uuid4()),'e'*64,10,lambda:dict(advice={'summary':'Legal preservation evidence'},usage={'input_tokens':8,'output_tokens':3}),metadata=dict(scan_id=snapshot['scan_id'],provider='azure',model='approved',target_id='approved',source_provider='azure',scope_id=tenant['subscription_ids'][0]))
+    repo=DataRetention(persistence);hold=repo.hold(tenant,result['assessment_id'],datetime.now(timezone.utc)+timedelta(days=1),'LEGAL-42')
+    with psycopg.connect(url) as db:
+        context(db,str(uuid4()))
+        assert db.execute('SELECT release_ai_hold(%s,%s,%s,%s)',(hold['id'],'a'*64,'Completed review','LEGAL-RELEASE-42')).fetchone()[0] is False
+    for statement in ('UPDATE ai_data_holds SET released_at=now()','DELETE FROM ai_data_events'):
+        with psycopg.connect(url) as db:
+            context(db,tenant['tenant_id'])
+            with pytest.raises(errors.InsufficientPrivilege):db.execute(statement)
+    assert repo.release(tenant,hold['id'],'Preservation review completed','LEGAL-RELEASE-42')['released']
+    with pytest.raises(RetentionConflict):repo.release(tenant,hold['id'],'Repeated review','LEGAL-RELEASE-43')
+    assert any(e['reason']=='LEGAL_HOLD_RELEASED' and e['cloud_provider']=='azure' and e['scope_id']==tenant['subscription_ids'][0] for e in repo.view(tenant)['events'])
+    assert repo.erase(tenant,result['assessment_id'],'PRIVACY-RELEASE-42')['content_erased']
+    assert ledger.usage(tenant['tenant_id'])['groups'][0]['input_tokens']==8
+
+
+def test_lean_multicloud_job_intent_fences_scope_and_commits_normalized_cloud_rows(database):
+    from app.tenant_config import normalize_tenant
+    from app.tenant_registry import PostgresRegistry
+    from app.config import Settings
+    from app.scan_selection import select
+    from workers.storage import JobRepository,SubmissionConflict
+    from workers.tasks import run_scan_job
+    from tests.test_worker import Lease
+    _,url,store=database
+    tid=str(uuid4());tenant=normalize_tenant(dict(tenant_id=tid,name='Durable AWS QA',plan_tier='ENTERPRISE',api_key_sha256=__import__('hashlib').sha256(tid.encode()).hexdigest(),subscription_ids=[],aws_accounts=[dict(account_id='123456789012',region='us-east-1',role_arn='arn:aws:iam::123456789012:role/Reader')]))
+    registry=PostgresRegistry(url,(tenant,),ttl=0)
+    assert registry.get(tid) is not None
+    settings=Settings('multi-cloud','unused',(tenant,),url,registry);jobs=JobRepository(url)
+    selection=select(tenant,['aws']);key=str(uuid4());queued=jobs.submit(tid,key,selection)
+    assert jobs.verify_delivery(tid,queued['job_id'],selection)
+    assert not jobs.verify_delivery(tid,queued['job_id'],dict(providers=['aws'],scopes={'aws':['999999999999']}))
+    assert jobs.submit(tid,key,selection)['job_id']==queued['job_id']
+    with pytest.raises(SubmissionConflict):jobs.submit(tid,key,dict(providers=['gcp'],scopes={'gcp':['another-project']}))
+    resource=dict(cloud_provider='aws',scope_id='123456789012',subscription_id='123456789012',resource_id='arn:aws:ec2:us-east-1:123456789012:volume/vol-0123456789abcdef0',resource_type='aws:ec2:volume',resource_name='qa',resource_group='us-east-1',region='us-east-1',rule_id='AWS_UNATTACHED_EBS',severity='MEDIUM',details='Synthetic inventory',estimated_monthly_waste_usd=None,evidence={})
+    class LocalLease(Lease):
+        def acquire(self,tenant_id,token):return True
+    result=run_scan_job(settings,tid,selection,queued['job_id'],jobs,LocalLease(),scanner=lambda _:([resource],[]))
+    saved=store.get(tid,result['scan_id']);assert saved['cloud_providers']==['aws'] and saved['subscriptions_scanned']==0
+    with jobs.transaction(tid) as db:
+        assert db.execute('SELECT cloud_provider,scope_id FROM cloud_findings WHERE scan_id=%s',(result['scan_id'],)).fetchall()==[('aws','123456789012')]
+        assert db.execute('SELECT count(*) FROM waste_findings WHERE scan_id=%s',(result['scan_id'],)).fetchone()[0]==0
+    next_job=jobs.submit(tid,str(uuid4()),selection);token=str(uuid4());assert jobs.start_job(tid,next_job['job_id'],token)
+    with jobs.transaction(tid) as db:db.execute('UPDATE tenant_registry SET active=false WHERE tenant_id=%s',(tid,))
+    foreign=dict(saved,scan_id=str(uuid4()))
+    with pytest.raises(ValueError,match='registry'):jobs.complete_job(tid,next_job['job_id'],foreign,selection,token=token)
+    assert store.get(tid,foreign['scan_id']) is None

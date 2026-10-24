@@ -35,11 +35,8 @@ def build_service():
     url = env('IDENTITY_DATABASE_URL')
     if not url:
         raise RuntimeError('Set PLATFORM_IDENTITY_DATABASE_URL')
-    from identity.knowledge.store import PostgresKnowledgeStore
-    knowledge_url = env('KNOWLEDGE_DATABASE_URL')
-    knowledge = PostgresKnowledgeStore(knowledge_url, url) if knowledge_url else None
     return IdentityService(PostgresStore(url), Peppers.from_env(), Throttle(RedisBackend()), RedisEvents(),
-                           UsageRecorder(), knowledge_store=knowledge)
+                           UsageRecorder())
 
 
 def problem(request, status, detail, headers=None):
@@ -458,9 +455,6 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def update_workspace_analysis_rules(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.update_workspace_analysis_rules(tenant_id, payload, identity, rid(request))
 
-    @app.get('/internal/v1/knowledge/retrieve')
-    def retrieve_knowledge(provider: str, service_category: str, rule_ids: str = Query('', max_length=2400), caller=Depends(verify_caller)):
-        return service.retrieve_knowledge(provider, service_category, rule_ids.split(',') if rule_ids else [])
 
     @app.get('/internal/v1/ai-policy')
     def effective_ai_policy(caller=Depends(verify_caller)):
@@ -474,26 +468,10 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def update_ai_policy(request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.update_ai_policy(payload, identity, rid(request))
 
-    @app.get('/admin/v1/knowledge/metrics')
-    def knowledge_metrics(identity=Depends(operator)):
-        return service.knowledge_metrics()
 
-    @app.post('/admin/v1/knowledge/publications/{publication_id}/review')
-    def review_publication(publication_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
-        return service.review_knowledge_publication(publication_id, payload, identity, rid(request))
 
-    @app.get('/admin/v1/knowledge/publications')
-    def knowledge_publications(status: str | None = Query(None, max_length=16), limit: int = Query(50, ge=1, le=200),
-                               cursor: str | None = Query(None, max_length=20), identity=Depends(operator)):
-        return service.list_knowledge_publications(status, limit, cursor)
 
-    @app.post('/admin/v1/knowledge/publications', status_code=201)
-    def create_knowledge_publication(request: Request, payload: dict = Body(...), identity=Depends(operator)):
-        return service.create_knowledge_publication(payload, identity, rid(request))
 
-    @app.patch('/admin/v1/knowledge/publications/{publication_id}')
-    def update_knowledge_publication(publication_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
-        return service.update_knowledge_publication(publication_id, payload, identity, rid(request))
 
     @app.get('/admin/v1/billing/settings')
     def billing_settings(identity=Depends(operator)):

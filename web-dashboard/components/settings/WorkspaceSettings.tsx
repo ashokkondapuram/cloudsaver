@@ -152,8 +152,8 @@ export function ResourceAccessIdentityEditor() {
   const [gcpServiceAccount, setGcpServiceAccount] = useState('');
   useEffect(() => {
     if (!data) return;
-    setAzureAppClientId(data.settings.identity.azure_app_client_id || '');
-    setGcpServiceAccount(data.settings.identity.gcp_service_account || '');
+    setAzureAppClientId(data.settings.identity?.azure_app_client_id || '');
+    setGcpServiceAccount(data.settings.identity?.gcp_service_account || '');
   }, [data]);
   if (!data) return null;
   if (data.directory_mode === 'cutover') {

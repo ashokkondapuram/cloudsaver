@@ -70,6 +70,10 @@ def validate_finding_scope(finding, tenant):
     """Validate normalized identity independently at ingestion/export boundaries."""
     provider = finding.get('cloud_provider', 'azure')
     rid, scope = finding.get('resource_id', ''), finding.get('scope_id')
+    legacy={'AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL'}
+    if provider in ('aws','gcp') and finding.get('rule_id') not in legacy:
+        from app.multicloud_scope import validate
+        return validate(finding,tenant)
     if provider != 'azure':
         types = {
             'AWS_UNATTACHED_EBS': ('aws', 'aws:ec2:volume'), 'AWS_UNASSOCIATED_EIP': ('aws', 'aws:ec2:elastic-ip'),

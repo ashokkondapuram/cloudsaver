@@ -5,7 +5,7 @@ import math
 from app.assessment import protection
 from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
 
-VERSION = '2026-10-24.1'
+VERSION = '1.4.0'
 OUTCOMES = ('condition_detected', 'condition_not_detected', 'insufficient_evidence', 'not_applicable',
             'disabled_by_policy', 'excluded_by_exception', 'unsupported_by_collector', 'evaluation_failed')
 # id, resource type suffix, name, configurable parameters with (default, min, max)
@@ -156,6 +156,11 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
             return finish('not_applicable', 'This rule reviews independently billable dedicated plans.')
         if isinstance(tier, str) and type(apps) is int and type(slots) is int:
             detected = False if apps > 0 or slots > 0 else continuous(evidence, 'Empty', p['minimum_days'], now)
+    if rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION','AZURE_ASP_UNDERUTILIZED_SKU') and detected:
+        from app.multicloud_rules import slo_gate
+        safe=slo_gate(evidence,now)
+        if safe is None:return dict(output,safety_blocks=['SLO_EVIDENCE_REQUIRED'])
+        if not safe:return dict(finish('condition_not_detected','SLO or saturation evidence blocks capacity reduction.'),safety_blocks=['SLO_ERROR_BUDGET_RISK'])
     if detected is None:
         return output
     return finish('condition_detected' if detected else 'condition_not_detected',
@@ -178,4 +183,5 @@ def evaluate_inventory(inventory, *, policies=None, observed_at=None, now=None):
                         outcome='evaluation_failed', reason='Invalid evidence or policy; inspection is required.',
                         automatic_execution=False, estimated_savings=None))
     from app.kubernetes_rules import evaluate_inventory as evaluate_kubernetes
-    return outcomes + evaluate_kubernetes(inventory, policies=policies, observed_at=observed_at, now=now)
+    from app.multicloud_rules import evaluate_inventory as evaluate_expanded
+    return outcomes + evaluate_kubernetes(inventory, policies=policies, observed_at=observed_at, now=now) + evaluate_expanded(inventory, policies=policies, observed_at=observed_at, now=now)

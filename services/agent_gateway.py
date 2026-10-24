@@ -14,7 +14,7 @@ from app.agent_contract import Strict, connectors, render_code
 from app.agent_store import AgentConflict, AgentRepository
 from app.auth import Role, require_workspace_role
 from app.enterprise_store import EnterpriseStore
-from app.savings_store import visible
+from app.principals import visible
 from app.telemetry_contract import moment
 from services.common import service
 
@@ -95,7 +95,8 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
 
     def human(row):
         require_workspace_role(row,Role.TENANT_ADMIN)
-        if row.get('subject_type') == 'service_account': raise HTTPException(403,'A human workspace administrator must review this plan.')
+        if row.get('key_id') or row.get('subject_type')=='service_account' or not (row.get('user_id') or row.get('subject_type')=='user' and row.get('subject_id')):
+            raise HTTPException(403,'A verified human workspace administrator session must review this plan.')
 
     def worker_auth(authorization: str = Header(default='')):
         enabled()
@@ -150,6 +151,8 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
         selected = [c for c in catalog() if c.id in body.connector_ids and c.tenant_id==row['tenant_id'] and c.provider==provider and c.scope_id==scope]
         if len(set(body.connector_ids))!=len(body.connector_ids) or len(selected)!=len(body.connector_ids):
             raise HTTPException(403,'Choose connectors bound to this workspace and resource scope.')
+        from app.agent_contract import supports_resource
+        if any(not supports_resource(c,body.resource_id) for c in selected):raise HTTPException(403,'A connector does not support this resource type. Use a typed adapter binding for the selected resource.')
         from app.data_governance import DataGovernor,sanitize,DataDenied
         from app.ai_advisory import AIError
         governor=DataGovernor(persistence)
@@ -158,7 +161,7 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
             if any(c.kind=='http_json' for c in selected):raise DataDenied('EXTERNAL_ACTION_DATA_PROHIBITED')
             _,policy,_=governor.policy()
         except DataDenied as error:
-            governor.event(row,'agent_planning','blocked',error.code,target_id=body.target_id)
+            governor.event(row,'agent_planning','blocked',error.code,target_id=body.target_id,source_provider=provider,scope_id=scope)
             raise HTTPException(403,str(error)) from None
         except AIError as error:raise HTTPException(error.status,str(error)) from None
         return call(repo.create,row,snapshot,resource,dict(body.model_dump(),_retention_days=policy['response_retention_days']))

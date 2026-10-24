@@ -1,3 +1,5 @@
+> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+
 # CloudSaver v0.10.0 console experience
 
 Source: [Advanced UI/UX Architecture & Component Engineering Guide](https://docs.google.com/document/d/1hETTGMG5X9zo3AuuthHQgR8cgFPrG97V694sGxve2Os/edit), the newest matching Drive guide, modified October 23, 2026 at 04:07 UTC. Its internal v0.7.2 label describes the source design; implementation extends the latest v0.9.0 product as v0.10.0. The duplicate document `14ZrmNNhiZtkhnBf5tUMc2gjUMAIQ7JsTHHwqwrQZSLQ` contained the same text when reviewed.

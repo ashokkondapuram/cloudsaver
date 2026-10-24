@@ -62,8 +62,10 @@ def test_quantities_are_unit_normalized_and_invalid_values_are_unknown(value,exp
     assert quantity(value)==expected
 
 
-def test_all_eight_contracts_are_registered_and_healthy_reviews_keep_finance_unknown():
-    assert len(RULE_IDS)==8
+def test_legacy_and_v140_contracts_are_registered_and_healthy_reviews_keep_finance_unknown():
+    from pathlib import Path
+    legacy=json.loads((Path(__file__).resolve().parents[1]/'platform/contracts/fixtures/kubernetes-rule-ids-v1.json').read_text())
+    assert set(legacy)<RULE_IDS and len(RULE_IDS)==10
     row=container()
     cpu=evaluated(row,'K8S_CONTAINER_CPU_OVERREQUEST')
     memory=evaluated(row,'K8S_CONTAINER_MEMORY_OVERREQUEST')
@@ -263,7 +265,7 @@ def test_workspace_and_patch_preview_use_saved_evidence_and_no_live_cluster_muta
     result=api.get(path,headers=headers)
     assert result.status_code==200
     view=result.json();row=next(r for r in view['resources'] if r['resource_type']=='kubernetes.io/Container')
-    assert len(view['rule_matrix'])==8 and row['costs']['billed_node_cost_usd'] is None
+    assert len(view['rule_matrix'])==10 and row['costs']['billed_node_cost_usd'] is None
     body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
     preview=api.post(path+'/patch-preview',headers=headers,json=body)
     assert preview.status_code==409 and 'SLO' in preview.json()['detail']
@@ -328,17 +330,6 @@ def test_conflicting_ledger_digest_marks_every_affected_observation():
     assert a['reconciliation_status']==b['reconciliation_status']=='source_conflict'
 
 
-def test_source_conflict_blocks_destructive_script_and_invalidates_opportunity():
-    from app.remediation import generate_script
-    from app.assessment import protection
-    sid='22222222-2222-4222-8222-222222222222'
-    rid=f'/subscriptions/{sid}/resourceGroups/rg/providers/Microsoft.Compute/disks/recovery'
-    row={'cloud_provider':'azure','subscription_id':sid,'resource_id':rid,'resource_type':'Microsoft.Compute/disks','reconciliation_status':'source_conflict'}
-    finding=dict(row,rule_id='ORPHANED_DISK',resource_name='recovery',estimated_monthly_waste_usd=10.)
-    compact([row],[finding],NOW.isoformat())
-    assert finding['estimated_monthly_waste_usd'] is None
-    assert 'SOURCE_CONFLICT' in protection(finding)
-    with pytest.raises(ValueError):generate_script({'mode':'azure','status':'completed','findings':[finding]},[rid],BINDING['tenant_id'],[sid])
 
 
 def test_managed_prometheus_endpoints_fail_before_sending_identity_to_wrong_cloud(monkeypatch):
@@ -361,7 +352,7 @@ def test_azure_federation_uses_customer_credential_and_managed_prometheus_audien
 
 def test_platform_rule_contracts_match_and_can_be_individually_disabled():
     from pathlib import Path
-    contract=Path(__file__).resolve().parents[1]/'platform/contracts/fixtures/kubernetes-rule-ids-v1.json'
+    contract=Path(__file__).resolve().parents[1]/'platform/contracts/fixtures/kubernetes-rule-ids-v2.json'
     assert set(json.loads(contract.read_text()))==RULE_IDS
 
 
@@ -396,28 +387,3 @@ def test_collection_duration_does_not_turn_shared_provenance_into_source_conflic
     ledger=compact(values,[],NOW.isoformat())
     assert len(ledger)==1 and ledger[0]['status']=='available'
     assert not any(r.get('reconciliation_status')=='source_conflict' for r in values)
-
-
-def test_signed_fresh_slo_proof_enables_review_patch_and_revocation_blocks_it(tmp_path,monkeypatch):
-    from test_high_impact_improvements import slo
-    from app.nextgen_evidence import canonical
-    import hmac
-    api,headers,scan_id=api_client(tmp_path,monkeypatch)
-    tid=api.get('/api/v1/me',headers=headers).json()['tenant_id']
-    path=f'/api/v1/scans/{scan_id}/kubernetes'
-    row=next(r for r in api.get(path,headers=headers).json()['resources'] if r['resource_type']=='kubernetes.io/Container')
-    case=api.post('/api/v1/optimization/cases',headers=headers,json=dict(scan_id=scan_id,resource_id=row['resource_id'],request_key=str(uuid4()),action='rightsizing'))
-    assert case.status_code==201,case.text
-    secret='synthetic-signature-key-'+'x'*32
-    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_KEY_FIXTURE',secret)
-    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_SOURCES',json.dumps([dict(tenant_id=tid,source_id='fixture',providers=['kubernetes'],scope_ids=[CLUSTER],kinds=['slo'],key_env='CLOUDSAVER_EVIDENCE_KEY_FIXTURE')]))
-    receipt=dict(receipt_id=str(uuid4()),source_id='fixture',tenant_id=tid,provider='kubernetes',scope_id=CLUSTER,resource_id=row['resource_id'],kind='slo',issued_at=datetime.now(timezone.utc).isoformat(),payload=slo())
-    signature=hmac.new(secret.encode(),canonical(receipt),hashlib.sha256).hexdigest()
-    stored=api.post('/api/v1/optimization/receipts',headers=dict(headers,**{'X-Evidence-Signature':signature}),json=receipt)
-    assert stored.status_code==201,stored.text
-    body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
-    result=api.post(path+'/patch-preview',headers=headers,json=body)
-    assert result.status_code==200,result.text
-    assert result.json()['automatic_execution'] is False and 'limits' not in result.json()['content']
-    monkeypatch.setenv('CLOUDSAVER_EVIDENCE_SOURCES','[]')
-    assert api.post(path+'/patch-preview',headers=headers,json=body).status_code==409

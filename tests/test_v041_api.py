@@ -64,7 +64,7 @@ def test_admin_live_scan_unknown_cost_import_review_and_honest_cancel(context):
         assert record['findings'][0]['estimated_monthly_waste_usd'] is None
         result = client.post('/api/v1/scans/'+record['scan_id']+'/remediation-terraform', headers=auth,
                              json={'resource_ids':[finding()['resource_id']]})
-        assert result.status_code == 200 and 'import {' in result.json()['hcl']
+        assert result.status_code == 404
         assert client.post('/api/v1/scans/'+record['scan_id']+'/cancel', headers=auth).status_code == 409
         assert client.post('/api/v1/scans/'+str(uuid4())+'/cancel', headers=auth).status_code == 404
         assert client.get('/api/v1/auth/consent-url', headers=auth).status_code == 501
@@ -114,19 +114,3 @@ def test_new_provider_routes_preserve_role_boundaries(context):
         assert client.get('/api/v1/providers', headers=viewer).json()['providers'] == ['azure']
         assert client.get('/api/v1/trends', headers=viewer).status_code == 200
         assert client.post('/api/v1/scans/multi-cloud', headers=viewer, json={'providers':['azure']}).status_code == 403
-
-
-def test_gitops_and_policy_routes_preserve_roles(context):
-    settings,validator,headers=context
-    with TestClient(create_app(settings,identity_validator=validator)) as client:
-        viewer=headers(['Viewer'])
-        selection=dict(scan_id=str(uuid4()),target_id='infra',resource_ids=['anything'])
-        assert client.get('/api/v1/gitops/targets',headers=viewer).status_code==200
-        assert client.get('/api/v1/gitops/requests',headers=viewer).status_code==200
-        assert client.post('/api/v1/gitops/preview',headers=viewer,json=selection).status_code==403
-        assert client.post('/api/v1/gitops/requests',headers=viewer,json=selection|{'idempotency_key':'test-key-12345678'}).status_code==403
-        minimal=dict(format_version='1.2',configuration={'root_module':{}},resource_changes=[])
-        response=client.post('/api/v1/policies/terraform/evaluate',headers=viewer,json={'plan':minimal})
-        assert response.status_code==200 and response.json()['decision']=='pass'
-        assert client.post('/api/v1/policies/terraform/evaluate',headers=viewer,json={'plan':minimal,'policy':{}}).status_code==422
-        assert client.post('/api/v1/policies/terraform/evaluate',headers=viewer,content=b'x'*2000001).status_code==413

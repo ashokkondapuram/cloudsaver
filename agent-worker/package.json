@@ -1,14 +1,26 @@
 {
   "name": "cloudsaver-agent-worker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=24.22.1"},
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-isolation=none tests/*.test.ts"
   },
-  "dependencies": {"@azure/identity": "^4.13.0"},
-  "devDependencies": {"@types/node": "^24.0.0", "typescript": "^5.9.2"}
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.1156.0",
+    "@aws-sdk/client-rds": "^3.1156.0",
+    "@aws-sdk/client-sts": "^3.1156.0",
+    "@aws-sdk/credential-providers": "^3.1156.0",
+    "@azure/identity": "^4.13.0",
+    "google-auth-library": "^11.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.2"
+  }
 }

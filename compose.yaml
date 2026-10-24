@@ -37,6 +37,9 @@ x-environment: &environment
   CLOUDSAVER_IDENTITY_URL: ${CLOUDSAVER_IDENTITY_URL:-http://identity-service:8005}
   CLOUDSAVER_IDENTITY_CACHE_SECONDS: ${CLOUDSAVER_IDENTITY_CACHE_SECONDS:-15}
   CLOUDSAVER_ENVIRONMENT: ${CLOUDSAVER_ENVIRONMENT:-development}
+  CLOUDSAVER_REGIONAL_PRICE_CATALOG: ${CLOUDSAVER_REGIONAL_PRICE_CATALOG:-[]}
+  CLOUDSAVER_LIVE_EVIDENCE_ENABLED: ${CLOUDSAVER_LIVE_EVIDENCE_ENABLED:-false}
+  CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES: ${CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES:-25}
   CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
   CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
   CLOUDSAVER_DATA_ENVIRONMENT_ID: ${CLOUDSAVER_DATA_ENVIRONMENT_ID:-}
@@ -44,12 +47,12 @@ x-environment: &environment
   CLOUDSAVER_KUBERNETES_BINDINGS: ${CLOUDSAVER_KUBERNETES_BINDINGS:-[]}
   CLOUDSAVER_EVIDENCE_SOURCES: ${CLOUDSAVER_EVIDENCE_SOURCES:-[]}
   CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED: ${CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED:-false}
-  CLOUDSAVER_TRUSTED_CALLERS: api-gateway,analytics-service,notification-service
-  NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,agent-gateway,identity-service,postgres,redis
+  CLOUDSAVER_TRUSTED_CALLERS: api-gateway
+  NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,scanner-service,agent-gateway,identity-service,postgres,redis
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:1.3.0
+  image: cloudsaver-python:1.4.0
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -69,7 +72,6 @@ x-worker-environment: &worker-environment
   REDIS_URL: redis://redis:6379/1
   CLOUDSAVER_SCHEDULER_TICK_SECONDS: ${CLOUDSAVER_SCHEDULER_TICK_SECONDS:-300}
   CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
-  CLOUDSAVER_KNOWLEDGE_ENABLED: ${CLOUDSAVER_KNOWLEDGE_ENABLED:-false}
   CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
   CLOUDSAVER_AI_HOURLY_ATTEMPTS: ${CLOUDSAVER_AI_HOURLY_ATTEMPTS:-10}
   CLOUDSAVER_AI_BATCH_TICK_SECONDS: ${CLOUDSAVER_AI_BATCH_TICK_SECONDS:-30}
@@ -92,9 +94,6 @@ services:
     environment:
       <<: *environment
       REDIS_URL: redis://redis:6379/0
-      TENANT_SERVICE_URL: http://tenant-service:8001
-      ANALYTICS_SERVICE_URL: http://analytics-service:8003
-      NOTIFICATION_SERVICE_URL: http://notification-service:8004
       AGENT_GATEWAY_URL: http://agent-gateway:8006
       CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_GATEWAY:-}
       CLOUDSAVER_TRUSTED_CALLERS: ''
@@ -102,45 +101,23 @@ services:
     depends_on:
       redis: {condition: service_healthy}
       scanner-service: {condition: service_healthy}
-      tenant-service: {condition: service_healthy}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-  tenant-service:
-    <<: *service
-    networks: [default, platform-link]
-    command: [uvicorn, services.tenant:create_app, --factory, --host, 0.0.0.0, --port, '8001']
-    environment:
-      <<: *environment
-      CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_TENANT:-}
-    depends_on:
-      migrate: {condition: service_completed_successfully}
-      redis: {condition: service_healthy}
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
       interval: 15s
       timeout: 5s
       retries: 5
   scanner-service:
     <<: *service
     networks: [default, platform-link]
-    command: [uvicorn, services.scanner:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
+    command: [uvicorn, app.main:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
     environment:
       <<: [*environment, *delivery-environment]
       CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY: ${CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY:-}
       REDIS_URL: redis://redis:6379/1
       CLOUDSAVER_DISTRIBUTED_SCAN_LOCK: 'true'
       CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
-      CLOUDSAVER_KNOWLEDGE_ENABLED: ${CLOUDSAVER_KNOWLEDGE_ENABLED:-false}
       CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
       CLOUDSAVER_AI_HOURLY_ATTEMPTS: ${CLOUDSAVER_AI_HOURLY_ATTEMPTS:-10}
-      CLOUDSAVER_GITOPS_TARGETS: ${CLOUDSAVER_GITOPS_TARGETS:-[]}
-      CLOUDSAVER_GITOPS_PUBLISH: ${CLOUDSAVER_GITOPS_PUBLISH:-false}
-      CLOUDSAVER_GITHUB_APP_ID: ${CLOUDSAVER_GITHUB_APP_ID:-}
-      CLOUDSAVER_GITHUB_APP_PRIVATE_KEY: ${CLOUDSAVER_GITHUB_APP_PRIVATE_KEY:-}
-      CLOUDSAVER_PLAN_POLICY: ${CLOUDSAVER_PLAN_POLICY:-}
       CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_SCANNER:-}
     depends_on:
       postgres: {condition: service_healthy}
@@ -169,7 +146,7 @@ services:
       timeout: 5s
       retries: 5
   agent-worker:
-    image: cloudsaver-agent-worker:1.0.0
+    image: cloudsaver-agent-worker:1.1.0
     build:
       context: ./agent-worker
       dockerfile: Dockerfile
@@ -197,24 +174,6 @@ services:
       no_proxy: localhost,127.0.0.1,::1,agent-gateway
     depends_on:
       agent-gateway: {condition: service_healthy}
-  analytics-service:
-    <<: *service
-    networks: [default, platform-link]
-    command: [uvicorn, services.analytics:create_app, --factory, --host, 0.0.0.0, --port, '8003']
-    environment:
-      <<: *environment
-      CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_ANALYTICS:-}
-    depends_on:
-      scanner-service: {condition: service_healthy}
-  notification-service:
-    <<: *service
-    networks: [default, platform-link]
-    command: [uvicorn, services.notification:create_app, --factory, --host, 0.0.0.0, --port, '8004']
-    environment:
-      <<: *environment
-      CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_NOTIFICATION:-}
-    depends_on:
-      scanner-service: {condition: service_healthy}
   web-dashboard:
     image: cloudsaver-web-dashboard:1.3.0
     build:

@@ -10,8 +10,10 @@ DEFINITIONS = (
     ('K8S_CONTAINER_UNDERPROVISIONED_RISK', ('Container',), 'Throttling, OOM and QoS reliability review', 'reliability'),
     ('K8S_HPA_PDB_CONFLICT_OR_IDLE_FLOOR', ('HorizontalPodAutoscaler','PodDisruptionBudget'), 'Autoscaler floor and PDB lock review', 'operations'),
     ('K8S_NODE_POOL_FRAGMENTATION_WASTE', ('Node',), 'Node capacity reservation slack review', 'cost'),
-    ('K8S_ABANDONED_WORKLOAD_OR_NAMESPACE', ('Container',), 'Zero-traffic workload review', 'operations'),
+    ('K8S_ABANDONED_WORKLOAD_OR_NAMESPACE', ('Container','CronJob','Job'), 'Zero-traffic workload review', 'operations'),
     ('K8S_PVC_UNMOUNTED_OR_LOW_OCCUPANCY', ('PersistentVolumeClaim',), 'Unmounted or low-occupancy PVC review', 'cost'),
+    ('K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE',('StatefulSet',),'Stateful memory buffer and ordinal volume review','reliability'),
+    ('K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX',('DaemonSet',),'Observed DaemonSet fleet allocation slack','cost'),
     ('K8S_ORPHANED_LOADBALANCER_SERVICE', ('Service',), 'Empty-endpoint LoadBalancer service review', 'cost'),
 )
 RULE_IDS = {r[0] for r in DEFINITIONS}
@@ -65,7 +67,7 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
             return output
         if requests['minimum'] != current or requests['maximum'] != current:
             return dict(output,reason='Memory request changed during the telemetry window.')
-        target=memory['p99']*1.35;detected=current>target and current-target>256*1024**2
+        target=memory['p99']*(1.50 if e.get('controller',{}).get('kind')=='StatefulSet' else 1.35);detected=current>target and current-target>256*1024**2
         blocks=[]
         if oom['maximum']>0: blocks.append('OOMKILL_OBSERVED')
         elif restarts['maximum'] != restarts['minimum']: blocks.append('RESTART_HISTORY_REQUIRES_OOM_VERIFICATION')
@@ -94,9 +96,14 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
             return output
         cpu_ratio=pool['requested_cpu']/cpu_capacity;memory_ratio=pool['requested_memory']/memory_capacity
         result=finish(cpu_ratio<.45 and memory_ratio<.45,'Reservation slack is an allocation review signal. Node termination, packing feasibility, PDBs and actual utilization remain unverified.', ['NODE_CONSOLIDATION_REQUIRES_SCHEDULING_REVIEW'])
-        return dict(result,capacity={'cpu_request_ratio':cpu_ratio,'memory_request_ratio':memory_ratio,
+        return dict(result,billed_node_cost_usd=e.get('pool_billed_node_cost_usd'),realizable_node_savings_usd=e.get('realizable_node_savings_usd'),capacity={'cpu_request_ratio':cpu_ratio,'memory_request_ratio':memory_ratio,
             'daemonset_cpu_tax_ratio':pool['daemon_cpu']/cpu_capacity,'daemonset_memory_tax_ratio':pool['daemon_memory']/memory_capacity})
     if rid == 'K8S_ABANDONED_WORKLOAD_OR_NAMESPACE':
+        if resource['resource_type'].endswith(('/CronJob','/Job')):
+            if e.get('job_inventory_complete') is not True:return output
+            finished=e.get('completed_jobs');failed=e.get('backoff_exceeded_jobs')
+            if type(finished) is not int or type(failed) is not int:return output
+            return finish((finished>0 and e.get('ttl_seconds_after_finished') is None) or failed>=3,'Completed job retention and repeated backoff failures require owner review; no compute savings are implied.',['JOB_OWNER_REVIEW_REQUIRED'])
         network=stat('network')
         if e.get('namespace') in ('kube-system','kube-public','kube-node-lease'):
             return dict(output,outcome='not_applicable',reason='System workloads are excluded from abandonment review.')
@@ -121,6 +128,14 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
         if not endpoints or type(e.get('available_endpoints')) is not int or e.get('cloud_lb_observed') is not True:
             return output
         return finish(endpoints['maximum']==0 and e['available_endpoints']==0,'30-day endpoint evidence is available. Paid cloud LB identity and retained ingress intent require review.', ['CLOUD_LB_COST_AND_OWNERSHIP_REVIEW_REQUIRED'])
+    if rid=='K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE':
+        if not isinstance(e.get('volume_claim_templates'),list) or e.get('pdb_inventory_complete') is not True:return output
+        missing=e.get('pdb_present') is False or e.get('topology_spread_constraints_present') is False
+        return finish(missing,'Stateful replicas require verified disruption and zone-spread intent; memory requests retain a 1.50x P99 buffer.',['STATEFUL_STORAGE_AND_RECOVERY_REVIEW_REQUIRED'])
+    if rid=='K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX':
+        fleet=e.get('daemonset_allocation') or {}
+        if fleet.get('complete') is not True:return output
+        return dict(finish(fleet['cpu_slack_cores']>0,'Measured fleet allocation slack is not node termination savings.',['SCHEDULING_AND_PDB_REVIEW_REQUIRED']),allocation_cpu_slack_cores=fleet['cpu_slack_cores'],observed_node_count=fleet['observed_node_count'])
     return output
 
 

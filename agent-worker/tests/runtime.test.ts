@@ -52,18 +52,20 @@ test('Azure tag connector preserves other tags, verifies changes and never retur
   const execute=connectorExecutor({token:async()=>'synthetic-provider-token',request:async(url,init)=>{
     assert.ok(String(url).startsWith('https://management.azure.com/subscriptions/'+sid+'/'));
     methods.push(init?.method||'GET');
+    if(!String(url).includes('/tags/default?'))return Response.json({id:a.task.resource_id,properties:{diskState:'Unattached'}});
     if(init?.method==='PATCH'){const body=JSON.parse(String(init.body));assert.equal(body.operation,'Merge');tags={...tags,...body.properties.tags};}
     return Response.json({properties:{tags}},{status:200});
   }});
   const first=await execute(a.task,connector,a.task.payload.plan.steps[0],0);
   const second=await execute(a.task,connector,a.task.payload.plan.steps[1],1);
   assert.equal(first.status,'succeeded');assert.equal(second.code,'TAGS_VERIFIED');assert.equal(tags.Owner,'private-owner');
-  assert.deepEqual(methods,['GET','GET','PATCH','GET']);assert.ok(!JSON.stringify(second).includes('private-owner'));
+  assert.deepEqual(methods,['GET','GET','GET','GET','PATCH','GET']);assert.ok(!JSON.stringify(second).includes('private-owner'));
 });
 
 test('live state drift, cross-scope IDs and missing credentials cannot mutate',async()=>{
   const a=assignment();let gets=0;let writes=0;
   const execute=connectorExecutor({token:async()=>'synthetic',request:async(_u,init)=>{
+    if(!String(_u).includes('/tags/default?'))return Response.json({id:a.task.resource_id,properties:{diskState:'Unattached'}});
     if(init?.method==='PATCH')writes++;
     return Response.json({properties:{tags:{version:String(gets++)}}});
   }});
@@ -90,4 +92,25 @@ test('credential-shaped first-party tag data never reaches Azure',async()=>{
 
 test('oversize responses are bounded before they can enter the task journal',async()=>{
   await assert.rejects(boundedRequest('https://approved.example',{},async()=>new Response('x'.repeat(1_000_001))));
+});
+
+test('expected disk state is checked against live metadata before tags or snapshots can run',async()=>{
+  const a=assignment();let writes=0;
+  const execute=connectorExecutor({token:async()=>'synthetic',request:async(url,init)=>{
+    if(init?.method==='PATCH')writes++;
+    return String(url).includes('/tags/default?')?Response.json({properties:{tags:{}}}):Response.json({id:a.task.resource_id,properties:{diskState:'Attached'}});
+  }});
+  const inspect={...a.task.payload.plan.steps[0],arguments:{expected_state:{diskState:'Unattached'}}};
+  assert.equal((await execute(a.task,connector,inspect,0)).code,'LIVE_RESOURCE_STATE_DRIFTED');
+  assert.equal((await execute(a.task,connector,a.task.payload.plan.steps[1],1)).status,'failed');assert.equal(writes,0);
+});
+
+test('operational drift after inspection blocks a write even when tags did not change',async()=>{
+  const a=assignment();let reads=0,writes=0;
+  const execute=connectorExecutor({token:async()=>'synthetic',request:async(url,init)=>{
+    if(init?.method==='PATCH')writes++;
+    return String(url).includes('/tags/default?')?Response.json({properties:{tags:{}}}):Response.json({id:a.task.resource_id,properties:{diskState:++reads===1?'Unattached':'Attached'}});
+  }});
+  assert.equal((await execute(a.task,connector,a.task.payload.plan.steps[0],0)).status,'succeeded');
+  assert.equal((await execute(a.task,connector,a.task.payload.plan.steps[1],1)).code,'LIVE_RESOURCE_STATE_DRIFTED');assert.equal(writes,0);
 });

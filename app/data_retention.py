@@ -3,7 +3,7 @@ from datetime import datetime,timedelta,timezone
 from uuid import uuid4
 import re
 from app.enterprise_store import decode
-from app.savings_store import actor
+from app.principals import actor
 
 
 class RetentionConflict(ValueError):pass
@@ -13,7 +13,7 @@ class DataRetention:
     def __init__(self,store,clock=None):self.store=store;self.clock=clock or (lambda:datetime.now(timezone.utc))
 
     def _erase(self,db,tid,attempt_id,actor_id,reference=None):
-        source=db.execute('SELECT request_key FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s',(tid,attempt_id)).fetchone()
+        source=db.execute('SELECT request_key,metadata FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s',(tid,attempt_id)).fetchone()
         if db.postgres:
             changed=db.execute('SELECT erase_ai_content(%s,%s,%s)',(attempt_id,actor_id,reference)).fetchone()[0]
             if changed and source:self._erase_agent_by_key(db,tid,str(source[0]),actor_id)
@@ -21,14 +21,15 @@ class DataRetention:
         row=db.execute('SELECT purpose,policy_digest,expires_at,erased_at FROM ai_data_retention WHERE tenant_id=%s AND attempt_id=%s',(tid,attempt_id)).fetchone()
         if not row or row[3] or (reference is None and datetime.fromisoformat(row[2].replace('Z','+00:00'))>self.clock()):return False
         if db.execute("SELECT 1 FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s AND status='pending'",(tid,attempt_id)).fetchone():return False
-        if db.execute('SELECT 1 FROM ai_data_holds WHERE tenant_id=%s AND attempt_id=%s AND hold_until>%s',(tid,attempt_id,self.clock().isoformat())).fetchone():return False
+        if db.execute('SELECT 1 FROM ai_data_holds WHERE tenant_id=%s AND attempt_id=%s AND released_at IS NULL AND hold_until>%s',(tid,attempt_id,self.clock().isoformat())).fetchone():return False
         db.execute('INSERT INTO _ai_erasure_permits(attempt_id,tenant_id) VALUES(%s,%s)',(attempt_id,tid))
         db.execute('UPDATE ai_inference_attempts SET response=NULL,content_erased_at=%s WHERE tenant_id=%s AND id=%s',(self.clock().isoformat(),tid,attempt_id))
         db.execute('DELETE FROM _ai_erasure_permits WHERE tenant_id=%s AND attempt_id=%s',(tid,attempt_id))
         db.execute("UPDATE ai_followups SET question='[ERASED BY DATA RETENTION]' WHERE tenant_id=%s AND attempt_id=%s",(tid,attempt_id))
         db.execute('UPDATE ai_data_retention SET erased_at=%s WHERE tenant_id=%s AND attempt_id=%s',(self.clock().isoformat(),tid,attempt_id))
-        db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-            (str(uuid4()),tid,row[0],'erased','PRIVACY_REQUEST' if reference else 'RETENTION_EXPIRED',row[1],None,db.json({'review_reference':reference}),actor_id,self.clock().isoformat()))
+        scope=decode(source[1]) if source else {}
+        db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at,cloud_provider,scope_id) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            (str(uuid4()),tid,row[0],'erased','PRIVACY_REQUEST' if reference else 'RETENTION_EXPIRED',row[1],None,db.json({'review_reference':reference}),actor_id,self.clock().isoformat(),scope.get('source_provider'),scope.get('scope_id')))
         if source:self._erase_agent_by_key(db,tid,str(source[0]),actor_id)
         return True
 
@@ -41,8 +42,8 @@ class DataRetention:
         payload.update(intent='[ERASED BY DATA GOVERNANCE]',plan=None,steps=[],connector_bindings=[],approval=None,data_erased=True)
         payload.pop('lease',None)
         repository._save(db,task,state,'ai_content_erased',actor_id,dict(content_erased=True,automatic_retry=False))
-        db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-            (str(uuid4()),tid,'agent_planning','erased','TASK_CONTENT_ERASED','0'*64,payload.get('target_id'),db.json({'task_reference':task_id}),actor_id,self.clock().isoformat()))
+        db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at,cloud_provider,scope_id) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+            (str(uuid4()),tid,'agent_planning','erased','TASK_CONTENT_ERASED','0'*64,payload.get('target_id'),db.json({'task_reference':task_id}),actor_id,self.clock().isoformat(),task['provider'],task['scope_id']))
         return True
 
     def _erase_agent_by_key(self,db,tid,key,actor_id):
@@ -55,14 +56,14 @@ class DataRetention:
             now=self.clock().isoformat()
             rows=db.execute('''SELECT r.attempt_id FROM ai_data_retention r JOIN ai_inference_attempts a ON a.id=r.attempt_id AND a.tenant_id=r.tenant_id
                 WHERE r.tenant_id=%s AND r.erased_at IS NULL AND r.expires_at<=%s AND a.status<>'pending'
-                AND NOT EXISTS(SELECT 1 FROM ai_data_holds h WHERE h.tenant_id=r.tenant_id AND h.attempt_id=r.attempt_id AND h.hold_until>%s)
+                AND NOT EXISTS(SELECT 1 FROM ai_data_holds h WHERE h.tenant_id=r.tenant_id AND h.attempt_id=r.attempt_id AND h.released_at IS NULL AND h.hold_until>%s)
                 ORDER BY r.expires_at,r.attempt_id LIMIT %s''',(tenant_id,now,now,limit)).fetchall()
             count=sum(bool(self._erase(db,tenant_id,str(row[0]),'0'*64)) for row in rows)
             tasks=db.execute('''SELECT t.id FROM agent_tasks t WHERE t.tenant_id=%s AND t.payload->>'data_erased' IS NULL
                 AND ((t.payload->>'data_retention_expires_at' IS NOT NULL AND t.payload->>'data_retention_expires_at'<=%s)
                     OR (t.payload->>'data_retention_expires_at' IS NULL AND t.created_at<=%s))
                 AND NOT EXISTS(SELECT 1 FROM ai_inference_attempts a JOIN ai_data_holds h ON h.tenant_id=a.tenant_id AND h.attempt_id=a.id
-                    WHERE a.tenant_id=t.tenant_id AND CAST(a.request_key AS TEXT)=t.payload->>'draft_key' AND h.hold_until>%s)
+                    WHERE a.tenant_id=t.tenant_id AND CAST(a.request_key AS TEXT)=t.payload->>'draft_key' AND h.released_at IS NULL AND h.hold_until>%s)
                 ORDER BY t.created_at LIMIT %s''',(tenant_id,now,(self.clock()-timedelta(days=7)).isoformat(),now,limit)).fetchall()
             return count+sum(bool(self._erase_agent(db,tenant_id,str(row[0]),'0'*64)) for row in tasks)
 
@@ -86,17 +87,47 @@ class DataRetention:
             if not record or record[0]:raise RetentionConflict('Content is missing or already erased; a hold cannot restore it.')
             db.execute('INSERT INTO ai_data_holds(id,tenant_id,attempt_id,review_reference,hold_until,actor,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)',
                 (identifier,tid,attempt_id,reference,hold_until.isoformat(),actor(tenant),now))
-            db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-                (str(uuid4()),tid,record[1],'held','TIME_BOUND_LEGAL_HOLD',record[2],None,db.json({'review_reference':reference,'hold_until':hold_until.isoformat()}),actor(tenant),now))
+            source=db.execute('SELECT metadata FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s',(tid,attempt_id)).fetchone()
+            scope=decode(source[0]) if source else {}
+            db.execute('INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at,cloud_provider,scope_id) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                (str(uuid4()),tid,record[1],'held','TIME_BOUND_LEGAL_HOLD',record[2],None,db.json({'review_reference':reference,'hold_until':hold_until.isoformat()}),actor(tenant),now,scope.get('source_provider'),scope.get('scope_id')))
         return dict(id=identifier,attempt_id=attempt_id,hold_until=hold_until.isoformat())
 
+    def release(self,tenant,hold_id,reason,ticket):
+        from app.data_governance import sanitize,DataDenied
+        if not isinstance(reason,str) or not 3<=len(reason.strip())<=500 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{2,119}',ticket):raise RetentionConflict('Provide a bounded reason and internal review ticket.')
+        try:cleaned,counts=sanitize({'reason':reason})
+        except DataDenied:raise RetentionConflict('Release reasons must not contain credentials.') from None
+        if counts['redacted_values']:raise RetentionConflict('Use a non-identifying review reason.')
+        tid=tenant['tenant_id'];who=actor(tenant);now=self.clock().isoformat()
+        with self.store.transaction(tid,write=True) as db:
+            if db.postgres:
+                changed=db.execute('SELECT release_ai_hold(%s,%s,%s,%s)',(hold_id,who,reason,ticket)).fetchone()[0]
+                if not changed:raise RetentionConflict('The hold is missing, released or expired.')
+            else:
+                row=db.execute('SELECT attempt_id FROM ai_data_holds WHERE tenant_id=%s AND id=%s AND released_at IS NULL AND hold_until>%s',(tid,hold_id,now)).fetchone()
+                if not row:raise RetentionConflict('The hold is missing, released or expired.')
+                db.execute('INSERT INTO _ai_hold_release_permits(id,tenant_id) VALUES(%s,%s)',(hold_id,tid))
+                db.execute('UPDATE ai_data_holds SET released_at=%s,released_by=%s,release_reason=%s,review_ticket=%s WHERE tenant_id=%s AND id=%s',(now,who,reason,ticket,tid,hold_id))
+                db.execute('DELETE FROM _ai_hold_release_permits WHERE tenant_id=%s AND id=%s',(tid,hold_id))
+                db.execute("""INSERT INTO ai_data_events(id,tenant_id,purpose,decision,reason,policy_digest,target_id,metadata,actor,created_at,cloud_provider,scope_id)
+                    SELECT %s,r.tenant_id,r.purpose,'released','LEGAL_HOLD_RELEASED',r.policy_digest,NULL,%s,%s,%s,a.metadata->>'source_provider',a.metadata->>'scope_id'
+                    FROM ai_data_retention r JOIN ai_inference_attempts a ON a.id=r.attempt_id AND a.tenant_id=r.tenant_id WHERE r.tenant_id=%s AND r.attempt_id=%s""",
+                    (str(uuid4()),db.json({'hold_reference':hold_id,'review_ticket':ticket}),who,now,tid,str(row[0])))
+        return dict(hold_id=hold_id,released=True)
+
     def view(self,tenant):
+        from app.data_scope import predicate
         tid=tenant['tenant_id']
+        events_filter,event_args=predicate(tenant)
+        attempt_filter,attempt_args=predicate(tenant,"a.metadata->>'source_provider'","a.metadata->>'scope_id'")
         with self.store.transaction(tid) as db:
-            events=db.execute('SELECT id,purpose,decision,reason,target_id,metadata,created_at,actor FROM ai_data_events WHERE tenant_id=%s ORDER BY created_at DESC,id DESC LIMIT 100',(tid,)).fetchall()
-            records=db.execute('SELECT attempt_id,purpose,expires_at,erased_at FROM ai_data_retention WHERE tenant_id=%s ORDER BY created_at DESC,attempt_id DESC LIMIT 100',(tid,)).fetchall()
-            holds=db.execute('SELECT attempt_id,hold_until,review_reference FROM ai_data_holds WHERE tenant_id=%s AND hold_until>%s ORDER BY hold_until DESC LIMIT 100',(tid,self.clock().isoformat())).fetchall()
-            counts=db.execute('SELECT decision,count(*) FROM ai_data_events WHERE tenant_id=%s GROUP BY decision',(tid,)).fetchall()
-        return dict(events=[dict(id=str(r[0]),purpose=r[1],decision=r[2],reason=r[3],target_id=r[4],metadata=decode(r[5]),created_at=str(r[6]),actor_reference=r[7]) for r in events],
+            events=db.execute('SELECT id,purpose,decision,reason,target_id,metadata,created_at,actor,cloud_provider,scope_id FROM ai_data_events WHERE tenant_id=%s'+events_filter+' ORDER BY created_at DESC,id DESC LIMIT 100',[tid,*event_args]).fetchall()
+            records=db.execute("""SELECT r.attempt_id,r.purpose,r.expires_at,r.erased_at FROM ai_data_retention r
+                JOIN ai_inference_attempts a ON a.id=r.attempt_id AND a.tenant_id=r.tenant_id WHERE r.tenant_id=%s"""+attempt_filter+' ORDER BY r.created_at DESC,r.attempt_id DESC LIMIT 100',[tid,*attempt_args]).fetchall()
+            holds=db.execute("""SELECT h.attempt_id,h.hold_until,h.review_reference,h.id FROM ai_data_holds h JOIN ai_inference_attempts a ON a.id=h.attempt_id AND a.tenant_id=h.tenant_id
+                WHERE h.tenant_id=%s AND h.released_at IS NULL AND h.hold_until>%s"""+attempt_filter+' ORDER BY h.hold_until DESC LIMIT 100',[tid,self.clock().isoformat(),*attempt_args]).fetchall()
+            counts=db.execute('SELECT decision,count(*) FROM ai_data_events WHERE tenant_id=%s'+events_filter+' GROUP BY decision',[tid,*event_args]).fetchall()
+        return dict(events=[dict(id=str(r[0]),purpose=r[1],decision=r[2],reason=r[3],target_id=r[4],metadata=decode(r[5]),created_at=str(r[6]),actor_reference=r[7],cloud_provider=r[8],scope_id=r[9]) for r in events],
             records=[dict(attempt_id=str(r[0]),purpose=r[1],expires_at=str(r[2]),erased_at=str(r[3]) if r[3] else None) for r in records],
-            active_holds=[dict(attempt_id=str(r[0]),hold_until=str(r[1]),review_reference=r[2]) for r in holds],counts=dict(counts))
+            active_holds=[dict(attempt_id=str(r[0]),hold_until=str(r[1]),review_reference=r[2],id=str(r[3])) for r in holds],counts=dict(counts))

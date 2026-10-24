@@ -11,7 +11,7 @@ type Provider = 'azure' | 'aws' | 'gcp';
 type Policy = {enabled: boolean; allowed_providers: Provider[]; disabled_providers: Provider[];
   allowed_models: Record<Provider, string[]>; allowed_regions: Record<Provider, string[]>;
   allow_cross_provider: boolean; max_input_tokens_per_request: number; max_output_tokens_per_request: number;
-  hourly_attempt_ceiling: number; monthly_token_ceiling: number; allow_knowledge_candidates: boolean;data_governance?:DataPolicy};
+  hourly_attempt_ceiling: number; monthly_token_ceiling: number;data_governance?:DataPolicy};
 type View = {version: number; policy: Policy; updated_at: string; updated_by: string};
 
 export function AIPolicySection() {
@@ -49,7 +49,6 @@ export function AIPolicySection() {
           ['hourly_attempt_ceiling', 'Hourly attempt ceiling', 1, 100],
           ['monthly_token_ceiling', 'Monthly token ceiling', 512, 1000000000],
         ] as const).map(([key, label, min, max]) => <label key={key} className="field-label">{label}<input type="number" min={min} max={max} value={draft[key]} onChange={event => setDraft({...draft, [key]: Number(event.target.value)})}/></label>)}
-        <label className="checkbox-row"><input type="checkbox" checked={draft.allow_knowledge_candidates} onChange={event => setDraft({...draft, allow_knowledge_candidates: event.target.checked})}/>Allow workspaces to record independent knowledge-candidate consent</label>
         <p className="muted">The client-contribution pipeline and cross-provider routing remain disabled. Human step-up is required before source-cloud restrictions can be relaxed.</p>
         <DataGovernancePolicyEditor value={draft.data_governance||defaultDataPolicy} onChange={data_governance=>setDraft({...draft,data_governance})}/>
       </fieldset>

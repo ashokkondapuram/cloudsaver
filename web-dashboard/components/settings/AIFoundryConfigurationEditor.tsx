@@ -8,7 +8,7 @@ import {Loading, Notice, SectionTitle} from '../ui/shared';
 
 type Provider = 'azure' | 'aws' | 'gcp';
 type Binding = {enabled: boolean; target_id: string | null; [key: string]: string | boolean | null};
-type Policy = {advisory_enabled: boolean; allow_anonymized_knowledge_candidates: boolean;
+type Policy = {advisory_enabled: boolean;
   routing_mode: string; primary_provider: Provider; max_input_tokens_per_request: number;
   max_output_tokens_per_request: number; hourly_attempt_budget: number; monthly_token_limit: number | null};
 type Config = {providers: Record<Provider, Binding>; policy: Policy};
@@ -16,7 +16,7 @@ type Template = {provider: Provider; target_id: string; model: string; fields: R
 type Result = {status: string; latency_ms: number; failure_category: string | null; remediation_hint: string;
   stages: {check: string; status: string; reason?: string}[]; inference_invoked: boolean};
 type View = {version: number; ai_foundry: Config; editable: boolean; plan_allowed: boolean; directory_mode: string; catalog: Template[];
-  platform_policy: {version: number; policy: {enabled: boolean; disabled_providers: string[]; allow_knowledge_candidates: boolean;
+  platform_policy: {version: number; policy: {enabled: boolean; disabled_providers: string[];
     max_input_tokens_per_request: number; max_output_tokens_per_request: number; hourly_attempt_ceiling: number; monthly_token_ceiling: number}};
   usage: {attempts_last_30d: number; known_input_tokens: number; known_output_tokens: number; unmetered_attempts: number;
     monthly_tokens_used_or_reserved: number; monthly_unbounded_legacy_attempts: number; attempts_current_hour: number; monthly_period: string} | null;
@@ -107,9 +107,6 @@ export function AIFoundryConfigurationEditor() {
         ] as const).map(([key, label, min, max]) => <label key={key}><span className="field-label">{label}</span><input type="number" min={min} max={max} step={1}
           value={draft.policy[key] ?? ''} placeholder={key === 'monthly_token_limit' ? `Platform cap: ${max}` : undefined}
           onChange={event => policy(key, key === 'monthly_token_limit' && event.target.value === '' ? null : Number(event.target.value))}/><small>Platform ceiling: {max.toLocaleString()}</small></label>)}</div>
-        <label className="checkbox-row"><input type="checkbox" checked={draft.policy.allow_anonymized_knowledge_candidates} disabled={!view.platform_policy.policy.allow_knowledge_candidates}
-          onChange={event => policy('allow_anonymized_knowledge_candidates', event.target.checked)}/>Allow independently reviewed anonymized pattern candidates</label>
-        <p className="inline-help">Consent is separate from advisory. The client-contribution pipeline remains disabled; no client data is copied into shared knowledge.</p>
       </fieldset>
       {view.usage && <div className="drawer-section"><h3>Measured usage</h3><p>{view.usage.attempts_last_30d.toLocaleString()} attempts in 30 days · {view.usage.known_input_tokens.toLocaleString()} known input tokens · {view.usage.known_output_tokens.toLocaleString()} known output tokens · {view.usage.unmetered_attempts} unmetered attempts.</p>
         <label className="field-label">{view.usage.monthly_period}: tokens used or reserved<progress max={draft.policy.monthly_token_limit || view.platform_policy.policy.monthly_token_ceiling} value={view.usage.monthly_tokens_used_or_reserved}/></label>
@@ -117,7 +114,7 @@ export function AIFoundryConfigurationEditor() {
         {!!view.usage.monthly_unbounded_legacy_attempts && <Notice tone="warning">Historical unmetered calls have no reservation. Capped inference is paused until the monthly budget can be verified.</Notice>}</div>}
       {editable && <><label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/>I acknowledge the selected provider, model and region, possible charges, and unverified advisory processing.</label>
         <button type="button" className="button primary" disabled={!!busy || !dirty || (draft.policy.advisory_enabled && !ack)} onClick={() => void save()}><Save size={15}/>{busy === 'save' ? 'Saving…' : 'Save AI configuration'}</button></>}
-      <p className="inline-help">Policy revision {view.platform_policy.version}. Published knowledge retrieval: {view.knowledge_retrieval}. {view.message}</p>
+      <p className="inline-help">Policy revision {view.platform_policy.version}. {view.message}</p>
       {!!view.diagnostics.length && <details><summary>Recent connection checks ({view.diagnostics.length})</summary><ul>{view.diagnostics.map(item => <li key={item.id}>{names[item.provider]} · {new Date(item.created_at).toLocaleString()} · {item.result.status} · {item.result.latency_ms} ms</li>)}</ul></details>}
     </>}
   </section>;

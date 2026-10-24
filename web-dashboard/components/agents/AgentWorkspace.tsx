@@ -20,7 +20,8 @@ const labels=(s:string)=>s.replaceAll('_',' ');
 const active=new Set(['draft_queued','drafting','approved','running','cancel_requested']);
 
 export function AgentWorkspace(){
-  const {token,scan,canAdmin}=useWorkspace();
+  const {token,scan,canAdmin,workspace}=useWorkspace();
+  const canApprove=canAdmin&&!workspace?.key_id&&workspace?.subject_type==='user';
   const [catalog,setCatalog]=useState<{enabled:boolean;connectors:Connector[]}|null>(null),[tasks,setTasks]=useState<Task[]>([]);
   const [resources,setResources]=useState<Resource[]>([]),[targets,setTargets]=useState<{target_id:string;provider:string}[]>([]);
   const [resource,setResource]=useState(''),[target,setTarget]=useState(''),[intent,setIntent]=useState(''),[selectedConnectors,setSelectedConnectors]=useState<string[]>([]);
@@ -41,7 +42,7 @@ export function AgentWorkspace(){
   },[refresh]);
   useEffect(()=>{
     const request=new AbortController();setResources([]);setResource('');setSelectedConnectors([]);setTarget('');
-    if(scan?.status==='completed'&&scan.mode!=='demo')api<{resources:Resource[]}>(`/optimization/scans/${scan.scan_id}`,token,{signal:request.signal}).then(r=>{if(!request.signal.aborted)setResources(r.resources);}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
+    if(scan?.status==='completed'&&scan.mode!=='demo')api<{items:{resource_id:string;resource_name:string;provider:string;scope_id:string}[]}>(`/scans/${scan.scan_id}/resources?limit=1000`,token,{signal:request.signal}).then(r=>{if(!request.signal.aborted){const rows=r.items.map(v=>({...v,cloud_provider:v.provider}));setResources(rows);const prefill=new URLSearchParams(window.location.search).get('resource');if(prefill&&rows.some(v=>v.resource_id===prefill))setResource(prefill);}}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
     return()=>request.abort();
   },[scan?.scan_id,scan?.status,scan?.mode,token]);
   useEffect(()=>{
@@ -85,7 +86,7 @@ export function AgentWorkspace(){
         <label>Resource from selected scan<select required value={resource} onChange={e=>{setResource(e.target.value);setSelectedConnectors([]);setTarget('');}}><option value="">Choose a resource</option>{resources.map(r=><option key={r.resource_id} value={r.resource_id}>{r.resource_name} · {r.cloud_provider}</option>)}</select></label>
         {!resources.length&&<p className="inline-help">Select a recent completed live scan to assign a task.</p>}
         <label>Approved planning model<select required value={target} onChange={e=>setTarget(e.target.value)}><option value="">Choose a model</option>{availableTargets.map(t=><option key={t.target_id}>{t.target_id}</option>)}</select></label>
-        {chosen&&!availableTargets.length&&<p className="inline-help">Configure an approved same-cloud model in Settings → AI Foundry.</p>}
+        {chosen&&!availableTargets.length&&<p className="inline-help">Configure an approved same-cloud model in Settings → AI & data governance.</p>}
         <fieldset><legend>Connector permissions</legend>{connectors.length?connectors.map(c=><label className="agent-check" key={c.id}><input type="checkbox" checked={selectedConnectors.includes(c.id)} onChange={e=>setSelectedConnectors(old=>e.target.checked?[...old,c.id]:old.filter(id=>id!==c.id))}/><span>{c.id}<small>{c.operations.join(' · ')}{c.endpoint&&<><br/>{c.endpoint}</>}</small></span></label>):<p className="inline-help">No connector grants match this resource.</p>}</fieldset>
         <label>Task instruction<textarea rows={4} minLength={5} maxLength={1500} required value={intent} onChange={e=>setIntent(e.target.value)} placeholder="Inspect the tags, then set CostCenter to FINOPS-42."/></label>
         <button className="button primary" disabled={busy||!catalog?.enabled||!selectedConnectors.length||!target||!resource} type="submit"><Bot size={16}/>{busy?'Submitting…':'Request AI execution plan'}</button>
@@ -105,7 +106,8 @@ export function AgentWorkspace(){
       {selected.state==='needs_reconciliation'&&<Notice tone="error">An action may have reached its connector. Inspect the provider’s audit trail and current state. This task will not replay automatically.</Notice>}
       {selected.state==='cancel_requested'&&<Notice tone="warning">Cancellation blocks subsequent steps. An in-flight connector request may still complete.</Notice>}
       {selected.state==='succeeded'&&<Notice tone="info">The connector program completed. Task success does not establish realized financial savings; use the verified savings workflow for billing proof.</Notice>}
-      {canAdmin&&!selected.payload.data_erased&&!selected.payload.data_content_expired&&<div className="agent-actions">{selected.state==='awaiting_approval'&&<><label>Approval validity<select value={minutes} onChange={e=>setMinutes(Number(e.target.value))}>{[5,15,30,60].map(m=><option key={m} value={m}>{m} minutes</option>)}</select></label><label className="agent-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>I reviewed the resource, connector destinations, exact arguments and recovery limits.</span></label><button className="button primary" disabled={busy||!confirmed||!catalog?.enabled} onClick={()=>review('approve')}><ShieldCheck size={16}/>Approve this plan</button><button className="button secondary" disabled={busy} onClick={()=>review('reject')}>Reject plan</button></>}
+      {canAdmin&&selected.state==='awaiting_approval'&&!canApprove&&<Notice tone="warning">Sign in with a verified human TenantAdmin session to approve this plan. API keys cannot approve execution.</Notice>}
+      {canAdmin&&!selected.payload.data_erased&&!selected.payload.data_content_expired&&<div className="agent-actions">{selected.state==='awaiting_approval'&&canApprove&&<><label>Approval validity<select value={minutes} onChange={e=>setMinutes(Number(e.target.value))}>{[5,15,30,60].map(m=><option key={m} value={m}>{m} minutes</option>)}</select></label><label className="agent-check"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>I reviewed the resource, connector destinations, exact arguments and recovery limits.</span></label><button className="button primary" disabled={busy||!confirmed||!catalog?.enabled} onClick={()=>review('approve')}><ShieldCheck size={16}/>Approve this plan</button><button className="button secondary" disabled={busy} onClick={()=>review('reject')}>Reject plan</button></>}
         {['awaiting_approval','rejected','failed','approval_expired'].includes(selected.state)&&<button className="button secondary" disabled={busy||!catalog?.enabled} onClick={()=>review('redraft')}>Request new AI draft</button>}
         {!['succeeded','failed','rejected','cancelled','needs_reconciliation','approval_expired'].includes(selected.state)&&<button className="button secondary" disabled={busy||selected.state==='cancel_requested'} onClick={()=>review('cancel')}>Cancel task</button>}
       </div>}

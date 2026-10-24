@@ -491,24 +491,9 @@ class PostgresTx:
         self._insert('analysis.workspace_rules', row)
         return row
 
-    def list_knowledge_publications(self, status=None, limit=50, offset=0):
-        if status:
-            rows = self._all('SELECT * FROM knowledge.publications WHERE status=%s ORDER BY updated_at DESC LIMIT %s OFFSET %s',
-                             (status, limit, offset))
-        else:
-            rows = self._all('SELECT * FROM knowledge.publications ORDER BY updated_at DESC LIMIT %s OFFSET %s', (limit, offset))
-        return [_text(dict(r), 'id') for r in rows]
 
-    def insert_knowledge_publication(self, row):
-        self._insert('knowledge.publications', row)
 
-    def get_knowledge_publication(self, publication_id):
-        row = self._one('SELECT * FROM knowledge.publications WHERE id=%s', (publication_id,))
-        return _text(dict(row), 'id') if row else None
 
-    def update_knowledge_publication(self, publication_id, expected_version, fields):
-        row = self._update('knowledge.publications', 'id', publication_id, expected_version, fields)
-        return _text(dict(row), 'id') if row else None
 
     # cache events (long poll)
     def insert_access_check(self, row):

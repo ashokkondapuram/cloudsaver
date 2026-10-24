@@ -471,19 +471,9 @@ class MemoryTx:
             row['version'] += 1
         return copy.deepcopy(row)
 
-    def list_knowledge_publications(self, status=None, limit=50, offset=0):
-        rows = [r for r in self.s['knowledge_publications'].values() if not status or r['status'] == status]
-        return copy.deepcopy(_newest(rows)[offset:offset + limit])
 
-    def insert_knowledge_publication(self, row):
-        self.s['knowledge_publications'][row['id']] = copy.deepcopy(row)
 
-    def get_knowledge_publication(self, publication_id):
-        row = self.s['knowledge_publications'].get(publication_id)
-        return copy.deepcopy(row) if row else None
 
-    def update_knowledge_publication(self, publication_id, expected_version, fields):
-        return _versioned(self.s['knowledge_publications'].get(publication_id), expected_version, fields)
 
     def max_provider_event_created(self, customer_id, provider):
         return max((r.get('event_created') or 0 for r in self.s['provider_events'].values()
@@ -507,7 +497,7 @@ class MemoryStore:
                       'provider_events': {}, 'cache_events': [], 'cache_seq': 0,
                       'billing_settings': dict(SEED_SETTINGS, version=1, updated_at=now, updated_by='bootstrap'),
                       'access_checks': {}, 'plan_change_requests': {}, 'rule_catalog': rules, 'workspace_rules': {},
-                      'knowledge_publications': {},
+
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
                                    'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
         self._lock = threading.RLock()

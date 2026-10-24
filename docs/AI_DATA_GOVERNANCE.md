@@ -15,18 +15,18 @@ New model calls are blocked until an operator registers the owning environment a
 | Processor | Exact workspace, target, Azure AI account resource ID, endpoint, deployment, allowed purpose and unexpired documented review |
 | Real provider invocation | A short-lived grant binds tenant, target, purpose, minimized payload and current policy digest; the native adapter checks it before requesting credentials or invoking a model |
 | Training and reuse | Customer-data training, cross-tenant reuse and generic HTTP action data transfer cannot be enabled through this policy |
-| Knowledge | No automatic learning from client prompts, plans or outcomes; the existing separately stored, reviewed public/synthetic knowledge publication workflow remains separate |
+| Knowledge | No learning from client prompts, plans or outcomes; knowledge harvesting, shared retrieval and publication APIs are removed |
 | Saved model content | Tenant-owned retention record, default seven days for new content; configurable from one to thirty days |
 | Privacy actions | Human `TenantAdmin` can erase AI content or place a bounded legal hold; viewers can inspect evidence |
 | Audit | Metadata-only decision codes, policy hashes, counts and actor references; database runtime privileges prohibit updating/deleting governance events |
 
-The supported processor boundary is currently Azure managed-identity inference. AWS, GCP and unverified Kubernetes model processing remain blocked by this contract. They are not silently rerouted into Azure. Discovery and non-AI resource analysis are independent of model processing approvals.
+v1.4 supports explicitly registered Azure managed-identity, keyless AWS Bedrock and keyless GCP Vertex processors. Bedrock approvals bind the role/account, region, model and published guardrail; Vertex approvals bind project, region, impersonated identity, model and a reviewed VPC-SC attestation. See [v1.4 activation](V1_4_IMPLEMENTATION.md) for the exact registration fields. No registration silently changes source-cloud routing. Unverified Kubernetes inference remains blocked by the existing Foundry source-cloud rules.
 
 Filtering is pattern based and is **not proof of anonymization**. Unknown business-sensitive free text may evade identifier detection. Do not submit secrets, personal information or confidential business narratives. Treat any allowed processor as a recipient of the minimized context. CloudSaver does not independently verify that an Azure account belongs to the declared directory or certify a provider's internal retention, training, abuse-monitoring or processing-location behavior. An authorized owner must review those settings and contractual controls before registration.
 
 ## Operator setup
 
-Apply migration `0018_ai_data_governance` using the existing schema-owner migration process before starting upgraded backend services. Use the runtime role for applications and the retention worker; never give either schema-owner credentials.
+Apply migrations through `0019_multicloud_governance_and_pillars` using the existing schema-owner migration process before starting upgraded backend services. Use the runtime role for applications and the retention worker; never give either schema-owner credentials.
 
 Set matching logical ownership values in the application deployment:
 
@@ -77,7 +77,7 @@ The default Compose service `data-retention-worker` performs database-only maint
 
 Erasure clears saved model responses and associated follow-up question text. For the linked current agent draft it also clears stored instructions, plan, steps, approval, connector bindings and lease. Pending work is cancelled; work that had already started becomes `needs_reconciliation`. An already dispatched provider action cannot be undone by erasure. Task resource identity, hashes, versions and operational outcomes remain for reconciliation and accountability. Old event copies of plan bodies are removed during migration; hashes remain.
 
-A legal hold lasts at most thirty days per record. It prevents content erasure while active. Placement is serialized with erasure so a hold cannot claim to preserve content already erased. The hold does **not** authorize normal reading or reusing expired content, new inference, or an extension of execution approval. The governance screen shows active holds and their internal references. There is no early-release endpoint in this increment; holds expire automatically. Review preservation requirements before their expiry.
+A legal hold lasts at most thirty days per record. It prevents content erasure while active. Placement is serialized with erasure so a hold cannot claim to preserve content already erased. The hold does **not** authorize normal reading or reusing expired content, new inference, or an extension of execution approval. The governance screen shows active holds and their internal references. Holds expire automatically or can be explicitly released through the audited human-only v1.4 release workflow. Review preservation requirements before their expiry.
 
 The APIs are:
 
@@ -87,21 +87,21 @@ The APIs are:
 | `POST /api/v1/ai/governance/records/{attempt_id}/erase` | Human `TenantAdmin`; body `{"review_reference":"PRIVACY-42"}`; irreversible content erasure |
 | `POST /api/v1/ai/governance/records/{attempt_id}/hold` | Human `TenantAdmin`; body includes `review_reference` and timezone-aware ISO `hold_until` within thirty days |
 
-Use authenticated workspace access as for other APIs. Service accounts cannot perform privacy mutations. These endpoints require full-workspace scope; restricted provider/scope keys are denied until the metadata views support equivalent filtering. Cross-tenant attempt IDs do not grant access. Internal references must contain 3–120 bounded characters, not personal information, ticket descriptions or secrets.
+Use authenticated workspace access as for other APIs. Service accounts cannot perform privacy mutations. The read endpoint filters events, counts, records and holds by provider/scope before limiting; unlabelled legacy rows and processor destinations are hidden from restricted views. Privacy mutations require full-workspace scope. A new hold-release endpoint requires a full-workspace human session, never a delegated key; see the v1.4 guide. Cross-tenant attempt IDs do not grant access. Internal references must contain 3–120 bounded characters, not personal information, ticket descriptions or secrets.
 
 This is AI-content erasure, not a full customer-deletion or DSAR implementation. Source inventory, task resource identity, financial records, billing evidence, metadata audits and usage fences retain their existing lifecycle. Database backups, replicas/WAL, exported historical artifacts and provider-side copies require separately reviewed retention/deletion procedures. Application erasure cannot retroactively delete them.
 
 ## Agent behavior
 
-Generic `http_json` action connectors are blocked during task creation, plan validation and worker execution, before secret resolution or HTTP invocation. Their compatibility schema is not permission to transfer data. Typed first-party Azure tag operations remain available with exact resource binding, human approval and credential-shaped argument rejection. Do not put client-sensitive information into tag arguments.
+Generic `http_json` action connectors are blocked during task creation, plan validation and worker execution, before secret resolution or HTTP invocation. Their compatibility schema is not permission to transfer data. Typed Azure, AWS, GCP and Kubernetes operations remain available with exact resource binding, prior inspection, human approval and credential-shaped argument rejection; the supported metadata/snapshot operations are listed in the v1.4 guide. Do not put client-sensitive information into tag arguments.
 
-The approval program hash now includes data-governance contract version 1 and hash schema version 2. Old approval hashes cannot authorize new execution. Re-review eligible plans under the new contract; do not copy old approvals. The worker still executes deterministic TypeScript from typed plans, without MCP or arbitrary model-generated source.
+The approval program hash now includes data-governance contract version 2 and hash schema version 3. Old approval hashes cannot authorize new execution. Re-review eligible plans under the new contract; do not copy old approvals. The worker still executes deterministic TypeScript from typed plans, without MCP or arbitrary model-generated source.
 
 ## Upgrade sequence and migration behavior
 
 1. Review backups and the local/provider retention requirements. Inventory historical model content and active agent tasks before upgrading.
 2. Stop old AI writers and agent workers during the schema/application transition. Build the upgraded platform identity service, scanner, gateway, agent gateway, retention worker, dashboard and portal through their existing deployment pipelines.
-3. Apply owner migration `0018_ai_data_governance`. It gives historical inference records and tasks without an expiry a **seven-day review window from migration time**, regardless of their original age. It does not immediately erase a year-old response based on its original creation date. Forced RLS is restored within the migration transaction after owner-only backfills across tenants.
+3. Apply owner migrations through `0019_multicloud_governance_and_pillars`. The original 0018 migration, when first applied, gives historical inference records and tasks without an expiry a **seven-day review window from migration time**, regardless of their original age. It does not immediately erase a year-old response based on its original creation date. Forced RLS is restored within the migration transaction after owner-only backfills across tenants.
 4. Start the upgraded API and control-plane services. Configure matching ownership identifiers and reviewed processors; inspect the tenant governance screen. Place required legal holds before the legacy review window ends.
 5. Start `data-retention-worker` and eligible agent workers. Confirm maintenance health and blocked/unregistered processor behavior using synthetic data before enabling real inference.
 
@@ -118,6 +118,8 @@ The platform identity service and portal run in their separate Compose/deploymen
 Erasure is irreversible. Once any `content_erased_at` marker exists, migration downgrade to `0017_agent_execution` deliberately fails: the old schema requires every completed attempt to have a response. The transaction preserves the new schema and forced RLS. Use a forward fix; never fabricate responses or restore deleted content merely to satisfy rollback.
 
 ## Verification
+
+The counts below record the v1.3 governance increment. Current v1.4 results and integration boundaries are recorded in [the v1.4 guide](V1_4_IMPLEMENTATION.md).
 
 - Full backend/platform regression suite against disposable PostgreSQL 16 and Redis 7: **802 passed**.
 - Dashboard browser suite: **56 passed**, including governance confirmation, viewer/mobile access and automated accessibility checks.

@@ -5,7 +5,6 @@ import math
 import pytest
 
 from app.assessment import PILLARS, assess, ai_context, protection, resource_key, summarize
-from app.remediation import generate_script
 from tests.support import azure_disk_finding
 
 SUB = '22222222-2222-4222-8222-222222222222'
@@ -46,15 +45,6 @@ def test_zero_price_remains_observed_and_grouped_unknown_is_not_zero():
     assert result['coverage']['full_inventory'] is False
 
 
-@pytest.mark.parametrize('tags', [{'DoNotTouch': 'true'}, {'do-not-delete': 'YES'}, {'Role': 'DR-Standby'},
-                                  {'Purpose': 'Witness'}, {'DisasterRecovery': 'ActiveStandby'}, {'Role': 'DoNotTouch'}])
-def test_protection_suppresses_destructive_artifacts_but_keeps_evidence(tags):
-    item = finding(evidence={'tags': tags})
-    assert protection(item)
-    assert assess(item)['disposition'] == 'protected'
-    assert 'NO_DESTRUCTIVE_RECOMMENDATION' in assess(item)['guardrails']
-    with pytest.raises(ValueError, match='Protected resource'):
-        generate_script(dict(mode='azure', status='completed', findings=[item]), [item['resource_id']], TENANT, [SUB])
 
 
 def test_explicit_rds_evidence_checks_are_risks_but_missing_values_remain_unknown():

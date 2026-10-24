@@ -4,8 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXT = (ROOT / 'compose.yaml').read_text()
-CALLERS = {'api-gateway': 'GATEWAY', 'tenant-service': 'TENANT', 'scanner-service': 'SCANNER',
-           'analytics-service': 'ANALYTICS', 'notification-service': 'NOTIFICATION', 'agent-gateway': 'AGENT'}
+CALLERS = {'api-gateway':'GATEWAY','scanner-service':'SCANNER','agent-gateway':'AGENT'}
 
 
 def sections():
@@ -34,8 +33,7 @@ def services():
 
 def test_only_cloudsaver_services_run_here():
     names = set(services())
-    assert names == {'migrate', 'api-gateway', 'tenant-service', 'scanner-service', 'analytics-service',
-                     'notification-service', 'web-dashboard', 'scan-worker', 'delivery-dispatcher', 'scan-scheduler',
+    assert names == {'migrate', 'api-gateway', 'scanner-service', 'web-dashboard', 'scan-worker', 'delivery-dispatcher', 'scan-scheduler',
                      'postgres', 'redis', 'agent-gateway', 'agent-worker', 'data-retention-worker'}
     assert not any(word in name for name in names for word in ('identity', 'portal', 'token', 'billing'))
 

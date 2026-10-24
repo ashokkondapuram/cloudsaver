@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from identity.domain import IdentityError, StaleVersion
-from identity.knowledge.store import PostgresKnowledgeStore
 from test_identity import build, workspace, TID, SID, OPERATOR, IP, Clock
 
 
@@ -11,41 +10,10 @@ def review_actor(name, role):
     return {'actor': name, 'actor_type': 'operator', 'roles': ['PlatformOperator', role]}
 
 
-def test_knowledge_is_separate_and_requires_two_independent_reviews():
-    service = build()
-    created = service.create_knowledge_publication({'title': 'Disk review', 'summary': 'Verify retained capacity.',
-        'body': 'Synthetic general example without a client record.'}, OPERATOR)
-    assert service.store is not service.knowledge_store
-    with pytest.raises(IdentityError, match='Independent'):
-        service.update_knowledge_publication(created['id'], {'version': 1, 'status': 'published'}, OPERATOR)
-    first = service.review_knowledge_publication(created['id'], {'version': 1, 'review': 'technical'},
-        review_actor('technical-reviewer', 'KnowledgeReviewer'))
-    with pytest.raises(IdentityError):
-        service.review_knowledge_publication(created['id'], {'version': first['version'], 'review': 'privacy'},
-            review_actor('technical-reviewer', 'PrivacyReviewer'))
-    second = service.review_knowledge_publication(created['id'], {'version': first['version'], 'review': 'privacy'},
-        review_actor('privacy-reviewer', 'PrivacyReviewer'))
-    published = service.update_knowledge_publication(created['id'], {'version': second['version'], 'status': 'published'}, OPERATOR)
-    assert service.knowledge_metrics()['active_published'] == 1
-    assert service.retrieve_knowledge('azure', 'storage')['items'][0]['publication_id'] == created['id']
-    with pytest.raises(IdentityError, match='immutable'):
-        service.update_knowledge_publication(created['id'], {'version': published['version'], 'body': 'Changed'}, OPERATOR)
 
 
-@pytest.mark.parametrize('body', ['contact alice@example.com', 'owner 11111111-1111-4111-8111-111111111111',
-    'ip 10.0.0.1', 'arn:aws:ec2:private', 'secret=private', 'service.internal'])
-def test_sensitive_content_is_rejected_before_knowledge_storage(body):
-    service = build()
-    with pytest.raises(IdentityError, match='No payload was stored'):
-        service.create_knowledge_publication({'title': 'Example', 'summary': 'Generic.', 'body': body}, OPERATOR)
-    assert service.knowledge_metrics()['status_counts'] == {}
 
 
-def test_knowledge_cannot_use_identity_database_or_credentials():
-    with pytest.raises(ValueError, match='separate databases'):
-        PostgresKnowledgeStore('postgresql://knowledge_app:p@db/identity', 'postgresql://identity_app:p@db/identity')
-    with pytest.raises(ValueError, match='separate runtime identity'):
-        PostgresKnowledgeStore('postgresql://identity_app:p@db/knowledge', 'postgresql://identity_app:p@db/identity')
 
 
 def test_rule_revision_and_parameters_are_atomic_and_strict():

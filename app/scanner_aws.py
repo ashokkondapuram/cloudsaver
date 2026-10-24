@@ -41,6 +41,10 @@ def scan_account(source, *, session=None):
             for source_key, key in [('BackupRetentionPeriod', 'backup_retention_days'), ('Size', 'size_gb'), ('Iops', 'provisioned_iops')]:
                 if type(row.get(source_key)) is int and row[source_key] >= 0:
                     evidence[key] = row[source_key]
+            evidence.update(volume_type=row.get('VolumeType'),storage_type=row.get('StorageType'),throughput_mibps=row.get('Throughput'),allocated_storage_gb=row.get('AllocatedStorage'))
+            evidence.update(created_at=str(row.get('CreateTime')) if row.get('CreateTime') else None)
+            if kind=='volume':evidence.update(disk_state=row.get('State'),association_verified=bool(row.get('Attachments')))
+            if kind=='db':evidence.update(power_state=row.get('DBInstanceStatus'),backup_retention_days=row.get('BackupRetentionPeriod'),deletion_protection=row.get('DeletionProtection'))
             result = dict(rule_id=rule, severity='MEDIUM' if kind == 'elastic-ip' else 'HIGH',
                 cloud_provider='aws', scope_id=account, subscription_id=account, region=region,
                 resource_id=rid, resource_name=name, resource_group=region,
@@ -90,6 +94,13 @@ def scan_account(source, *, session=None):
             add('AWS_IDLE_RDS', 'db', row['DBInstanceIdentifier'], row,
                 'RDS instance is stopped. Storage and backup charges may remain; state does not prove idle duration or deletability.',
                 row.get('DBInstanceStatus') == 'stopped')
+        from app.collectors.live_common import enabled
+        if enabled():
+            from app.collectors.aws_live import extra_inventory,enrich
+            inventory += extra_inventory(client,account,region)
+            enrich(client,inventory)
+            by_id={r['resource_id']:r for r in inventory}
+            findings=[dict(r,evidence=by_id[r['resource_id']]['evidence']) for r in findings]
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

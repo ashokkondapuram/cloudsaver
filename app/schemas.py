@@ -44,3 +44,56 @@ class RemediationRequest(BaseModel):
 class MultiCloudScanRequest(BaseModel):
     providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(min_length=1, max_length=4)
     model_config = ConfigDict(extra='forbid')
+
+
+# Shared bounded JSON parser. Reject duplicate keys, NaN and excessive nesting.
+import json
+import math
+from fastapi import HTTPException
+
+MAX_BYTES = 2_000_000
+class InvalidJSON(ValueError):
+    pass
+
+
+def load_json(raw):
+    if len(raw) > MAX_BYTES:
+        raise InvalidJSON('Input exceeds the 2 MB limit')
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise InvalidJSON('Duplicate JSON keys are unsupported')
+            result[key] = value
+        return result
+    try:
+        value = json.loads(raw, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(InvalidJSON('Non-finite JSON numbers are unsupported')))
+    except (ValueError, RecursionError, UnicodeError):
+        raise InvalidJSON('Invalid JSON input') from None
+    stack = [(value, 0)]
+    nodes = 0
+    while stack:
+        item, depth = stack.pop()
+        nodes += 1
+        if isinstance(item,float) and not math.isfinite(item):
+            raise InvalidJSON('Non-finite JSON numbers are unsupported')
+        if depth > 64 or nodes > 200000:
+            raise InvalidJSON('Input complexity exceeds the policy limit')
+        if isinstance(item, dict):
+            stack.extend((v, depth+1) for v in item.values())
+        elif isinstance(item, list):
+            stack.extend((v, depth+1) for v in item)
+    return value
+
+
+
+async def bounded_json(request):
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw)>MAX_BYTES:
+            raise HTTPException(413,'Request exceeds the 2 MB limit')
+    try:
+        return load_json(bytes(raw))
+    except InvalidJSON:
+        raise HTTPException(422,'Invalid or unsupported JSON request') from None
