@@ -1,3 +1,4 @@
+from tests.test_ai_advisory import provider_protocol_only
 import hashlib
 import json
 from datetime import date, timedelta
@@ -125,7 +126,7 @@ def test_foundry_targets_are_keyless_and_hosts_are_allowlisted():
                                    role_arn='arn:aws:iam::123456789012:role/AIReviewer', auth='managed_identity'))
 
 
-def test_foundry_adapter_uses_platform_identity_and_model_inference_route(monkeypatch):
+def test_foundry_adapter_uses_platform_identity_and_model_inference_route(monkeypatch, provider_protocol_only):
     from types import SimpleNamespace
     from app.ai_advisory import CloudAdapter
     seen = []

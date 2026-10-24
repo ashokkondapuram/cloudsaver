@@ -363,7 +363,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0016_nextgen_savings',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0018_ai_data_governance',)]
 
 
 def test_savings_case_receipts_and_audit_are_forced_rls_and_append_only(database):
@@ -397,6 +397,167 @@ def test_scheduler_reservation_throttles_concurrent_publishers(database):
     repository = JobRepository(app)
     assert repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400,a['subscription_ids'])
     assert not repository.reserve_scheduled_job(a['tenant_id'],str(uuid4()),86400,a['subscription_ids'])
+
+
+def test_agent_tasks_and_audit_enforce_rls_and_single_worker_claim(database):
+    from app.agent_store import AgentRepository
+    from app.agent_contract import Connector
+    from app.enterprise_store import EnterpriseStore
+    from concurrent.futures import ThreadPoolExecutor
+    from types import SimpleNamespace
+    _,url,store=database
+    tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    resource=snapshot['findings'][0];scope=tenant['subscription_ids'][0]
+    repo=AgentRepository(EnterpriseStore(SimpleNamespace(database_url=url,database='unused')))
+    task=repo.create(tenant,snapshot,resource,dict(request_key=str(uuid4()),intent='Inspect current tags',connector_ids=['azure-tags'],target_id='approved-model'))
+    worker={'id':'worker-test','connector_ids':['azure-tags']}
+    connector=Connector(id='azure-tags',tenant_id=tenant['tenant_id'],scope_id=scope,provider='azure',kind='azure_arm',operations=['resource.inspect'])
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results=list(pool.map(lambda _:repo.claim(tenant,worker,[connector]),range(2)))
+    assert sum(r is not None for r in results)==1
+    assert repo.get(workspace(),task['id']) is None
+    with psycopg.connect(url) as db:
+        for table in ('agent_tasks','agent_task_events'):
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+    for statement in ('DELETE FROM agent_tasks','DELETE FROM agent_task_events','UPDATE agent_task_events SET action=action','UPDATE agent_tasks SET resource_id=resource_id'):
+        with psycopg.connect(url) as db:
+            context(db,tenant['tenant_id'])
+            with pytest.raises(errors.InsufficientPrivilege):db.execute(statement)
+
+
+def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_privileges(database):
+    from types import SimpleNamespace
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.data_retention import DataRetention,RetentionConflict
+    from app.ai_advisory import AIError
+    from datetime import timedelta
+    _,url,store=database
+    tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    persistence=EnterpriseStore(SimpleNamespace(database_url=url,database='unused'));ledger=InferenceLedger(persistence)
+    key=str(uuid4());metadata=dict(scan_id=snapshot['scan_id'],provider='azure',model='approved',target_id='approved')
+    def invoke():return dict(advice={'summary':'Private governed model text'},usage={'input_tokens':100,'output_tokens':200})
+    result=ledger.run(tenant['tenant_id'],key,'a'*64,10,invoke,metadata=metadata)
+    attempt=result['assessment_id'];repo=DataRetention(persistence)
+    for table in ('ai_data_events','ai_data_retention','ai_data_holds'):
+        with psycopg.connect(url) as db:
+            assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+    assert repo.erase(tenant,attempt,'PRIVACY-42')['content_erased'] is True
+    assert ledger.get(tenant['tenant_id'],attempt)['response'] is None
+    assert ledger.usage(tenant['tenant_id'])['groups'][0]['input_tokens']==100
+    with pytest.raises(AIError) as error:ledger.run(tenant['tenant_id'],key,'a'*64,10,lambda:pytest.fail('No replay'),metadata=metadata)
+    assert error.value.status==410
+    with psycopg.connect(url) as db:
+        context(db,tenant['tenant_id'])
+        with pytest.raises(errors.CheckViolation):db.execute('UPDATE ai_inference_attempts SET response=%s WHERE id=%s',(Jsonb({}),attempt))
+    for statement in ('DELETE FROM ai_data_events','UPDATE ai_data_events SET reason=reason','UPDATE ai_data_retention SET expires_at=expires_at','DELETE FROM ai_data_holds'):
+        with psycopg.connect(url) as db:
+            context(db,tenant['tenant_id'])
+            with pytest.raises(errors.InsufficientPrivilege):db.execute(statement)
+    held=ledger.run(tenant['tenant_id'],str(uuid4()),'b'*64,10,invoke,metadata=metadata)['assessment_id']
+    repo.hold(tenant,held,datetime.now(timezone.utc)+timedelta(days=1),'LEGAL-42')
+    with pytest.raises(RetentionConflict):repo.erase(tenant,held,'PRIVACY-43')
+    with psycopg.connect(url) as db:
+        context(db,str(uuid4()))
+        assert db.execute('SELECT erase_ai_content(%s,%s,%s)',(held,'0'*64,'PRIVACY-43')).fetchone()[0] is False
+    env=os.environ.copy();env['CLOUDSAVER_MIGRATION_URL']=database[0]
+    rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
+    assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
+    with psycopg.connect(database[0]) as db:
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0018_ai_data_governance'
+        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
+
+
+def test_data_governance_migration_gives_all_legacy_tenants_a_review_window(database):
+    from datetime import timedelta
+    from urllib.parse import urlsplit,urlunsplit
+    old_owner,old_url,_=database
+    privileged=os.environ['CLOUDSAVER_TEST_PRIVILEGED_URL']
+    dbname='cloudsaver_governance_'+uuid4().hex
+    def destination(value):return urlunsplit(urlsplit(value)._replace(path='/'+dbname))
+    with psycopg.connect(privileged,autocommit=True) as db:
+        db.execute(sql.SQL('CREATE DATABASE {} OWNER cloudsaver_owner').format(sql.Identifier(dbname)))
+    owner,url=destination(old_owner),destination(old_url)
+    try:
+        migrate(owner,'0017_agent_execution');store=PostgresStore(url);legacy=[]
+        old=datetime.now(timezone.utc)-timedelta(days=400)
+        for _ in range(2):
+            tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+            attempt,task=uuid4(),uuid4();legacy.append((tenant['tenant_id'],attempt,task))
+            with psycopg.connect(url) as db:
+                context(db,tenant['tenant_id'])
+                db.execute('''INSERT INTO ai_inference_attempts(id,tenant_id,request_key,fingerprint,scan_id,metadata,status,response,created_at,completed_at)
+                    VALUES(%s,%s,%s,%s,%s,%s,'completed',%s,%s,%s)''',
+                    (attempt,tenant['tenant_id'],uuid4(),'a'*64,snapshot['scan_id'],Jsonb({}),Jsonb({'summary':'Old reviewed content'}),old,old))
+                db.execute('''INSERT INTO agent_tasks(id,tenant_id,provider,scope_id,resource_id,scan_id,request_key,fingerprint,state,version,payload,actor,created_at,updated_at)
+                    VALUES(%s,%s,'azure',%s,%s,%s,%s,%s,'awaiting_approval',1,%s,%s,%s,%s)''',
+                    (task,tenant['tenant_id'],tenant['subscription_ids'][0],snapshot['findings'][0]['resource_id'],snapshot['scan_id'],uuid4(),'b'*64,Jsonb({'plan':{'summary':'Old plan'}}),'c'*64,old,old))
+                db.execute('''INSERT INTO agent_task_events(id,tenant_id,task_id,version,action,actor,payload,created_at)
+                    VALUES(%s,%s,%s,1,'drafted',%s,%s,%s)''',
+                    (uuid4(),tenant['tenant_id'],task,'c'*64,Jsonb({'plan':{'summary':'Legacy event copy'},'plan_hash':'d'*64}),old))
+        started=datetime.now(timezone.utc);migrate(owner,'head');finished=datetime.now(timezone.utc)
+        with psycopg.connect(url) as db:
+            for tid,attempt,task in legacy:
+                context(db,tid)
+                expiry,registered=db.execute('SELECT expires_at,created_at FROM ai_data_retention WHERE attempt_id=%s',(attempt,)).fetchone()
+                assert started+timedelta(days=7)<=expiry<=finished+timedelta(days=7)
+                assert started<=registered<=finished
+                assert db.execute('SELECT response FROM ai_inference_attempts WHERE id=%s',(attempt,)).fetchone()[0]['summary']=='Old reviewed content'
+                payload=db.execute('SELECT payload FROM agent_tasks WHERE id=%s',(task,)).fetchone()[0]
+                expiry=datetime.fromisoformat(payload['data_retention_expires_at'])
+                assert started+timedelta(days=7)<=expiry<=finished+timedelta(days=7)
+                event=db.execute('SELECT payload FROM agent_task_events WHERE task_id=%s',(task,)).fetchone()[0]
+                assert 'plan' not in event and event['plan_hash']=='d'*64 and event['plan_body_removed_by_data_governance'] is True
+            for table in ('agent_tasks','agent_task_events','ai_inference_attempts','ai_data_retention'):
+                assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
+    finally:
+        with psycopg.connect(privileged,autocommit=True) as db:
+            db.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(dbname)))
+
+
+def test_concurrent_legal_hold_prevents_erasure_after_preservation_lock(database,monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    from datetime import timedelta
+    from threading import Event
+    from types import SimpleNamespace
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.data_retention import DataRetention,RetentionConflict
+    _,url,store=database
+    tenant=workspace();snapshot=scan(tenant);store.save(tenant['tenant_id'],snapshot,workspace=tenant)
+    persistence=EnterpriseStore(SimpleNamespace(database_url=url,database='unused'))
+    result=InferenceLedger(persistence).run(tenant['tenant_id'],str(uuid4()),'a'*64,10,lambda:dict(advice={'summary':'Preserve evidence'},usage={}),
+        metadata=dict(scan_id=snapshot['scan_id'],provider='azure',model='approved',target_id='approved'))
+    attempt=result['assessment_id'];locked=Event();erase_entered=Event();release=Event();original=persistence.transaction
+    class ObservedConnection:
+        def __init__(self,connection):self.connection=connection
+        def __getattr__(self,name):return getattr(self.connection,name)
+        def execute(self,query,parameters=()):
+            cursor=self.connection.execute(query,parameters)
+            if query.startswith('SELECT id FROM ai_inference_attempts') and query.endswith('FOR UPDATE'):
+                locked.set();assert release.wait(10),'Preservation test did not release its lock'
+            return cursor
+    @contextmanager
+    def observed(tid,write=False):
+        # Enterprise writes also take a tenant advisory lock before yielding.
+        # Observe entry before that gate; erasure must wait for preservation.
+        if locked.is_set():erase_entered.set()
+        with original(tid,write=write) as db:yield ObservedConnection(db)
+    monkeypatch.setattr(persistence,'transaction',observed);repo=DataRetention(persistence)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        preservation=pool.submit(repo.hold,tenant,attempt,datetime.now(timezone.utc)+timedelta(days=1),'LEGAL-RACE-42')
+        try:
+            assert locked.wait(10)
+            erasure=pool.submit(repo.erase,tenant,attempt,'PRIVACY-RACE-42')
+            assert erase_entered.wait(10)
+        finally:release.set()
+        assert preservation.result(timeout=10)['attempt_id']==attempt
+        with pytest.raises(RetentionConflict):erasure.result(timeout=10)
+    with original(tenant['tenant_id']) as db:
+        assert db.execute('SELECT response FROM ai_inference_attempts WHERE id=%s',(attempt,)).fetchone()[0] is not None
 
 
 @pytest.fixture
@@ -816,23 +977,38 @@ def test_multiple_notification_targets_project_queued_failed_and_sent_accurately
 
 
 def test_delivery_downgrade_upgrade_preserves_scans_and_restores_forced_rls(database):
-    owner,url,store=database
-    a=workspace();snapshot=scan(a);store.save(a['tenant_id'],snapshot,workspace=a)
-    from workers.storage import JobRepository
-    jobs=JobRepository(url);job_id=str(uuid4());jobs.queue_job(a['tenant_id'],job_id)
-    with jobs.transaction(a['tenant_id']) as db:
-        db.execute("UPDATE scan_jobs SET notification_status='queued' WHERE id=%s",(job_id,))
-    env=os.environ.copy();env['CLOUDSAVER_MIGRATION_URL']=owner
-    migration = subprocess.run([sys.executable,'-m','alembic','downgrade','0006_gitops_requests'],cwd=ROOT,env=env,capture_output=True)
-    assert migration.returncode == 0, migration.stderr.decode(errors='replace')
-    with psycopg.connect(url) as db:
-        context(db,a['tenant_id'])
-        assert db.execute('SELECT notification_status FROM scan_jobs WHERE id=%s',(job_id,)).fetchone()[0]=='failed'
-        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='scan_jobs'::regclass").fetchone()==(True,True)
-    migrate(owner,'head')
-    assert store.get(a['tenant_id'],snapshot['scan_id'])==snapshot
-    from database.delivery import DeliveryRepository
-    assert DeliveryRepository(url).list(a['tenant_id'])==[]
+    from urllib.parse import urlsplit,urlunsplit
+    old_owner,old_url,_=database
+    privileged=os.environ['CLOUDSAVER_TEST_PRIVILEGED_URL']
+    dbname='cloudsaver_migration_'+uuid4().hex
+    def destination(value):
+        parsed=urlsplit(value)
+        return urlunsplit(parsed._replace(path='/'+dbname))
+    with psycopg.connect(privileged,autocommit=True) as db:
+        db.execute(sql.SQL('CREATE DATABASE {} OWNER cloudsaver_owner').format(sql.Identifier(dbname)))
+    owner,url=destination(old_owner),destination(old_url)
+    try:
+        migrate(owner,'head')
+        store=PostgresStore(url)
+        a=workspace();snapshot=scan(a);store.save(a['tenant_id'],snapshot,workspace=a)
+        from workers.storage import JobRepository
+        jobs=JobRepository(url);job_id=str(uuid4());jobs.queue_job(a['tenant_id'],job_id)
+        with jobs.transaction(a['tenant_id']) as db:
+            db.execute("UPDATE scan_jobs SET notification_status='queued' WHERE id=%s",(job_id,))
+        env=os.environ.copy();env['CLOUDSAVER_MIGRATION_URL']=owner
+        migration = subprocess.run([sys.executable,'-m','alembic','downgrade','0006_gitops_requests'],cwd=ROOT,env=env,capture_output=True)
+        assert migration.returncode == 0, migration.stderr.decode(errors='replace')
+        with psycopg.connect(url) as db:
+            context(db,a['tenant_id'])
+            assert db.execute('SELECT notification_status FROM scan_jobs WHERE id=%s',(job_id,)).fetchone()[0]=='failed'
+            assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='scan_jobs'::regclass").fetchone()==(True,True)
+        migrate(owner,'head')
+        assert store.get(a['tenant_id'],snapshot['scan_id'])==snapshot
+        from database.delivery import DeliveryRepository
+        assert DeliveryRepository(url).list(a['tenant_id'])==[]
+    finally:
+        with psycopg.connect(privileged,autocommit=True) as db:
+            db.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(dbname)))
 
 
 def test_interactive_job_submission_is_atomic_idempotent_and_tenant_isolated(tenants, monkeypatch):

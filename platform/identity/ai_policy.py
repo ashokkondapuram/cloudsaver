@@ -3,16 +3,18 @@ import copy
 import re
 
 from identity.domain import IdentityError, StaleVersion, iso
+from identity.data_policy import DEFAULT_DATA_GOVERNANCE,validate_data_governance
 
 DEFAULT_POLICY = dict(enabled=False, allowed_providers=['azure', 'aws', 'gcp'],
     disabled_providers=[], allowed_models={'azure': [], 'aws': [], 'gcp': []},
     allowed_regions={'azure': [], 'aws': [], 'gcp': []}, allow_cross_provider=False,
     max_input_tokens_per_request=4000, max_output_tokens_per_request=1200,
-    hourly_attempt_ceiling=10, monthly_token_ceiling=1000000, allow_knowledge_candidates=False)
+    hourly_attempt_ceiling=10, monthly_token_ceiling=1000000, allow_knowledge_candidates=False,
+    data_governance=copy.deepcopy(DEFAULT_DATA_GOVERNANCE))
 
 
 def validate_policy(value):
-    if not isinstance(value, dict) or set(value) != set(DEFAULT_POLICY):
+    if not isinstance(value, dict) or set(value)-{'data_governance'} != set(DEFAULT_POLICY)-{'data_governance'}:
         raise IdentityError('Provide the complete supported AI policy.')
     for field in ('enabled', 'allow_cross_provider', 'allow_knowledge_candidates'):
         if type(value[field]) is not bool:
@@ -35,14 +37,18 @@ def validate_policy(value):
         ('monthly_token_ceiling', 512, 1000000000)):
         if type(value[field]) is not int or not low <= value[field] <= high:
             raise IdentityError('AI policy budget is outside supported bounds.')
-    return copy.deepcopy(value)
+    try:
+        governance=validate_data_governance(value.get('data_governance',DEFAULT_DATA_GOVERNANCE))
+    except (ValueError,TypeError,KeyError):
+        raise IdentityError('AI data policy is invalid. Register explicit, reviewed processors and prohibited reuse controls.') from None
+    return dict(copy.deepcopy(value),data_governance=governance)
 
 
 class AIPolicyOps:
     def get_ai_policy(self):
         with self.store.transaction() as tx:
             row = tx.get_ai_policy()
-        return dict(policy=row['policy'], version=row['version'], updated_at=iso(row['updated_at']), updated_by=row['updated_by'])
+        return dict(policy=validate_policy(row['policy']), version=row['version'], updated_at=iso(row['updated_at']), updated_by=row['updated_by'])
 
     def update_ai_policy(self, payload, actor, request_id=None):
         version = self._version(payload)

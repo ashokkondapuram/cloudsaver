@@ -7,7 +7,7 @@ import pytest
 
 import scripts.setup_compose as setup
 
-TOKENS = ['CLOUDSAVER_IDENTITY_TOKEN_' + c for c in ('GATEWAY', 'TENANT', 'SCANNER', 'ANALYTICS', 'NOTIFICATION')]
+TOKENS = ['CLOUDSAVER_IDENTITY_TOKEN_' + c for c in ('GATEWAY', 'TENANT', 'SCANNER', 'ANALYTICS', 'NOTIFICATION', 'AGENT')]
 PLATFORM = ['TOKEN_DB_PASSWORD', 'IDENTITY_DB_OWNER_PASSWORD', 'IDENTITY_DB_APP_PASSWORD', 'CLOUDSAVER_KEY_PEPPER',
             'CLOUDSAVER_KEY_PEPPER_VERSION', 'CLOUDSAVER_IDENTITY_CALLERS', 'CLOUDSAVER_IDENTITY_TOKEN_PORTAL',
             'CLOUDSAVER_PORTAL_AUTH', 'CLOUDSAVER_OPERATOR_KEY_SHA256', 'CLOUDSAVER_IDENTITY_REDIS_URL',
@@ -31,6 +31,15 @@ def mode(target):
     return stat.S_IMODE(target.stat().st_mode)
 
 
+def test_blank_agent_caller_placeholder_is_provisioned_without_printing_secret(env,capsys):
+    env.write_text('POSTGRES_PASSWORD=synthetic\nCLOUDSAVER_IDENTITY_TOKEN_AGENT=\n')
+    setup.add_identity()
+    configured=values(env)
+    assert len(configured['CLOUDSAVER_IDENTITY_TOKEN_AGENT'])>=32
+    assert env.read_text().count('CLOUDSAVER_IDENTITY_TOKEN_AGENT=')==1
+    assert configured['CLOUDSAVER_IDENTITY_TOKEN_AGENT'] not in capsys.readouterr().out
+
+
 def test_create_generates_only_cloudsaver_settings_and_prints_digests(env, capsys):
     setup.create()
     created = values(env)
@@ -43,7 +52,7 @@ def test_create_generates_only_cloudsaver_settings_and_prints_digests(env, capsy
         assert created[name] not in out
     digests = json.loads(out.split('PLATFORM_IDENTITY_CALLERS): ', 1)[1].splitlines()[0])
     assert digests['gateway'] == hashlib.sha256(created['CLOUDSAVER_IDENTITY_TOKEN_GATEWAY'].encode()).hexdigest()
-    assert set(digests) == {'gateway', 'tenant', 'scanner', 'analytics', 'notification'}
+    assert set(digests) == {'gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent'}
     with pytest.raises(SystemExit):
         setup.create()
 

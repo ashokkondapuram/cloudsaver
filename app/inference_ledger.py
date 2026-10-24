@@ -39,10 +39,13 @@ class InferenceLedger:
         db.execute('INSERT INTO ai_inference_events(id,tenant_id,attempt_id,action,created_at) VALUES (%s,%s,%s,%s,%s)',
                    (str(uuid4()),tenant_id,attempt_id,action,now.isoformat()))
 
-    def run(self,tenant_id,key,fingerprint,limit,invoke,*,metadata,monthly_token_limit=None,token_reservation=None):
+    def run(self,tenant_id,key,fingerprint,limit,invoke,*,metadata,monthly_token_limit=None,token_reservation=None,data_governance=None):
         from app.ai_advisory import AIError
         attempt_id=str(uuid4())
         tenant_id,key=str(UUID(tenant_id)),str(UUID(key))
+        from app.data_retention import DataRetention
+        try:DataRetention(self.store).purge(tenant_id)
+        except Exception:raise AIError('Durable AI coordination unavailable; no inference was started') from None
         try:
             with self.store.transaction(tenant_id,write=True) as db:
                 now=self.now(db)
@@ -52,6 +55,9 @@ class InferenceLedger:
                         raise AIError('Idempotency key belongs to a different request',409)
                     if prior[1]!='completed':
                         raise AIError('This durable AI attempt is pending or uncertain; it will not be repeated automatically',409)
+                    expiry=db.execute('SELECT expires_at FROM ai_data_retention WHERE tenant_id=%s AND attempt_id=(SELECT id FROM ai_inference_attempts WHERE tenant_id=%s AND request_key=%s)',(tenant_id,tenant_id,key)).fetchone()
+                    if expiry and instant(expiry[0])<=now:raise AIError('AI content expired under data governance. This request key cannot be replayed.',410)
+                    if prior[2] is None:raise AIError('AI content was erased under data governance. This request key cannot be replayed.',410)
                     return dict(decode(prior[2]),cached=True)
                 if not db.execute('SELECT 1 FROM scans WHERE tenant_id=%s AND id=%s',(tenant_id,metadata['scan_id'])).fetchone():
                     raise AIError('Owned assessment scan not found',404)
@@ -74,6 +80,10 @@ class InferenceLedger:
                     raise AIError('Assessment metadata exceeded the allowed bound',422)
                 db.execute('''INSERT INTO ai_inference_attempts(id,tenant_id,request_key,fingerprint,scan_id,metadata,created_at)
                     VALUES (%s,%s,%s,%s,%s,%s,%s)''',(attempt_id,tenant_id,key,fingerprint,metadata['scan_id'],db.json(metadata),now.isoformat()))
+                retention=data_governance or {}
+                expiry=instant(retention['response_expires_at']) if retention.get('response_expires_at') else now+timedelta(days=7)
+                db.execute('INSERT INTO ai_data_retention(attempt_id,tenant_id,purpose,policy_digest,expires_at,created_at) VALUES(%s,%s,%s,%s,%s,%s)',
+                    (attempt_id,tenant_id,retention.get('purpose',metadata.get('kind','assessment')),retention.get('policy_digest','0'*64),expiry.isoformat(),now.isoformat()))
                 self.event(db,tenant_id,attempt_id,'claimed',now)
         except AIError:
             raise
@@ -143,6 +153,8 @@ class InferenceLedger:
         return result
 
     def page(self,tenant_id,limit=25,before=None,scan_id=None,resource_reference=None):
+        from app.data_retention import DataRetention
+        DataRetention(self.store).purge(tenant_id)
         from app.ai_advisory import AIError
         with self.store.transaction(tenant_id) as db:
             cursor=None
@@ -152,6 +164,7 @@ class InferenceLedger:
                     raise AIError('Assessment cursor does not belong to this workspace',422)
             # JSON field filtering uses the shared SQLite/PostgreSQL ->> operator.
             rows=db.execute(f'''SELECT {COLUMNS} FROM ai_inference_attempts WHERE tenant_id=%s
+                AND COALESCE(metadata->>'kind','')<>'agent_plan'
                 AND (CAST(%s AS TEXT) IS NULL OR scan_id=%s)
                 AND (CAST(%s AS TEXT) IS NULL OR metadata->>'resource_reference'=%s)
                 AND (CAST(%s AS TEXT) IS NULL OR created_at<%s OR (created_at=%s AND id<%s))
@@ -162,11 +175,20 @@ class InferenceLedger:
                         durable=True)
 
     def get(self,tenant_id,attempt_id):
+        from app.data_retention import DataRetention
+        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             row=db.execute(f'SELECT {COLUMNS},response FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s',(tenant_id,attempt_id)).fetchone()
             if not row:
                 return None
+            if decode(row[3]).get('kind')=='agent_plan':
+                # Planning shares metering, but its response is not an assessment/advisory schema.
+                return None
             result=self.public(row[:-1]);result['response']=decode(row[-1]) if row[-1] else None
+            expiry=db.execute('SELECT expires_at,erased_at FROM ai_data_retention WHERE tenant_id=%s AND attempt_id=%s',(tenant_id,attempt_id)).fetchone()
+            if expiry:
+                result['content_retention']=dict(expires_at=str(expiry[0]),erased_at=str(expiry[1]) if expiry[1] else None)
+                if expiry[1] or instant(expiry[0])<=self.now(db):result['response']=None
             result['events']=[dict(action=r[0],created_at=r[1]) for r in db.execute('SELECT action,created_at FROM ai_inference_events WHERE tenant_id=%s AND attempt_id=%s ORDER BY created_at,id',(tenant_id,attempt_id)).fetchall()]
             return result
 

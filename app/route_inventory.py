@@ -12,6 +12,20 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/ai/governance'): 'full_scope',
+    ('POST','/api/v1/ai/governance/records/{attempt_id}/erase'): 'full_scope',
+    ('POST','/api/v1/ai/governance/records/{attempt_id}/hold'): 'full_scope',
+    ('POST','/api/v1/ai/governance/records/{attempt_id}/{decision}'): 'full_scope',
+    ('GET', '/api/v1/agents/catalog'): 'scoped_read',
+    ('GET', '/api/v1/agents/tasks'): 'scoped_read',
+    ('GET', '/api/v1/agents/tasks/{task_id}'): 'scoped_read',
+    ('POST', '/api/v1/agents/tasks'): 'scoped_read',
+    ('POST', '/api/v1/agents/tasks/{task_id}/review'): 'scoped_read',
+    ('POST', '/internal/v1/agent/claim'): 'service_identity',
+    ('POST', '/internal/v1/agent/tasks/{task_id}/heartbeat'): 'service_identity',
+    ('POST', '/internal/v1/agent/tasks/{task_id}/draft'): 'service_identity',
+    ('POST', '/internal/v1/agent/tasks/{task_id}/steps/{index}/{action}'): 'service_identity',
+    ('POST', '/internal/v1/agent/tasks/{task_id}/fail'): 'service_identity',
     ('GET','/api/v1/optimization/scans/{scan_id}'):'scoped_read',
     ('GET','/api/v1/optimization/scans/{scan_id}/topology/{root_key}'):'scoped_read',
     ('POST','/api/v1/optimization/simulate/{engine}'):'agnostic',

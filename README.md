@@ -1,5 +1,14 @@
 # CloudSaver v1.3.0
 
+AI data governance now requires reviewed, purpose-specific processors and minimized input,
+blocks training/shared reuse and generic HTTP action transfers, and adds content retention,
+legal holds and privacy erasure. See the [data governance rollout guide](docs/AI_DATA_GOVERNANCE.md)
+before upgrading: existing AI calls require processor registration and legacy content receives a seven-day review window.
+
+The `/agents` workspace adds AI-drafted, human-approved connector tasks, a durable agent gateway,
+and a separate containerized TypeScript `runCode` worker. See the
+[agent worker deployment and approval guide](docs/AGENTIC_WORKER.md) for setup, supported operations and limits.
+
 Recent engineering improvements add delegated rule settings, service-analysis workspaces, broader inventory,
 separate reviewed AI knowledge storage, billing reconciliation/import, and access-isolation fixes.
 See [implementation status and configuration](docs/IMPLEMENTATION_STATUS.md) for delivered functionality,

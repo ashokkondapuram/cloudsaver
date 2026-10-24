@@ -16,7 +16,7 @@ import secrets
 from pathlib import Path
 
 path = Path(__file__).resolve().parents[1] / '.env'
-CLOUDSAVER_CALLERS = ('gateway', 'tenant', 'scanner', 'analytics', 'notification')
+CLOUDSAVER_CALLERS = ('gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent')
 MIGRATED = {
     'TOKEN_DB_PASSWORD': 'PLATFORM_DB_PASSWORD',
     'IDENTITY_DB_OWNER_PASSWORD': 'PLATFORM_DB_OWNER_PASSWORD',

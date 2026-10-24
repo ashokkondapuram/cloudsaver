@@ -2,15 +2,36 @@
   "version": 1,
   "policy": {
     "enabled": false,
-    "allowed_providers": ["azure", "aws", "gcp"],
+    "allowed_providers": [
+      "azure",
+      "aws",
+      "gcp"
+    ],
     "disabled_providers": [],
-    "allowed_models": {"azure": [], "aws": [], "gcp": []},
-    "allowed_regions": {"azure": [], "aws": [], "gcp": []},
+    "allowed_models": {
+      "azure": [],
+      "aws": [],
+      "gcp": []
+    },
+    "allowed_regions": {
+      "azure": [],
+      "aws": [],
+      "gcp": []
+    },
     "allow_cross_provider": false,
     "max_input_tokens_per_request": 4000,
     "max_output_tokens_per_request": 1200,
     "hourly_attempt_ceiling": 10,
     "monthly_token_ceiling": 1000000,
-    "allow_knowledge_candidates": false
+    "allow_knowledge_candidates": false,
+    "data_governance": {
+      "environment_id": "",
+      "azure_tenant_id": "",
+      "response_retention_days": 7,
+      "allow_training": false,
+      "allow_cross_tenant_reuse": false,
+      "allow_external_action_data": false,
+      "processors": []
+    }
   }
 }

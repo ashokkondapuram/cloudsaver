@@ -25,9 +25,11 @@ export const navigation = [
   {href: '/services/disks', label: 'Service analysis', icon: Database, group: ''},
   {href: '/allocation', label: 'Cost allocation', icon: Wallet, group: ''},
   {href: '/automation', label: 'Automation', icon: FileCode2, group: 'GOVERNANCE'},
+  {href: '/agents', label: 'Agent workspace', icon: Sparkles, group: ''},
   {href: '/activity', label: 'Activity & delivery', icon: Activity, group: ''},
   {href: '/settings', label: 'Settings & integrations', icon: Settings2, group: 'MANAGE'},
   {href: '/settings/rules', label: 'Analysis rules', icon: ShieldCheck, group: ''},
+  {href: '/settings/data-governance', label: 'AI data governance', icon: ShieldCheck, group: ''},
   {href: '/settings/organization', label: 'People & access', icon: LockKeyhole, group: ''},
 ];
 

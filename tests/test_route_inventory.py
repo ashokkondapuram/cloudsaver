@@ -11,6 +11,7 @@ from services.analytics import create_app as analytics
 from services.gateway import create_app as gateway
 from services.notification import create_app as notification
 from services.tenant import create_app as tenant_service
+from services.agent_gateway import create_app as agent_gateway
 
 TID = '11111111-1111-4111-8111-111111111111'
 SID = '33333333-3333-4333-8333-333333333333'
@@ -51,6 +52,7 @@ def apps(tmp_path):
         'scanner': scanner(config, scanner=lambda tenant: []),
         'analytics': analytics(config, transport),
         'notification': notification(config, transport),
+        'agent': agent_gateway(config),
     }
 
 

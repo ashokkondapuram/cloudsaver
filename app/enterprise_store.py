@@ -7,7 +7,8 @@ from uuid import UUID
 
 TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
           'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics',
-          'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions')
+          'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions',
+          'agent_tasks', 'agent_task_events','ai_data_events','ai_data_retention','ai_data_holds')
 
 
 class Connection:
@@ -38,11 +39,49 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0016_nextgen_savings before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0018_ai_data_governance before startup ({table})')
         else:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
+                existing=db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_inference_attempts'").fetchone()
+                if existing and 'content_erased_at' not in {r[1] for r in db.execute('PRAGMA table_info(ai_inference_attempts)').fetchall()}:
+                    db.execute('ALTER TABLE ai_inference_attempts ADD COLUMN content_erased_at TEXT')
                 db.db.executescript('''
+                CREATE TABLE IF NOT EXISTS ai_data_events (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,purpose TEXT NOT NULL,decision TEXT NOT NULL,
+                    reason TEXT NOT NULL,policy_digest TEXT NOT NULL,target_id TEXT,metadata TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS ai_data_retention (
+                    attempt_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,purpose TEXT NOT NULL,policy_digest TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,erased_at TEXT,created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS ai_data_holds (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,attempt_id TEXT NOT NULL,review_reference TEXT NOT NULL,
+                    hold_until TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS _ai_erasure_permits (attempt_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL);
+                CREATE TRIGGER IF NOT EXISTS ai_data_events_no_update BEFORE UPDATE ON ai_data_events
+                    BEGIN SELECT RAISE(ABORT,'Data-use audit is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS ai_data_events_no_delete BEFORE DELETE ON ai_data_events
+                    BEGIN SELECT RAISE(ABORT,'Data-use audit is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS ai_data_holds_no_update BEFORE UPDATE ON ai_data_holds
+                    BEGIN SELECT RAISE(ABORT,'Legal holds are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS ai_data_holds_no_delete BEFORE DELETE ON ai_data_holds
+                    BEGIN SELECT RAISE(ABORT,'Legal holds are append-only'); END;
+                CREATE TABLE IF NOT EXISTS agent_tasks (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,
+                    resource_id TEXT NOT NULL,scan_id TEXT NOT NULL,request_key TEXT NOT NULL,fingerprint TEXT NOT NULL,
+                    state TEXT NOT NULL,version INTEGER NOT NULL,payload TEXT NOT NULL,actor TEXT NOT NULL,
+                    created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(tenant_id,request_key));
+                CREATE TABLE IF NOT EXISTS agent_task_events (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,task_id TEXT NOT NULL,version INTEGER NOT NULL,
+                    action TEXT NOT NULL,actor TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(task_id,version));
+                DROP TRIGGER IF EXISTS agent_events_no_update;
+                UPDATE agent_task_events SET payload=json_set(json_remove(payload,'$.plan'),'$.plan_body_removed_by_data_governance',json('true'))
+                    WHERE json_type(payload,'$.plan') IS NOT NULL;
+                CREATE TRIGGER IF NOT EXISTS agent_events_no_update BEFORE UPDATE ON agent_task_events
+                    BEGIN SELECT RAISE(ABORT,'Agent audit events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS agent_events_no_delete BEFORE DELETE ON agent_task_events
+                    BEGIN SELECT RAISE(ABORT,'Agent audit events are append-only'); END;
+                UPDATE agent_tasks SET payload=json_set(payload,'$.data_retention_expires_at',strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'))
+                    WHERE json_extract(payload,'$.data_retention_expires_at') IS NULL;
                 CREATE TABLE IF NOT EXISTS savings_cases (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,
                     resource_id TEXT NOT NULL,baseline_scan_id TEXT NOT NULL,request_key TEXT NOT NULL,fingerprint TEXT NOT NULL,
@@ -80,14 +119,23 @@ class EnterpriseStore:
                 CREATE TABLE IF NOT EXISTS ai_inference_attempts (
                     id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL,
                     scan_id TEXT NOT NULL, metadata TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',response TEXT,
-                    input_tokens INTEGER,output_tokens INTEGER,created_at TEXT NOT NULL,completed_at TEXT,
+                    input_tokens INTEGER,output_tokens INTEGER,created_at TEXT NOT NULL,completed_at TEXT,content_erased_at TEXT,
                     UNIQUE(tenant_id,request_key),UNIQUE(id,tenant_id));
                 CREATE INDEX IF NOT EXISTS ai_history ON ai_inference_attempts(tenant_id,created_at DESC,id DESC);
                 CREATE TABLE IF NOT EXISTS ai_inference_events (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,attempt_id TEXT NOT NULL,action TEXT NOT NULL,created_at TEXT NOT NULL);
-                CREATE TRIGGER IF NOT EXISTS immutable_inference_outcome BEFORE UPDATE ON ai_inference_attempts
+                DROP TRIGGER IF EXISTS immutable_inference_outcome;
+                CREATE TRIGGER immutable_inference_outcome BEFORE UPDATE ON ai_inference_attempts
                     WHEN OLD.status<>'pending' OR NEW.status NOT IN ('completed','uncertain')
-                    BEGIN SELECT RAISE(ABORT,'Inference outcomes are final'); END;
+                    BEGIN
+                      SELECT CASE WHEN NOT(NEW.response IS NULL AND NEW.content_erased_at IS NOT NULL AND OLD.status=NEW.status
+                        AND OLD.input_tokens IS NEW.input_tokens AND OLD.output_tokens IS NEW.output_tokens
+                        AND OLD.completed_at IS NEW.completed_at AND OLD.metadata=NEW.metadata
+                        AND OLD.fingerprint=NEW.fingerprint AND OLD.request_key=NEW.request_key
+                        AND OLD.tenant_id=NEW.tenant_id AND OLD.scan_id=NEW.scan_id AND OLD.id=NEW.id AND OLD.created_at=NEW.created_at
+                        AND EXISTS(SELECT 1 FROM _ai_erasure_permits WHERE attempt_id=OLD.id AND tenant_id=OLD.tenant_id))
+                        THEN RAISE(ABORT,'Inference outcomes are final') END;
+                    END;
                 CREATE TABLE IF NOT EXISTS focus_imports (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,source_id TEXT NOT NULL,fingerprint TEXT NOT NULL,
                     provider TEXT NOT NULL,sub_account TEXT NOT NULL,currency TEXT NOT NULL,
@@ -119,6 +167,9 @@ class EnterpriseStore:
                     decision TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',defer_until TEXT,evidence_digest TEXT NOT NULL,
                     actor TEXT NOT NULL,created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS resource_decision_latest ON resource_decisions(tenant_id,resource_key,created_at DESC,id DESC);
+                INSERT OR IGNORE INTO ai_data_retention(attempt_id,tenant_id,purpose,policy_digest,expires_at,created_at)
+                    SELECT id,tenant_id,'legacy_inference','0000000000000000000000000000000000000000000000000000000000000000',
+                    strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'),strftime('%Y-%m-%dT%H:%M:%SZ','now') FROM ai_inference_attempts;
                 ''')
 
     @contextmanager

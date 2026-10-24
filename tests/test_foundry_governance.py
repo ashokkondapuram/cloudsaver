@@ -2,7 +2,7 @@ import copy
 import json
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from threading import Event
 from uuid import uuid4
 
@@ -15,7 +15,7 @@ from app.foundry_config import normalize, provider_fields
 from app.inference_ledger import InferenceLedger
 from app.tenant_config import normalize_tenant
 from app.tenant_registry import MemoryRegistry
-from tests.test_ai_advisory import target, TID, context, advice
+from tests.test_ai_advisory import provider_protocol_only, target, TID, context, advice
 from tests.test_enterprise import evidence, metadata, result, workspace
 DEFAULT_POLICY = json.loads((Path(__file__).resolve().parents[1] / 'platform/contracts/fixtures/ai-policy-v1.json').read_text())['policy']
 
@@ -27,12 +27,17 @@ def foundry(evidence, monkeypatch):
     registry = MemoryRegistry((normalize_tenant(workspace()),))
     settings = Settings('azure', settings.database, registry.bootstrap, None, registry)
     ledger = InferenceLedger(store)
-    gateway = AIGateway(targets=[target(region='eastus')], enabled=True, budget=ledger, settings=settings,
+    arm='/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/approved'
+    gateway = AIGateway(targets=[target(region='eastus',auth='managed_identity',azure_resource_id=arm)], enabled=True, budget=ledger, settings=settings,
                         adapter=lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('No live inference in governance tests')))
     policy = copy.deepcopy(DEFAULT_POLICY)
     policy.update(enabled=True, max_input_tokens_per_request=16000)
     policy['allowed_models']['azure'] = ['operator-model']
     policy['allowed_regions']['azure'] = ['eastus']
+    policy['data_governance'].update(environment_id='test-company',azure_tenant_id=TID,processors=[dict(workspace_id=TID,target_id='review',azure_resource_id=arm,
+        endpoint_url=gateway.targets[0].endpoint,deployment_name=gateway.targets[0].model,purposes=['assessment','resource_assessment','followup','agent_planning'],
+        review_reference='TEST-APPROVAL',review_expires_at=(datetime.now(timezone.utc)+timedelta(days=10)).isoformat(),provider_controls_reviewed=True)])
+    monkeypatch.setenv('CLOUDSAVER_DATA_ENVIRONMENT_ID','test-company');monkeypatch.setenv('CLOUDSAVER_DATA_AZURE_TENANT_ID',TID)
     gateway.foundry.policy_reader = lambda: {'version': 1, 'policy': policy}
     tenant = dict(registry.get(TID), roles=['TenantAdmin'])
     config = normalize(None)
@@ -149,7 +154,7 @@ def test_cross_provider_route_cannot_substitute_key_ack_for_human_step_up(foundr
         gateway.foundry.save(tenant, 1, config, True)
 
 
-def test_bedrock_profile_cannot_route_to_a_region_outside_operator_policy(monkeypatch):
+def test_bedrock_profile_cannot_route_to_a_region_outside_operator_policy(monkeypatch, provider_protocol_only):
     from app.ai_advisory import CloudAdapter
     calls = []
     class Client:
@@ -170,7 +175,7 @@ def test_bedrock_profile_cannot_route_to_a_region_outside_operator_policy(monkey
     assert calls == ['bedrock']
 
 
-def test_bedrock_converse_attaches_the_approved_published_guardrail(monkeypatch):
+def test_bedrock_converse_attaches_the_approved_published_guardrail(monkeypatch, provider_protocol_only):
     from app.ai_advisory import CloudAdapter
     observed = []
     class Client:

@@ -20,6 +20,12 @@ def target(provider='azure', **kwargs):
     return dict(target_id='review', tenant_id=TID, provider=provider, model='operator-model', **dict(binding, **kwargs))
 
 
+@pytest.fixture
+def provider_protocol_only(monkeypatch):
+    """Isolate mocked wire protocols; test_data_governance covers the mandatory public entry gate."""
+    monkeypatch.setattr('app.data_governance.require_processing_grant',lambda *_:None)
+
+
 def advice():
     return dict(summary='Saved evidence is incomplete.', risk_level='unknown',
                 pillars=[dict(pillar=p, observation='Independent verification is required.', evidence_codes=[]) for p in PILLARS],
@@ -80,7 +86,7 @@ def test_http_adapter_blocks_redirects_oversized_errors_and_raw_messages():
         assert len(calls) == 1 and 'private-provider' not in str(error.value)
 
 
-def test_azure_adapter_uses_tenant_keyless_identity_and_fixed_no_tools_request(monkeypatch):
+def test_azure_adapter_uses_tenant_keyless_identity_and_fixed_no_tools_request(monkeypatch, provider_protocol_only):
     from types import SimpleNamespace
     calls = []
     class Credential:
@@ -104,7 +110,7 @@ def test_azure_adapter_uses_tenant_keyless_identity_and_fixed_no_tools_request(m
     assert len(calls) == 1
 
 
-def test_bedrock_adapter_has_no_inference_retries_and_uses_tenant_external_id(monkeypatch):
+def test_bedrock_adapter_has_no_inference_retries_and_uses_tenant_external_id(monkeypatch, provider_protocol_only):
     from types import SimpleNamespace
     calls = []
     class Client:
@@ -127,7 +133,7 @@ def test_bedrock_adapter_has_no_inference_retries_and_uses_tenant_external_id(mo
     assert len(calls) == 1
 
 
-def test_vertex_adapter_uses_bound_impersonation_and_cloud_platform_scope(monkeypatch):
+def test_vertex_adapter_uses_bound_impersonation_and_cloud_platform_scope(monkeypatch, provider_protocol_only):
     calls = []
     class Credential:
         token = 'ephemeral-token'
@@ -200,7 +206,7 @@ def test_target_source_and_context_limits_reject_before_attempt_or_inference():
 
 
 @pytest.mark.parametrize('finish,tools', [('length',None),('content_filter',None),(None,None),('stop',[{'type':'function'}])])
-def test_incomplete_filtered_or_tool_provider_response_is_rejected(monkeypatch,finish,tools):
+def test_incomplete_filtered_or_tool_provider_response_is_rejected(monkeypatch,finish,tools, provider_protocol_only):
     from types import SimpleNamespace
     class Credential:
         def get_token(self,scope): return SimpleNamespace(token='test-only')
@@ -237,7 +243,7 @@ def test_ambiguous_duplicate_json_properties_are_rejected():
 
 @pytest.mark.parametrize('provider,finish', [('aws','max_tokens'),('aws','tool_use'),('aws',None),
                                           ('gcp','MAX_TOKENS'),('gcp','SAFETY'),('gcp',None)])
-def test_other_providers_reject_nonterminal_or_filtered_results(monkeypatch,provider,finish):
+def test_other_providers_reject_nonterminal_or_filtered_results(monkeypatch,provider,finish, provider_protocol_only):
     from types import SimpleNamespace
     if provider=='aws':
         class Client:

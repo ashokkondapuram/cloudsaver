@@ -10,7 +10,7 @@ from fastapi import Header, HTTPException, Request
 
 from identity.config import env
 
-VERIFY_CALLERS = frozenset({'gateway', 'tenant', 'scanner', 'analytics', 'notification'})
+VERIFY_CALLERS = frozenset({'gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent'})
 DIRECTORY_CALLERS = frozenset({'tenant'})
 ADMIN_CALLERS = frozenset({'portal'})
 OPERATOR, AUDITOR = 'PlatformOperator', 'PlatformAuditor'

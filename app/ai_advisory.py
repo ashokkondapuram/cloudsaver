@@ -288,6 +288,9 @@ def token_usage(value, input_key, output_key):
 
 class CloudAdapter:
     def __call__(self, target, tenant, context, *, system=SYSTEM, parse=parse_advice):
+        from app.data_governance import require_processing_grant,DataDenied
+        try:require_processing_grant(target,tenant,context)
+        except DataDenied as error:raise AIError(str(error),403) from None
         payload = json.dumps(context, sort_keys=True, separators=(',', ':'))
         try:
             if target.provider == 'azure':
@@ -426,6 +429,31 @@ class AIGateway:
         if settings is not None:
             from app.foundry import FoundryController
             self.foundry = FoundryController(settings, self.targets, self.budget if getattr(self.budget, 'durable', False) else None, deployment_limit=self.limit)
+        from app.data_governance import DataGovernor
+        self.governance = DataGovernor(getattr(self.budget,'store',None),lambda:self.foundry.policy_reader()) if self.foundry is not None else None
+
+    def prepare_data(self,tenant,target,purpose,message):
+        if self.governance is None:
+            # Pure dependency-injected unit adapters have no external data transport.
+            # The real CloudAdapter independently refuses calls without a processing grant.
+            return message,None
+        from app.data_governance import DataDenied
+        try:return self.governance.prepare(tenant,target,purpose,message)
+        except DataDenied as error:raise AIError(str(error),403) from None
+
+    def invoke_data(self,target,tenant,message,grant,*,system=SYSTEM,parse=parse_advice):
+        from contextlib import nullcontext
+        from app.data_governance import DataDenied
+        try:
+            with grant.active() if grant is not None else nullcontext():
+                inferred=(self.adapter(target,tenant,message) if system==SYSTEM and parse is parse_advice
+                    else self.adapter(target,tenant,message,system=system,parse=parse))
+            if grant is not None:
+                if isinstance(inferred,InferenceResult):
+                    return InferenceResult(self.governance.clean_output(tenant,grant,inferred.advice),inferred.usage)
+                return self.governance.clean_output(tenant,grant,inferred)
+            return inferred
+        except DataDenied as error:raise AIError(str(error),403) from None
 
     def _selection(self, tenant, target_id, source_provider):
         if not self.enabled:
@@ -455,7 +483,16 @@ class AIGateway:
                 targets, limits = self.foundry.resolved(tenant)
             except AIError as error:
                 targets, reason = [], str(error)
+        data_policy=self.governance.view(tenant) if self.governance is not None else None
+        if data_policy is not None:
+            from datetime import datetime,timezone
+            approvals={p['target_id']:p for p in data_policy['processors'] if datetime.fromisoformat(p['review_expires_at'].replace('Z','+00:00'))>datetime.now(timezone.utc)}
+            targets=[t for t in targets if data_policy['status']=='enforced' and t.provider=='azure' and t.auth=='managed_identity'
+                and t.target_id in approvals and t.azure_resource_id and t.azure_resource_id.lower()==approvals[t.target_id]['azure_resource_id'].lower()
+                and t.endpoint and t.endpoint.rstrip('/')==approvals[t.target_id]['endpoint_url'].rstrip('/') and t.model==approvals[t.target_id]['deployment_name']]
+            if not targets and reason is None:reason='Data governance requires a current purpose-bound processor approval in the owning environment.'
         return {'enabled': self.enabled and bool(targets), 'hourly_attempt_limit': limits['hourly'], 'advisory_only': True, 'durable_history': bool(getattr(self.budget,'durable',False)),
+                'data_governance':data_policy,
                 'configuration_reason': reason, 'settings_path': '/settings/ai',
                 'routing_mode': limits.get('routing_mode'), 'platform_policy_version': limits.get('platform_version'),
                 'knowledge_retrieval': 'configured' if os.getenv('CLOUDSAVER_KNOWLEDGE_ENABLED') == 'true' else 'disabled',
@@ -472,13 +509,14 @@ class AIGateway:
         if context['provider'] not in target.allowed_source_providers:
             raise AIError('AI target policy does not permit this source provider', 403)
         context = dict(context, knowledge=retrieve(context))
+        context,data_grant = self.prepare_data(tenant,target,'assessment',context)
         if len(json.dumps(context, sort_keys=True).encode()) > target.max_context_bytes:
             raise AIError('Sanitized evidence exceeds the AI target context limit', 422)
         attribution = attribution or dict(cost_center='unassigned',application_id='unassigned')
         fingerprint = hashlib.sha256(json.dumps({'target': target.model_dump(mode='json'), 'scan': scan_id,
                                                 'context': context, 'evidence_digest': assessment['evidence_digest'], 'attribution': attribution, 'schema': 3, 'instruction_digest': hashlib.sha256(SYSTEM.encode()).hexdigest()}, sort_keys=True).encode()).hexdigest()
         def invoke():
-            inferred = self.adapter(target, tenant, context)
+            inferred = self.invoke_data(target,tenant,context,data_grant)
             advice = inferred.advice if isinstance(inferred, InferenceResult) else inferred
             usage = inferred.usage if isinstance(inferred, InferenceResult) else token_usage(None, '', '')
             # Revalidate dependency-injected adapters as well. Citations must reference saved evidence.
@@ -492,6 +530,7 @@ class AIGateway:
                         validation=dict(schema=True, pillar_citations=True, risk_floor=True, semantic_claims_verified=False),
                         advice=advice, warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
         options = self._budget_options(target, limits, context, SYSTEM)
+        if data_grant is not None:options['data_governance']=data_grant.metadata
         if getattr(self.budget,'durable',False):
             actor = hashlib.sha256((tenant['tenant_id']+'|'+(tenant.get('subject_id') or tenant.get('user_id') or tenant.get('key_id') or 'workspace_key')).encode()).hexdigest()
             options['metadata'] = dict(scan_id=scan_id,resource_reference=context['resource_reference'],provider=target.provider,
@@ -519,6 +558,8 @@ class AIGateway:
                        'Knowledge citations do not replace observed check citations or prove client facts.')
         if len(json.dumps(message, sort_keys=True).encode()) > target.max_context_bytes:
             raise AIError('Sanitized evidence exceeds the AI target context limit', 422)
+        message,data_grant=self.prepare_data(tenant,target,kind,message)
+        resource=message['resource'] if kind=='followup' else message
         attribution = attribution or dict(cost_center='unassigned', application_id='unassigned')
         fingerprint = hashlib.sha256(json.dumps({'target': target.model_dump(mode='json'), 'scan': scan_id, 'kind': kind,
                                                 'message': message, 'evidence_digest': assessment['evidence_digest'],
@@ -526,7 +567,7 @@ class AIGateway:
                                                 'instruction_digest': hashlib.sha256(system.encode()).hexdigest()}, sort_keys=True).encode()).hexdigest()
 
         def invoke():
-            inferred = self.adapter(target, tenant, message, system=system, parse=parse)
+            inferred = self.invoke_data(target,tenant,message,data_grant,system=system,parse=parse)
             advice = inferred.advice if isinstance(inferred, InferenceResult) else inferred
             usage = inferred.usage if isinstance(inferred, InferenceResult) else token_usage(None, '', '')
             advice = parse(json.dumps(advice), message)
@@ -540,6 +581,7 @@ class AIGateway:
                                                                     semantic_claims_verified=False),
                         warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
         options = self._budget_options(target, limits, message, system)
+        if data_grant is not None:options['data_governance']=data_grant.metadata
         if getattr(self.budget, 'durable', False):
             actor = hashlib.sha256((tenant['tenant_id'] + '|' + (tenant.get('subject_id') or tenant.get('user_id') or tenant.get('key_id') or 'workspace_key')).encode()).hexdigest()
             options['metadata'] = dict(scan_id=scan_id, resource_reference=resource['resource_reference'], kind=kind,

@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 path = ROOT / '.env'
 platform_env = ROOT / 'platform' / '.env'
-CALLERS = ('gateway', 'tenant', 'scanner', 'analytics', 'notification')
+CALLERS = ('gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent')
 TOKENS = tuple('CLOUDSAVER_IDENTITY_TOKEN_' + caller.upper() for caller in CALLERS)
 IDENTITY_URL = 'http://identity-service:8005'
 CUTOVER = {'CLOUDSAVER_KEY_VERIFIER': 'identity', 'CLOUDSAVER_DIRECTORY_MODE': 'cutover',
@@ -85,11 +85,11 @@ def add_identity():
     lines = read_env()
     if not lines:
         raise SystemExit('No .env found; run scripts/setup_compose.py first.')
-    present = names(lines)
+    present = values_of(lines)
     values = identity_values()
-    added = [name for name in values if name not in present]
+    added = [name for name in values if not present.get(name)]
     if added:
-        write_env(lines + ['# Identity-service in the platform project (reached over platform-link)']
+        write_env([line for line in lines if name_of(line) not in added] + ['# Identity-service in the platform project (reached over platform-link)']
                   + [f'{name}={values[name]}' for name in added])
         print('Added to .env: ' + ', '.join(added))
         lines = read_env()

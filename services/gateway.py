@@ -53,6 +53,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         'scanner': internal_url('SCANNER_SERVICE_URL', 'http://scanner-service:8002'),
         'analytics': internal_url('ANALYTICS_SERVICE_URL', 'http://analytics-service:8003'),
         'notification': internal_url('NOTIFICATION_SERVICE_URL', 'http://notification-service:8004'),
+        'agent': internal_url('AGENT_GATEWAY_URL', 'http://agent-gateway:8006'),
     }
 
     async def allowed(row=Depends(tenant)):
@@ -65,6 +66,39 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     from app.onboarding_api import customer_access_router, onboarding_router
     app.include_router(onboarding_router())
     app.include_router(customer_access_router(allowed))
+
+    @app.get('/api/v1/ai/governance')
+    async def data_governance(row=Depends(allowed),authorization: str = Header()):
+        return await forward('GET','scanner','/api/v1/ai/governance',authorization)
+
+    @app.post('/api/v1/ai/governance/records/{attempt_id}/{decision}')
+    async def data_privacy(attempt_id:UUID,decision:str,request:Request,row=Depends(allowed),authorization:str=Header()):
+        if decision not in ('erase','hold'):raise HTTPException(404,'Privacy operation not found')
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],f'/api/v1/ai/governance/records/{attempt_id}/{decision}',authorization,
+            json=await bounded_json(request),transport=transport)
+
+    @app.get('/api/v1/agents/catalog')
+    async def agent_catalog(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET','agent','/api/v1/agents/catalog',authorization)
+
+    @app.get('/api/v1/agents/tasks')
+    async def agent_tasks(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET','agent','/api/v1/agents/tasks',authorization)
+
+    @app.get('/api/v1/agents/tasks/{task_id}')
+    async def agent_task(task_id: UUID,row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET','agent',f'/api/v1/agents/tasks/{task_id}',authorization)
+
+    @app.post('/api/v1/agents/tasks',status_code=201)
+    async def agent_submit(request: Request,row=Depends(allowed),authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['agent'],'/api/v1/agents/tasks',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.post('/api/v1/agents/tasks/{task_id}/review')
+    async def agent_review(task_id: UUID,request: Request,row=Depends(allowed),authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['agent'],f'/api/v1/agents/tasks/{task_id}/review',authorization,json=await bounded_json(request),transport=transport)
 
     @app.get('/api/v1/auth/consent-url')
     async def consent_url(row=Depends(allowed), authorization: str = Header()):

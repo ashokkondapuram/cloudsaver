@@ -39,11 +39,13 @@ x-environment: &environment
   CLOUDSAVER_ENVIRONMENT: ${CLOUDSAVER_ENVIRONMENT:-development}
   CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
   CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
+  CLOUDSAVER_DATA_ENVIRONMENT_ID: ${CLOUDSAVER_DATA_ENVIRONMENT_ID:-}
+  CLOUDSAVER_DATA_AZURE_TENANT_ID: ${CLOUDSAVER_DATA_AZURE_TENANT_ID:-}
   CLOUDSAVER_KUBERNETES_BINDINGS: ${CLOUDSAVER_KUBERNETES_BINDINGS:-[]}
   CLOUDSAVER_EVIDENCE_SOURCES: ${CLOUDSAVER_EVIDENCE_SOURCES:-[]}
   CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED: ${CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED:-false}
   CLOUDSAVER_TRUSTED_CALLERS: api-gateway,analytics-service,notification-service
-  NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,identity-service,postgres,redis
+  NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,agent-gateway,identity-service,postgres,redis
   no_proxy: *internal_no_proxy
 
 x-service: &service
@@ -93,6 +95,7 @@ services:
       TENANT_SERVICE_URL: http://tenant-service:8001
       ANALYTICS_SERVICE_URL: http://analytics-service:8003
       NOTIFICATION_SERVICE_URL: http://notification-service:8004
+      AGENT_GATEWAY_URL: http://agent-gateway:8006
       CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_GATEWAY:-}
       CLOUDSAVER_TRUSTED_CALLERS: ''
       CLOUDSAVER_TRUSTED_PROXIES: web-dashboard
@@ -148,6 +151,52 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+  agent-gateway:
+    <<: *service
+    networks: [default, platform-link]
+    command: [uvicorn, services.agent_gateway:create_app, --factory, --host, 0.0.0.0, --port, '8006']
+    environment:
+      <<: *environment
+      CLOUDSAVER_AGENT_ENABLED: ${CLOUDSAVER_AGENT_ENABLED:-false}
+      CLOUDSAVER_AGENT_CONNECTORS: ${CLOUDSAVER_AGENT_CONNECTORS:-[]}
+      CLOUDSAVER_AGENT_WORKERS: ${CLOUDSAVER_AGENT_WORKERS:-[]}
+      CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_AGENT:-}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8006/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  agent-worker:
+    image: cloudsaver-agent-worker:1.0.0
+    build:
+      context: ./agent-worker
+      dockerfile: Dockerfile
+    profiles: [agentic]
+    restart: unless-stopped
+    init: true
+    user: '1000:1000'
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 1.0
+    stop_grace_period: 120s
+    environment:
+      CLOUDSAVER_ENVIRONMENT: ${CLOUDSAVER_ENVIRONMENT:-development}
+      CLOUDSAVER_AGENT_GATEWAY_URL: ${CLOUDSAVER_AGENT_GATEWAY_URL:-http://agent-gateway:8006}
+      CLOUDSAVER_AGENT_WORKER_TOKEN: ${CLOUDSAVER_AGENT_WORKER_TOKEN:-}
+      CLOUDSAVER_AGENT_TENANT_IDS: ${CLOUDSAVER_AGENT_TENANT_IDS:-[]}
+      CLOUDSAVER_AGENT_CONNECTORS: ${CLOUDSAVER_AGENT_CONNECTORS:-[]}
+      CLOUDSAVER_AGENT_AZURE_IDENTITY: ${CLOUDSAVER_AGENT_AZURE_IDENTITY:-managed_identity}
+      AZURE_CLIENT_ID: ${CLOUDSAVER_AGENT_AZURE_CLIENT_ID:-}
+      NO_PROXY: localhost,127.0.0.1,::1,agent-gateway
+      no_proxy: localhost,127.0.0.1,::1,agent-gateway
+    depends_on:
+      agent-gateway: {condition: service_healthy}
   analytics-service:
     <<: *service
     networks: [default, platform-link]
@@ -179,6 +228,11 @@ services:
       no_proxy: *gateway_no_proxy
     depends_on:
       api-gateway: {condition: service_healthy}
+  data-retention-worker:
+    <<: *service
+    command: [python, -m, workers.data_retention]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
   scan-worker:
     <<: *service
     profiles: [scheduled]

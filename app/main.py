@@ -48,6 +48,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     from app.focus import FocusRepository
     from app.finops_api import create_router as finops_router
     evidence_store=EnterpriseStore(settings)
+    from app.data_governance_api import create_router as governance_router
+    api.include_router(governance_router(evidence_store,current_tenant))
     from app.savings_store import SavingsRepository
     savings_repository=SavingsRepository(evidence_store)
     from app.nextgen_api import create_router as nextgen_router

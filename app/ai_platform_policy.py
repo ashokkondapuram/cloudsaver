@@ -9,7 +9,7 @@ def validate(value):
     required = {'enabled', 'allowed_providers', 'disabled_providers', 'allowed_models', 'allowed_regions',
         'allow_cross_provider', 'max_input_tokens_per_request', 'max_output_tokens_per_request',
         'hourly_attempt_ceiling', 'monthly_token_ceiling', 'allow_knowledge_candidates'}
-    if not isinstance(value, dict) or set(value) != required:
+    if not isinstance(value, dict) or set(value)-{'data_governance'} != required:
         raise ValueError('Incomplete policy')
     for key in ('enabled', 'allow_cross_provider', 'allow_knowledge_candidates'):
         if type(value[key]) is not bool:
@@ -26,7 +26,8 @@ def validate(value):
                 or any(not isinstance(items, list) or len(items) > 100 or any(not isinstance(item, str) for item in items)
                        for items in value[key].values())):
             raise ValueError('Invalid allowlist')
-    return value
+    from app.data_policy import DEFAULT_DATA_GOVERNANCE,validate_data_governance
+    return dict(value,data_governance=validate_data_governance(value.get('data_governance',DEFAULT_DATA_GOVERNANCE)))
 
 
 def current():

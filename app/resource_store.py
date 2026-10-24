@@ -142,10 +142,13 @@ class ResourceStore:
 
     def results(self, tenant_id, keys=None, *, limit=5000):
         """Latest completed resource assessment per resource key, across scans."""
+        from app.data_retention import DataRetention
+        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             rows = db.execute('''SELECT metadata->>'resource_reference',id,response,created_at,scan_id FROM ai_inference_attempts
-                WHERE tenant_id=%s AND status='completed' AND metadata->>'kind'='resource_assessment'
-                ORDER BY created_at DESC,id DESC LIMIT %s''', (tenant_id, limit)).fetchall()
+                WHERE tenant_id=%s AND status='completed' AND response IS NOT NULL AND metadata->>'kind'='resource_assessment'
+                AND NOT EXISTS(SELECT 1 FROM ai_data_retention d WHERE d.tenant_id=ai_inference_attempts.tenant_id AND d.attempt_id=ai_inference_attempts.id AND d.expires_at<=%s)
+                ORDER BY created_at DESC,id DESC LIMIT %s''', (tenant_id,utcnow().isoformat(), limit)).fetchall()
         latest = {}
         for key, attempt_id, response, created_at, scan_id in rows:
             if key in latest or (keys is not None and key not in keys):
@@ -158,20 +161,27 @@ class ResourceStore:
         return latest
 
     def result_history(self, tenant_id, key, limit=20):
+        from app.data_retention import DataRetention
+        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
-            rows = db.execute('''SELECT id,scan_id,created_at,response FROM ai_inference_attempts WHERE tenant_id=%s AND status='completed'
+            rows = db.execute('''SELECT id,scan_id,created_at,response FROM ai_inference_attempts WHERE tenant_id=%s AND status='completed' AND response IS NOT NULL
                 AND metadata->>'kind'='resource_assessment' AND metadata->>'resource_reference'=%s
-                ORDER BY created_at DESC,id DESC LIMIT %s''', (tenant_id, key, limit)).fetchall()
+                AND NOT EXISTS(SELECT 1 FROM ai_data_retention d WHERE d.tenant_id=ai_inference_attempts.tenant_id AND d.attempt_id=ai_inference_attempts.id AND d.expires_at<=%s)
+                ORDER BY created_at DESC,id DESC LIMIT %s''', (tenant_id, key,utcnow().isoformat(), limit)).fetchall()
         return [dict(assessment_id=str(r[0]), scan_id=str(r[1]), created_at=iso(r[2]), risk_level=decode(r[3])['advice']['risk_level'],
                      evidence_digest=decode(r[3])['evidence_digest'], model=decode(r[3])['model']) for r in rows]
 
     # Follow-up questions
 
     def followups(self, tenant_id, scan_id, key):
+        from app.data_retention import DataRetention
+        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             rows = db.execute('''SELECT f.id,f.question,f.created_at,a.response FROM ai_followups f
                 JOIN ai_inference_attempts a ON a.id=f.attempt_id AND a.tenant_id=f.tenant_id
-                WHERE f.tenant_id=%s AND f.scan_id=%s AND f.resource_key=%s ORDER BY f.created_at,f.id''', (tenant_id, scan_id, key)).fetchall()
+                WHERE f.tenant_id=%s AND f.scan_id=%s AND f.resource_key=%s AND a.response IS NOT NULL
+                AND NOT EXISTS(SELECT 1 FROM ai_data_retention d WHERE d.tenant_id=a.tenant_id AND d.attempt_id=a.id AND d.expires_at<=%s)
+                ORDER BY f.created_at,f.id''', (tenant_id, scan_id, key,utcnow().isoformat())).fetchall()
         return [dict(id=str(r[0]), question=r[1], created_at=iso(r[2]), answer=decode(r[3])['advice']) for r in rows]
 
     def followup_count(self, tenant_id, scan_id, key):
