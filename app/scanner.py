@@ -104,13 +104,21 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
     raise ScanError("Azure inventory exceeded the pagination limit.")
 
 
-INVENTORY_QUERY = "Resources | where isnotempty(id)" + _PROJECTION
+INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
+    ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
+    ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)')
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
     """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
     rows = []
     for row in execute_pages(client, INVENTORY_QUERY, subscriptions):
+        evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
+        for source, target in (('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
+            if isinstance(row.get(source), str) and row[source]:
+                evidence[target] = row[source]
+        if type(row.get('hostedAppCount')) is int and row['hostedAppCount'] >= 0:
+            evidence['hosted_app_count'] = row['hostedAppCount']
         rows.append({
             'cloud_provider': 'azure',
             'resource_id': row['id'],
@@ -119,6 +127,7 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
             'resource_group': row['resourceGroup'],
             'subscription_id': row['subscriptionId'],
             'scope_id': row['subscriptionId'],
+            'evidence': evidence,
         })
     return rows
 

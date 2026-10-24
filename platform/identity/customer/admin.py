@@ -61,7 +61,25 @@ class CustomerOps:
         if grant.get('key_admin'):
             return list(grant['roles']) if tenant_id == grant['tenant_id'] else []
         membership = tx.get_workspace_membership(tenant_id, grant['subject_id'])
-        return list(membership['roles']) if membership else []
+        if not membership:
+            return []
+        member_roles = set(ROLES if 'TenantAdmin' in membership['roles'] else membership['roles'])
+        key_roles = set(ROLES if 'TenantAdmin' in grant['roles'] else grant['roles'])
+        return [role for role in ROLES if role in member_roles & key_roles]
+
+    def _assert_delegated_envelope(self, requested, grant, workspace):
+        """A scoped administration key cannot mint a broader credential, even for its owner."""
+        from identity.domain import configured_providers
+        providers = configured_providers(workspace)
+        requested_providers = set(providers if requested['all_providers'] else requested['allowed_providers'])
+        allowed = set(grant['allowed_providers'])
+        if not requested_providers <= allowed or (requested['all_providers'] and not grant['all_providers']):
+            raise IdentityError(FORBIDDEN, status=403)
+        limits = grant.get('scope_restrictions') or {}
+        target = requested.get('scope_restrictions') or {}
+        for provider in requested_providers:
+            if provider in limits and (provider not in target or not set(target[provider]) <= set(limits[provider])):
+                raise IdentityError(FORBIDDEN, status=403)
 
     def _customer_workspaces(self, tx, customer_id):
         return [w for w in tx.list_workspaces(None, None, customer_id, 0, 10000) if w['status'] != 'deleted']
@@ -165,7 +183,7 @@ class CustomerOps:
                 'claimed_at': now, 'subject_type': 'user', 'subject_user_id': user_id,
             })
             actor = {'actor': user_id, 'actor_type': 'customer'}
-            grant = self._grant_fields({'roles': ['Viewer'], 'all_providers': True}, workspace)
+            grant = self._grant_fields({'roles': ['TenantAdmin'], 'all_providers': True}, workspace)
             grant |= {'subject_type': 'user', 'subject_user_id': user_id}
             personal, secret = self._new_key_row(workspace, 'Owner access key', grant,
                                                  now + timedelta(days=DEFAULT_EXPIRY_DAYS), actor)
@@ -452,6 +470,7 @@ class CustomerOps:
                     raise IdentityError('Assign workspace access before issuing a key for this user.')
             self._assert_key_issuance_allowed(tx, workspace)
             issued = self._grant_fields(payload, workspace)
+            self._assert_delegated_envelope(issued, grant, workspace)
             self._roles_subset(issued['roles'], self._issuer_roles(tx, tenant_id, grant))
             if subject_user_id:
                 self._roles_subset(issued['roles'], tx.get_workspace_membership(tenant_id, subject_user_id)['roles'])
@@ -486,6 +505,7 @@ class CustomerOps:
         with self.store.transaction() as tx:
             row, workspace = self._customer_key(tx, key_id, grant)
             self._roles_subset(row['roles'], self._issuer_roles(tx, workspace['tenant_id'], grant))
+            self._assert_delegated_envelope(row, grant, workspace)
         allowed = {k: payload[k] for k in ('overlap_hours', 'expires_at') if k in payload}
         return self.rotate_key(key_id, allowed, _actor(grant), request_id)
 

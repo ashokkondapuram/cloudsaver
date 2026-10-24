@@ -16,3 +16,5 @@ RULE_SEED = (
     ('K8S_CPU_OVERSIZED', 'kubernetes', 'compute', 'pod', 'Oversized CPU requests', 'performance'),
     ('K8S_MEMORY_OVERSIZED', 'kubernetes', 'compute', 'pod', 'Oversized memory requests', 'performance'),
 )
+from identity.analysis.contracts import DEFINITIONS
+RULE_SEED += tuple((rid, 'azure', category, kind, name, 'cost') for rid, category, kind, name, _ in DEFINITIONS)

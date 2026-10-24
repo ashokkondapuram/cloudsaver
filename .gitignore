@@ -1,4 +1,7 @@
 .venv/
+**/node_modules
+**/.next/
+**/*.tsbuildinfo
 data/
 __pycache__/
 .pytest_cache/

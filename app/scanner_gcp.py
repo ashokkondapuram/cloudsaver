@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from app.cloud_http import JSONReader, pages
 from app.cloud_scope import NAME, matches, validate_finding_scope
 from app.scanner import ScanError
+from app.inventory import FindingBatch, observation
 
 COMPUTE = 'https://compute.googleapis.com/compute/v1/projects/'
 SQL = 'https://sqladmin.googleapis.com/sql/v1beta4/projects/'
@@ -108,7 +109,7 @@ def scan_gcp_project(source, *, reader=None, now=None):
             raise ScanError('The GCP workload identity credential is unavailable') from None
         except Exception:
             raise ScanError('The GCP API client could not be initialized') from None
-    findings, seen = [], set()
+    findings, inventory, seen = [], [], set()
     tenant = {'gcp_projects': [source]}
 
     def consume(row, kind, regional):
@@ -119,6 +120,7 @@ def scan_gcp_project(source, *, reader=None, now=None):
         if result['resource_id'] in seen:
             return
         seen.add(result['resource_id'])
+        inventory.append(observation(result))
         if len(seen) > 100000:
             raise ScanError('GCP inventory resource limit exceeded')
         users = row.get('users')
@@ -156,6 +158,11 @@ def scan_gcp_project(source, *, reader=None, now=None):
             for row in page.get('items', []):
                 if row.get('project') != project or not matches(NAME, row.get('name')):
                     raise ScanError('Cloud SQL returned an out-of-scope instance')
+                if row.get('region') not in regions:
+                    continue
+                result = finding(project, row, 'instances')
+                validate_finding_scope(result, tenant)
+                inventory.append(observation(result))
                 environment = row.get('settings', {}).get('userLabels', {}).get('environment')
                 if row.get('state') != 'RUNNABLE' or environment not in ('dev', 'development', 'staging'):
                     continue
@@ -165,7 +172,7 @@ def scan_gcp_project(source, *, reader=None, now=None):
                     validate_finding_scope(result, tenant)
                     result['evidence'].update(evidence)
                     findings.append(result)
-        return findings
+        return FindingBatch(findings, inventory)
     except ScanError:
         raise
     except Exception:

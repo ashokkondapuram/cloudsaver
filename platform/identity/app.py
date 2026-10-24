@@ -35,7 +35,11 @@ def build_service():
     url = env('IDENTITY_DATABASE_URL')
     if not url:
         raise RuntimeError('Set PLATFORM_IDENTITY_DATABASE_URL')
-    return IdentityService(PostgresStore(url), Peppers.from_env(), Throttle(RedisBackend()), RedisEvents(), UsageRecorder())
+    from identity.knowledge.store import PostgresKnowledgeStore
+    knowledge_url = env('KNOWLEDGE_DATABASE_URL')
+    knowledge = PostgresKnowledgeStore(knowledge_url, url) if knowledge_url else None
+    return IdentityService(PostgresStore(url), Peppers.from_env(), Throttle(RedisBackend()), RedisEvents(),
+                           UsageRecorder(), knowledge_store=knowledge)
 
 
 def problem(request, status, detail, headers=None):
@@ -59,8 +63,14 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
         logger.info('Billing provider: %s', app.state.billing_provider)
         flusher = Flusher(service.usage, service.store, flush_interval)
         flusher.start()
-        yield
-        flusher.stop()
+        from identity.billing.evaluator import BillingEvaluator
+        evaluator = BillingEvaluator(service)
+        evaluator.start()
+        try:
+            yield
+        finally:
+            evaluator.stop()
+            flusher.stop()
 
     app = FastAPI(title='identity-service', version='1.2.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.service = service
@@ -193,6 +203,14 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def customer_me(grant=Depends(customer_grant)):
         return {k: grant[k] for k in ('customer_id', 'tenant_id', 'subject_id', 'customer_roles', 'roles',
                                       'membership_version')}
+
+    @app.get('/customer/v1/workspaces/{tenant_id}/analysis-rules')
+    def customer_rules(tenant_id: str, grant=Depends(customer_grant)):
+        return service.customer_analysis_rules(tenant_id, grant)
+
+    @app.put('/customer/v1/workspaces/{tenant_id}/analysis-rules')
+    def customer_update_rules(tenant_id: str, request: Request, payload: dict = Body(...), grant=Depends(customer_grant)):
+        return service.customer_analysis_rules(tenant_id, grant, payload, rid(request))
 
     @app.get('/customer/v1/users')
     def customer_users(grant=Depends(customer_grant)):
@@ -439,6 +457,18 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     @app.put('/admin/v1/workspaces/{tenant_id}/analysis-rules')
     def update_workspace_analysis_rules(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.update_workspace_analysis_rules(tenant_id, payload, identity, rid(request))
+
+    @app.get('/internal/v1/knowledge/retrieve')
+    def retrieve_knowledge(provider: str, service_category: str, rule_ids: str = Query('', max_length=2400), caller=Depends(verify_caller)):
+        return service.retrieve_knowledge(provider, service_category, rule_ids.split(',') if rule_ids else [])
+
+    @app.get('/admin/v1/knowledge/metrics')
+    def knowledge_metrics(identity=Depends(operator)):
+        return service.knowledge_metrics()
+
+    @app.post('/admin/v1/knowledge/publications/{publication_id}/review')
+    def review_publication(publication_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.review_knowledge_publication(publication_id, payload, identity, rid(request))
 
     @app.get('/admin/v1/knowledge/publications')
     def knowledge_publications(status: str | None = Query(None, max_length=16), limit: int = Query(50, ge=1, le=200),

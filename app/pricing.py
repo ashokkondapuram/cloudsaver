@@ -10,6 +10,43 @@ from pydantic import BaseModel
 ENDPOINT = 'https://prices.azure.com/api/retail/prices'
 
 
+def opportunity_totals(findings, *, realized=False):
+    """Conservative overlap rollup. Unknown alternatives keep the total unknown.
+
+    Collectors can supply a verified shared workload group. Otherwise findings on one resource
+    are competing alternatives. Never infer parent topology from names or tags.
+    """
+    groups = {}
+    for finding in findings:
+        provider = finding.get('cloud_provider', 'azure')
+        resource_id = finding.get('resource_id')
+        if not isinstance(resource_id, str) or not resource_id:
+            groups.setdefault('unattributed', []).append(None)
+            continue
+        identity = resource_id.lower() if provider == 'azure' else resource_id
+        key = finding.get('opportunity_group_id') or f'{provider}:{identity}'
+        amount = ((finding.get('cost_attribution') or {}).get('realizable_savings_usd') if realized
+                  else finding.get('estimated_monthly_waste_usd'))
+        if type(amount) not in (int, float, Decimal):
+            parsed = None
+        else:
+            parsed = Decimal(str(amount))
+            if not parsed.is_finite() or parsed < 0:
+                parsed = None
+        groups.setdefault(key, []).append(parsed)
+    known = Decimal(0)
+    incomplete = 0
+    for amounts in groups.values():
+        observed = [value for value in amounts if value is not None]
+        if observed:
+            known += max(observed)
+        incomplete += any(value is None for value in amounts)
+    return dict(total_monthly_opportunity_usd=float(known.quantize(Decimal('.01'))) if groups and not incomplete else None,
+                known_monthly_opportunity_usd=float(known.quantize(Decimal('.01'))) if groups else None,
+                opportunity_group_count=len(groups), unpriced_group_count=incomplete,
+                overlap_basis='maximum observed alternative per verified group or resource; compatibility not inferred')
+
+
 class ConfidenceLevel(str, Enum):
     HIGH = 'HIGH'
     UNKNOWN = 'UNKNOWN'

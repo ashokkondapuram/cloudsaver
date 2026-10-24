@@ -265,6 +265,10 @@ def test_local_billing_state_is_read_only_for_the_runtime_role(database):
         context(db, a['tenant_id'])
         with pytest.raises(errors.CheckViolation):
             db.execute("UPDATE organizations SET plan_tier='not a code' WHERE id=%s", (organization,))
+    # This module shares a disposable database with rollback tests. Restore its legacy-compatible tier.
+    with psycopg.connect(app) as db:
+        context(db, a['tenant_id'])
+        db.execute("UPDATE organizations SET plan_tier='STARTER' WHERE id=%s", (organization,))
 
 
 def test_directory_projection_persists_the_plan_block(database):
@@ -768,7 +772,8 @@ def test_delivery_downgrade_upgrade_preserves_scans_and_restores_forced_rls(data
     with jobs.transaction(a['tenant_id']) as db:
         db.execute("UPDATE scan_jobs SET notification_status='queued' WHERE id=%s",(job_id,))
     env=os.environ.copy();env['CLOUDSAVER_MIGRATION_URL']=owner
-    subprocess.run([sys.executable,'-m','alembic','downgrade','0006_gitops_requests'],cwd=ROOT,env=env,check=True,capture_output=True)
+    migration = subprocess.run([sys.executable,'-m','alembic','downgrade','0006_gitops_requests'],cwd=ROOT,env=env,capture_output=True)
+    assert migration.returncode == 0, migration.stderr.decode(errors='replace')
     with psycopg.connect(url) as db:
         context(db,a['tenant_id'])
         assert db.execute('SELECT notification_status FROM scan_jobs WHERE id=%s',(job_id,)).fetchone()[0]=='failed'

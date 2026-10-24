@@ -4,6 +4,7 @@ from contextvars import ContextVar
 from fastapi import HTTPException
 
 from app.route_inventory import classify
+from app.pricing import opportunity_totals
 
 LABELS = {'azure': 'Azure', 'aws': 'AWS', 'gcp': 'Google Cloud', 'kubernetes': 'Kubernetes'}
 SCOPE_KEYS = {'azure': 'subscription_ids', 'aws': 'aws_accounts', 'gcp': 'gcp_projects', 'kubernetes': 'kubernetes_clusters'}
@@ -71,6 +72,7 @@ def enforce_route(method, path, tenant, configured):
 def scan_providers(scan):
     providers = set(scan.get('cloud_providers') or ['azure'])
     providers |= {f.get('cloud_provider', 'azure') for f in scan.get('findings', [])}
+    providers |= {f.get('cloud_provider', 'azure') for f in scan.get('inventory', [])}
     return providers
 
 
@@ -91,19 +93,30 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
     if not providers & allowed:
         return None
     findings = scan.get('findings', [])
+    inventory = scan.get('inventory', [])
     in_scope = [f for f in findings if f.get('cloud_provider', 'azure') in allowed and finding_in_scope(f, scopes)]
+    inventory_in_scope = [r for r in inventory if r.get('cloud_provider', 'azure') in allowed and finding_in_scope(r, scopes)]
+    evaluations = scan.get('rule_evaluations', [])
+    evaluations_in_scope = [r for r in evaluations if r.get('cloud_provider', 'azure') in allowed and finding_in_scope(r, scopes)]
     if strict and scopes and len(in_scope) != len([f for f in findings if f.get('cloud_provider', 'azure') in allowed]):
         return None
-    if providers <= allowed and len(in_scope) == len(findings):
+    if strict and scopes and len(inventory_in_scope) != len([r for r in inventory if r.get('cloud_provider', 'azure') in allowed]):
+        return None
+    if strict and len(evaluations_in_scope) != len(evaluations):
+        return None
+    if providers <= allowed and len(in_scope) == len(findings) and len(inventory_in_scope) == len(inventory) and len(evaluations_in_scope) == len(evaluations):
         return scan
-    waste = [f.get('estimated_monthly_waste_usd') for f in in_scope]
-    realizable = [(f.get('cost_attribution') or {}).get('realizable_savings_usd') for f in in_scope]
+    opportunity = opportunity_totals(in_scope)
+    realizable = opportunity_totals(in_scope, realized=True)
     return dict(
-        scan, findings=in_scope, total_items_found=len(in_scope),
+        scan, findings=in_scope, inventory=inventory_in_scope, total_items_found=len(inventory_in_scope) if inventory else len(in_scope),
         cloud_providers=sorted(p for p in (scan.get('cloud_providers') or ['azure']) if p in allowed),
         subscriptions_scanned=scan.get('subscriptions_scanned', 0) if 'azure' in allowed else 0,
-        total_monthly_waste_usd=round(sum(waste), 2) if in_scope and all(v is not None for v in waste) else None,
-        realizable_monthly_savings_usd=round(sum(realizable), 2) if in_scope and all(v is not None for v in realizable) else None,
+        total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
+        realizable_monthly_savings_usd=realizable['total_monthly_opportunity_usd'],
+        opportunity_summary=opportunity,
+        coverage=None, rule_evaluations=evaluations_in_scope,
+        subscriptions_scanned_scope='filtered_count_unavailable',
         provider_filtered=True, scope_filtered=bool(scopes))
 
 

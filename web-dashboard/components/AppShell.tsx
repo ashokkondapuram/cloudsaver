@@ -20,10 +20,13 @@ export const navigation = [
   {href: '/', label: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE', shortcut: 'G D'},
   {href: '/findings', label: 'Inventory & findings', icon: Blocks, group: '', shortcut: 'G F'},
   {href: '/resources', label: 'Resource analysis', icon: BrainCircuit, group: '', shortcut: 'G R'},
+  {href: '/services/disks', label: 'Service analysis', icon: Database, group: ''},
   {href: '/allocation', label: 'Cost allocation', icon: Wallet, group: ''},
   {href: '/automation', label: 'Automation', icon: FileCode2, group: 'GOVERNANCE'},
   {href: '/activity', label: 'Activity & delivery', icon: Activity, group: ''},
   {href: '/settings', label: 'Settings & integrations', icon: Settings2, group: 'MANAGE'},
+  {href: '/settings/rules', label: 'Analysis rules', icon: ShieldCheck, group: ''},
+  {href: '/settings/organization', label: 'People & access', icon: LockKeyhole, group: ''},
 ];
 
 function Brand({compact = false}: {compact?: boolean}) {

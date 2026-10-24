@@ -91,7 +91,7 @@ class OperatorAuth:
                                 options={'require': ['exp', 'iat', 'iss', 'aud', 'oid', 'tid']})
             if claims['tid'] != tenant:
                 raise jwt.InvalidTokenError()
-            roles = [r for r in claims.get('roles', []) if r in (OPERATOR, AUDITOR)]
+            roles = [r for r in claims.get('roles', []) if r in (OPERATOR, AUDITOR, 'KnowledgeReviewer', 'PrivacyReviewer')]
         except jwt.PyJWKClientConnectionError:
             raise HTTPException(503, 'Entra signing keys are temporarily unavailable') from None
         except (jwt.PyJWTError, ValueError, KeyError, TypeError):
@@ -108,7 +108,13 @@ class OperatorAuth:
             if scheme.lower() != 'bearer':
                 raise HTTPException(401, 'Operator authentication required', headers={'WWW-Authenticate': 'Bearer'})
             operator = self.authenticate(token.strip())
-            if request.method != 'GET' and OPERATOR not in operator['roles']:
+            roles = set(operator['roles'])
+            knowledge_path = request.url.path.startswith('/admin/v1/knowledge/')
+            if not roles & {OPERATOR, AUDITOR} and not (knowledge_path or request.url.path == '/admin/v1/session'):
+                raise HTTPException(403, 'This role is restricted to knowledge governance')
+            review = (request.method == 'POST' and knowledge_path and request.url.path.endswith('/review')
+                      and bool(roles & {'KnowledgeReviewer', 'PrivacyReviewer'}))
+            if request.method != 'GET' and OPERATOR not in roles and not review:
                 raise HTTPException(403, 'The PlatformOperator role is required')
             return operator
         return current

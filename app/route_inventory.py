@@ -12,6 +12,11 @@ Classes:
 """
 
 ROUTES = {
+    ('GET', '/api/v1/rules/effective'): 'agnostic',
+    ('POST', '/api/v1/rules/preview'): 'full_scope',
+    ('PUT', '/api/v1/rules/overrides'): 'full_scope',
+    ('GET', '/api/v1/services/{service}'): 'scoped_read',
+    ('GET', '/api/v1/services/{service}/comparison'): 'scoped_read',
     ('GET', '/'): 'public',
     ('GET', '/healthz'): 'public',
     ('GET', '/readyz'): 'public',

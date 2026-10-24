@@ -12,6 +12,7 @@ x-identity: &identity
   tmpfs: [/tmp]
 
 x-identity-environment: &identity-environment
+  PLATFORM_KNOWLEDGE_DATABASE_URL: ${PLATFORM_KNOWLEDGE_DATABASE_URL:-}
   PLATFORM_IDENTITY_DATABASE_URL: postgresql://identity_app:${PLATFORM_DB_APP_PASSWORD:?Run scripts/setup_platform.py}@platform-db:5432/identity
   PLATFORM_KEY_PEPPER: ${PLATFORM_KEY_PEPPER:-}
   PLATFORM_KEY_PEPPER_VERSION: ${PLATFORM_KEY_PEPPER_VERSION:-1}

@@ -1,6 +1,7 @@
 """AWS inventory through a keyless reader role, with scope checks and no demo fallback."""
 from app.cloud_scope import validate_finding_scope
 from app.scanner import ScanError
+from app.inventory import FindingBatch, observation
 
 
 def scan_account(source, *, session=None):
@@ -22,9 +23,9 @@ def scan_account(source, *, session=None):
         if client('sts').get_caller_identity().get('Account') != account:
             raise ScanError('AWS caller does not match the configured account')
         ec2, rds = client('ec2'), client('rds')
-        findings, seen, total = [], set(), 0
+        findings, inventory, seen, total = [], [], set(), 0
 
-        def add(rule, kind, name, row, details):
+        def add(rule, kind, name, row, details, detected=True):
             rid = (f'arn:aws:rds:{region}:{account}:db:{name}' if kind == 'db'
                    else f'arn:aws:ec2:{region}:{account}:{kind}/{name}')
             if kind == 'db' and row.get('DBInstanceArn') != rid:
@@ -48,7 +49,9 @@ def scan_account(source, *, session=None):
                 evidence=evidence)
             validate_finding_scope(result, {'aws_accounts': [source]})
             if rid not in seen:
-                findings.append(result)
+                inventory.append(observation(result))
+                if detected:
+                    findings.append(result)
                 seen.add(rid)
 
         def rows(api, operation, field, **kwargs):
@@ -71,22 +74,23 @@ def scan_account(source, *, session=None):
                 seen_tokens.add(token)
             raise ScanError('AWS exceeded its inventory page limit')
 
-        for row in rows(ec2, 'describe_volumes', 'Volumes', Filters=[{'Name': 'status', 'Values': ['available']}], MaxResults=500):
-            if row.get('State') == 'available' and row.get('Attachments') == []:
-                add('AWS_UNATTACHED_EBS', 'volume', row['VolumeId'], row,
-                    'Available EBS volume has no attachments. Validate retention, snapshots and recovery. Pricing and realizable savings are unknown.')
+        for row in rows(ec2, 'describe_volumes', 'Volumes', MaxResults=500):
+            add('AWS_UNATTACHED_EBS', 'volume', row['VolumeId'], row,
+                'Available EBS volume has no attachments. Validate retention, snapshots and recovery. Pricing and realizable savings are unknown.',
+                row.get('State') == 'available' and row.get('Attachments') == [])
         addresses = ec2.describe_addresses().get('Addresses')
         if not isinstance(addresses, list) or len(addresses) > 100000:
             raise ScanError('AWS returned invalid address inventory')
         for row in addresses:
-            if row.get('AllocationId') and not row.get('AssociationId') and not row.get('NetworkInterfaceId') and not row.get('InstanceId'):
+            if row.get('AllocationId'):
                 add('AWS_UNASSOCIATED_EIP', 'elastic-ip', row['AllocationId'], row,
-                    'Allocated VPC Elastic IP has no association. Releasing it may lose a reserved address; validate dependencies.')
+                    'Allocated VPC Elastic IP has no association. Releasing it may lose a reserved address; validate dependencies.',
+                    not row.get('AssociationId') and not row.get('NetworkInterfaceId') and not row.get('InstanceId'))
         for row in rows(rds, 'describe_db_instances', 'DBInstances', MaxRecords=100):
-            if row.get('DBInstanceStatus') == 'stopped':
-                add('AWS_IDLE_RDS', 'db', row['DBInstanceIdentifier'], row,
-                    'RDS instance is stopped. Storage and backup charges may remain; state does not prove idle duration or deletability.')
-        return findings
+            add('AWS_IDLE_RDS', 'db', row['DBInstanceIdentifier'], row,
+                'RDS instance is stopped. Storage and backup charges may remain; state does not prove idle duration or deletability.',
+                row.get('DBInstanceStatus') == 'stopped')
+        return FindingBatch(findings, inventory)
     except ScanError:
         raise
     except Exception:

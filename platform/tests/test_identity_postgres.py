@@ -29,7 +29,50 @@ OPERATOR = {'actor': 'operator-key', 'actor_type': 'operator'}
 TABLES = ('directory.customers', 'directory.workspaces', 'directory.workspace_azure_subscriptions',
           'directory.workspace_aws_accounts', 'directory.workspace_gcp_projects', 'directory.workspace_kubernetes_clusters',
           'directory.platform_settings', 'directory.directory_changes', 'identity.api_keys', 'identity.key_events',
-          'identity.key_usage_hourly', 'identity.verification_failures_minute')
+          'identity.key_usage_hourly', 'identity.verification_failures_minute', 'directory.access_checks',
+          'identity.service_accounts', 'identity.cache_events', 'identity.customer_memberships',
+          'identity.workspace_memberships', 'identity.users')
+
+
+def test_separate_knowledge_database_governance(token_db):
+    """Real migrations, separate credentials, forced RLS and independent publication reviews."""
+    from sqlalchemy.engine import make_url
+    from identity.knowledge.store import PostgresKnowledgeStore
+    from test_identity import build
+    privileged = os.environ['CLOUDSAVER_TEST_PRIVILEGED_URL']
+    name = 'knowledge_test_' + uuid4().hex
+    password = secrets.token_urlsafe(24)
+    base = make_url(privileged).set(database=name)
+    owner = base.set(username='knowledge_owner', password=password).render_as_string(hide_password=False)
+    runtime = base.set(username='knowledge_app', password=password).render_as_string(hide_password=False)
+    with psycopg.connect(privileged, autocommit=True) as admin:
+        for role in ('knowledge_owner', 'knowledge_app'):
+            admin.execute(sql.SQL('CREATE ROLE {} LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD {}')
+                          .format(sql.Identifier(role), sql.Literal(password)))
+        admin.execute(sql.SQL('CREATE DATABASE {} OWNER knowledge_owner').format(sql.Identifier(name)))
+        admin.execute(sql.SQL('REVOKE ALL ON DATABASE {} FROM PUBLIC').format(sql.Identifier(name)))
+        admin.execute(sql.SQL('GRANT CONNECT ON DATABASE {} TO knowledge_app').format(sql.Identifier(name)))
+    try:
+        env = dict(os.environ, PLATFORM_KNOWLEDGE_MIGRATION_URL=owner, PLATFORM_IDENTITY_MIGRATION_URL=token_db[0])
+        subprocess.run([sys.executable, '-m', 'alembic', '-c', 'knowledge_alembic.ini', 'upgrade', 'head'],
+                       cwd=ROOT, env=env, check=True, capture_output=True)
+        service = build()
+        service.knowledge_store = PostgresKnowledgeStore(runtime, token_db[1])
+        created = service.create_knowledge_publication({'title': 'Public storage guidance',
+            'summary': 'Verify recovery before any storage change.', 'body': 'Independent synthetic guidance.'}, OPERATOR)
+        for version, kind, role in ((1, 'technical', 'KnowledgeReviewer'), (2, 'privacy', 'PrivacyReviewer')):
+            service.review_knowledge_publication(created['id'], {'version': version, 'review': kind},
+                {'actor': kind, 'actor_type': 'operator', 'roles': [role]})
+        service.update_knowledge_publication(created['id'], {'version': 3, 'status': 'published'}, OPERATOR)
+        assert service.knowledge_metrics()['active_published'] == 1
+        assert service.retrieve_knowledge('azure', 'storage')['items'][0]['publication_id'] == created['id']
+        with psycopg.connect(runtime) as db:
+            flags = db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='knowledge.publications'::regclass").fetchone()
+            assert flags == (True, True)
+            assert db.execute("SELECT to_regclass('directory.customers')").fetchone()[0] is None
+    finally:
+        with psycopg.connect(privileged, autocommit=True) as admin:
+            admin.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
 
 
 @pytest.fixture(scope='module')
@@ -56,8 +99,9 @@ def token_db():
     owner = base.set(username='identity_owner', password=passwords['identity_owner']).render_as_string(hide_password=False)
     app = base.set(username='identity_app', password=passwords['identity_app']).render_as_string(hide_password=False)
     env = dict(os.environ, CLOUDSAVER_IDENTITY_MIGRATION_URL=owner)
-    subprocess.run([sys.executable, '-m', 'alembic', '-c', 'identity_alembic.ini', 'upgrade', 'head'], cwd=ROOT, env=env,
-                   check=True, capture_output=True, text=True)
+    migration = subprocess.run([sys.executable, '-m', 'alembic', '-c', 'identity_alembic.ini', 'upgrade', 'head'], cwd=ROOT, env=env,
+                              capture_output=True, text=True)
+    assert migration.returncode == 0, migration.stderr
     yield owner, app
     with psycopg.connect(privileged, autocommit=True) as admin:
         admin.execute(sql.SQL('DROP DATABASE IF EXISTS {} WITH (FORCE)').format(sql.Identifier(name)))
@@ -77,6 +121,21 @@ def test_every_table_forces_row_level_security(token_db):
                           "AND c.relname <> 'alembic_version'").fetchall()
     assert {r[0] for r in rows} == set(TABLES)
     assert all(r[1] and r[2] for r in rows)
+
+
+def test_rule_parameter_revision_uses_real_jsonb_and_preserves_forced_rls(service, token_db):
+    tid = str(uuid4())
+    customer = service.create_customer({'name': 'Policy integration'}, OPERATOR)
+    service.create_workspace({'tenant_id': tid, 'customer_id': customer['id'], 'name': 'Rules',
+                              'plan_tier': 'ENTERPRISE'}, OPERATOR)
+    policy = service.list_workspace_analysis_rules(tid)
+    updated = service.update_workspace_analysis_rules(tid, {'version': policy['version'], 'rules': [
+        {'rule_id': 'AZURE_DISK_UNATTACHED_RETENTION', 'enabled': True, 'parameters': {'minimum_days': 21}}]}, OPERATOR)
+    assert updated['version'] == policy['version'] + 1
+    rule = next(r for r in updated['items'] if r['id'] == 'AZURE_DISK_UNATTACHED_RETENTION')
+    assert rule['parameters'] == {'minimum_days': 21}
+    with psycopg.connect(token_db[1]) as db:
+        assert db.execute("SELECT relforcerowsecurity FROM pg_class WHERE oid='analysis.rule_catalog'::regclass").fetchone() == (True,)
 
 
 def test_runtime_store_refuses_the_owner_role(token_db):

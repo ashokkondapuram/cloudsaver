@@ -42,6 +42,7 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
         for source in tenant.get('kubernetes_clusters',[]):
             collectors.append(lambda source=dict(source):scan_cluster(source))
     findings=[]
+    inventory = []
     if collectors:
         # Fixed concurrency bounds cloud pressure. Any failed collector discards the whole result.
         batches={};count=0
@@ -61,6 +62,10 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
                 raise
         # Completion order never changes snapshot ordering or fingerprints.
         findings=[finding for index in sorted(batches) for finding in batches[index]]
+        inventory = [row for index in sorted(batches) for row in getattr(batches[index], 'inventory', [])]
+    inventory = azure_inventory + inventory
+    if len(inventory) > 100000:
+        raise ScanError('Multi-cloud inventory resource limit exceeded')
     seen = set()
     for finding in findings:
         if finding.get('cloud_provider', 'azure') not in providers:
@@ -72,4 +77,8 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
         seen.add(identity)
         if len(seen) > 100000:
             raise ScanError('Multi-cloud inventory finding limit exceeded')
-    return findings, azure_inventory
+    for row in inventory:
+        validate_finding_scope(dict(row, rule_id=row.get('inventory_rule_id', 'INVENTORY')), tenant)
+    if enabled_rule_ids is not None:
+        findings = [row for row in findings if row['rule_id'] in enabled_rule_ids]
+    return findings, inventory

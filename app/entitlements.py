@@ -164,6 +164,8 @@ def normalize_plan(value):
     if not isinstance(value, dict):
         raise ValueError('The plan block must be an object')
     code = plan_code(value.get('code'))
+    if 'access_suspended' in value and type(value['access_suspended']) is not bool:
+        raise ValueError('Billing access suspension must be a boolean')
     state = value.get('billing_state') or 'none'
     if state not in BILLING_STATES:
         raise ValueError('Unknown billing state')
@@ -171,6 +173,7 @@ def normalize_plan(value):
     if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version < 0):
         raise ValueError('Entitlements version must be a non-negative integer')
     return {
+        **({'access_suspended': True} if value.get('access_suspended') is True else {}),
         'code': code, 'name': _name(value.get('name')) or code.title(), 'billing_state': state,
         'current_period_end': _timestamp(value.get('current_period_end')),
         'grace_ends_at': _timestamp(value.get('grace_ends_at')),

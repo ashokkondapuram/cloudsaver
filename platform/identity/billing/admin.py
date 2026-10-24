@@ -19,6 +19,37 @@ def _seed_entitlements(code, stored):
 
 
 class BillingOps:
+    def evaluate_billing(self):
+        if not flag('BILLING_ENABLED'):
+            return {'changed': 0}
+        actor = {'actor': 'billing-evaluator', 'actor_type': 'system'}
+        changed, offset = 0, 0
+        while True:
+            with self.store.transaction() as tx:
+                page = tx.list_customers(None, None, offset, 100)
+            for candidate in page:
+                if candidate['status'] == 'deleted':
+                    continue
+                with self.store.transaction() as tx:
+                    customer = tx.get_customer(candidate['id'], lock=True)
+                    if not customer or customer['status'] == 'deleted':
+                        continue
+                    now = self.now()
+                    sub = tx.latest_subscription(customer['id'])
+                    state, boundary = billing_state(sub, now)
+                    if state == (customer.get('billing_state') or 'none'):
+                        continue
+                    tx.set_customer_billing_state(customer['id'], state, boundary or now)
+                    self._sync_customer_entitlements(tx, customer['id'], actor, now)
+                    self._event(tx, actor, 'billing_state_changed', details={
+                        'customer_id': customer['id'], 'from': customer.get('billing_state'), 'to': state})
+                    for workspace in tx.list_workspaces(None, None, customer['id'], 0, 10000):
+                        self._publish([{'tenant_id': workspace['tenant_id'], 'event': 'entitlements_changed', 'directory': True}], tx)
+                    changed += 1
+            offset += len(page)
+            if len(page) < 100:
+                return {'changed': changed}
+
     def _plan_row_view(self, row, usage):
         customers, workspaces = usage.get(row['code'], (0, 0))
         refs = row.get('external_price_refs') or {}

@@ -279,8 +279,8 @@ def test_plan_limits_apply_to_settings_changes(registry_mode, fake, secret):
 def test_scan_filtering_hides_other_providers():
     from app.provider_access import filter_scan
     scan = {'scan_id': 's', 'cloud_providers': ['azure', 'aws'], 'subscriptions_scanned': 1, 'total_items_found': 2,
-            'findings': [{'cloud_provider': 'azure', 'estimated_monthly_waste_usd': 10.0},
-                         {'cloud_provider': 'aws', 'estimated_monthly_waste_usd': 4.5}]}
+            'findings': [{'cloud_provider': 'azure', 'resource_id': '/subscriptions/example/disks/a', 'estimated_monthly_waste_usd': 10.0},
+                         {'cloud_provider': 'aws', 'resource_id': 'arn:aws:ec2:us-east-1:123456789012:volume/vol-a', 'estimated_monthly_waste_usd': 4.5}]}
     filtered = filter_scan(scan, frozenset({'aws'}))
     assert filtered['total_items_found'] == 1 and filtered['total_monthly_waste_usd'] == 4.5
     assert filtered['cloud_providers'] == ['aws'] and filtered['subscriptions_scanned'] == 0
@@ -326,9 +326,9 @@ def test_gateway_pins_customer_calls_to_the_callers_workspace(cutover, secret, f
 def test_scan_filtering_hides_out_of_scope_findings():
     from app.provider_access import filter_scan, restrict
     scan = {'scan_id': 's', 'cloud_providers': ['azure', 'aws'], 'subscriptions_scanned': 1,
-            'findings': [{'cloud_provider': 'azure', 'subscription_id': SID, 'estimated_monthly_waste_usd': 10.0},
-                         {'cloud_provider': 'aws', 'scope_id': '123456789012', 'estimated_monthly_waste_usd': 4.5},
-                         {'cloud_provider': 'aws', 'scope_id': '999999999999', 'estimated_monthly_waste_usd': 1.0}]}
+            'findings': [{'cloud_provider': 'azure', 'resource_id': '/subscriptions/example/disks/a', 'subscription_id': SID, 'estimated_monthly_waste_usd': 10.0},
+                         {'cloud_provider': 'aws', 'resource_id': 'arn:aws:ec2:us-east-1:123456789012:volume/vol-a', 'scope_id': '123456789012', 'estimated_monthly_waste_usd': 4.5},
+                         {'cloud_provider': 'aws', 'resource_id': 'arn:aws:ec2:us-east-1:999999999999:volume/vol-b', 'scope_id': '999999999999', 'estimated_monthly_waste_usd': 1.0}]}
     allowed = frozenset({'azure', 'aws'})
     filtered = filter_scan(scan, allowed, scopes={'aws': frozenset({'999999999999'})})
     assert [f.get('scope_id') or f['subscription_id'] for f in filtered['findings']] == [SID, '999999999999']

@@ -18,7 +18,7 @@ PROVIDER_NAMES = ('manual', 'stripe')
 
 CARD_NUMBER = 'Remove the card number. Use the invoice or remittance reference instead.'
 ISSUANCE_BLOCKED = ("This customer doesn't have an active billing subscription. Create one on the customer's "
-                    'Billing tab, or record a payment, before you issue keys.')
+                    'Billing tab and reconcile the service period before you issue keys.')
 PLAN_LOCKED = ("This workspace's plan comes from the customer's subscription. Change it on the customer's "
                'Billing tab.')
 STRIPE_MANAGED = 'Stripe manages this subscription. You can change only notes and entitlement overrides.'

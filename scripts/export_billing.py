@@ -55,7 +55,7 @@ def export(db):
                           'stripe_subscription_status, ' + ', '.join(WATERMARKS) +
                           ' FROM public.organizations WHERE tenant_id=%s ORDER BY created_at, id', (tenant_id,)).fetchall()
         organizations.extend(organization(row) for row in rows)
-        events.extend({'event_id': r[0], 'event_type': r[1], 'created_at': _iso(r[2])} for r in db.execute(
+        events.extend({'tenant_id': tenant_id, 'event_id': r[0], 'event_type': r[1], 'created_at': _iso(r[2])} for r in db.execute(
             'SELECT event_id, event_type, event_created FROM public.stripe_events WHERE tenant_id=%s '
             'ORDER BY event_created, event_id', (tenant_id,)))
     return {'version': 1, 'exported_at': _iso(datetime.now(timezone.utc)),

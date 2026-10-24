@@ -453,6 +453,7 @@ class MemoryTx:
         row = self.s['workspace_rules'].get(key)
         if row is None:
             row = {'tenant_id': tenant_id, 'rule_id': rule_id, 'enabled': fields['enabled'],
+                   'parameters': copy.deepcopy(fields.get('parameters', {})),
                    'unavailable_reason': fields.get('unavailable_reason'), 'version': 1,
                    'created_at': fields['updated_at'], 'created_by': fields['updated_by'],
                    'updated_at': fields['updated_at'], 'updated_by': fields['updated_by']}

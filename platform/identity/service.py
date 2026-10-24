@@ -64,7 +64,7 @@ def snapshot(workspace, customer, plan=None):
 
 class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
-                 cache_seconds=None, provider_scoped_keys=None):
+                 cache_seconds=None, provider_scoped_keys=None, knowledge_store=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage
         self.environment = environment or env('ENVIRONMENT', 'development')
         self.now = clock
@@ -73,6 +73,11 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
             raise ValueError('PLATFORM_IDENTITY_CACHE_SECONDS must be between 0 and 30')
         self.provider_scoped_keys = flag('PROVIDER_SCOPED_KEYS') if provider_scoped_keys is None else provider_scoped_keys
         self.metrics = {}
+        from identity.knowledge.store import DisabledStore
+        if knowledge_store is None and type(store).__name__ == 'MemoryStore':
+            from identity.store_memory import MemoryStore
+            knowledge_store = MemoryStore()
+        self.knowledge_store = knowledge_store or DisabledStore()
 
     def _count(self, *labels):
         self.metrics[labels] = self.metrics.get(labels, 0) + 1
@@ -165,8 +170,16 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
         customer_roles = []
         if row.get('subject_user_id') and customer:
             customer_roles = self._membership_roles(tx, subject_id, customer['id'])
+        roles = list(row['roles'])
+        if row.get('subject_user_id'):
+            membership = tx.get_workspace_membership(row['tenant_id'], subject_id)
+            member_roles = (membership or {}).get('roles', [])
+            permitted = set(normalize_roles(['TenantAdmin', 'BillingAdmin', 'Viewer'])
+                            if 'TenantAdmin' in member_roles else member_roles)
+            key_roles = ['TenantAdmin', 'BillingAdmin', 'Viewer'] if 'TenantAdmin' in roles else roles
+            roles = [role for role in key_roles if role in permitted]
         grant = {'valid': True, 'tenant_id': row['tenant_id'], 'customer_id': workspace['customer_id'],
-                 'key_id': row['key_id'], 'key_name': row['name'], 'roles': list(row['roles']),
+                 'key_id': row['key_id'], 'key_name': row['name'], 'roles': roles,
                  'all_providers': row['all_providers'], 'allowed_providers': allowed,
                  'scope_restrictions': self._effective_restrictions(row, workspace, allowed),
                  'workspace_status': workspace['status'], 'directory_version': workspace['version'],

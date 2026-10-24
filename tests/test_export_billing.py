@@ -55,7 +55,7 @@ def test_export_is_read_only_and_covers_every_tenant(tmp_path, capsys):
                           'stripe_event_id': 'evt_placeholder', 'stripe_last_invoice_id': None,
                           'stripe_invoice_event_created': None}}
     assert starter['tenant_id'] == OTHER and starter['billing_watermark'] is None
-    assert document['stripe_events'] == [{'event_id': 'evt_placeholder', 'event_type': 'invoice.paid',
+    assert document['stripe_events'] == [{'tenant_id': TID, 'event_id': 'evt_placeholder', 'event_type': 'invoice.paid',
                                           'created_at': '2026-01-02T03:01:40Z'}]
     assert 'Exported 2 organizations and 1 Stripe events.' in capsys.readouterr().err
 

@@ -1,4 +1,9 @@
-# CloudSaver v1.0.0
+# CloudSaver v1.3.0
+
+Recent engineering improvements add delegated rule settings, service-analysis workspaces, broader inventory,
+separate reviewed AI knowledge storage, billing reconciliation/import, and access-isolation fixes.
+See [implementation status and configuration](docs/IMPLEMENTATION_STATUS.md) for delivered functionality,
+verification, migration requirements and the remaining enterprise roadmap.
 
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development

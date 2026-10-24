@@ -66,6 +66,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     from app.onboarding_api import onboarding_router, customer_access_router
     api.include_router(onboarding_router())
     api.include_router(customer_access_router(current_tenant))
+    from app.service_analysis_api import create_router as service_analysis_router
+    api.include_router(service_analysis_router(store, current_tenant))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -174,8 +176,11 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 heartbeat.start()
 
             from app.scanner import scan_live
-            from app.effective_rules import enabled_rule_ids_for_tenant
-            rule_ids = enabled_rule_ids_for_tenant(tenant_id)
+            from app.effective_rules import policy_for_tenant
+            rule_policy = policy_for_tenant(tenant_id)
+            rule_ids = set(rule_policy['enabled_rule_ids']) if rule_policy is not None else None
+            if tenant.get('key_id') and rule_policy is None:
+                raise ScanError('Analysis policy is unavailable; no scan was saved. Retry when identity-service is available.')
             inventory = []
             if providers:
                 from app.multi_cloud import scan_multi_cloud
@@ -204,15 +209,20 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 else:
                     enriched_findings.append(finding)
 
-            known = all(f.get('estimated_monthly_waste_usd') is not None for f in enriched_findings)
-            total_waste = round(sum(f['estimated_monthly_waste_usd'] for f in enriched_findings), 2) if known and enriched_findings else None
-            realizable_values = [(f.get('cost_attribution') or {}).get('realizable_savings_usd') for f in enriched_findings]
-            realizable_savings = (
-                round(sum(v for v in realizable_values if v is not None), 2)
-                if realizable_values and all(v is not None for v in realizable_values) else None
-            )
+            from app.pricing import opportunity_totals
+            opportunity = opportunity_totals(enriched_findings)
+            total_waste = opportunity['total_monthly_opportunity_usd']
+            realizable_savings = opportunity_totals(enriched_findings, realized=True)['total_monthly_opportunity_usd']
 
             from app.multi_cloud import scope_fingerprint
+            from app.analysis_rules import evaluate_inventory, VERSION as rule_version, RULES
+            from app.inventory import coverage
+            observation_time = datetime.now(timezone.utc).isoformat()
+            policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
+            if rule_ids is not None:
+                for rid, *_ in RULES:
+                    policies.setdefault(rid, {'enabled': rid in rule_ids})
+            evaluations = evaluate_inventory(inventory, observed_at=observation_time, policies=policies)
             result = dict(
                 scan_id=str(uuid4()),
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -226,6 +236,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 realizable_monthly_savings_usd=realizable_savings,
                 findings=enriched_findings,
                 inventory=inventory,
+                opportunity_summary=opportunity,
+                rule_evaluations=evaluations,
+                rule_manifest={'version': rule_version, 'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None,
+                               'workspace_version': (rule_policy or {}).get('version'), 'policies': policies,
+                               'policy_source': 'identity' if rule_ids is not None else 'local_catalog'},
+                coverage=coverage(inventory, enriched_findings, evaluations),
             )
             # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
             if hasattr(ScanSummary, 'model_validate'):

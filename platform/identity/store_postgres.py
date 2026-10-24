@@ -2,7 +2,7 @@
 from contextlib import contextmanager
 
 from identity.billing.domain import ENDED
-from identity.domain import SCOPE_KEYS
+from identity.domain import SCOPE_KEYS, KEY_DEFAULTS
 
 KEY_COLUMNS = ('id', 'key_id', 'tenant_id', 'name', 'roles', 'all_providers', 'allowed_providers', 'scope_restrictions',
                'format', 'hash_scheme', 'secret_digest', 'pepper_version', 'legacy_sha256', 'legacy_fingerprint',
@@ -17,7 +17,7 @@ SCOPE_SQL = {
 }
 # jsonb columns; every other list value is a PostgreSQL array (roles, allowed_providers).
 JSON_COLUMNS = frozenset({'identity', 'scope_restrictions', 'details', 'external_customer_refs', 'entitlements',
-                          'entitlement_overrides', 'external_price_refs', 'snapshot'})
+                          'entitlement_overrides', 'external_price_refs', 'snapshot', 'parameters'})
 ENDED_SQL = '(' + ','.join(f"'{s}'" for s in ENDED) + ')'
 
 
@@ -218,6 +218,7 @@ class PostgresTx:
                 for r in rows}
 
     def insert_key(self, row):
+        row = {**KEY_DEFAULTS, **row}
         self._insert('identity.api_keys', {c: row[c] for c in KEY_COLUMNS})
 
     def update_key(self, key_id, fields, expected_version=None):
@@ -476,6 +477,7 @@ class PostgresTx:
                             'WHERE tenant_id=%s AND rule_id=%s AND version=%s RETURNING *', values)
             return dict(row) if row else None
         row = {'tenant_id': tenant_id, 'rule_id': rule_id, 'enabled': fields['enabled'],
+               'parameters': fields.get('parameters', {}),
                'unavailable_reason': fields.get('unavailable_reason'), 'version': 1,
                'created_at': fields['updated_at'], 'created_by': fields['updated_by'],
                'updated_at': fields['updated_at'], 'updated_by': fields['updated_by']}

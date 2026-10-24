@@ -49,6 +49,12 @@ export function AccessSettings() {
   const [error, setError] = useState('');
   const [pending, setPending] = useState<Pending>(null);
   const [secret, setSecret] = useState('');
+  useEffect(() => {setSecret(''); setPending(null); setData(null);}, [token, workspace?.tenant_id]);
+  useEffect(() => {
+    if (!secret) return;
+    const timer = window.setTimeout(() => setSecret(''), 120000);
+    return () => window.clearTimeout(timer);
+  }, [secret]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -200,7 +206,7 @@ export function AccessSettings() {
       </table></div> : <p className="inline-help">No activity yet.</p>}
     </section>
 
-    <InviteDialog open={pending?.kind === 'invite'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/users/invite', token, {body}), `Invitation sent to ${body.email}.`)}/>
+    <InviteDialog open={pending?.kind === 'invite'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/users/invite', token, {body}), `User access added for ${body.email}. Email delivery is not configured.`)}/>
     <MemberDialog pending={pending?.kind === 'member' ? pending : null} users={data.users} members={data.members} onClose={() => setPending(null)}
       onSubmit={(userId, roles, version) => act(() => api(`/customer/members/${userId}`, token, {method: 'PUT', body: {roles, version}}), 'Workspace access saved.')}/>
     <AccountDialog open={pending?.kind === 'account'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/service-accounts', token, {body}), `${body.name} created.`)}/>

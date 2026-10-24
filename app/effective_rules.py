@@ -4,8 +4,8 @@ import logging
 logger = logging.getLogger('cloudsaver.analysis.rules')
 
 
-def enabled_rule_ids_for_tenant(tenant_id: str) -> set[str] | None:
-    """Return enabled rule ids, or None when identity is unavailable (scan all rules)."""
+def policy_for_tenant(tenant_id: str) -> dict | None:
+    """Return the frozen policy input; identity-managed callers fail closed on None."""
     from app.identity_client import IdentityUnavailable, shared_client
 
     try:
@@ -27,4 +27,11 @@ def enabled_rule_ids_for_tenant(tenant_id: str) -> set[str] | None:
     ids = payload.get('enabled_rule_ids')
     if not isinstance(ids, list):
         return None
-    return {str(r) for r in ids}
+    if any(not isinstance(value, str) for value in ids):
+        return None
+    return payload
+
+
+def enabled_rule_ids_for_tenant(tenant_id: str) -> set[str] | None:
+    policy = policy_for_tenant(tenant_id)
+    return set(policy['enabled_rule_ids']) if policy is not None else None

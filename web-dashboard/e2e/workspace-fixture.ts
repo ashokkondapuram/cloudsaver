@@ -35,6 +35,9 @@ export async function mockWorkspace(page:Page,options:{role?:string;count?:numbe
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
     if(path==='/api/v1/me')response={name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
+    else if(path===`/api/v1/scans/${scanId}/resources`)response={scan_id:scanId,observed_at:scanTime,total:0,items:[],summary:{total:0,ai_status:{},ai_risk:{},decision:{},review_priority:{}}};
+    else if(path==='/api/v1/rules/effective')response={version:1,items:[]};
+    else if(path.startsWith('/api/v1/services/'))response={latest:null,history:[],resources:[]};
     else if(path==='/api/v1/scans')response=[current];
     else if(path==='/api/v1/settings')response={editable:false,settings:{tenant_id:tenantId,name:'Interface QA workspace',version:1,plan_tier:'GROWTH',subscription_ids:[subscriptionId],aws_accounts:[],gcp_projects:[],kubernetes_clusters:[],schedule:{frequency:'manual'},alerts:{enabled:false,channel:null,webhook_configured:false}},limits:{max_subscriptions:20,allowed_scan_frequencies:['manual','daily'],can_dispatch_automated_alerts:true},platform:null,identity:{identity_mode:'managed_identity',azure_access:'federated',aws_external_id:tenantId}};
     else if(path==='/api/v1/ai/targets')response={enabled:!!options.ai,hourly_attempt_limit:10,targets:options.ai?[{target_id:'approved-review',provider:'azure',model:'operator-model'}]:[]};

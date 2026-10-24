@@ -26,7 +26,7 @@ def setup_stack(account='123456789012'):
 def test_aws_complete_pagination_and_account_validation():
     stack, stubs, session = setup_stack()
     with stack:
-        first = {'Filters':[{'Name':'status','Values':['available']}], 'MaxResults':500}
+        first = {'MaxResults':500}
         stubs['ec2'].add_response('describe_volumes', {'Volumes':[dict(VolumeId='vol-08a9c2b4d1ef50123',State='available',Attachments=[])], 'NextToken':'next'}, first)
         stubs['ec2'].add_response('describe_volumes', {'Volumes':[dict(VolumeId='vol-0b73e512c98a34211',State='in-use',Attachments=[])]}, dict(first,NextToken='next'))
         stubs['ec2'].add_response('describe_addresses', {'Addresses':[dict(AllocationId='eipalloc-01f2a3b4c5d6e7f80'),
@@ -36,6 +36,7 @@ def test_aws_complete_pagination_and_account_validation():
         stubs['rds'].add_response('describe_db_instances', {'DBInstances':[]}, {'MaxRecords':100,'Marker':'next'})
         result = scan_account(SOURCE, session=session)
         assert len(result) == 3
+        assert len(result.inventory) == 5  # Attached volumes and associated IPs remain in inventory.
         assert {f['rule_id'] for f in result} == {'AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS'}
         assert all(f['estimated_monthly_waste_usd'] is None for f in result)
         for stub in stubs.values():

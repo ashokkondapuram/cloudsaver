@@ -634,9 +634,9 @@ def test_workspace_analysis_rules_default_enabled_and_overridable(service, clock
     live = service.effective_analysis_rules(TID)
     assert rule_id not in live['enabled_rule_ids']
     with pytest.raises(IdentityError, match='published rule from the catalog'):
-        service.update_workspace_analysis_rules(TID, {'version': 1, 'rules': [{'rule_id': 'bogus'}]}, OPERATOR)
+        service.update_workspace_analysis_rules(TID, {'version': updated['version'], 'rules': [{'rule_id': 'bogus'}]}, OPERATOR)
     with pytest.raises(StaleVersion):
-        service.update_workspace_analysis_rules(TID, {'version': 2, 'rules': [{'rule_id': rule_id, 'enabled': True}]}, OPERATOR)
+        service.update_workspace_analysis_rules(TID, {'version': 1, 'rules': [{'rule_id': rule_id, 'enabled': True}]}, OPERATOR)
 
 
 def test_knowledge_publication_lifecycle_and_pagination(service, clock):
@@ -648,7 +648,13 @@ def test_knowledge_publication_lifecycle_and_pagination(service, clock):
     rest = service.list_knowledge_publications(limit=2, cursor=page['next_cursor'])
     assert len(rest['items']) == 1 and rest['next_cursor'] is None
     pub = created[0]
-    updated = service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'published', 'quality_score': 80}, OPERATOR)
+    with pytest.raises(IdentityError, match='Independent'):
+        service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'published'}, OPERATOR)
+    technical = {'actor': 'technical', 'actor_type': 'operator', 'roles': ['KnowledgeReviewer']}
+    privacy = {'actor': 'privacy', 'actor_type': 'operator', 'roles': ['PrivacyReviewer']}
+    service.review_knowledge_publication(pub['id'], {'version': 1, 'review': 'technical'}, technical)
+    service.review_knowledge_publication(pub['id'], {'version': 2, 'review': 'privacy'}, privacy)
+    updated = service.update_knowledge_publication(pub['id'], {'version': 3, 'status': 'published', 'quality_score': 80}, OPERATOR)
     assert updated['status'] == 'published' and updated['quality_score'] == 80
     with pytest.raises(StaleVersion):
         service.update_knowledge_publication(pub['id'], {'version': 1, 'status': 'deprecated'}, OPERATOR)

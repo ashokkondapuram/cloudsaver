@@ -23,7 +23,7 @@ export function RulesTab({workspace}: Props) {
     try {
       const updated = await portal<WorkspaceAnalysisRules>(path, {
         method: 'PUT',
-        body: {version: workspace.version, rules: [{rule_id: rule.id, enabled: !rule.enabled}]},
+        body: {version: data.version, rules: [{rule_id: rule.id, enabled: !rule.enabled}]},
       });
       setData(updated);
     } catch (cause) {

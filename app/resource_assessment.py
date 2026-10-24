@@ -73,7 +73,7 @@ def merge(key, findings, *, observed_at=None, now=None):
         evidence_gap_codes=sorted({c['code'] for c in merged_checks if c['status'] == 'unknown'}),
         pillars=pillars, guardrails=guardrails,
         evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
-        retail_estimate_usd=float(sum(amounts).quantize(Decimal('0.01'))) if amounts else None,
+        retail_estimate_usd=float(max(amounts).quantize(Decimal('0.01'))) if amounts else None,
         billed_cost_usd=None, realizable_savings_usd=None, automatic_execution=False)
     context = dict(
         resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,

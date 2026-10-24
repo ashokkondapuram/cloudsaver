@@ -243,6 +243,33 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     def selected_params(request, names):
         return {k: v for k, v in request.query_params.items() if k in names}
 
+    @app.get('/api/v1/rules/effective')
+    async def effective_rules(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/rules/effective', authorization)
+
+    @app.post('/api/v1/rules/preview')
+    async def preview_rules(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post('/api/v1/rules/preview', request, authorization)
+
+    @app.put('/api/v1/rules/overrides')
+    async def save_rules(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('PUT', targets['scanner'], '/api/v1/rules/overrides', authorization,
+                              json=await bounded_json(request), transport=transport)
+
+    @app.get('/api/v1/services/{service}')
+    async def service_workspace(service: str, row=Depends(allowed), authorization: str = Header()):
+        if service not in ('disks', 'public-ips', 'virtual-machines', 'app-service-plans'):
+            raise HTTPException(404, 'Service not found')
+        return await forward('GET', 'scanner', f'/api/v1/services/{service}', authorization)
+
+    @app.get('/api/v1/services/{service}/comparison')
+    async def service_comparison(service: str, before: UUID, after: UUID, row=Depends(allowed), authorization: str = Header()):
+        if service not in ('disks', 'public-ips', 'virtual-machines', 'app-service-plans'):
+            raise HTTPException(404, 'Service not found')
+        return await forward('GET', 'scanner', f'/api/v1/services/{service}/comparison', authorization,
+                             {'before': str(before), 'after': str(after)})
+
     @app.get('/api/v1/scans/{scan_id}/resources')
     async def resources(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources', authorization, selected_params(request, resource_filters))

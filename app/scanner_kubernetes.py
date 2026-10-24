@@ -7,6 +7,7 @@ import os
 from app.cloud_http import JSONReader
 from app.cloud_scope import NAME, POD_NAME, matches, validate_finding_scope
 from app.scanner import ScanError
+from app.inventory import FindingBatch
 
 WINDOW_HOURS = 336
 STEP = 3600
@@ -97,7 +98,14 @@ def scan_cluster(source, *, reader=None, now=None):
                         unit='cores' if dimension == 'cpu' else 'bytes'))
                 validate_finding_scope(result, {'kubernetes_clusters': [source]})
                 findings.append(result)
-        return findings
+        inventory = []
+        for namespace, pod, container in sorted(set().union(*(set(value) for value in series.values()))):
+            inventory.append(dict(cloud_provider='kubernetes', scope_id=cluster, subscription_id=cluster,
+                inventory_rule_id='K8S_CPU_OVERSIZED',
+                resource_id=f'k8s://{cluster}/namespaces/{namespace}/pods/{pod}/containers/{container}',
+                resource_name=container, resource_group=namespace, resource_type='kubernetes.io/Container',
+                evidence={'source': 'Prometheus query_range', 'inventory_basis': 'metrics_visible_containers'}))
+        return FindingBatch(findings, inventory, basis='metrics_visible_containers')
     except ScanError:
         raise
     except Exception:

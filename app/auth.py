@@ -246,6 +246,10 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         if mode == 'entra':
             return await run_in_threadpool(entra, token)
         result = await run_in_threadpool(workspace, token, client_ip.get(), request_id.get())
+        if (result.get('plan') or {}).get('access_suspended') is True:
+            if not (request.url.path.startswith('/api/v1/customer/') or request.url.path.startswith('/api/v1/billing/')
+                    or request.url.path == '/api/v1/me'):
+                raise HTTPException(403, 'Product access is suspended by billing policy. Security and billing administration remain available.')
         if result.get('allowed_providers') is not None or result.get('scope_restrictions'):
             source = next((t for t in _tenants(settings) if t['tenant_id'] == result['tenant_id']), result)
             route = request.scope.get('route')

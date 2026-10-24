@@ -139,8 +139,13 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             if completed and completed['status'] == 'completed':
                 return dict(job_id=job_id, status='completed', scan_id=completed['scan_id'])
             raise TerminalJob('Job exhausted its durable attempt limit')
-        from app.effective_rules import enabled_rule_ids_for_tenant
-        rule_ids = enabled_rule_ids_for_tenant(tenant_id)
+        from app.effective_rules import policy_for_tenant
+        from app.config import key_verifier
+        policy = policy_for_tenant(tenant_id)
+        rule_ids = set(policy['enabled_rule_ids']) if policy is not None else None
+        if key_verifier() == 'identity' and policy is None:
+            from app.scanner import ScanError
+            raise ScanError('Analysis policy is unavailable; no scan was saved.')
         inventory = []
         if scanner:
             scanned = scanner(tenant)
@@ -161,15 +166,28 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             sub = str(UUID(finding['subscription_id']))
             if sub not in tenant['subscription_ids'] or not finding['resource_id'].lower().startswith(f'/subscriptions/{sub}/'):
                 raise UnauthorizedJob('Scanner returned an unauthorized resource')
-        known = all(f.get('estimated_monthly_waste_usd') is not None for f in findings)
         from app.multi_cloud import scope_fingerprint
+        from app.analysis_rules import evaluate_inventory, RULES, VERSION
+        from app.inventory import coverage
+        from app.pricing import opportunity_totals
+        observed_at = datetime.now(timezone.utc).isoformat()
+        policies = {item['id']: item for item in (policy or {}).get('items', [])}
+        if rule_ids is not None:
+            for rid, *_ in RULES:
+                policies.setdefault(rid, {'enabled': rid in rule_ids})
+        outcomes = evaluate_inventory(inventory, policies=policies, observed_at=observed_at)
+        opportunity = opportunity_totals(findings)
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
             total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
             cloud_providers=['azure'],
             scope_fingerprint=scope_fingerprint(tenant, ['azure']),
-            total_monthly_waste_usd=round(sum(f['estimated_monthly_waste_usd'] for f in findings), 2) if known and findings else None,
+            total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
+            opportunity_summary=opportunity, rule_evaluations=outcomes,
+            rule_manifest={'version': VERSION, 'policies': policies, 'workspace_version': (policy or {}).get('version'),
+                           'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None},
+            coverage=coverage(inventory, findings, outcomes),
         )).model_dump()
         heartbeat.ensure_owned()
         repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token, notification_targets=notification_targets)
