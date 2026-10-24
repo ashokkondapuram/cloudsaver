@@ -83,6 +83,7 @@ services:
     command: [python, -m, alembic, upgrade, head]
     environment:
       CLOUDSAVER_MIGRATION_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set URL-safe POSTGRES_PASSWORD in .env}@postgres:5432/cloudsaver
+      CLOUDSAVER_DB_PASSWORD: ${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}
       CLOUDSAVER_REGISTRY_EXPORT_PASSWORD: ${CLOUDSAVER_REGISTRY_EXPORT_PASSWORD:-}
     depends_on:
       postgres: {condition: service_healthy}

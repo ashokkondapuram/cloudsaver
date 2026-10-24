@@ -98,6 +98,36 @@ docker compose --env-file .\.env config --quiet
 
 If the copied template also has blank service tokens, use the same Docker command with `--add-identity`, then repeat the platform `--add-callers ../.env` command before starting services. None of these helpers changes passwords stored in an existing PostgreSQL volume.
 
+### Migration fails: role "cloudsaver_app" does not exist
+
+Read the actual migration error before retrying:
+
+```powershell
+docker compose --env-file .\.env logs --no-color --tail=120 migrate
+```
+
+If the log reports `psycopg.errors.UndefinedObject: role "cloudsaver_app" does not exist`, PostgreSQL is reachable but its application-role initialization did not finish. PostgreSQL only runs `/docker-entrypoint-initdb.d/` automatically when its data directory is empty; restarting a partially initialized volume does not rerun those scripts.
+
+With the latest source, rebuild the Python service image and retry the migration. It creates a **missing** restricted application role from `CLOUDSAVER_DB_PASSWORD` and initializes the legacy scan store before applying schema grants. Existing role passwords and attributes are preserved. Unsafe existing role attributes stop the migration for administrator review.
+
+```powershell
+docker compose --env-file .\.env build migrate
+docker compose --env-file .\.env run --rm migrate
+# Continue only after the migration succeeds.
+docker compose --env-file .\.env up -d
+```
+
+For an older image, when the log confirms that the role is missing, run its installed initialization script once before retrying:
+
+```powershell
+docker compose --env-file .\.env exec -T postgres sh /docker-entrypoint-initdb.d/00-init.sh
+# Continue only if initialization succeeds.
+docker compose --env-file .\.env run --rm migrate
+docker compose --env-file .\.env up -d
+```
+
+These steps retain database records and volumes. Do **not** use `docker compose down -v` to repair this error. Keep the original credentials for populated databases. A password-authentication error is a different problem: restore the credentials that match the existing roles rather than rerunning initialization. Redact passwords and credential-bearing URLs before sharing logs.
+
 ### Upgrade an existing installation
 
 For an existing installation, apply platform revision `i0013_multicloud_analysis_catalog` and core revision `0019_multicloud_governance_and_pillars` using their schema-owner migration jobs. Rebuild the stack and remove the obsolete tenant/analytics/notification containers with `docker compose up -d --remove-orphans` after checking this deployment's orphan list. This does not remove database volumes. The core service now owns the directory projector; only one core replica should run it.

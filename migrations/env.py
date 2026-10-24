@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, pool, text
 from sqlalchemy.engine import make_url
 
 from database.models import Base
+from database.bootstrap import ensure_database_bootstrap
 
 target_metadata = Base.metadata
 raw_url = os.environ.get('CLOUDSAVER_MIGRATION_URL')
@@ -31,5 +32,7 @@ else:
         connection.rollback()
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
         with context.begin_transaction():
+            ensure_database_bootstrap(connection.connection.driver_connection,
+                                      os.environ.get('CLOUDSAVER_DB_PASSWORD'))
             context.run_migrations()
     engine.dispose()
