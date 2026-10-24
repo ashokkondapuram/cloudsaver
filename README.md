@@ -33,8 +33,11 @@ Tenant isolation uses PostgreSQL forced RLS and scoped application queries. Do n
 Use the existing deployment configuration and the separate platform project. `.env.example` documents non-secret settings and required secret references. Do not commit `.env`, cloud credentials or workspace keys.
 
 ```bash
-cp .env.example .env
-# Configure reviewed workspace scopes, database roles and platform caller credentials.
+# New installation: generate private env files rather than copying blank templates.
+python3 scripts/setup_compose.py
+(cd platform && python3 scripts/setup_platform.py)
+(cd platform && python3 scripts/setup_platform.py --add-callers ../.env)
+# Configure reviewed workspace scopes and identity bindings.
 make platform-up
 make build
 docker compose run --rm migrate
@@ -43,6 +46,15 @@ make status
 ```
 
 Open `http://localhost:3000` and connect with your authorized workspace credential or configured human identity. In Settings, review scopes, billing, rules, processor approvals and delegated access before scanning or enabling inference.
+
+If you already copied `.env.example` into `.env` for a **new, empty database**, fill its blank database passwords without replacing other settings:
+
+```bash
+python3 scripts/setup_compose.py --init-db-passwords
+docker compose --env-file .env config --quiet
+```
+
+An existing PostgreSQL volume needs its original `POSTGRES_PASSWORD` and `CLOUDSAVER_DB_PASSWORD`. Editing `.env` does not change database role passwords. Recover those existing values from your deployment's secret store instead of initializing replacements. Run Compose from the repository root or supply its `.env` path explicitly.
 
 For an existing installation, apply platform revision `i0013_multicloud_analysis_catalog` and core revision `0019_multicloud_governance_and_pillars` using their schema-owner migration jobs. Rebuild the stack and remove the obsolete tenant/analytics/notification containers with `docker compose up -d --remove-orphans` after checking this deployment's orphan list. This does not remove database volumes. The core service now owns the directory projector; only one core replica should run it.
 

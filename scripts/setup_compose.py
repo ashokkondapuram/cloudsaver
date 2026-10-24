@@ -2,6 +2,7 @@
 
   python scripts/setup_compose.py                  create a new .env (never overwrites)
   python scripts/setup_compose.py --add-identity   add missing identity caller tokens
+  python scripts/setup_compose.py --init-db-passwords fill blank DB passwords for a new database
   python scripts/setup_compose.py --cutover        make identity-service authoritative
   python scripts/setup_compose.py --prune-platform remove settings that moved to platform/.env
   python scripts/setup_compose.py --caller-digests print caller token SHA-256 digests for the platform
@@ -14,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 from pathlib import Path
 
@@ -98,6 +100,29 @@ def add_identity():
     print_digests(lines)
 
 
+def init_db_passwords():
+    """Repair a copied template for first boot; never rotate a configured password.
+
+    This only edits .env. Existing database roles require their original credentials.
+    """
+    if not path.exists():
+        raise SystemExit('No .env found; run python3 scripts/setup_compose.py first. No file was changed.')
+    lines = read_env()
+    keys = ('POSTGRES_PASSWORD', 'CLOUDSAVER_DB_PASSWORD')
+    for key in keys:
+        if sum(name_of(line) == key for line in lines) > 1:
+            raise SystemExit('Duplicate database password settings; resolve them manually. No file was changed.')
+    current = values_of(lines)
+    missing = [key for key in keys if key not in current or re.fullmatch(r'''(?:''|""|)\s*(?:\#.*)?''', current[key].strip())]
+    if not missing:
+        print('Database passwords are already configured. No file was changed.')
+        return
+    write_env([line for line in lines if name_of(line) not in missing]
+              + [f'{key}={secrets.token_hex(32)}' for key in missing])
+    print('Initialized blank database settings: ' + ', '.join(missing))
+    print('New database only: this does not change passwords in an existing PostgreSQL volume.')
+
+
 def cutover():
     lines = read_env()
     if not set(TOKENS) <= names(lines):
@@ -156,12 +181,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--add-identity', action='store_true')
+    group.add_argument('--init-db-passwords', action='store_true',
+                       help='Fill missing/blank DB passwords for a new database; preserve existing values')
     group.add_argument('--cutover', action='store_true')
     group.add_argument('--prune-platform', action='store_true')
     group.add_argument('--caller-digests', action='store_true')
     args = parser.parse_args()
     if args.add_identity:
         add_identity()
+    elif args.init_db_passwords:
+        init_db_passwords()
     elif args.cutover:
         cutover()
     elif args.prune_platform:

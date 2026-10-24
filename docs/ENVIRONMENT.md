@@ -31,12 +31,15 @@ python3 scripts/setup_compose.py
 | Command | Purpose |
 | --- | --- |
 | `python3 scripts/setup_compose.py --add-identity` | Add missing `CLOUDSAVER_IDENTITY_TOKEN_*` entries |
+| `python3 scripts/setup_compose.py --init-db-passwords` | For a new, empty database: fill missing/blank root DB passwords, preserve configured values, and keep `.env` private |
 | `python3 scripts/setup_compose.py --caller-digests` | Print digests for `PLATFORM_IDENTITY_CALLERS` |
 | `python3 scripts/setup_compose.py --cutover` | Set workspace-key verifier to identity and directory mode to cutover |
 | `python3 scripts/setup_compose.py --prune-platform` | Remove platform-owned keys from root `.env` after `platform/.env` exists |
 | `platform/scripts/setup_platform.py --migrate-from ../.env` | Move 1.2 platform settings from CloudSaver `.env` into `platform/.env` |
 
 **Start order (Docker):** platform first (`make platform-up`), then CloudSaver (`make up`). The platform compose project creates the external network `platform-link`.
+
+If Compose reports that `CLOUDSAVER_DB_PASSWORD` or `POSTGRES_PASSWORD` is missing, its root `.env` is absent, contains blank template entries, or is not being selected. For a new installation, generate `.env` with the setup script above. For a copied template and a new empty database, use `--init-db-passwords`, then validate with `docker compose --env-file .env config --quiet`. The helper never prints passwords or replaces a configured value. It does not rotate existing PostgreSQL roles: an existing volume requires the passwords used when it was initialized, recovered from your deployment's secret store.
 
 ---
 

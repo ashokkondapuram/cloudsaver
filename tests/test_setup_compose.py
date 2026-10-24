@@ -40,6 +40,40 @@ def test_blank_agent_caller_placeholder_is_provisioned_without_printing_secret(e
     assert configured['CLOUDSAVER_IDENTITY_TOKEN_AGENT'] not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize('blank', ['', "''", '"" # copied template'])
+def test_init_db_passwords_repairs_blanks_without_rotating_or_disclosing_credentials(env, capsys, blank):
+    existing = secrets.token_hex(32)
+    env.write_text(f'# keep this configuration\nPOSTGRES_PASSWORD={existing}\nCLOUDSAVER_DB_PASSWORD={blank}\nCLOUDSAVER_TENANTS=[]\n')
+    setup.init_db_passwords()
+    configured = values(env)
+    assert configured['POSTGRES_PASSWORD'] == existing
+    assert len(configured['CLOUDSAVER_DB_PASSWORD']) == 64
+    int(configured['CLOUDSAVER_DB_PASSWORD'], 16)
+    assert mode(env) == 0o600 and '# keep this configuration' in env.read_text()
+    output = capsys.readouterr().out
+    assert existing not in output and configured['CLOUDSAVER_DB_PASSWORD'] not in output
+    before = env.read_bytes()
+    setup.init_db_passwords()
+    assert env.read_bytes() == before and 'No file was changed' in capsys.readouterr().out
+
+
+def test_init_db_passwords_adds_absent_keys_and_refuses_ambiguous_existing_values(env):
+    env.write_text('CLOUDSAVER_TENANTS=[]\n')
+    setup.init_db_passwords()
+    assert all(len(values(env)[name]) == 64 for name in ('POSTGRES_PASSWORD', 'CLOUDSAVER_DB_PASSWORD'))
+    env.write_text('POSTGRES_PASSWORD=original\nPOSTGRES_PASSWORD=\n')
+    before = env.read_bytes()
+    with pytest.raises(SystemExit, match='Duplicate'):
+        setup.init_db_passwords()
+    assert env.read_bytes() == before
+
+
+def test_init_db_passwords_requires_an_existing_env(env):
+    with pytest.raises(SystemExit, match='No .env found'):
+        setup.init_db_passwords()
+    assert not env.exists()
+
+
 def test_create_generates_only_cloudsaver_settings_and_prints_digests(env, capsys):
     setup.create()
     created = values(env)
