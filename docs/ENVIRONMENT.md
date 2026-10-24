@@ -193,6 +193,8 @@ Keyless access is configured once per stack; workspace bindings live in the plat
 
 ## Platform database and Redis (`platform/.env`)
 
+An existing platform volume keeps its stored role passwords when containers are rebuilt. Restore the original database secrets if possible. To intentionally align owner/app passwords with the current environment without replacing data, follow the [platform migration recovery procedure](../README.md#platform-migration-fails-password-authentication-failed-for-identity_owner). The database helper changes existing passwords only with the explicit `--reset-passwords` flag.
+
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `PLATFORM_DB_PASSWORD` | Yes | Postgres superuser |

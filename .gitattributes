@@ -1,0 +1,3 @@
+# PostgreSQL entrypoint scripts execute inside Linux containers, including on Windows.
+*.sh text eol=lf
+*.sql text eol=lf

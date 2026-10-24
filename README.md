@@ -128,6 +128,39 @@ docker compose --env-file .\.env up -d
 
 These steps retain database records and volumes. Do **not** use `docker compose down -v` to repair this error. Keep the original credentials for populated databases. A password-authentication error is a different problem: restore the credentials that match the existing roles rather than rerunning initialization. Redact passwords and credential-bearing URLs before sharing logs.
 
+### Platform migration fails: password authentication failed for identity_owner
+
+`identity-migrate` uses `PLATFORM_DB_OWNER_PASSWORD` from **`platform/.env`**, separately from the CloudSaver database credentials in the root `.env`. The platform retains the PostgreSQL volume `cloudsaver_token-db-data`. Rebuilding a container or changing environment variables does not update passwords already stored in that volume. PostgreSQL can also report an authentication failure when the requested role was never created.
+
+First restore the original `platform/.env` or its database passwords from your secret store if available. An upgrade from the older combined deployment can preserve its original settings with `platform/scripts/setup_platform.py --migrate-from ../.env`; that helper creates a new platform file and refuses to overwrite one that exists. Do not regenerate the key pepper, operator key or workspace keys during database recovery.
+
+For a local deployment where you intentionally want the database to use the owner and app passwords in your **current** `platform/.env`, update the source from `main` while preserving your environment files, then run these commands from the repository root in PowerShell. Run them one at a time and continue only after each succeeds. This briefly stops platform access and explicitly changes the two database role passwords; other clients using the old passwords will need updating.
+
+```powershell
+# Install the updated, repeatable database initialization/recovery helper.
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml build platform-db
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml stop identity-service platform-portal
+
+# Load the current environment into the database container; retain its volume.
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml up -d --wait --force-recreate platform-db
+
+# Explicitly align stored owner/app passwords with the container environment.
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml exec -T platform-db sh /docker-entrypoint-initdb.d/00-identity.sh --reset-passwords
+
+# Apply schema changes, then recreate the services with the current credentials.
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml run --rm identity-migrate
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml up -d --force-recreate identity-service platform-portal
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml ps
+```
+
+The helper creates missing roles/databases and preserves existing tables and records. Without `--reset-passwords`, it preserves existing passwords. It stops on unsafe role attributes or an unexpected database owner rather than silently changing them. Passwords are read inside the database container; do not paste them into terminal commands or share environment files. This does not change the PostgreSQL administrator password, identity key pepper or portal credentials.
+
+If your database uses custom local administrator authentication, use your established DBA access procedure; do not weaken authentication to run this helper. Keep database backups and never use `down -v` as a password repair. If migration still fails, inspect:
+
+```powershell
+docker compose --env-file .\platform\.env -f .\platform\compose.yaml logs --no-color --tail=120 platform-db identity-migrate
+```
+
 ### Upgrade an existing installation
 
 For an existing installation, apply platform revision `i0013_multicloud_analysis_catalog` and core revision `0019_multicloud_governance_and_pillars` using their schema-owner migration jobs. Rebuild the stack and remove the obsolete tenant/analytics/notification containers with `docker compose up -d --remove-orphans` after checking this deployment's orphan list. This does not remove database volumes. The core service now owns the directory projector; only one core replica should run it.
