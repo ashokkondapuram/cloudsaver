@@ -10,6 +10,10 @@ atomic token reservations, metadata diagnostics, typed resource relationships an
 See [resource analysis and AI Foundry activation](docs/RESOURCE_ANALYSIS_FOUNDRY_IMPLEMENTATION.md)
 for configuration, migrations, verification and supported boundaries.
 
+Kubernetes federation now adds API inventory, guarded five-minute analysis, source-health provenance,
+cross-source conflict detection and a dedicated `/kubernetes` workspace. See
+[Kubernetes setup and implementation boundaries](docs/KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md).
+
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
 release applies the new v1.0.0 master guide to the latest

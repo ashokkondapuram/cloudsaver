@@ -25,8 +25,8 @@ class TimeSeriesEvidenceContract:
 
     def __post_init__(self):
         if (self.aggregation not in ('P95', 'P99', 'MAX', 'SUM') or self.interval_minutes != 5
-                or self.window_days != 30 or not .95 <= self.min_coverage_ratio <= 1
-                or not 5 <= self.max_gap_minutes <= 60 or self.min_resource_age_days < 30):
+                or not 14 <= self.window_days <= 30 or not .95 <= self.min_coverage_ratio <= 1
+                or not 5 <= self.max_gap_minutes <= 60 or self.min_resource_age_days < self.window_days):
             raise ValueError('Unsupported telemetry contract')
 
 

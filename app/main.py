@@ -71,6 +71,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     api.include_router(customer_access_router(current_tenant))
     from app.service_analysis_api import create_router as service_analysis_router
     api.include_router(service_analysis_router(store, current_tenant))
+    from app.kubernetes_api import create_router as kubernetes_router
+    api.include_router(kubernetes_router(store, current_tenant))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
@@ -215,6 +217,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             from app.dependencies import canonical_inventory, group_opportunities
             observation_time = datetime.now(timezone.utc).isoformat()
             inventory = canonical_inventory(inventory, observation_time)
+            from app.collectors.provenance import compact
+            source_ledger = compact(inventory, enriched_findings, observation_time)
             enriched_findings = group_opportunities(enriched_findings, inventory)
             from app.pricing import opportunity_totals
             opportunity = opportunity_totals(enriched_findings)
@@ -226,7 +230,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
             from app.inventory import coverage, coverage_manifest
             policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
             if rule_ids is not None:
-                for rid, *_ in RULES:
+                from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
+                for rid, *_ in (*RULES, *KUBERNETES_RULES):
                     policies.setdefault(rid, {'enabled': rid in rule_ids})
             evaluations = evaluate_inventory(inventory, observed_at=observation_time, policies=policies)
             result = dict(
@@ -242,6 +247,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 realizable_monthly_savings_usd=realizable_savings,
                 findings=enriched_findings,
                 inventory=inventory,
+                source_ledger=source_ledger,
                 opportunity_summary=opportunity,
                 rule_evaluations=evaluations,
                 rule_manifest={'version': rule_version, 'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None,

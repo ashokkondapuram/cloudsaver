@@ -173,10 +173,13 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         from app.pricing import opportunity_totals
         observed_at = datetime.now(timezone.utc).isoformat()
         inventory = canonical_inventory(inventory, observed_at)
+        from app.collectors.provenance import compact
+        source_ledger = compact(inventory, findings, observed_at)
         findings = group_opportunities(findings, inventory)
         policies = {item['id']: item for item in (policy or {}).get('items', [])}
         if rule_ids is not None:
-            for rid, *_ in RULES:
+            from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
+            for rid, *_ in (*RULES, *KUBERNETES_RULES):
                 policies.setdefault(rid, {'enabled': rid in rule_ids})
         outcomes = evaluate_inventory(inventory, policies=policies, observed_at=observed_at)
         opportunity = opportunity_totals(findings)
@@ -184,7 +187,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(subscriptions),
             total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
-            cloud_providers=['azure'],
+            cloud_providers=['azure'], source_ledger=source_ledger,
             scope_fingerprint=scope_fingerprint(tenant, ['azure']),
             total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
             opportunity_summary=opportunity, rule_evaluations=outcomes,

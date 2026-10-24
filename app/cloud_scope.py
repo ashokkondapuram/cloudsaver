@@ -76,7 +76,18 @@ def validate_finding_scope(finding, tenant):
             'AWS_IDLE_RDS': ('aws', 'aws:rds:db'), 'GCP_UNATTACHED_DISK': ('gcp', 'compute.googleapis.com/Disk'),
             'GCP_UNASSIGNED_ADDRESS': ('gcp', 'compute.googleapis.com/Address'), 'GCP_IDLE_CLOUD_SQL': ('gcp', 'sqladmin.googleapis.com/Instance'),
             'K8S_CPU_OVERSIZED': ('kubernetes', 'kubernetes.io/Container'), 'K8S_MEMORY_OVERSIZED': ('kubernetes', 'kubernetes.io/Container')}
-        if types.get(finding.get('rule_id')) != (provider, finding.get('resource_type')):
+        if provider == 'kubernetes':
+            from app.kubernetes_rules import DEFINITIONS
+            kind = finding.get('resource_type', '').removeprefix('kubernetes.io/')
+            permitted = {rule[0]: rule[1] for rule in DEFINITIONS}
+            valid_type = (types.get(finding.get('rule_id')) == (provider, finding.get('resource_type'))
+                          or kind in permitted.get(finding.get('rule_id'), ()))
+            if finding.get('rule_id') == 'K8S_INVENTORY':
+                from app.collectors.kubernetes import RESOURCES
+                valid_type = kind in {row[1] for row in RESOURCES} | {'Container'}
+            if not finding.get('resource_type', '').startswith('kubernetes.io/') or not valid_type:
+                raise ValueError('Finding rule and Kubernetes type are inconsistent')
+        elif types.get(finding.get('rule_id')) != (provider, finding.get('resource_type')):
             raise ValueError('Finding rule and cloud resource type are inconsistent')
     if provider == 'azure':
         if finding.get('rule_id', '').startswith(('AWS_', 'GCP_', 'K8S_')):
@@ -106,7 +117,14 @@ def validate_finding_scope(finding, tenant):
                 expected_region = match[4] if match[3] == 'regions' else match[4].rsplit('-', 1)[0]
                 valid = valid and finding['region'] == expected_region
     elif provider == 'kubernetes':
-        match = re.fullmatch(r'k8s://(' + NAME + r')/namespaces/(' + NAME + r')/pods/(' + POD_NAME + r')/containers/(' + NAME + r')', rid)
+        kind=finding['resource_type'].split('/')[-1]
+        if kind=='Container':
+            pattern=r'k8s://(' + NAME + r')/namespaces/(' + NAME + r')/pods/(' + POD_NAME + r')/containers/(' + NAME + r')'
+        elif kind in ('Node','Namespace','PersistentVolume','StorageClass'):
+            pattern=r'k8s://(' + NAME + r')/'+kind.lower()+r's/('+POD_NAME+r')'
+        else:
+            pattern=r'k8s://(' + NAME + r')/namespaces/(' + NAME + r')/'+kind.lower()+r's/('+POD_NAME+r')'
+        match = re.fullmatch(pattern, rid)
         valid = bool(match and scope == match[1] and finding['subscription_id'] == scope
                      and scope in {c['cluster_id'] for c in tenant.get('kubernetes_clusters', [])})
     else:

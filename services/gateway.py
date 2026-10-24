@@ -254,6 +254,14 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'q', 'limit', 'offset')
     resource_key = Path(pattern=r'^[a-f0-9]{64}$')
 
+    @app.get('/api/v1/scans/{scan_id}/kubernetes')
+    async def kubernetes_view(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/kubernetes', authorization)
+
+    @app.post('/api/v1/scans/{scan_id}/kubernetes/patch-preview')
+    async def kubernetes_patch(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/kubernetes/patch-preview', request, authorization)
+
     def selected_params(request, names):
         return {k: v for k, v in request.query_params.items() if k in names}
 

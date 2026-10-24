@@ -106,10 +106,9 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
                    for r in inventory_in_scope if r.get('resource_id')}
     def narrowed_dependencies(row):
         provider = row.get('cloud_provider', 'azure')
-        normalize = lambda value: value.lower() if provider == 'azure' else value
         return [edge for edge in row.get('dependency_refs', []) if isinstance(edge, dict)
-                and all(isinstance(edge.get(field), str) and (provider, normalize(edge[field])) in visible_ids
-                        for field in ('from_resource_id', 'to_resource_id'))]
+                and all(isinstance(edge.get(field), str) and (edge.get(side+'_provider',provider), edge[field].lower() if edge.get(side+'_provider',provider)=='azure' else edge[field]) in visible_ids
+                        for side,field in (('from','from_resource_id'),('to','to_resource_id')))]
     dependencies_changed = any('dependency_refs' in row and narrowed_dependencies(row) != row['dependency_refs'] for row in inventory_in_scope)
     evaluations = scan.get('rule_evaluations', [])
     evaluations_in_scope = [r for r in evaluations if r.get('cloud_provider', 'azure') in allowed and finding_in_scope(r, scopes)]
@@ -126,6 +125,7 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
     opportunity = opportunity_totals(in_scope)
     realizable = opportunity_totals(in_scope, realized=True)
     inventory_in_scope = [dict(row, dependency_refs=narrowed_dependencies(row)) if 'dependency_refs' in row else row for row in inventory_in_scope]
+    visible_scopes={(row.get('cloud_provider','azure'),row.get('scope_id') or row.get('subscription_id')) for row in inventory_in_scope}
     return dict(
         scan, findings=in_scope, inventory=inventory_in_scope, total_items_found=len(inventory_in_scope) if inventory else len(in_scope),
         cloud_providers=sorted(p for p in (scan.get('cloud_providers') or ['azure']) if p in allowed),
@@ -134,6 +134,8 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
         realizable_monthly_savings_usd=realizable['total_monthly_opportunity_usd'],
         opportunity_summary=opportunity,
         coverage=None, coverage_manifest=None, rule_evaluations=evaluations_in_scope,
+        source_ledger=[source for source in scan.get('source_ledger', [])
+                       if (source.get('provider'),source.get('scope_id')) in visible_scopes],
         subscriptions_scanned_scope='filtered_count_unavailable',
         provider_filtered=True, scope_filtered=bool(scopes))
 

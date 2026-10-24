@@ -95,6 +95,8 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
         return finish('disabled_by_policy', 'Unavailable under the frozen workspace policy.')
     if rule_id in resource.get('unsupported_rule_ids', []):
         return finish('unsupported_by_collector', 'This collector does not acquire the required evidence contract.')
+    if resource.get('reconciliation_status')=='source_conflict':
+        return finish('insufficient_evidence','Conflicting inventory sources require reconciliation before this rule can be evaluated.')
     observed = moment(observed_at)
     if not observed or not 0 <= (now - observed).total_seconds() < 86400:
         return output
@@ -175,4 +177,5 @@ def evaluate_inventory(inventory, *, policies=None, observed_at=None, now=None):
                         resource_id=resource['resource_id'], subscription_id=resource.get('subscription_id'),
                         outcome='evaluation_failed', reason='Invalid evidence or policy; inspection is required.',
                         automatic_execution=False, estimated_savings=None))
-    return outcomes
+    from app.kubernetes_rules import evaluate_inventory as evaluate_kubernetes
+    return outcomes + evaluate_kubernetes(inventory, policies=policies, observed_at=observed_at, now=now)

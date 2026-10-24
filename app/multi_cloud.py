@@ -40,7 +40,7 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
             collectors.append(lambda bound=bound:scan_gcp_project(bound))
     if 'kubernetes' in providers:
         for source in tenant.get('kubernetes_clusters',[]):
-            collectors.append(lambda source=dict(source):scan_cluster(source))
+            collectors.append(lambda source=dict(source,tenant_id=tenant['tenant_id']):scan_cluster(source))
     findings=[]
     inventory = []
     if collectors:

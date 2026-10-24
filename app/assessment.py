@@ -19,6 +19,12 @@ def resource_key(finding):
 
 def category(finding):
     kind = finding.get('resource_type', '').lower()
+    if kind.endswith(('/persistentvolumeclaim','/persistentvolume','/storageclass')):
+        return 'storage'
+    if kind.endswith(('/service','/endpointslice')) and finding.get('cloud_provider')=='kubernetes':
+        return 'network'
+    if finding.get('cloud_provider')=='kubernetes' and kind.startswith('kubernetes.io/'):
+        return 'compute'
     if any(x in kind for x in ('disk', 'volume', 'storage')):
         return 'storage'
     if any(x in kind for x in ('rds', 'sql', 'database', 'alloydb', 'aurora')):
@@ -43,6 +49,8 @@ def protection(finding):
         return re.sub(r'[^a-z0-9]', '', value.casefold())
     tags = {normalize(k): normalize(v) for k, v in tags_of(finding).items()}
     reasons = []
+    if finding.get('reconciliation_status')=='source_conflict':
+        reasons.append('SOURCE_CONFLICT')
     if any(tags.get(k) in ('true', 'yes', '1', 'enabled') for k in ('donottouch', 'donotdelete', 'retain', 'legalhold')):
         reasons.append('EXPLICIT_RETENTION')
     if any(tags.get(k) in ('drstandby', 'disasterrecoverystandby', 'activestandby', 'coldspare', 'witness', 'donottouch') for k in ('role', 'disasterrecovery', 'purpose')):
@@ -96,6 +104,25 @@ def assess(finding, *, observed_at=None, now=None):
     complete_utilization = utilization(evidence, observed_at)
     check('performance', 'UTILIZATION_WINDOW', 'observed' if complete_utilization else 'unknown',
           'Saved 14-day hourly P95 evidence has a complete collector summary; peaks and SLOs still need review.' if complete_utilization else 'Complete utilization/headroom evidence is unavailable; do not infer idle duration from stopped state.')
+    if finding.get('cloud_provider')=='kubernetes' and finding.get('resource_type','').startswith('kubernetes.io/') and isinstance(evidence.get('metrics'),dict):
+        from app.telemetry_contract import moment
+        metrics=evidence.get('metrics') or {}
+        def metric(name):
+            value=metrics.get(name) or {}
+            if not isinstance(value,dict):return None
+            end=moment(value.get('window_end'))
+            return value if value.get('sufficient') is True and end and 0 <= ((now or datetime.now(timezone.utc))-end).total_seconds() < 86400 else None
+        cpu,memory,throttle,oom,restarts=(metric(key) for key in ('cpu','memory','throttling','oom','restarts'))
+        check('performance','K8S_FIVE_MINUTE_TELEMETRY','observed' if cpu and memory else 'unknown',
+              'CPU rate and memory working-set evidence use validated 30-day five-minute windows.' if cpu and memory else 'Complete five-minute CPU and memory evidence is unavailable.',['metrics.cpu','metrics.memory'])
+        check('performance','K8S_CPU_THROTTLING','unknown' if not throttle else 'risk' if throttle['p95']>.02 else 'observed',
+              'CPU throttling above 2% blocks request reduction.' if throttle and throttle['p95']>.02 else 'Throttling requires measured five-minute evidence.',['metrics.throttling'])
+        oom_risk=oom and oom['maximum']>0
+        zero_verified=oom and restarts and oom['maximum']==0 and restarts['maximum']==restarts['minimum']
+        check('reliability','K8S_OOM_HISTORY','risk' if oom_risk else 'observed' if zero_verified else 'unknown',
+              'OOMKill evidence blocks memory reduction.' if oom_risk else 'A last termination reason alone does not prove a full zero-OOM history.',['metrics.oom','metrics.restarts'])
+        check('operations','K8S_SOURCE_RECONCILIATION','risk' if finding.get('reconciliation_status')=='source_conflict' else 'unknown',
+              'Conflicting sources require reconciliation.' if finding.get('reconciliation_status')=='source_conflict' else 'Complete cross-source state and transition agreement is unverified.',['reconciliation_status'])
     if kind in ('storage', 'database'):
         encrypted = evidence.get('encrypted')
         check('security', 'ENCRYPTION_AT_REST', 'observed' if encrypted is True else 'risk' if encrypted is False else 'unknown',

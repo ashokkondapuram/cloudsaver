@@ -20,6 +20,7 @@ export const navigation = [
   {href: '/', label: 'Overview', icon: LayoutDashboard, group: 'WORKSPACE', shortcut: 'G D'},
   {href: '/findings', label: 'Inventory & findings', icon: Blocks, group: '', shortcut: 'G F'},
   {href: '/resources', label: 'Resource analysis', icon: BrainCircuit, group: '', shortcut: 'G R'},
+  {href: '/kubernetes', label: 'Kubernetes & containers', icon: Blocks, group: ''},
   {href: '/services/disks', label: 'Service analysis', icon: Database, group: ''},
   {href: '/allocation', label: 'Cost allocation', icon: Wallet, group: ''},
   {href: '/automation', label: 'Automation', icon: FileCode2, group: 'GOVERNANCE'},

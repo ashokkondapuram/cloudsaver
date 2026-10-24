@@ -39,6 +39,7 @@ x-environment: &environment
   CLOUDSAVER_ENVIRONMENT: ${CLOUDSAVER_ENVIRONMENT:-development}
   CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
   CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
+  CLOUDSAVER_KUBERNETES_BINDINGS: ${CLOUDSAVER_KUBERNETES_BINDINGS:-[]}
   CLOUDSAVER_TRUSTED_CALLERS: api-gateway,analytics-service,notification-service
   NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,tenant-service,scanner-service,analytics-service,notification-service,identity-service,postgres,redis
   no_proxy: *internal_no_proxy

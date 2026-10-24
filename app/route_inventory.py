@@ -12,6 +12,8 @@ Classes:
 """
 
 ROUTES = {
+    ('GET', '/api/v1/scans/{scan_id}/kubernetes'): 'scoped_read',
+    ('POST', '/api/v1/scans/{scan_id}/kubernetes/patch-preview'): 'scan_write',
     ('GET', '/api/v1/rules/effective'): 'agnostic',
     ('POST', '/api/v1/rules/preview'): 'full_scope',
     ('PUT', '/api/v1/rules/overrides'): 'full_scope',

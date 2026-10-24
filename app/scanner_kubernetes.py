@@ -50,6 +50,11 @@ def _series(data, cluster, start, end):
 
 
 def scan_cluster(source, *, reader=None, now=None):
+    from app.collectors.kubernetes import binding
+    approved = binding(source.get('tenant_id'), source['cluster_id'])
+    if approved:
+        from app.collectors.federation import scan
+        return scan(source, approved, metric_reader=reader, now=now)
     cluster = source['cluster_id']
     now = now or datetime.now(timezone.utc)
     end = int(now.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0).timestamp())

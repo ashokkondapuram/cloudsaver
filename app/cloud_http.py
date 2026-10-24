@@ -5,12 +5,17 @@ from app.scanner import ScanError
 
 
 class JSONReader:
-    def __init__(self, *, token=None, credentials=None, transport=None):
+    def __init__(self, *, token=None, credentials=None, transport=None, headers_factory=None, timeout_seconds=60):
         self.token, self.credentials = token, credentials
-        self.client = httpx.Client(timeout=httpx.Timeout(60, connect=10), follow_redirects=False, transport=transport)
+        self.headers_factory = headers_factory
+        self.client = httpx.Client(timeout=httpx.Timeout(timeout_seconds, connect=min(10,timeout_seconds)), follow_redirects=False, transport=transport)
 
     def get(self, url, params=None):
         headers = {}
+        if self.headers_factory:
+            url = str(httpx.URL(url, params=params))
+            params = None
+            headers.update(self.headers_factory(url))
         if self.token:
             headers['Authorization'] = 'Bearer ' + self.token
         if self.credentials:

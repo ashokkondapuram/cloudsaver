@@ -18,3 +18,5 @@ RULE_SEED = (
 )
 from identity.analysis.contracts import DEFINITIONS
 RULE_SEED += tuple((rid, 'azure', category, kind, name, 'cost') for rid, category, kind, name, _ in DEFINITIONS)
+from identity.analysis.kubernetes import DEFINITIONS as KUBERNETES_RULES
+RULE_SEED += tuple((rid, 'kubernetes', category, kind, name, pillar) for rid,category,kind,name,pillar in KUBERNETES_RULES)
