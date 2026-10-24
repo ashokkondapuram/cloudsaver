@@ -1,6 +1,7 @@
 """Read-only Azure inventory findings. A finding is a review signal, not savings."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -106,12 +107,16 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
 
 INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
     ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
-    ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)')
+    ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)'
+    ', resourceLocation=location, managedBy=tostring(managedBy), osDiskId=tostring(properties.storageProfile.osDisk.managedDisk.id)'
+    ', dataDisks=properties.storageProfile.dataDisks, networkInterfaces=properties.networkProfile.networkInterfaces'
+    ', nicIpConfigurations=properties.ipConfigurations, serverFarmId=tostring(properties.serverFarmId)')
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
     """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
     rows = []
+    observed_at = datetime.now(timezone.utc).isoformat()
     for row in execute_pages(client, INVENTORY_QUERY, subscriptions):
         evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
         for source, target in (('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
@@ -119,6 +124,25 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
                 evidence[target] = row[source]
         if type(row.get('hostedAppCount')) is int and row['hostedAppCount'] >= 0:
             evidence['hosted_app_count'] = row['hostedAppCount']
+        edges = []
+        def edge(kind, source, target):
+            if isinstance(source, str) and isinstance(target, str) and source and target:
+                edges.append(dict(relationship=kind, from_resource_id=source, to_resource_id=target,
+                                  verification_state='verified', observed_at=observed_at))
+        kind = row['type'].lower()
+        if kind == 'microsoft.compute/disks':
+            edge('vm_to_disk', row.get('managedBy'), row['id'])
+        elif kind == 'microsoft.compute/virtualmachines':
+            edge('vm_to_disk', row['id'], row.get('osDiskId'))
+            for item in row.get('dataDisks') or []:
+                edge('vm_to_disk', row['id'], (item.get('managedDisk') or {}).get('id'))
+            for item in row.get('networkInterfaces') or []:
+                edge('vm_to_nic', row['id'], item.get('id'))
+        elif kind == 'microsoft.network/networkinterfaces':
+            for item in row.get('nicIpConfigurations') or []:
+                edge('nic_to_ip', row['id'], ((item.get('properties') or {}).get('publicIPAddress') or {}).get('id'))
+        elif kind == 'microsoft.web/sites':
+            edge('app_service_to_plan', row['id'], row.get('serverFarmId'))
         rows.append({
             'cloud_provider': 'azure',
             'resource_id': row['id'],
@@ -128,6 +152,10 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
             'subscription_id': row['subscriptionId'],
             'scope_id': row['subscriptionId'],
             'evidence': evidence,
+            'region': row.get('resourceLocation'), 'dependency_refs': edges,
+            'collector_version': 'azure-arg-2026-10-24',
+            'unsupported_rule_ids': ['AZURE_DISK_PROVISIONED_PERFORMANCE', 'AZURE_PUBLIC_IP_ASSOCIATED_IDLE',
+                                     'AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU'],
         })
     return rows
 

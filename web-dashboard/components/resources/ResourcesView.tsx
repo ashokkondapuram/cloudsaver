@@ -11,6 +11,7 @@ import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, ProviderBadge} from '../ui/shared';
 import {AIRisk, AIStatusBadge, DecisionBadge, PillarDots} from './ResourceParts';
 import {ResourceDrawer} from './ResourceDrawer';
+import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 
 type Filters = {provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string};
 const empty: Filters = {provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: ''};
@@ -58,6 +59,7 @@ function BatchDialog({open, onClose, scanId, selected, total, onCreated}: {open:
         </div>
         {count > 500 && <Notice tone="warning">A batch can include up to 500 resources. Select fewer resources to continue.</Notice>}
         <label className="ai-target-label">Approved model target<select value={target} disabled={busy} onChange={e => setTarget(e.target.value)}>{targets.targets.map(t => <option key={t.target_id} value={t.target_id}>{t.target_id} · {t.provider} · {t.model}</option>)}</select></label>
+        <AIProcessingDisclosure targets={targets} targetId={target}/>
         <p className="inline-help">Your workspace can run {limit} AI attempts per hour. {count > limit ? `This batch will take about ${Math.ceil(count / limit)} hours and resumes automatically each hour.` : 'This batch should finish within the hour.'} Resources whose evidence changes before they’re assessed are skipped.</p>
         <p className="inline-help">Only sanitized facts are sent: check codes, statuses and allowlisted settings. Resource names, IDs, raw tags and free text stay in CloudSaver. Inference can incur provider charges.</p>
         <label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} disabled={busy} onChange={e => setAck(e.target.checked)}/>I acknowledge external processing of this sanitized evidence.</label>

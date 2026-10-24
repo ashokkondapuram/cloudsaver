@@ -17,7 +17,7 @@ SCOPE_SQL = {
 }
 # jsonb columns; every other list value is a PostgreSQL array (roles, allowed_providers).
 JSON_COLUMNS = frozenset({'identity', 'scope_restrictions', 'details', 'external_customer_refs', 'entitlements',
-                          'entitlement_overrides', 'external_price_refs', 'snapshot', 'parameters'})
+                          'entitlement_overrides', 'external_price_refs', 'snapshot', 'parameters', 'policy'})
 ENDED_SQL = '(' + ','.join(f"'{s}'" for s in ENDED) + ')'
 
 
@@ -44,6 +44,13 @@ def _payment(row):
 class PostgresTx:
     def __init__(self, db):
         self.db = db
+
+    def get_ai_policy(self):
+        return dict(self._one('SELECT policy,version,updated_at,updated_by FROM directory.ai_foundry_policy WHERE id=1'))
+
+    def update_ai_policy(self, expected_version, fields):
+        row = self._update('directory.ai_foundry_policy', 'id', 1, expected_version, fields)
+        return dict(row) if row else None
 
     def _one(self, sql, params=()):
         return self.db.execute(sql, params).fetchone()

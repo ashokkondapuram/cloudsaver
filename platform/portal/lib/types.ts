@@ -35,6 +35,7 @@ export type Entitlements = {
   can_export_terraform: boolean;
   can_use_keyvault: boolean;
   can_dispatch_automated_alerts: boolean;
+  can_use_ai_advisory: boolean;
   retention_days: number;
   allowed_providers: Provider[];
   max_workspaces: number;

@@ -93,16 +93,18 @@ def normalize_tenant(raw, *, require_scope=False, allow_missing_key=False):
     active = raw.get('active', True)
     if not isinstance(active, bool):
         raise ValueError('Workspace status must be a boolean')
+    from app.foundry_config import normalize as normalize_foundry
     return dict(tenant_id=tenant_id, name=name.strip(), subscription_ids=subscriptions,
                 api_key_sha256=digest, plan_tier=tier, active=active,
                 identity=normalize_identity(raw.get('identity')),
                 schedule=normalize_schedule(raw.get('schedule'), tier),
                 alerts=normalize_alerts(raw.get('alerts')),
+                ai_foundry=normalize_foundry(raw.get('ai_foundry')),
                 version=int(raw.get('version', 0)), **sources, **projection)
 
 
 SCOPE_KEYS = ('subscription_ids', 'aws_accounts', 'gcp_projects', 'kubernetes_clusters')
-CONFIG_KEYS = SCOPE_KEYS + ('identity', 'schedule', 'alerts')
+CONFIG_KEYS = SCOPE_KEYS + ('identity', 'schedule', 'alerts', 'ai_foundry')
 
 
 def config_of(tenant):

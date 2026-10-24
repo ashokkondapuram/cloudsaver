@@ -38,6 +38,7 @@ export function ServiceWorkspace({service = 'disks'}: {service?: string}) {
       <section className="panel"><SectionTitle title="Coverage">Observed {new Date(data.latest.observed_at).toLocaleString()} · Counts may overlap across different rules.</SectionTitle>
         <dl className="settings-key-values">{['discovered_count', 'in_scope_count', 'evaluated_count', 'insufficient_evidence_count', 'excluded_count', 'unsupported_count'].map(key => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{String(data.latest!.coverage[key])}</dd></div>)}</dl>
         <p className="inline-help">Coverage describes collector-visible supported types. It does not certify every resource in the cloud account. Missing telemetry requires collector/access investigation.</p>
+        <p>Failed scopes: {Array.isArray(data.latest.coverage.failed_scopes) ? data.latest.coverage.failed_scopes.length : 'Not recorded'}.</p>
       </section>
       <section className="panel"><SectionTitle title="Rule outcomes">Original frozen policy and evidence from the selected observation.</SectionTitle>
         <table className="summary-table"><thead><tr><th>Rule</th><th>Outcome distribution</th></tr></thead><tbody>{data.latest.rule_matrix.map(rule => <tr key={rule.rule_id}><td>{rule.name}</td><td>{Object.entries(rule.outcomes).map(([key, count]) => `${key.replaceAll('_', ' ')}: ${count}`).join(' · ') || 'Not evaluated in this snapshot'}</td></tr>)}</tbody></table>

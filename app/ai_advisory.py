@@ -26,7 +26,8 @@ class Target(BaseModel):
     target_id: str = Field(pattern=r'^[a-z0-9-]{1,40}$')
     tenant_id: UUID
     provider: Literal['azure', 'aws', 'gcp']
-    model: str = Field(pattern=r'^[A-Za-z0-9._:-]{1,160}$')
+    model: str = Field(pattern=r'^[A-Za-z0-9._:/-]{1,512}$')
+    max_input_tokens: int = Field(default=4000, ge=256, le=16000, strict=True)
     max_output_tokens: int = Field(default=1800, ge=256, le=4096, strict=True)
     max_context_bytes: int = Field(default=16384, ge=2048, le=32768, strict=True)
     allowed_source_providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(default_factory=lambda: ['azure', 'aws', 'gcp', 'kubernetes'], min_length=1, max_length=4)
@@ -37,6 +38,12 @@ class Target(BaseModel):
     role_arn: str | None = None
     project: str | None = None
     service_account: str | None = None
+    api_version: str | None = Field(None, pattern=r'^20[0-9]{2}-[0-9]{2}-[0-9]{2}(?:-preview)?$')
+    deployment_sku: Literal['Standard_PAYG', 'Provisioned_PTU'] = 'Standard_PAYG'
+    azure_resource_id: str | None = Field(None, pattern=r'^/subscriptions/[0-9a-fA-F-]{36}/resourceGroups/[A-Za-z0-9_.()-]{1,90}/providers/Microsoft.CognitiveServices/accounts/[A-Za-z0-9-]{1,64}$')
+    guardrail_id: str | None = Field(None, pattern=r'^[a-z0-9]{1,64}$')
+    guardrail_version: str | None = Field(None, pattern=r'^(?:[1-9][0-9]{0,7}|DRAFT)$')
+    approved_regions: list[str] = Field(default_factory=list, max_length=100)
 
     @model_validator(mode='after')
     def binding(self):
@@ -44,7 +51,9 @@ class Target(BaseModel):
             parsed = urlsplit(self.endpoint or '')
             if (parsed.scheme != 'https' or not re.fullmatch(AZURE_HOSTS, parsed.hostname or '')
                     or parsed.port not in (None, 443) or parsed.path not in ('', '/') or parsed.query or parsed.fragment
-                    or parsed.username or parsed.password or any((self.region, self.role_arn, self.project, self.service_account))):
+                    or parsed.username or parsed.password or any((self.role_arn, self.project, self.service_account, self.guardrail_id, self.guardrail_version))
+                    or not re.fullmatch(r'[A-Za-z0-9._-]{1,160}', self.model)
+                    or (self.region is not None and not re.fullmatch(r'[a-z0-9-]{2,40}', self.region))):
                 raise ValueError('Azure requires an approved HTTPS Azure OpenAI or AI Foundry root endpoint only')
         elif self.auth != 'customer_federated':
             raise ValueError('Managed identity authentication applies to Azure targets only')
@@ -53,12 +62,20 @@ class Target(BaseModel):
                     or not re.fullmatch(r'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}', self.role_arn or '')
                     or any((self.endpoint, self.project, self.service_account))):
                 raise ValueError('Bedrock requires an operator-bound region and role ARN')
+            if not (re.fullmatch(r'[A-Za-z0-9._:-]{1,160}', self.model) or re.fullmatch(
+                    r'arn:aws:bedrock:[a-z0-9-]+:[0-9]{12}:(?:application-inference-profile|inference-profile)/[A-Za-z0-9._:-]{1,160}', self.model)):
+                raise ValueError('Choose a Bedrock model or inference profile identifier')
+            if bool(self.guardrail_id) != bool(self.guardrail_version):
+                raise ValueError('A Bedrock guardrail requires both identifier and version')
         else:
             if (not re.fullmatch(r'[a-z][a-z0-9-]{4,28}[a-z0-9]', self.project or '')
                     or not re.fullmatch(r'[a-z]+-[a-z]+[0-9]', self.region or '')
                     or not re.fullmatch(r'[a-z0-9-]{6,30}@' + re.escape(self.project or '') + r'\.iam\.gserviceaccount\.com', self.service_account or '')
-                    or any((self.endpoint, self.role_arn))):
+                    or any((self.endpoint, self.role_arn, self.guardrail_id, self.guardrail_version))
+                    or not re.fullmatch(r'[A-Za-z0-9._-]{1,160}', self.model)):
                 raise ValueError('Vertex requires an operator-bound regional project and service account')
+        if self.provider != 'azure' and any((self.api_version, self.azure_resource_id)):
+            raise ValueError('Azure deployment metadata applies only to Azure targets')
         return self
 
 
@@ -110,6 +127,8 @@ def parse_advice(raw, context):
                 value[key] = item
             return value
         result = Advice.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
+        if any(UNSAFE_TEXT.search(text) or MONEY_TEXT.search(text) for text in _strings(result.model_dump())):
+            raise ValueError('Advice contains instructions or unsupported monetary claims')
         from app.knowledge import validate_citations
         validate_citations(result.model_dump(), context)
         allowed = set(context['observed_check_codes'])
@@ -174,6 +193,7 @@ limitations (up to 3 strings naming evidence gaps). No additional properties.'''
 # Advice is review text: links, code and command lines are never accepted from the model.
 UNSAFE_TEXT = re.compile(r'https?://|www\.|```|\$\(|`[^`]+`|\b(sudo|kubectl|terraform\s+(apply|destroy|import))\b'
                          r'|\b(az|aws|gcloud)\s+[a-z0-9-]+\s+[a-z0-9-]+\s+--|\brm\s+-[rf]|resource\s+"[a-z0-9_]+"')
+MONEY_TEXT = re.compile(r'(?i)(?:[$€£]|\b(?:USD|CAD|EUR|GBP|INR|AUD|JPY|KWD))\s*[0-9]|[0-9][0-9,.]*\s*(?:USD|CAD|EUR|GBP|INR|AUD|JPY|KWD|dollars|euros)\b')
 
 
 def _strings(value):
@@ -199,7 +219,7 @@ def _load(raw, model):
             value[key] = item
         return value
     result = model.model_validate(json.loads(raw, object_pairs_hook=unique_pairs))
-    if any(UNSAFE_TEXT.search(text) for text in _strings(result.model_dump())):
+    if any(UNSAFE_TEXT.search(text) or MONEY_TEXT.search(text) for text in _strings(result.model_dump())):
         raise ValueError('AI response contained links, code or commands')
     return result
 
@@ -279,9 +299,9 @@ class CloudAdapter:
                     root = target.endpoint.rstrip('/')
                     if root.endswith('.services.ai.azure.com'):
                         # AI Foundry model inference: the deployment is named in the body.
-                        result = post_json(root + '/models/chat/completions?api-version=2024-05-01-preview', token, dict(body, model=target.model))
+                        result = post_json(root + '/models/chat/completions?api-version=' + (target.api_version or '2024-05-01-preview'), token, dict(body, model=target.model))
                     else:
-                        result = post_json(root + '/openai/deployments/' + target.model + '/chat/completions?api-version=2024-10-21', token, body)
+                        result = post_json(root + '/openai/deployments/' + target.model + '/chat/completions?api-version=' + (target.api_version or '2024-10-21'), token, body)
                 choice = result['choices'][0]
                 if choice.get('finish_reason') != 'stop' or choice['message'].get('tool_calls'):
                     raise AIError('AI response was incomplete, filtered or requested unsupported tools', 502)
@@ -291,11 +311,15 @@ class CloudAdapter:
                 from app.cloud_identity import aws_session
                 from botocore.config import Config
                 session = aws_session({'region': target.region, 'role_arn': target.role_arn, 'external_id': tenant['tenant_id']})
+                from app.foundry_diagnostics import verify_bedrock_profile
+                verify_bedrock_profile(session, target)
                 with session.client('bedrock-runtime', region_name=target.region,
                         config=Config(connect_timeout=5, read_timeout=35, retries={'total_max_attempts': 1})) as client:
+                    guardrail = {'guardrailConfig': {'guardrailIdentifier': target.guardrail_id,
+                        'guardrailVersion': target.guardrail_version}} if target.guardrail_id else {}
                     result = client.converse(modelId=target.model, system=[{'text': system}],
                         messages=[{'role': 'user', 'content': [{'text': payload}]}],
-                        inferenceConfig={'maxTokens': target.max_output_tokens, 'temperature': 0})
+                        inferenceConfig={'maxTokens': target.max_output_tokens, 'temperature': 0}, **guardrail)
                 parts = result['output']['message']['content']
                 if result.get('stopReason') != 'end_turn' or any(set(part) != {'text'} for part in parts):
                     raise AIError('AI response was incomplete, filtered or requested unsupported tools', 502)
@@ -383,9 +407,9 @@ class RedisBudget:
 
 
 class AIGateway:
-    def __init__(self, *, targets=None, enabled=None, budget=None, adapter=None, limit=None):
+    def __init__(self, *, targets=None, enabled=None, budget=None, adapter=None, limit=None, settings=None):
         self.enabled = os.getenv('CLOUDSAVER_AI_ENABLED', '').lower() == 'true' if enabled is None else enabled
-        raw = json.loads(os.getenv('CLOUDSAVER_AI_TARGETS', '[]')) if targets is None and self.enabled else (targets or [])
+        raw = json.loads(os.getenv('CLOUDSAVER_AI_TARGETS', '[]')) if targets is None else (targets or [])
         if not isinstance(raw, list) or len(raw) > 1000:
             raise ValueError('AI targets must be a bounded list')
         try:
@@ -398,19 +422,53 @@ class AIGateway:
         self.limit = int(os.getenv('CLOUDSAVER_AI_HOURLY_ATTEMPTS', '10')) if limit is None else limit
         if not 1 <= self.limit <= 100:
             raise ValueError('AI attempt limit must be between 1 and 100')
+        self.foundry = None
+        if settings is not None:
+            from app.foundry import FoundryController
+            self.foundry = FoundryController(settings, self.targets, self.budget if getattr(self.budget, 'durable', False) else None, deployment_limit=self.limit)
+
+    def _selection(self, tenant, target_id, source_provider):
+        if not self.enabled:
+            raise AIError('AI inference is disabled by the deployment operator.', 403)
+        if self.foundry is not None:
+            targets, limits = self.foundry.resolved(tenant, source_provider, target_id)
+            return targets[0], limits
+        target = next((target for target in self.targets if str(target.tenant_id) == tenant['tenant_id'] and target.target_id == target_id), None)
+        if target is None:
+            raise AIError('AI target is unavailable for this workspace', 404)
+        return target, dict(hourly=self.limit, monthly=None)
+
+    def _budget_options(self, target, limits, message, system):
+        if self.foundry is None:
+            return {}
+        # A byte bound is intentionally conservative for text tokens; include protocol framing headroom.
+        if len(json.dumps(message, ensure_ascii=True).encode()) + len(system.encode()) + 512 > target.max_input_tokens:
+            raise AIError('Evidence exceeds the conservative input-token allowance. Increase the approved limit or reduce context.', 422)
+        if not getattr(self.budget, 'durable', False):
+            raise AIError('Workspace AI budgets require the durable attempt ledger.', 503)
+        return dict(monthly_token_limit=limits['monthly'], token_reservation=target.max_input_tokens + target.max_output_tokens)
 
     def available(self, tenant):
-        return {'enabled': self.enabled, 'hourly_attempt_limit': self.limit, 'advisory_only': True, 'durable_history': bool(getattr(self.budget,'durable',False)),
+        targets, limits, reason = self.targets, {'hourly': self.limit}, None
+        if self.foundry is not None:
+            try:
+                targets, limits = self.foundry.resolved(tenant)
+            except AIError as error:
+                targets, reason = [], str(error)
+        return {'enabled': self.enabled and bool(targets), 'hourly_attempt_limit': limits['hourly'], 'advisory_only': True, 'durable_history': bool(getattr(self.budget,'durable',False)),
+                'configuration_reason': reason, 'settings_path': '/settings/ai',
+                'routing_mode': limits.get('routing_mode'), 'platform_policy_version': limits.get('platform_version'),
+                'knowledge_retrieval': 'configured' if os.getenv('CLOUDSAVER_KNOWLEDGE_ENABLED') == 'true' else 'disabled',
+                'usage': self.budget.window_summary(tenant['tenant_id']) if self.foundry is not None and getattr(self.budget, 'durable', False) else None,
                 'targets': [dict(target_id=t.target_id, provider=t.provider, model=t.model,
+                                 destination_region=t.region, max_input_tokens=t.max_input_tokens,
                                  max_output_tokens=t.max_output_tokens, max_context_bytes=t.max_context_bytes,
                                  allowed_source_providers=t.allowed_source_providers)
-                            for t in self.targets if self.enabled and str(t.tenant_id) == tenant['tenant_id']]}
+                            for t in targets if self.enabled and str(t.tenant_id) == tenant['tenant_id']]}
 
     def evaluate(self, tenant, target_id, key, scan_id, context, assessment, *, attribution=None):
         from app.knowledge import retrieve, confidence
-        target = next((t for t in self.targets if str(t.tenant_id) == tenant['tenant_id'] and t.target_id == target_id), None)
-        if not self.enabled or target is None:
-            raise AIError('AI target is unavailable for this workspace', 404)
+        target, limits = self._selection(tenant, target_id, context['provider'])
         if context['provider'] not in target.allowed_source_providers:
             raise AIError('AI target policy does not permit this source provider', 403)
         context = dict(context, knowledge=retrieve(context))
@@ -433,14 +491,14 @@ class AIGateway:
                         confidence_band=confidence(assessment), knowledge_sources=context['knowledge'],
                         validation=dict(schema=True, pillar_citations=True, risk_floor=True, semantic_claims_verified=False),
                         advice=advice, warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
-        options = {}
+        options = self._budget_options(target, limits, context, SYSTEM)
         if getattr(self.budget,'durable',False):
-            actor = hashlib.sha256((tenant['tenant_id']+'|'+tenant.get('user_id','workspace_key')).encode()).hexdigest()
+            actor = hashlib.sha256((tenant['tenant_id']+'|'+(tenant.get('subject_id') or tenant.get('user_id') or tenant.get('key_id') or 'workspace_key')).encode()).hexdigest()
             options['metadata'] = dict(scan_id=scan_id,resource_reference=context['resource_reference'],provider=target.provider,
                 model=target.model,target_id=target_id,evidence_digest=assessment['evidence_digest'],
                 policy_version=assessment['policy_version'],actor_reference=actor,
                 cost_center=attribution['cost_center'],application_id=attribution['application_id'],attribution_source='observed_tags_unverified')
-        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, self.limit, invoke, **options)
+        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, min(self.limit, limits['hourly']), invoke, **options)
 
     KINDS = {'resource_assessment': (RESOURCE_SYSTEM, parse_resource_advice, 4),
              'followup': (FOLLOWUP_SYSTEM, parse_followup, 1)}
@@ -449,9 +507,7 @@ class AIGateway:
         """Resource-level inference. message is the exact sanitized payload sent to the model."""
         system, parse, schema = self.KINDS[kind]
         resource = message['resource'] if kind == 'followup' else message
-        target = next((t for t in self.targets if str(t.tenant_id) == tenant['tenant_id'] and t.target_id == target_id), None)
-        if not self.enabled or target is None:
-            raise AIError('AI target is unavailable for this workspace', 404)
+        target, limits = self._selection(tenant, target_id, resource['provider'])
         if resource['provider'] not in target.allowed_source_providers:
             raise AIError('AI target policy does not permit this source provider', 403)
         from app.knowledge import retrieve, confidence
@@ -483,12 +539,12 @@ class AIGateway:
                         validation=dict(schema=True, citations=True, risk_floor=kind != 'followup',
                                                                     semantic_claims_verified=False),
                         warning='AI text is unverified advice. It does not approve actions or establish a dependency graph, billing savings or live state.')
-        options = {}
+        options = self._budget_options(target, limits, message, system)
         if getattr(self.budget, 'durable', False):
-            actor = hashlib.sha256((tenant['tenant_id'] + '|' + tenant.get('user_id', 'workspace_key')).encode()).hexdigest()
+            actor = hashlib.sha256((tenant['tenant_id'] + '|' + (tenant.get('subject_id') or tenant.get('user_id') or tenant.get('key_id') or 'workspace_key')).encode()).hexdigest()
             options['metadata'] = dict(scan_id=scan_id, resource_reference=resource['resource_reference'], kind=kind,
                                        provider=target.provider, model=target.model, target_id=target_id,
                                        evidence_digest=assessment['evidence_digest'], policy_version=assessment['policy_version'],
                                        actor_reference=actor, cost_center=attribution['cost_center'],
                                        application_id=attribution['application_id'], attribution_source='observed_tags_unverified')
-        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, self.limit, invoke, **options)
+        return self.budget.run(tenant['tenant_id'], str(key), fingerprint, min(self.limit, limits['hourly']), invoke, **options)

@@ -79,6 +79,14 @@ class MemoryTx:
         self.s['workspaces'][tenant_id][SCOPE_KEYS[provider]] = copy.deepcopy(items)
 
     # platform
+    def get_ai_policy(self):
+        from identity.ai_policy import DEFAULT_POLICY
+        return copy.deepcopy(self.s.setdefault('ai_policy', dict(policy=DEFAULT_POLICY, version=1, updated_at=utcnow(), updated_by='bootstrap')))
+
+    def update_ai_policy(self, expected_version, fields):
+        self.get_ai_policy()
+        return _versioned(self.s['ai_policy'], expected_version, fields)
+
     def get_platform(self):
         return dict(self.s['platform'])
 

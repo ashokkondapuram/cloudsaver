@@ -23,8 +23,14 @@ def denied(provider):
 def narrow(tenant, allowed):
     """Effective workspace: scope lists of providers outside the grant are emptied."""
     allowed = set(allowed)
-    return dict(tenant, **{key: (tenant.get(key, []) if provider in allowed else [])
+    result = dict(tenant, **{key: (tenant.get(key, []) if provider in allowed else [])
                            for provider, key in SCOPE_KEYS.items()})
+    if tenant.get('ai_foundry'):
+        from app.foundry_config import normalize
+        defaults = normalize(None)
+        result['ai_foundry'] = dict(tenant['ai_foundry'], providers={key: value if key in allowed else defaults['providers'][key]
+                                  for key, value in tenant['ai_foundry']['providers'].items()})
+    return result
 
 
 def scope_id(key, item):
@@ -96,6 +102,15 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
     inventory = scan.get('inventory', [])
     in_scope = [f for f in findings if f.get('cloud_provider', 'azure') in allowed and finding_in_scope(f, scopes)]
     inventory_in_scope = [r for r in inventory if r.get('cloud_provider', 'azure') in allowed and finding_in_scope(r, scopes)]
+    visible_ids = {(r.get('cloud_provider', 'azure'), r['resource_id'].lower() if r.get('cloud_provider', 'azure') == 'azure' else r['resource_id'])
+                   for r in inventory_in_scope if r.get('resource_id')}
+    def narrowed_dependencies(row):
+        provider = row.get('cloud_provider', 'azure')
+        normalize = lambda value: value.lower() if provider == 'azure' else value
+        return [edge for edge in row.get('dependency_refs', []) if isinstance(edge, dict)
+                and all(isinstance(edge.get(field), str) and (provider, normalize(edge[field])) in visible_ids
+                        for field in ('from_resource_id', 'to_resource_id'))]
+    dependencies_changed = any('dependency_refs' in row and narrowed_dependencies(row) != row['dependency_refs'] for row in inventory_in_scope)
     evaluations = scan.get('rule_evaluations', [])
     evaluations_in_scope = [r for r in evaluations if r.get('cloud_provider', 'azure') in allowed and finding_in_scope(r, scopes)]
     if strict and scopes and len(in_scope) != len([f for f in findings if f.get('cloud_provider', 'azure') in allowed]):
@@ -104,10 +119,13 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
         return None
     if strict and len(evaluations_in_scope) != len(evaluations):
         return None
-    if providers <= allowed and len(in_scope) == len(findings) and len(inventory_in_scope) == len(inventory) and len(evaluations_in_scope) == len(evaluations):
+    if strict and dependencies_changed:
+        return None
+    if not scopes and not dependencies_changed and providers <= allowed and len(in_scope) == len(findings) and len(inventory_in_scope) == len(inventory) and len(evaluations_in_scope) == len(evaluations):
         return scan
     opportunity = opportunity_totals(in_scope)
     realizable = opportunity_totals(in_scope, realized=True)
+    inventory_in_scope = [dict(row, dependency_refs=narrowed_dependencies(row)) if 'dependency_refs' in row else row for row in inventory_in_scope]
     return dict(
         scan, findings=in_scope, inventory=inventory_in_scope, total_items_found=len(inventory_in_scope) if inventory else len(in_scope),
         cloud_providers=sorted(p for p in (scan.get('cloud_providers') or ['azure']) if p in allowed),
@@ -115,7 +133,7 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
         total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
         realizable_monthly_savings_usd=realizable['total_monthly_opportunity_usd'],
         opportunity_summary=opportunity,
-        coverage=None, rule_evaluations=evaluations_in_scope,
+        coverage=None, coverage_manifest=None, rule_evaluations=evaluations_in_scope,
         subscriptions_scanned_scope='filtered_count_unavailable',
         provider_filtered=True, scope_filtered=bool(scopes))
 

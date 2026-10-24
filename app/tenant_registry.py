@@ -108,7 +108,8 @@ class BaseRegistry:
             raise VersionConflict('Settings changed since you loaded them')
         merged = normalize_tenant(dict(current, **changes), allow_missing_key=True)
         if not self._write(merged, expected_version, actor, webhook,
-                           plan_changed=merged['plan_tier'] != current['plan_tier']):
+                           plan_changed=merged['plan_tier'] != current['plan_tier'],
+                           ai_changed=merged.get('ai_foundry') != current.get('ai_foundry')):
             raise VersionConflict('Settings changed since you loaded them')
         self.invalidate()
         return self._read_one(merged['tenant_id'])
@@ -218,7 +219,7 @@ class MemoryRegistry(BaseRegistry):
         self.audit.append((tenant['tenant_id'], actor, 'plan_changed', expected_version + 1))
         return True
 
-    def _write(self, tenant, expected_version, actor, webhook, *, plan_changed):
+    def _write(self, tenant, expected_version, actor, webhook, *, plan_changed, ai_changed=False):
         stored = self._tenants.get(tenant['tenant_id'])
         if not stored or stored['version'] != expected_version:
             return False
@@ -227,7 +228,7 @@ class MemoryRegistry(BaseRegistry):
             self._webhooks.pop(tenant['tenant_id'], None)
         elif webhook is not UNSET:
             self._webhooks[tenant['tenant_id']] = webhook
-        self.audit.append((tenant['tenant_id'], actor, 'tenant_updated', expected_version + 1))
+        self.audit.append((tenant['tenant_id'], actor, 'ai_settings_updated' if ai_changed else 'tenant_updated', expected_version + 1))
         return True
 
     def _write_platform(self, settings, expected_version, actor):
@@ -371,7 +372,7 @@ class PostgresRegistry(BaseRegistry):
             self._sync_domain(db, tenant, plan_changed=True)
         return True
 
-    def _write(self, tenant, expected_version, actor, webhook, *, plan_changed):
+    def _write(self, tenant, expected_version, actor, webhook, *, plan_changed, ai_changed=False):
         from psycopg.types.json import Jsonb
         webhook_sql, params = '', []
         if webhook is not UNSET:
@@ -385,7 +386,7 @@ class PostgresRegistry(BaseRegistry):
                  Jsonb(config_of(tenant)), actor, *params, tenant['tenant_id'], expected_version]).fetchone()
             if not updated:
                 return False
-            self._audit(db, tenant['tenant_id'], actor, 'tenant_updated', updated[0])
+            self._audit(db, tenant['tenant_id'], actor, 'ai_settings_updated' if ai_changed else 'tenant_updated', updated[0])
             self._sync_domain(db, tenant, plan_changed=plan_changed)
         return True
 

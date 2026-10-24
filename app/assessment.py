@@ -49,6 +49,14 @@ def protection(finding):
         reasons.append('RECOVERY_OR_WITNESS_ROLE')
     if (finding.get('evidence') or {}).get('deletion_protection') is True:
         reasons.append('DELETION_PROTECTION')
+    if tags.get('retention') in ('permanent', 'legalhold') or tags.get('migrationwindow') == 'active':
+        reasons.append('RETENTION_OR_MIGRATION_HOLD')
+    evidence = finding.get('evidence') or {}
+    locks = evidence.get('management_locks')
+    if isinstance(locks, list) and any(lock in ('CanNotDelete', 'ReadOnly') for lock in locks if isinstance(lock, str)):
+        reasons.append('MANAGEMENT_LOCK')
+    if evidence.get('backup_enrolled') is True or evidence.get('replication_enrolled') is True:
+        reasons.append('BACKUP_OR_REPLICATION')
     return sorted(reasons)
 
 

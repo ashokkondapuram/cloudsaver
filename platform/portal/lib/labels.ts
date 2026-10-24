@@ -71,6 +71,7 @@ export const ENTITLEMENT_KEYS: EntitlementKey[] = [
   'max_subscriptions', 'max_resources_per_scan', 'allowed_scan_frequencies', 'can_export_terraform', 'can_use_keyvault',
   'can_dispatch_automated_alerts', 'retention_days', 'allowed_providers', 'max_workspaces', 'max_active_keys_per_workspace',
   'max_key_lifetime_days',
+  'can_use_ai_advisory',
 ];
 export const entitlementLabel: Record<EntitlementKey, string> = {
   max_subscriptions: 'Cloud scopes per workspace',
@@ -79,6 +80,7 @@ export const entitlementLabel: Record<EntitlementKey, string> = {
   can_export_terraform: 'Terraform review',
   can_use_keyvault: 'Key Vault integration',
   can_dispatch_automated_alerts: 'Automatic alerts',
+  can_use_ai_advisory: 'AI advisory',
   retention_days: 'Retention (days)',
   allowed_providers: 'Cloud providers',
   max_workspaces: 'Workspaces per customer',

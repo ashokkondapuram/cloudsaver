@@ -39,7 +39,7 @@ class InferenceLedger:
         db.execute('INSERT INTO ai_inference_events(id,tenant_id,attempt_id,action,created_at) VALUES (%s,%s,%s,%s,%s)',
                    (str(uuid4()),tenant_id,attempt_id,action,now.isoformat()))
 
-    def run(self,tenant_id,key,fingerprint,limit,invoke,*,metadata):
+    def run(self,tenant_id,key,fingerprint,limit,invoke,*,metadata,monthly_token_limit=None,token_reservation=None):
         from app.ai_advisory import AIError
         attempt_id=str(uuid4())
         tenant_id,key=str(UUID(tenant_id)),str(UUID(key))
@@ -59,6 +59,17 @@ class InferenceLedger:
                 count=db.execute('SELECT count(*) FROM ai_inference_attempts WHERE tenant_id=%s AND created_at>=%s',(tenant_id,hour)).fetchone()[0]
                 if count>=limit:
                     raise AIError('Workspace AI hourly attempt budget reached',429)
+                if monthly_token_limit is not None:
+                    if (type(monthly_token_limit) is not int or type(token_reservation) is not int
+                            or monthly_token_limit < 1 or not 512 <= token_reservation <= 20096):
+                        raise AIError('Invalid server token reservation', 422)
+                    start = now.replace(day=1,hour=0,minute=0,second=0,microsecond=0).isoformat()
+                    used, unknown = self.token_totals(db, tenant_id, start)
+                    if unknown:
+                        raise AIError('Unmetered historical attempts prevent verification of the monthly token budget.', 429)
+                    if used + token_reservation > monthly_token_limit:
+                        raise AIError('Workspace AI monthly token budget cannot reserve this request.', 429)
+                    metadata = dict(metadata, reserved_tokens=token_reservation)
                 if len(json.dumps(metadata).encode())>8000:
                     raise AIError('Assessment metadata exceeded the allowed bound',422)
                 db.execute('''INSERT INTO ai_inference_attempts(id,tenant_id,request_key,fingerprint,scan_id,metadata,created_at)
@@ -94,6 +105,34 @@ class InferenceLedger:
             if isinstance(error,AIError):
                 raise
             raise AIError('AI outcome or durable result is uncertain; no automatic retry was issued') from None
+
+    @staticmethod
+    def token_totals(db, tenant_id, start):
+        # Pending, uncertain, or partially metered calls keep their complete reservation.
+        # A legacy unmetered call without a reservation blocks capped inference until the period expires.
+        return db.execute('''SELECT COALESCE(SUM(CASE WHEN status='completed' AND input_tokens IS NOT NULL AND output_tokens IS NOT NULL
+            THEN input_tokens+output_tokens ELSE CAST(metadata->>'reserved_tokens' AS BIGINT) END),0),
+            COALESCE(SUM(CASE WHEN (status<>'completed' OR input_tokens IS NULL OR output_tokens IS NULL)
+            AND metadata->>'reserved_tokens' IS NULL THEN 1 ELSE 0 END),0)
+            FROM ai_inference_attempts WHERE tenant_id=%s AND created_at>=%s''', (tenant_id,start)).fetchone()
+
+    def window_summary(self, tenant_id):
+        with self.store.transaction(tenant_id) as db:
+            now = self.now(db)
+            month = now.replace(day=1,hour=0,minute=0,second=0,microsecond=0)
+            used, unknown = self.token_totals(db, tenant_id, month.isoformat())
+            rows = db.execute('''SELECT count(*),COALESCE(SUM(input_tokens),0),COALESCE(SUM(output_tokens),0),
+                COALESCE(SUM(CASE WHEN input_tokens IS NULL OR output_tokens IS NULL THEN 1 ELSE 0 END),0)
+                FROM ai_inference_attempts WHERE tenant_id=%s AND created_at>=%s''',
+                (tenant_id,(now-timedelta(days=30)).isoformat())).fetchone()
+            hour = now.replace(minute=0,second=0,microsecond=0)
+            hourly = db.execute('SELECT count(*) FROM ai_inference_attempts WHERE tenant_id=%s AND created_at>=%s',
+                                (tenant_id,hour.isoformat())).fetchone()[0]
+        return dict(attempts_last_30d=rows[0], known_input_tokens=rows[1], known_output_tokens=rows[2],
+                    unmetered_attempts=rows[3], attempts_current_hour=hourly,
+                    monthly_tokens_used_or_reserved=used, monthly_unbounded_legacy_attempts=unknown,
+                    monthly_period_start=month.isoformat(), hourly_resets_at=(hour+timedelta(hours=1)).isoformat(),
+                    monthly_period='UTC calendar month', partial_usage_is_not_zero=True)
 
     @staticmethod
     def public(row):

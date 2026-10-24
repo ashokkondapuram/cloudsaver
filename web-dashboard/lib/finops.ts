@@ -25,6 +25,24 @@ export const dateTime = (value: string) => {const d = new Date(value); return Nu
 export const shortDate = (value: string) => {const d = new Date(value); return Number.isNaN(d.valueOf()) ? 'an unknown date' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});};
 export const compact = (value: number) => new Intl.NumberFormat('en-US', {notation: value >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1}).format(value);
 
+export function opportunityTotals(findings: Finding[]) {
+  const groups = new Map<string, {known: number | null; unknown: boolean; count: number}>();
+  for (const finding of findings) {
+    const provider = providerOf(finding);
+    const id = provider === 'azure' ? finding.resource_id?.toLowerCase() : finding.resource_id;
+    const key = finding.opportunity_group_id || (id ? `${provider}:${id}` : 'unattributed');
+    const group = groups.get(key) || {known: null, unknown: false, count: 0};
+    const amount = finding.estimated_monthly_waste_usd;
+    if (id && typeof amount === 'number' && Number.isFinite(amount) && amount >= 0) group.known = Math.max(group.known ?? 0, amount);
+    else group.unknown = true;
+    group.count++; groups.set(key, group);
+  }
+  const rows = [...groups.values()];
+  const known = rows.some(group => group.known !== null) ? Math.round(rows.reduce((sum, group) => sum + (group.known ?? 0), 0) * 100) / 100 : null;
+  return {known, total: groups.size && rows.every(group => !group.unknown) ? known : null,
+    overlapping_groups: rows.filter(group => group.count > 1).length, unpriced_groups: rows.filter(group => group.unknown).length};
+}
+
 export function observedTags(finding: Finding): Record<string, string> {
   const raw = finding.evidence?.tags || finding.evidence?.labels;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};

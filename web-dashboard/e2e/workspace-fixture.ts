@@ -1,4 +1,5 @@
 import {Page,expect} from '@playwright/test';
+import {foundryView} from './foundry-fixture';
 
 // Test-only browser data. Production code never imports this file and every API
 // route is intercepted, including mutations, before connecting the test session.
@@ -37,6 +38,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;count?:numbe
     if(path==='/api/v1/me')response={name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
     else if(path===`/api/v1/scans/${scanId}/resources`)response={scan_id:scanId,observed_at:scanTime,total:0,items:[],summary:{total:0,ai_status:{},ai_risk:{},decision:{},review_priority:{}}};
     else if(path==='/api/v1/rules/effective')response={version:1,items:[]};
+    else if(path==='/api/v1/settings/ai')response=foundryView(false);
     else if(path.startsWith('/api/v1/services/'))response={latest:null,history:[],resources:[]};
     else if(path==='/api/v1/scans')response=[current];
     else if(path==='/api/v1/settings')response={editable:false,settings:{tenant_id:tenantId,name:'Interface QA workspace',version:1,plan_tier:'GROWTH',subscription_ids:[subscriptionId],aws_accounts:[],gcp_projects:[],kubernetes_clusters:[],schedule:{frequency:'manual'},alerts:{enabled:false,channel:null,webhook_configured:false}},limits:{max_subscriptions:20,allowed_scan_frequencies:['manual','daily'],can_dispatch_automated_alerts:true},platform:null,identity:{identity_mode:'managed_identity',azure_access:'federated',aws_external_id:tenantId}};

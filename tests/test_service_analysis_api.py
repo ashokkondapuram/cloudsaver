@@ -52,3 +52,23 @@ def test_preview_does_not_write_policy_and_rejects_out_of_bounds(tmp_path, monke
     assert api.post('/api/v1/rules/preview', json=body, headers=headers).status_code == 422
     body['version'] = 0
     assert api.put('/api/v1/rules/overrides', json=body, headers=headers).status_code == 422
+
+
+def test_snapshot_comparison_ignores_collection_timestamps_but_detects_configuration_changes(tmp_path, monkeypatch):
+    import copy
+    api, headers, original, tenant = client(tmp_path, monkeypatch)
+    store = Store(str(tmp_path / 'store.sqlite3'))
+    before, after = copy.deepcopy(original), copy.deepcopy(original)
+    for snapshot, when in ((before, '2026-10-23T18:00:00Z'), (after, '2026-10-24T01:00:00Z')):
+        snapshot['scan_id'] = str(uuid4())
+        snapshot['timestamp'] = when
+        snapshot['inventory'][0].update(observed_at=when, configuration_snapshot={'disk_state': 'Attached'}, dependency_refs=[])
+        store.save(tenant['tenant_id'], snapshot, workspace=tenant)
+    path = f'/api/v1/services/disks/comparison?before={before["scan_id"]}&after={after["scan_id"]}'
+    assert api.get(path, headers=headers).json()['items'][0]['state'] == 'persisting'
+    changed = copy.deepcopy(after)
+    changed['scan_id'] = str(uuid4())
+    changed['inventory'][0]['configuration_snapshot']['disk_state'] = 'Unattached'
+    store.save(tenant['tenant_id'], changed, workspace=tenant)
+    path = f'/api/v1/services/disks/comparison?before={before["scan_id"]}&after={changed["scan_id"]}'
+    assert api.get(path, headers=headers).json()['items'][0]['state'] == 'changed'

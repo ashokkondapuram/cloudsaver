@@ -39,7 +39,7 @@ def create_router(settings, store, current_tenant, gateway=None, ledger=None):
         from app.enterprise_store import EnterpriseStore
         from app.inference_ledger import InferenceLedger
         ledger = InferenceLedger(EnterpriseStore(settings))
-    gateway = gateway or AIGateway(budget=ledger)
+    gateway = gateway or AIGateway(budget=ledger, settings=settings)
 
     def owned(scan_id, tenant):
         scan = store.get(tenant['tenant_id'], str(scan_id))

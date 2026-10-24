@@ -10,6 +10,7 @@ import {useSession} from '../SessionProvider';
 import {Loading, Notice, PageHeading, SectionTitle, Switch} from '../ui/shared';
 import {BillingSettingsSection} from './BillingSettingsSection';
 import {ResourceAccessSection} from './ResourceAccessSection';
+import {AIPolicySection} from './AIPolicySection';
 
 export function PlatformSettingsView() {
   const {canWrite} = useSession();
@@ -61,5 +62,6 @@ export function PlatformSettingsView() {
     </section>}
     {data && <ResourceAccessSection settings={data} onSaved={setData}/>}
     <BillingSettingsSection/>
+    <AIPolicySection/>
   </>;
 }

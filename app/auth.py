@@ -298,6 +298,7 @@ def workspace_response(workspace, mode, settings=None):
         'mode': mode, 'plan_tier': tier.tier, 'plan_name': tier.plan_name, 'billing_state': tier.billing_state,
         'max_subscriptions': tier.max_subscriptions,
         'can_export_terraform': tier.can_export_terraform,
+        'can_use_ai_advisory': tier.can_use_ai_advisory,
         'providers': providers,
         'max_scopes_per_scan': tier.max_subscriptions,
         'configured_scope_count': sum(len(workspace.get(k, [])) for k in ('subscription_ids','aws_accounts','gcp_projects','kubernetes_clusters')),

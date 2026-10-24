@@ -79,6 +79,34 @@ def context(db, tenant):
     db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (tenant,))
 
 
+def test_ai_token_reservation_and_diagnostics_use_real_tenant_rls(tenants):
+    from app.enterprise_store import EnterpriseStore
+    from app.inference_ledger import InferenceLedger
+    from app.ai_advisory import AIError
+    app, _, a, b, sa, _ = tenants
+    settings = Settings('azure', '/unused', (), app)
+    persistence = EnterpriseStore(settings)
+    ledger = InferenceLedger(persistence)
+    metadata = dict(scan_id=sa['scan_id'], provider='azure', model='fixture-model', target_id='fixture', resource_reference='a'*64)
+    ledger.run(a['tenant_id'], str(uuid4()), 'a'*64, 10, lambda: {'usage': {}}, metadata=metadata,
+               monthly_token_limit=1000, token_reservation=600)
+    with pytest.raises(AIError, match='monthly token budget'):
+        ledger.run(a['tenant_id'], str(uuid4()), 'b'*64, 10, lambda: pytest.fail('Must not invoke'), metadata=metadata,
+                   monthly_token_limit=1000, token_reservation=600)
+    assert ledger.window_summary(a['tenant_id'])['monthly_tokens_used_or_reserved'] == 600
+    assert ledger.window_summary(b['tenant_id'])['monthly_tokens_used_or_reserved'] == 0
+    key = str(uuid4())
+    with persistence.transaction(a['tenant_id'], write=True) as db:
+        db.execute('INSERT INTO ai_connection_diagnostics(id,tenant_id,provider,target_id,actor,result,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s)',
+            (key, a['tenant_id'], 'azure', 'fixture', 'a'*64, db.json({'status': 'inconclusive'}), datetime.now(timezone.utc).isoformat()))
+    with persistence.transaction(b['tenant_id']) as db:
+        assert db.execute('SELECT id FROM ai_connection_diagnostics WHERE id=%s', (key,)).fetchone() is None
+    with psycopg.connect(app) as db:
+        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_connection_diagnostics'::regclass").fetchone() == (True,True)
+        with pytest.raises(errors.InsufficientPrivilege):
+            db.execute('DELETE FROM ai_connection_diagnostics WHERE id=%s', (key,))
+
+
 def test_runtime_role_and_forced_policies(database):
     _, app, _ = database
     with psycopg.connect(app) as db:
@@ -335,7 +363,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0013_billing_projection',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0015_ai_foundry_diagnostics',)]
 
 
 def test_scheduler_reservation_throttles_concurrent_publishers(database):

@@ -8,6 +8,7 @@ from uuid import uuid4
 from identity import keys as keyfmt
 from identity.config import env, flag
 from identity.analysis.admin import AnalysisOps
+from identity.ai_policy import AIPolicyOps
 from identity.billing.admin import BillingOps
 from identity.customer.admin import CustomerOps
 from identity.knowledge.admin import KnowledgeOps
@@ -62,7 +63,7 @@ def snapshot(workspace, customer, plan=None):
     return row
 
 
-class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps):
+class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPolicyOps):
     def __init__(self, store, peppers, throttle, events, usage, *, environment=None, clock=utcnow,
                  cache_seconds=None, provider_scoped_keys=None, knowledge_store=None):
         self.store, self.peppers, self.throttle, self.events, self.usage = store, peppers, throttle, events, usage

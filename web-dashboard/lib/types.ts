@@ -10,6 +10,7 @@ export type Finding = {
   subscription_id: string;
   resource_id: string;
   estimated_monthly_waste_usd: number | null;
+  opportunity_group_id?: string | null;
   details: string;
   cost_attribution?: {
     confidence: string;
@@ -48,6 +49,7 @@ export type Workspace = {
   configured_scope_count?: number;
   max_scopes_per_scan?: number;
   can_export_terraform?: boolean;
+  can_use_ai_advisory?: boolean;
   scheduled_scans_enabled?: boolean;
   scheduled_scan_interval_seconds?: number;
   allowed_scan_frequencies?: string[];
@@ -144,6 +146,7 @@ export type Entitlements = {
   can_export_terraform: boolean;
   can_use_keyvault: boolean;
   can_dispatch_automated_alerts: boolean;
+  can_use_ai_advisory?: boolean;
   retention_days: number;
   entitlements_source: 'platform' | 'fallback';
   settings_version: number;

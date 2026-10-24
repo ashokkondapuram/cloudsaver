@@ -43,7 +43,9 @@ def test_creation_date_cannot_prove_unattached_duration():
 
 def test_protection_and_policy_are_separate_from_approval():
     r = resource(power_state='PowerState/stopped', tags={'legalhold': 'true'})
-    assert rule('AZURE_VM_STOPPED_RESIDUAL_COST', r)['outcome'] == 'excluded'
+    evaluated = rule('AZURE_VM_STOPPED_RESIDUAL_COST', r)
+    assert evaluated['outcome'] == 'condition_detected'
+    assert evaluated['destructive_actions_blocked'] is True and evaluated['protected_reasons']
     assert rule('AZURE_VM_STOPPED_RESIDUAL_COST', r, policy={'enabled': False})['outcome'] == 'disabled_by_policy'
 
 

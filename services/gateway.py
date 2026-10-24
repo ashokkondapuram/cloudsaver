@@ -199,6 +199,20 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def ai_targets(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/ai/targets', authorization)
 
+    @app.get('/api/v1/settings/ai')
+    async def foundry_settings(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/settings/ai', authorization)
+
+    @app.put('/api/v1/settings/ai')
+    async def save_foundry_settings(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('PUT', targets['scanner'], '/api/v1/settings/ai', authorization,
+                              json=await bounded_json(request), transport=transport)
+
+    @app.post('/api/v1/settings/ai/test-connection')
+    async def test_foundry_connection(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post('/api/v1/settings/ai/test-connection', request, authorization)
+
     @app.get('/api/v1/ai/assessments')
     async def ai_history(request: Request, row=Depends(allowed), authorization: str = Header()):
         params={k:v for k,v in request.query_params.items() if k in ('limit','before','scan_id','resource_reference')}

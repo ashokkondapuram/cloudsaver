@@ -156,10 +156,25 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         state = repo.item_states(tenant['tenant_id'], scan['scan_id']).get(resource_key)
         decision = repo.latest_decisions(tenant['tenant_id'], {resource_key}).get(resource_key)
         followups = repo.followups(tenant['tenant_id'], scan['scan_id'], resource_key)
+        normalize_id = lambda value: value.lower() if assessment['provider'] == 'azure' else value
+        selected_id = normalize_id(assessment['resource_id'])
+        observation = next((row for row in scan.get('inventory', []) if row.get('cloud_provider', 'azure') == assessment['provider']
+                            and normalize_id(row['resource_id']) == selected_id), None)
+        evaluations = [row for row in scan.get('rule_evaluations', []) if row.get('cloud_provider', 'azure') == assessment['provider']
+                       and normalize_id(row['resource_id']) == selected_id]
+        groups = {row['opportunity_group_id'] for row in findings if row.get('opportunity_group_id')}
+        overlaps = [dict(resource_id=row['resource_id'], resource_name=row.get('resource_name'), rule_id=row['rule_id'])
+                    for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_id(row['resource_id']) != selected_id]
+        from app.pricing import opportunity_totals
+        costs = dict(billed_cost_usd=None, retail_estimate_usd=assessment['retail_estimate_usd'], modeled_future_cost_usd=None,
+                     opportunity_usd=opportunity_totals(findings, realized=True)['total_monthly_opportunity_usd'],
+                     verified_realized_savings_usd=None, currency='USD',
+                     explanation='Retail estimates are advisory. Resource-period billing allocation, target costs and post-change savings are not established here.')
         return dict(scan_id=scan['scan_id'], assessment=assessment, findings=findings, ai_context=context,
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,
-                    followups_remaining=max(0, MAX_QUESTIONS - len(followups)))
+                    followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,
+                    rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps)
 
     @router.post('/scans/{scan_id}/ai-batches', status_code=202)
     async def create_batch(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):

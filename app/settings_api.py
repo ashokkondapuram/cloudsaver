@@ -19,6 +19,7 @@ from app.auth import Role, require_workspace_role
 from app.config import directory_mode
 from app.provider_access import narrow
 from app.tenant_config import normalize_identity
+from app.foundry_config import FoundrySettings
 
 SCOPES_IN_PORTAL = 'Cloud accounts are managed in the platform portal. Contact your CloudSaver administrator to change them.'
 
@@ -67,6 +68,8 @@ class WorkspaceSettings(Strict):
     schedule: Schedule
     alerts: Alerts
     identity: Identity | None = None
+    ai_foundry: FoundrySettings | None = None
+    acknowledge_external_processing: StrictBool = False
 
 
 def public_tenant(tenant):
@@ -78,13 +81,14 @@ def public_tenant(tenant):
         'kubernetes_clusters': [{k: c[k] for k in ('cluster_id', 'prometheus_url', 'bearer_token_env')}
                                 for c in tenant.get('kubernetes_clusters', [])],
         'identity': tenant.get('identity', {}), 'schedule': tenant.get('schedule', {}),
+        'ai_foundry': tenant.get('ai_foundry'),
         'alerts': dict(tenant.get('alerts') or {'enabled': False, 'channel': None},
                        webhook_configured=bool(tenant.get('webhook_configured'))),
     }
 
 
 def actor_for(workspace):
-    principal = workspace.get('user_id') or 'workspace-key:' + workspace['tenant_id']
+    principal = workspace.get('subject_id') or workspace.get('user_id') or 'workspace-key:' + (workspace.get('key_id') or workspace['tenant_id'])
     return 'principal:' + hashlib.sha256(principal.encode()).hexdigest()
 
 
@@ -198,6 +202,15 @@ def create_router(settings, current_tenant, identity_client=None):
                 enforce_subscription_quota(plan, total + len(current.get('kubernetes_clusters', [])), adding_count=0)
         changes = dict(scopes, **identity_changes, schedule=payload.schedule.model_dump(),
                        alerts={'enabled': alerts.enabled, 'channel': alerts.channel})
+        if payload.ai_foundry is not None:
+            from app.foundry import FoundryController
+            from app.ai_advisory import AIError
+            try:
+                controller = FoundryController(settings)
+                controller.check_write(workspace, payload.ai_foundry.model_dump(), payload.acknowledge_external_processing)
+                changes['ai_foundry'] = controller.validate_configuration(workspace, payload.ai_foundry.model_dump())
+            except AIError as error:
+                raise HTTPException(error.status, str(error)) from None
         tenant = save(lambda: store.update(workspace['tenant_id'], changes, payload.version, actor_for(workspace), webhook=webhook))
         return {'settings': public_tenant(visible(tenant, workspace))}
 

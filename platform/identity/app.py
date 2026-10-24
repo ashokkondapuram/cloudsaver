@@ -462,6 +462,18 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def retrieve_knowledge(provider: str, service_category: str, rule_ids: str = Query('', max_length=2400), caller=Depends(verify_caller)):
         return service.retrieve_knowledge(provider, service_category, rule_ids.split(',') if rule_ids else [])
 
+    @app.get('/internal/v1/ai-policy')
+    def effective_ai_policy(caller=Depends(verify_caller)):
+        return service.get_ai_policy()
+
+    @app.get('/admin/v1/ai-policy')
+    def read_ai_policy(identity=Depends(operator)):
+        return service.get_ai_policy()
+
+    @app.put('/admin/v1/ai-policy')
+    def update_ai_policy(request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_ai_policy(payload, identity, rid(request))
+
     @app.get('/admin/v1/knowledge/metrics')
     def knowledge_metrics(identity=Depends(operator)):
         return service.knowledge_metrics()

@@ -39,6 +39,7 @@ class TierEntitlements(BaseModel):
     can_use_keyvault: bool
     can_export_terraform: bool
     can_dispatch_automated_alerts: bool
+    can_use_ai_advisory: bool = False
     retention_days: int
     allowed_providers: List[str] = list(PROVIDERS)
     billing_state: str = 'none'
@@ -67,6 +68,7 @@ TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
         max_resources_per_scan=2500,
         allowed_scan_frequencies=["manual", "daily"],
         can_use_keyvault=False,
+        can_use_ai_advisory=True,
         can_export_terraform=True,
         can_dispatch_automated_alerts=True,
         retention_days=90
@@ -77,6 +79,7 @@ TIER_LIMITS: Dict[PlanTier, TierEntitlements] = {
         max_resources_per_scan=100000,
         allowed_scan_frequencies=["manual", "daily", "hourly"],
         can_use_keyvault=True,
+        can_use_ai_advisory=True,
         can_export_terraform=True,
         can_dispatch_automated_alerts=True,
         retention_days=365
@@ -130,6 +133,8 @@ def billing_url(value):
 def _limits(value):
     if not isinstance(value, dict):
         raise ValueError('Plan entitlements must be an object')
+    value = dict(value)
+    value.setdefault('can_use_ai_advisory', False)
 
     def number(key):
         item = value.get(key)
@@ -153,6 +158,7 @@ def _limits(value):
             'allowed_scan_frequencies': frequencies if 'manual' in frequencies else ['manual'] + frequencies,
             'can_export_terraform': flag('can_export_terraform'), 'can_use_keyvault': flag('can_use_keyvault'),
             'can_dispatch_automated_alerts': flag('can_dispatch_automated_alerts'),
+            'can_use_ai_advisory': flag('can_use_ai_advisory'),
             'retention_days': number('retention_days'),
             'allowed_providers': subset('allowed_providers', PROVIDERS, list(PROVIDERS))}
 

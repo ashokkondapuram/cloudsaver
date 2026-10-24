@@ -3,6 +3,7 @@ import inspect
 import re
 
 from identity.analysis.admin import AnalysisOps
+from identity.ai_policy import AIPolicyOps
 from identity.billing.admin import BillingOps
 from identity.customer.admin import CustomerOps
 from identity.knowledge.admin import KnowledgeOps
@@ -24,6 +25,6 @@ def mutating_methods_without_events(cls):
 
 def test_every_mutating_admin_method_emits_an_audit_event():
     offenders = {cls.__name__: mutating_methods_without_events(cls)
-                 for cls in (AnalysisOps, BillingOps, CustomerOps, KnowledgeOps)}
+                 for cls in (AnalysisOps, BillingOps, CustomerOps, KnowledgeOps, AIPolicyOps)}
     offenders = {k: v for k, v in offenders.items() if v}
     assert not offenders, f'Mutating methods with no audit event: {offenders}'

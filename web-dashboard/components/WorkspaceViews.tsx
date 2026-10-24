@@ -5,9 +5,9 @@ import {useRouter} from 'next/navigation';
 import {useEffect, useMemo, useState} from 'react';
 import {Activity, BrainCircuit, ArrowRight, Bell, Blocks, Check, CheckCircle2, ChevronRight, Cloud, CreditCard, Database, ExternalLink, FileCode2, Fingerprint, GitBranch, GitPullRequest, History, KeyRound, Layers3, LockKeyhole, MinusCircle, Plus, Settings2, ShieldCheck, Tags, Target, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
-import {dateTime, money, observedTags, providerNames, providerOf, scopeOf} from '../lib/finops';
+import {dateTime, money, opportunityTotals, observedTags, providerNames, providerOf, scopeOf} from '../lib/finops';
 import {CONTACT_ACCOUNT_MANAGER, billingStateLabels, frequencyNames, manageBillingUrl, planDate} from '../lib/plan';
-import type {Entitlements, PlanOption, Reliability} from '../lib/types';
+import type {Entitlements, Finding, PlanOption, Reliability} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
 import {useScopedFindings} from './Overview';
 import {GitOpsPanel, PlanPolicyPanel} from './GitOpsPanel';
@@ -15,6 +15,7 @@ import {ReliabilityPanel} from './ReliabilityPanel';
 import {ServiceAnalysis} from './ServiceAnalysis';
 import {BillingEvidencePanel,AIAssessmentHistory} from './EnterpriseEvidence';
 import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
+import {AIFoundryConfigurationEditor} from './settings/AIFoundryConfigurationEditor';
 import {CloudScopesEditor, IdentityOnboardingPanel, ResourceAccessIdentityEditor, ScheduleAlertsEditor} from './settings/WorkspaceSettings';
 import {AccessSettings} from './settings/AccessSettings';
 
@@ -24,19 +25,20 @@ export function Allocation() {
   const router = useRouter();
   const [query,setQuery] = useState('');
   const groups = useMemo(() => {
-    const map = new Map<string,{provider:string;scope:string;count:number;priced:number;amount:number;tags:number}>();
+    const map = new Map<string,{provider:string;scope:string;count:number;priced:number;amount:number;tags:number;items:Finding[]}>();
     for (const f of findings) {
       const key = JSON.stringify([providerOf(f),scopeOf(f)]);
-      const group = map.get(key) || {provider:providerOf(f),scope:scopeOf(f),count:0,priced:0,amount:0,tags:0};
-      group.count++; if(f.estimated_monthly_waste_usd !== null) {group.priced++;group.amount+=f.estimated_monthly_waste_usd;}
+      const group = map.get(key) || {provider:providerOf(f),scope:scopeOf(f),count:0,priced:0,amount:0,tags:0,items:[]};
+      group.count++; if(f.estimated_monthly_waste_usd !== null) group.priced++;
+      group.items.push(f);
       if(Object.keys(observedTags(f)).length)group.tags++;
       map.set(key,group);
     }
-    return [...map.values()].sort((a,b)=>b.count-a.count);
+    return [...map.values()].map(group => ({...group, amount: opportunityTotals(group.items).known || 0})).sort((a,b)=>b.count-a.count);
   }, [findings]);
   const priced = findings.filter(f => f.estimated_monthly_waste_usd!==null);
   const tagged = findings.filter(f => Object.keys(observedTags(f)).length);
-  return <><section className="allocation-metrics"><article className="metric-card"><div className="metric-label">Observed accounts / scopes<Layers3 size={17}/></div><strong>{groups.length}</strong><div className="metric-footnote">With findings in this view</div></article><article className="metric-card"><div className="metric-label">Priced portion<Wallet size={17}/></div><strong>{priced.length ? money(priced.reduce((sum,f)=>sum+(f.estimated_monthly_waste_usd||0),0)) : 'Not estimated'}</strong><div className="metric-footnote">{priced.length} of {findings.length} findings · excludes unknown costs</div></article><article className="metric-card"><div className="metric-label">Tag evidence coverage<Tags size={17}/></div><strong>{findings.length ? `${Math.round(tagged.length/findings.length*100)}%` : '—'}</strong><div className="metric-footnote">{tagged.length} observations contain tags or labels</div></article></section>
+  return <><section className="allocation-metrics"><article className="metric-card"><div className="metric-label">Observed accounts / scopes<Layers3 size={17}/></div><strong>{groups.length}</strong><div className="metric-footnote">With findings in this view</div></article><article className="metric-card"><div className="metric-label">Priced portion<Wallet size={17}/></div><strong>{priced.length ? money(opportunityTotals(findings).known) : 'Not estimated'}</strong><div className="metric-footnote">{priced.length} of {findings.length} findings · excludes unknown costs</div></article><article className="metric-card"><div className="metric-label">Tag evidence coverage<Tags size={17}/></div><strong>{findings.length ? `${Math.round(tagged.length/findings.length*100)}%` : '—'}</strong><div className="metric-footnote">{tagged.length} observations contain tags or labels</div></article></section>
     <div className="allocation-banner"><span><Wallet size={23}/></span><div><h3>A clear view of the evidence you have.</h3><p>This view groups resource findings by provider and account. Billing-based chargeback, showback, and unit economics require a connected billing allocation feed.</p></div></div>
     <section className="panel"><SectionTitle title="Account & scope breakdown" action={<label className="inline-search"><span className="sr-only">Search scopes</span><input type="search" aria-label="Search scopes" placeholder="Search account or scope…" value={query} onChange={e=>setQuery(e.target.value)}/></label>}>Resource signals and retail estimates from the selected snapshot</SectionTitle>{groups.length ? <div className="summary-table-scroll"><table className="summary-table"><thead><tr><th>Account / scope</th><th>Provider</th><th>Findings</th><th>Pricing coverage</th><th>Known retail portion</th><th><span className="sr-only">Explore</span></th></tr></thead><tbody>{groups.filter(group=>`${group.scope} ${providerNames[group.provider]}`.toLowerCase().includes(query.toLowerCase())).map(group=><tr key={group.provider+group.scope}><td><code>{group.scope}</code></td><td><ProviderBadge provider={group.provider}/></td><td>{group.count}</td><td><div className="coverage-cell"><span>{group.priced}/{group.count}</span><i><b style={{width:`${group.priced/group.count*100}%`}}/></i></div></td><td>{group.priced ? money(group.amount) : 'Not estimated'}</td><td><button className="icon-button" aria-label={`Explore scope ${group.scope}`} onClick={()=>{setScope([group.scope]);router.push(`/findings?provider=${encodeURIComponent(group.provider)}`);}}><ArrowRight size={16}/></button></td></tr>)}</tbody></table></div> : <EmptyState icon={Layers3} title="No scoped findings yet">A completed resource scan will populate your account breakdown.</EmptyState>}</section>
     <BillingEvidencePanel/><ServiceAnalysis/><section className="panel tag-evidence-panel"><SectionTitle title="Ownership & tag evidence">Understand what is available before making an allocation decision</SectionTitle>{tagged.length ? <div className="observed-tags-grid">{[...new Set(tagged.flatMap(f=>Object.keys(observedTags(f))))].slice(0,12).map(key=><div key={key}><Tags size={16}/><strong>{key}</strong><span>{tagged.filter(f=>key in observedTags(f)).length} observations</span></div>)}</div> : <div className="evidence-unavailable"><Tags size={24}/><div><h3>No tag fields in these observations</h3><p>This is an evidence gap, not a policy-compliance score. Tags and allocation rules have not been configured through this console.</p></div></div>}</section>
@@ -87,7 +89,7 @@ function ResourceAccessSettings() {
       setTesting(false);
     }
   }
-  return <><IdentityOnboardingPanel/><ResourceAccessIdentityEditor/><section className="panel"><SectionTitle title="Test access" action={canAdmin ? <button type="button" className="button secondary" disabled={testing} onClick={() => void testAccess()}>{testing ? 'Testing…' : 'Test access'}</button> : undefined}>Check read-only access for this workspace before you run a scan</SectionTitle>{!canAdmin && <Notice tone="info">A workspace administrator can run access tests.</Notice>}{results.length ? <dl className="settings-key-values">{results.map(row => <div key={row.provider}><dt>{providerNames[row.provider] || row.provider}</dt><dd>{row.message || row.status}</dd></div>)}</dl> : <p className="inline-help">Runs a short probe per configured cloud provider. No secrets are shown.</p>}</section></>;
+  return <><IdentityOnboardingPanel/><ResourceAccessIdentityEditor/><AIFoundryConfigurationEditor/><section className="panel"><SectionTitle title="Test access" action={canAdmin ? <button type="button" className="button secondary" disabled={testing} onClick={() => void testAccess()}>{testing ? 'Testing…' : 'Test access'}</button> : undefined}>Check read-only access for this workspace before you run a scan</SectionTitle>{!canAdmin && <Notice tone="info">A workspace administrator can run access tests.</Notice>}{results.length ? <dl className="settings-key-values">{results.map(row => <div key={row.provider}><dt>{providerNames[row.provider] || row.provider}</dt><dd>{row.message || row.status}</dd></div>)}</dl> : <p className="inline-help">Runs a short probe per configured cloud provider. No secrets are shown.</p>}</section></>;
 }
 
 function Integrations() {

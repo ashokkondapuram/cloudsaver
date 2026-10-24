@@ -168,9 +168,12 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
                 raise UnauthorizedJob('Scanner returned an unauthorized resource')
         from app.multi_cloud import scope_fingerprint
         from app.analysis_rules import evaluate_inventory, RULES, VERSION
-        from app.inventory import coverage
+        from app.inventory import coverage, coverage_manifest
+        from app.dependencies import canonical_inventory, group_opportunities
         from app.pricing import opportunity_totals
         observed_at = datetime.now(timezone.utc).isoformat()
+        inventory = canonical_inventory(inventory, observed_at)
+        findings = group_opportunities(findings, inventory)
         policies = {item['id']: item for item in (policy or {}).get('items', [])}
         if rule_ids is not None:
             for rid, *_ in RULES:
@@ -188,6 +191,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             rule_manifest={'version': VERSION, 'policies': policies, 'workspace_version': (policy or {}).get('version'),
                            'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None},
             coverage=coverage(inventory, findings, outcomes),
+            coverage_manifest=coverage_manifest(inventory, findings, outcomes),
         )).model_dump()
         heartbeat.ensure_owned()
         repository.complete_job(tenant_id, job_id, scan, tenant['subscription_ids'], token=token, notification_targets=notification_targets)
@@ -317,7 +321,7 @@ def process_ai_batches():
         settings = Settings.load()
         scans = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
         evidence = EnterpriseStore(settings)
-        gateway = AIGateway(budget=InferenceLedger(evidence))
+        gateway = AIGateway(budget=InferenceLedger(evidence), settings=settings)
         processed = process_batches(settings.tenants, scans, ResourceStore(evidence), gateway,
                                     max_items=int(os.getenv('CLOUDSAVER_AI_BATCH_ITEMS_PER_TICK', '10')))
         return {'processed': processed, 'enabled': True}

@@ -3,8 +3,11 @@ from datetime import datetime, timedelta, timezone
 import math
 
 from app.assessment import protection
+from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
 
-VERSION = '2026-10-23.2'
+VERSION = '2026-10-24.1'
+OUTCOMES = ('condition_detected', 'condition_not_detected', 'insufficient_evidence', 'not_applicable',
+            'disabled_by_policy', 'excluded_by_exception', 'unsupported_by_collector', 'evaluation_failed')
 # id, resource type suffix, name, configurable parameters with (default, min, max)
 RULES = (
     ('AZURE_DISK_UNATTACHED_RETENTION', 'disks', 'Retained unattached managed disk review', {'minimum_days': (14, 7, 90)}),
@@ -42,30 +45,12 @@ def parameters(rule_id, overrides=None):
 
 def series(values, now):
     """30 days, five-minute buckets, >=95% coverage, no gap over an hour; no zero filling."""
-    if not isinstance(values, dict):
+    results = {label: evaluate_series(values, TimeSeriesEvidenceContract('metric', aggregation),
+                                     now=now, require_resource_age=False)
+               for label, aggregation in (('p95', 'P95'), ('p99', 'P99'), ('maximum', 'MAX'))}
+    if not all(result.is_sufficient for result in results.values()):
         return None
-    start, end = moment(values.get('window_start')), moment(values.get('window_end'))
-    points = values.get('points')
-    if not start or not end or end - start != timedelta(days=30) or not 0 <= (now - end).total_seconds() < 86400:
-        return None
-    if not isinstance(points, list) or len(points) > 8640 or len(points) < math.ceil(8640 * .95):
-        return None
-    parsed = {}
-    for point in points:
-        if not isinstance(point, dict):
-            return None
-        stamp, value = moment(point.get('at')), point.get('value')
-        if (not stamp or stamp <= start or stamp > end or (stamp - start).total_seconds() % 300
-                or stamp in parsed or type(value) not in (int, float) or not math.isfinite(value) or value < 0):
-            return None
-        parsed[stamp] = value
-    times = [start, *sorted(parsed), end]
-    if max((b - a).total_seconds() for a, b in zip(times, times[1:])) > 3600:
-        return None
-    ordered = sorted(parsed.values())
-    return {'p95': ordered[math.ceil(len(ordered) * .95) - 1],
-            'p99': ordered[math.ceil(len(ordered) * .99) - 1], 'maximum': ordered[-1],
-            'coverage': len(ordered) / 8640}
+    return {label: result.observed_value for label, result in results.items()} | {'coverage': results['p95'].coverage_ratio}
 
 
 def continuous(evidence, expected, minimum_days, now):
@@ -98,7 +83,8 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
                   resource_id=resource['resource_id'], subscription_id=resource.get('subscription_id'),
                   resource_type=resource['resource_type'], outcome='insufficient_evidence',
                   reason='Required fresh configuration, history, or telemetry is unavailable.',
-                  automatic_execution=False, estimated_savings=None)
+                  automatic_execution=False, estimated_savings=None, protected_reasons=protection(resource),
+                  destructive_actions_blocked=bool(protection(resource)))
 
     def finish(state, reason):
         return dict(output, outcome=state, reason=reason)
@@ -106,9 +92,9 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
     if policy.get('enabled') is False:
         return finish('disabled_by_policy', 'Disabled in the frozen workspace policy.')
     if policy.get('unavailable_reason'):
-        return finish('unavailable', 'Unavailable under the frozen workspace policy.')
-    if protection(resource):
-        return finish('excluded', 'Retention, recovery, or deletion protection requires independent review.')
+        return finish('disabled_by_policy', 'Unavailable under the frozen workspace policy.')
+    if rule_id in resource.get('unsupported_rule_ids', []):
+        return finish('unsupported_by_collector', 'This collector does not acquire the required evidence contract.')
     observed = moment(observed_at)
     if not observed or not 0 <= (now - observed).total_seconds() < 86400:
         return output
@@ -129,7 +115,8 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
         else:
             io, throughput = series(metrics.get('iops'), now), series(metrics.get('throughput'), now)
             target = evidence.get('target_disk') or {}
-            if io and throughput and all(type(target.get(k)) in (int, float) and target[k] > 0 for k in ('iops', 'throughput')):
+            if (io and throughput and all(type(target.get(k)) in (int, float) and math.isfinite(target[k]) and target[k] > 0 for k in ('iops', 'throughput'))
+                    and known('target_compatible') and known('throttling_observed')):
                 factor = 1 + p['headroom_percent'] / 100
                 detected = (evidence.get('target_compatible') is True and io['maximum'] * factor <= target['iops']
                             and throughput['maximum'] * factor <= target['throughput']
@@ -181,5 +168,11 @@ def evaluate_inventory(inventory, *, policies=None, observed_at=None, now=None):
             continue
         for rule in RULES:
             if resource['resource_type'].lower().rsplit('/', 1)[-1] == rule[1]:
-                outcomes.append(evaluate(resource, rule, policy=(policies or {}).get(rule[0]), observed_at=observed_at, now=now))
+                try:
+                    outcomes.append(evaluate(resource, rule, policy=(policies or {}).get(rule[0]), observed_at=observed_at, now=now))
+                except (TypeError, ValueError, KeyError, OverflowError):
+                    outcomes.append(dict(rule_id=rule[0], rule_version=VERSION, name=rule[2], cloud_provider='azure',
+                        resource_id=resource['resource_id'], subscription_id=resource.get('subscription_id'),
+                        outcome='evaluation_failed', reason='Invalid evidence or policy; inspection is required.',
+                        automatic_execution=False, estimated_savings=None))
     return outcomes

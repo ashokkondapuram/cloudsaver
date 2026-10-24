@@ -1,13 +1,13 @@
 import {useMemo} from 'react';
 import {Coins,Layers3,ShieldCheck,Tags} from 'lucide-react';
 import type {Finding} from '../../lib/types';
-import {money,scopeOf,providerOf} from '../../lib/finops';
+import {money,scopeOf,providerOf,opportunityTotals} from '../../lib/finops';
 import {knownPrice,protectionSignals} from '../../lib/resource-insights';
 
 export function ExplorerSummary({findings}:{findings:Finding[]}){
   const summary=useMemo(()=>{
     const priced=findings.filter(knownPrice);
-    return {count:findings.length,priced:priced.length,retail:priced.reduce((sum,f)=>sum+(f.estimated_monthly_waste_usd||0),0),
+    return {count:findings.length,priced:priced.length,retail:opportunityTotals(findings).known,
       protected:findings.filter(f=>protectionSignals(f).length>0).length,
       scopes:new Set(findings.map(f=>`${providerOf(f)}:${scopeOf(f)}`)).size};
   },[findings]);

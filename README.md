@@ -5,6 +5,11 @@ separate reviewed AI knowledge storage, billing reconciliation/import, and acces
 See [implementation status and configuration](docs/IMPLEMENTATION_STATUS.md) for delivered functionality,
 verification, migration requirements and the remaining enterprise roadmap.
 
+The next engineering increment adds governed AI Foundry settings, operator model/region policy,
+atomic token reservations, metadata diagnostics, typed resource relationships and a richer resource drawer.
+See [resource analysis and AI Foundry activation](docs/RESOURCE_ANALYSIS_FOUNDRY_IMPLEMENTATION.md)
+for configuration, migrations, verification and supported boundaries.
+
 CloudSaver reviews cloud resource waste and container requests with a Next.js /
 React dashboard, five FastAPI services, PostgreSQL and Redis. This development
 release applies the new v1.0.0 master guide to the latest

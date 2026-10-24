@@ -12,6 +12,7 @@ def _entitlements_dict(tier):
         'can_export_terraform': tier.can_export_terraform,
         'can_use_keyvault': tier.can_use_keyvault,
         'can_dispatch_automated_alerts': tier.can_dispatch_automated_alerts,
+        'can_use_ai_advisory': tier.can_use_ai_advisory,
         'retention_days': tier.retention_days,
         'allowed_providers': list(tier.allowed_providers),
     }

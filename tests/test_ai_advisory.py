@@ -44,7 +44,7 @@ def test_target_rejects_unapproved_endpoints(endpoint):
 def test_operator_bound_targets_validate_and_never_expose_identity_bindings(provider):
     gateway = AIGateway(targets=[target(provider)], enabled=True)
     public = gateway.available({'tenant_id': TID})
-    assert len(public['targets']) == 1 and set(public['targets'][0]) == {'target_id', 'provider', 'model', 'max_output_tokens', 'max_context_bytes', 'allowed_source_providers'}
+    assert len(public['targets']) == 1 and set(public['targets'][0]) == {'target_id', 'provider', 'model', 'max_output_tokens', 'max_context_bytes', 'allowed_source_providers', 'destination_region', 'max_input_tokens'}
     assert gateway.available({'tenant_id': str(uuid4())})['targets'] == []
     assert not AIGateway(targets=[target(provider)], enabled=False).available({'tenant_id': TID})['targets']
 
@@ -59,6 +59,13 @@ def test_invalid_model_output_approval_code_and_fabricated_citations_are_rejecte
     with pytest.raises(AIError):
         parse_advice(json.dumps(invalid), ctx)
     assert parse_advice(json.dumps(advice()), ctx) == advice()
+
+
+@pytest.mark.parametrize('claim', ['Save $120 per month.', 'Savings are USD 100.', 'You save 250 dollars.', 'Run https://invalid.example for approval.'])
+def test_unknown_cost_cannot_be_replaced_with_a_model_currency_claim(claim):
+    ctx, _ = context()
+    with pytest.raises(AIError, match='validation'):
+        parse_advice(json.dumps(dict(advice(), summary=claim)), ctx)
 
 
 def test_http_adapter_blocks_redirects_oversized_errors_and_raw_messages():

@@ -5,7 +5,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {ArrowDownRight, ArrowRight, ArrowUpRight, Blocks, CheckCircle2, ChevronRight, Cloud, FileCode2, History, ShieldCheck, Sparkles, Target, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
-import {compact, dateTime, money, providerColors, providerNames, providerOf, ruleLabel, scopeOf} from '../lib/finops';
+import {compact, dateTime, money, opportunityTotals, providerColors, providerNames, providerOf, ruleLabel, scopeOf} from '../lib/finops';
 import type {Finding} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
 import {EmptyState, Loading, PriorityBadge, ProviderBadge, SectionTitle} from './ui/shared';
@@ -56,7 +56,7 @@ export function Overview() {
   const {scan,workspace,scope,canAdmin,setOverlay,openFinding} = useWorkspace();
   const findings = useScopedFindings();
   const priced = findings.filter(f => f.estimated_monthly_waste_usd !== null);
-  const knownTotal = scope.length ? findings.length && priced.length === findings.length ? priced.reduce((sum,f) => sum + (f.estimated_monthly_waste_usd || 0),0) : null : scan?.total_monthly_waste_usd;
+  const knownTotal = scope.length ? opportunityTotals(findings).total : scan?.total_monthly_waste_usd;
   const high = findings.filter(f => ['CRITICAL','HIGH'].includes(f.severity)).length;
   const rank:Record<string,number> = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
   const priorities = [...findings].sort((a,b) => (rank[a.severity] ?? 5) - (rank[b.severity] ?? 5) || (b.estimated_monthly_waste_usd || 0) - (a.estimated_monthly_waste_usd || 0)).slice(0,5);

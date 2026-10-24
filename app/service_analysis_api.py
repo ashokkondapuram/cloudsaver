@@ -90,7 +90,9 @@ def create_router(store, current_tenant):
 
     @router.get('/services/{service}')
     def service_workspace(service: str, tenant=Depends(current_tenant)):
-        scans = store.list(tenant['tenant_id'], 100)
+        if service not in SERVICES:
+            raise HTTPException(404, 'Service not found')
+        scans = [scan for scan in store.list(tenant['tenant_id'], 100) if scan['status'] == 'completed']
         trend = []
         current = []
         for index, scan in enumerate(scans):
@@ -114,11 +116,20 @@ def create_router(store, current_tenant):
         scans = [store.get(tenant['tenant_id'], str(value)) for value in (before, after)]
         if any(scan is None for scan in scans):
             raise HTTPException(404, 'Scan not found')
+        if any(scan['status'] != 'completed' for scan in scans):
+            raise HTTPException(409, 'Comparison requires two completed observations.')
+        def material(row):
+            # Collection timestamps change on every run; they are not configuration changes.
+            if 'configuration_snapshot' not in row:
+                return {key: value for key, value in row.items() if key not in ('observed_at', 'timestamp')}
+            return {key: row.get(key) for key in ('configuration_snapshot', 'protection_signals', 'region', 'resource_type',
+                    'collector_version', 'evidence_schema_version')} | {'dependency_refs': [
+                    {key: value for key, value in edge.items() if key != 'observed_at'} for edge in row.get('dependency_refs', [])]}
         rows = [{r['resource_id']: r for r in selected(scan, service)} for scan in scans]
         result = []
         for key in sorted(set(rows[0]) | set(rows[1])):
             state = ('new' if key not in rows[0] else 'no_longer_observed' if key not in rows[1]
-                     else 'persisting' if rows[0][key] == rows[1][key] else 'changed')
+                     else 'persisting' if material(rows[0][key]) == material(rows[1][key]) else 'changed')
             result.append(dict(resource_id=key, state=state))
         return dict(items=result, before=str(before), after=str(after), message='Observation change only; no deletion or savings is proven.')
 

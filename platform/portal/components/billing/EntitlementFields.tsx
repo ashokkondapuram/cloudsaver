@@ -4,7 +4,7 @@ import {ENTITLEMENT_KEYS, PROVIDERS, SCAN_FREQUENCIES, entitlementLabel, entitle
 import type {EntitlementKey, Entitlements, Provider, ScanFrequency} from '../../lib/types';
 
 type NumberKey = 'max_subscriptions' | 'max_resources_per_scan' | 'retention_days' | 'max_workspaces' | 'max_active_keys_per_workspace' | 'max_key_lifetime_days';
-type BoolKey = 'can_export_terraform' | 'can_use_keyvault' | 'can_dispatch_automated_alerts';
+type BoolKey = 'can_export_terraform' | 'can_use_keyvault' | 'can_dispatch_automated_alerts' | 'can_use_ai_advisory';
 
 export type EntitlementDraft = Record<NumberKey, string> & Record<BoolKey, boolean> & {
   allowed_scan_frequencies: ScanFrequency[]; allowed_providers: Provider[];
@@ -18,13 +18,13 @@ const NUMBER_RULES: Record<NumberKey, {min: number; max?: number}> = {
   max_active_keys_per_workspace: {min: 1, max: 20},
   max_key_lifetime_days: {min: 1, max: 365},
 };
-const BOOL_KEYS: BoolKey[] = ['can_export_terraform', 'can_use_keyvault', 'can_dispatch_automated_alerts'];
+const BOOL_KEYS: BoolKey[] = ['can_export_terraform', 'can_use_keyvault', 'can_dispatch_automated_alerts', 'can_use_ai_advisory'];
 const isNumberKey = (key: EntitlementKey): key is NumberKey => key in NUMBER_RULES;
 const isBoolKey = (key: EntitlementKey): key is BoolKey => (BOOL_KEYS as EntitlementKey[]).includes(key);
 
 export const DEFAULT_ENTITLEMENTS: Entitlements = {
   max_subscriptions: 1, max_resources_per_scan: 500, allowed_scan_frequencies: ['manual'], can_export_terraform: false,
-  can_use_keyvault: false, can_dispatch_automated_alerts: false, retention_days: 30, allowed_providers: [...PROVIDERS],
+  can_use_keyvault: false, can_dispatch_automated_alerts: false, can_use_ai_advisory: false, retention_days: 30, allowed_providers: [...PROVIDERS],
   max_workspaces: 1, max_active_keys_per_workspace: 5, max_key_lifetime_days: 365,
 };
 
@@ -35,6 +35,7 @@ export function toDraft(values: Partial<Entitlements>, base: Entitlements = DEFA
     retention_days: String(merged.retention_days), max_workspaces: String(merged.max_workspaces),
     max_active_keys_per_workspace: String(merged.max_active_keys_per_workspace), max_key_lifetime_days: String(merged.max_key_lifetime_days),
     can_export_terraform: merged.can_export_terraform, can_use_keyvault: merged.can_use_keyvault, can_dispatch_automated_alerts: merged.can_dispatch_automated_alerts,
+    can_use_ai_advisory: merged.can_use_ai_advisory,
     allowed_scan_frequencies: [...merged.allowed_scan_frequencies], allowed_providers: [...merged.allowed_providers],
   };
 }

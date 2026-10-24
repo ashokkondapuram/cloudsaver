@@ -6,7 +6,7 @@ import sqlite3
 from uuid import UUID
 
 TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
-          'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions')
+          'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics')
 
 
 class Connection:
@@ -42,6 +42,13 @@ class EnterpriseStore:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
                 db.db.executescript('''
+                CREATE TABLE IF NOT EXISTS ai_connection_diagnostics (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,target_id TEXT NOT NULL,
+                    actor TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE TRIGGER IF NOT EXISTS ai_diagnostics_no_update BEFORE UPDATE ON ai_connection_diagnostics
+                    BEGIN SELECT RAISE(ABORT,'AI diagnostics are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS ai_diagnostics_no_delete BEFORE DELETE ON ai_connection_diagnostics
+                    BEGIN SELECT RAISE(ABORT,'AI diagnostics are append-only'); END;
                 CREATE TABLE IF NOT EXISTS ai_inference_attempts (
                     id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, request_key TEXT NOT NULL, fingerprint TEXT NOT NULL,
                     scan_id TEXT NOT NULL, metadata TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',response TEXT,

@@ -52,7 +52,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
     from app.assessment_api import create_router as assessment_router
     from app.ai_advisory import AIGateway
     ledger = InferenceLedger(evidence_store)
-    ai_gateway = ai_gateway or AIGateway(budget=ledger)
+    ai_gateway = ai_gateway or AIGateway(budget=ledger, settings=settings)
+    from app.foundry_api import create_router as foundry_router
+    from app.foundry import FoundryController
+    api.include_router(foundry_router(getattr(ai_gateway, 'foundry', None) or FoundryController(settings, ledger=ledger), current_tenant))
     api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
     from app.resource_api import create_router as resource_router
     api.include_router(resource_router(settings, store, current_tenant, ai_gateway, evidence_store))
@@ -209,6 +212,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                 else:
                     enriched_findings.append(finding)
 
+            from app.dependencies import canonical_inventory, group_opportunities
+            observation_time = datetime.now(timezone.utc).isoformat()
+            inventory = canonical_inventory(inventory, observation_time)
+            enriched_findings = group_opportunities(enriched_findings, inventory)
             from app.pricing import opportunity_totals
             opportunity = opportunity_totals(enriched_findings)
             total_waste = opportunity['total_monthly_opportunity_usd']
@@ -216,8 +223,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
 
             from app.multi_cloud import scope_fingerprint
             from app.analysis_rules import evaluate_inventory, VERSION as rule_version, RULES
-            from app.inventory import coverage
-            observation_time = datetime.now(timezone.utc).isoformat()
+            from app.inventory import coverage, coverage_manifest
             policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
             if rule_ids is not None:
                 for rid, *_ in RULES:
@@ -242,6 +248,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, gitops_conf
                                'workspace_version': (rule_policy or {}).get('version'), 'policies': policies,
                                'policy_source': 'identity' if rule_ids is not None else 'local_catalog'},
                 coverage=coverage(inventory, enriched_findings, evaluations),
+                coverage_manifest=coverage_manifest(inventory, enriched_findings, evaluations),
             )
             # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
             if hasattr(ScanSummary, 'model_validate'):

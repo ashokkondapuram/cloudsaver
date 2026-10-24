@@ -9,7 +9,7 @@ PROVIDERS = ('azure', 'aws', 'gcp', 'kubernetes')
 FREQUENCIES = ('manual', 'daily', 'hourly')
 # Sent to CloudSaver in the verify and directory plan block.
 CLOUDSAVER_KEYS = ('max_subscriptions', 'max_resources_per_scan', 'allowed_scan_frequencies', 'can_export_terraform',
-                   'can_use_keyvault', 'can_dispatch_automated_alerts', 'retention_days', 'allowed_providers')
+                   'can_use_keyvault', 'can_dispatch_automated_alerts', 'retention_days', 'allowed_providers', 'can_use_ai_advisory')
 # Enforced by identity-service only.
 PLATFORM_KEYS = ('max_workspaces', 'max_active_keys_per_workspace', 'max_key_lifetime_days')
 ENTITLEMENT_KEYS = CLOUDSAVER_KEYS + PLATFORM_KEYS
@@ -20,27 +20,28 @@ LABELS = {
     'retention_days': 'Retention (days)', 'allowed_providers': 'Cloud providers',
     'max_workspaces': 'Workspaces per customer', 'max_active_keys_per_workspace': 'Active keys per workspace',
     'max_key_lifetime_days': 'Maximum key lifetime (days)',
+    'can_use_ai_advisory': 'AI advisory',
 }
 INTEGERS = {'max_subscriptions': (0, 1_000_000), 'max_resources_per_scan': (1, 10_000_000), 'retention_days': (1, 3650),
             'max_workspaces': (1, 10_000), 'max_active_keys_per_workspace': (1, 20), 'max_key_lifetime_days': (1, 365)}
-BOOLEANS = ('can_export_terraform', 'can_use_keyvault', 'can_dispatch_automated_alerts')
+BOOLEANS = ('can_export_terraform', 'can_use_keyvault', 'can_dispatch_automated_alerts', 'can_use_ai_advisory')
 
 SEED_PLANS = (
     {'code': 'STARTER', 'name': 'Starter', 'description': 'Manual scans for small teams.',
      'entitlements': {'max_subscriptions': 2, 'max_resources_per_scan': 250, 'allowed_scan_frequencies': ['manual'],
-                      'can_export_terraform': False, 'can_use_keyvault': False, 'can_dispatch_automated_alerts': False,
+                      'can_export_terraform': False, 'can_use_keyvault': False, 'can_dispatch_automated_alerts': False, 'can_use_ai_advisory': False,
                       'retention_days': 7, 'allowed_providers': list(PROVIDERS), 'max_workspaces': 3,
                       'max_active_keys_per_workspace': 5, 'max_key_lifetime_days': 365}},
     {'code': 'GROWTH', 'name': 'Growth', 'description': 'Daily scans, Terraform review and automatic alerts.',
      'entitlements': {'max_subscriptions': 10, 'max_resources_per_scan': 2500,
                       'allowed_scan_frequencies': ['manual', 'daily'], 'can_export_terraform': True,
-                      'can_use_keyvault': False, 'can_dispatch_automated_alerts': True, 'retention_days': 90,
+                      'can_use_keyvault': False, 'can_dispatch_automated_alerts': True, 'retention_days': 90, 'can_use_ai_advisory': True,
                       'allowed_providers': list(PROVIDERS), 'max_workspaces': 10, 'max_active_keys_per_workspace': 10,
                       'max_key_lifetime_days': 365}},
     {'code': 'ENTERPRISE', 'name': 'Enterprise', 'description': 'Hourly scans, Key Vault and long retention.',
      'entitlements': {'max_subscriptions': 1000, 'max_resources_per_scan': 100000,
                       'allowed_scan_frequencies': ['manual', 'daily', 'hourly'], 'can_export_terraform': True,
-                      'can_use_keyvault': True, 'can_dispatch_automated_alerts': True, 'retention_days': 365,
+                      'can_use_keyvault': True, 'can_dispatch_automated_alerts': True, 'retention_days': 365, 'can_use_ai_advisory': True,
                       'allowed_providers': list(PROVIDERS), 'max_workspaces': 100, 'max_active_keys_per_workspace': 20,
                       'max_key_lifetime_days': 365}},
 )
@@ -60,6 +61,9 @@ def validate_entitlements(value, *, partial=False):
     """Return normalized entitlements in canonical key order. Unknown keys are rejected."""
     if not isinstance(value, dict):
         raise IdentityError('Entitlements must be an object.')
+    if not partial:
+        value = dict(value)
+        value.setdefault('can_use_ai_advisory', False)
     unknown = sorted(set(value) - set(ENTITLEMENT_KEYS))
     if unknown:
         raise IdentityError(f'Remove unknown entitlements: {", ".join(unknown)}.')

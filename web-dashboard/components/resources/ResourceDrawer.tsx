@@ -9,6 +9,36 @@ import {Dialog} from '../ui/dialog';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, PillarDots} from './ResourceParts';
+import {AIProcessingDisclosure} from './AIProcessingDisclosure';
+
+function Evidence({detail}: {detail: ResourceDetail}) {
+  const text = JSON.stringify(detail.observation?.configuration_snapshot || {}, null, 2);
+  return <div className="drawer-section"><h3>Evidence provenance</h3>
+    <p>Collector: {detail.observation?.collector_version || 'Not recorded'} · Schema: {detail.observation?.evidence_schema_version || 'Legacy'}</p>
+    <p>Observed: {detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}. Configuration older than 24 hours requires refresh.</p>
+    {detail.assessment.pillars.flatMap(pillar => pillar.checks).map(check => <article key={`${check.pillar}:${check.code}`}><h4>{sentence(check.code)} · {check.status}</h4><p>{check.explanation}</p><small>Evidence fields: {check.evidence_fields.join(', ') || 'None returned'}</small></article>)}
+    <details><summary>Saved configuration ({text.length > 16000 ? 'truncated' : 'available fields'})</summary><pre style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{text.slice(0, 16000)}</pre></details>
+  </div>;
+}
+
+function Rules({detail}: {detail: ResourceDetail}) {
+  return <div className="drawer-section"><h3>Frozen rule evaluations</h3>{!detail.rule_evaluations?.length ? <Notice>No per-rule evaluation records exist in this observation. An absence of findings does not establish a pass.</Notice> : detail.rule_evaluations.map(rule => <article key={rule.rule_id}>
+    <h4>{rule.rule_id}</h4><p>{sentence(rule.outcome)} · version {rule.rule_version}</p><p>{rule.reason}</p>{rule.destructive_actions_blocked && <strong>Protected — destructive actions blocked</strong>}</article>)}</div>;
+}
+
+function Costs({detail}: {detail: ResourceDetail}) {
+  const fields = [['billed_cost_usd', 'Billed cost'], ['retail_estimate_usd', 'Retail review estimate'], ['modeled_future_cost_usd', 'Modeled future cost'],
+    ['opportunity_usd', 'Modeled opportunity'], ['verified_realized_savings_usd', 'Verified realized savings']] as const;
+  return <div className="drawer-section"><h3>Financial evidence</h3><dl className="settings-key-values">{fields.map(([key, name]) => <div key={key}><dt>{name}</dt><dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key])}</dd></div>)}</dl>
+    <p>{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
+    {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {item.rule_id}</li>)}</ul></Notice>}</div>;
+}
+
+function Dependencies({detail}: {detail: ResourceDetail}) {
+  return <div className="drawer-section"><h3>Observed typed relationships</h3><p>Only returned, authorized graph nodes are shown. Missing edges do not establish that dependencies are absent.</p>
+    {!detail.observation?.dependency_refs?.length ? <Notice>No typed dependency evidence is available. Verify topology, locks, backup and failover independently.</Notice> : <ul>{detail.observation.dependency_refs.map((edge, index) => <li key={index}><strong>{sentence(edge.relationship)} · {edge.verification_state}</strong><p>{edge.from_resource_id} → {edge.to_resource_id}</p><small>Observed: {edge.observed_at ? dateTime(edge.observed_at) : 'Unknown'}</small></li>)}</ul>}
+    {!!detail.assessment.protected_reasons.length && <Notice>Protection signals: {detail.assessment.protected_reasons.map(sentence).join(', ')}. These prevent destructive changes.</Notice>}</div>;
+}
 
 const formatDay = (value: string) => new Date(value + 'T00:00:00').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
 
@@ -37,6 +67,9 @@ function Assessment({detail}: {detail: ResourceDetail}) {
     <span className="eyebrow">UNVERIFIED MODEL ADVICE · {result.model}</span>
     {detail.ai.status === 'stale' && <Notice tone="warning">The resource evidence changed after this assessment. Run a new AI assessment before relying on it.</Notice>}
     <Notice tone="warning">{result.warning}</Notice>
+    <h4>Deterministic evidence confidence: {result.confidence_band?.replaceAll('_', ' ') || 'Not recorded'}</h4>
+    <p className="inline-help">This band describes saved evidence completeness. It is not a measured model-accuracy rate.</p>
+    {!!result.advice.knowledge_citations?.length && <><h4>Cited published guidance</h4><ul>{result.knowledge_sources?.filter(source => result.advice.knowledge_citations?.includes(source.publication_id)).map(source => <li key={source.publication_id}>{source.title} · version {source.version} · {source.publication_id}</li>)}</ul></>}
     <h4>Suggested risk: {result.advice.risk_level}</h4><p>{result.advice.summary}</p>
     <h4>Recommended next steps</h4><Actions actions={result.advice.recommended_actions || []}/>
     {result.advice.pillars.map(p => <article key={p.pillar}><h4 className="capitalize">{p.pillar}</h4><p>{p.observation}</p><small>Saved check references: {p.evidence_codes.map(label).join(', ') || 'None — evidence gap'}</small></article>)}
@@ -72,6 +105,7 @@ function Questions({detail, onChange}: {detail: ResourceDetail; onChange: () => 
       {!detail.followups.length ? <p className="inline-empty">No questions yet.</p> : <div className="followup-list">{detail.followups.map(f => <article key={f.id}><strong>{f.question}</strong><p>{f.answer.answer}</p>{!!f.answer.evidence_codes.length && <small>Evidence: {f.answer.evidence_codes.map(label).join(', ')}</small>}{!!f.answer.limitations.length && <small>Limitations: {f.answer.limitations.join(' · ')}</small>}<small>{dateTime(f.created_at)}</small></article>)}</div>}</div>
     {!canAdmin ? <p className="inline-help">A workspace administrator can ask questions.</p> : !targets?.enabled || !targets.targets.length ? <p className="inline-empty">No approved AI target is enabled for this workspace.</p> : detail.followups_remaining > 0 && <form className="drawer-section followup-form" onSubmit={ask}>
       <label className="ai-target-label">Approved model target<select value={target} disabled={busy} onChange={e => setTarget(e.target.value)}>{targets.targets.map(t => <option key={t.target_id} value={t.target_id}>{t.target_id} · {t.model}</option>)}</select></label>
+      <AIProcessingDisclosure targets={targets} targetId={target}/>
       <label className="ai-target-label">Your question<textarea maxLength={500} rows={3} value={question} disabled={busy} onChange={e => setQuestion(e.target.value)} placeholder="For example: What evidence is missing before this disk can be removed?"/></label>
       <small className="inline-help">{question.length}/500 · Your question is sent to the model with the sanitized evidence.</small>
       <label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} disabled={busy} onChange={e => setAck(e.target.checked)}/>I acknowledge external processing of my question and this sanitized evidence.</label>
@@ -143,14 +177,17 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
     return () => request.abort();
   }, [scanId, resourceKey, token, version]);
   const changed = () => {setVersion(v => v + 1); onChange();};
-  const tabs = [{id: 'overview', label: 'Overview', icon: ShieldCheck}, {id: 'ai', label: 'AI assessment', icon: BrainCircuit}, {id: 'questions', label: 'Questions', icon: MessageSquareText}, {id: 'history', label: 'History', icon: History}, {id: 'decision', label: 'Decision', icon: ListChecks}];
+  const tabs = [{id: 'overview', label: 'Overview', icon: ShieldCheck}, {id: 'evidence', label: 'Evidence', icon: ListChecks},
+    {id: 'rules', label: 'Rules', icon: ListChecks}, {id: 'cost', label: 'Cost', icon: ListChecks},
+    {id: 'dependencies', label: 'Dependencies', icon: ShieldCheck}, {id: 'ai', label: 'AI Advice', icon: BrainCircuit},
+    {id: 'history', label: 'History', icon: History}, {id: 'decision', label: 'Decisions', icon: ListChecks}];
   const current = detail && detail.assessment.resource_key === resourceKey ? detail : null;
   return <Dialog open={!!resourceKey} onClose={onClose} title="Resource analysis" drawer>
     {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current ? <Loading label="Loading resource analysis…"/> : <>
       <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={current.assessment.provider}/><span className={`state-badge ${current.assessment.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{current.assessment.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><AIStatusBadge ai={current.ai}/></div><h2>{current.assessment.resource_name || current.assessment.resource_id}</h2><p>{current.assessment.finding_count} finding{current.assessment.finding_count === 1 ? '' : 's'} · {sentence(current.assessment.review_priority)} · <PillarDots pillars={Object.fromEntries(current.assessment.pillars.map(p => [p.pillar, p.status]))}/></p></div>
       <div className="drawer-tabs" role="tablist" aria-label="Resource analysis views">{tabs.map(t => <button key={t.id} id={`${id}-${t.id}-tab`} role="tab" aria-selected={tab === t.id} aria-controls={`${id}-${t.id}`} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}><t.icon size={15}/>{t.label}</button>)}</div>
       <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`}>
-        {tab === 'overview' ? <Overview detail={current}/> : tab === 'ai' ? <Assessment detail={current}/> : tab === 'questions' ? <Questions detail={current} onChange={changed}/> : tab === 'history' ? <HistoryTab detail={current}/> : <DecisionTab detail={current} onChange={changed}/>}
+        {tab === 'overview' ? <Overview detail={current}/> : tab === 'evidence' ? <Evidence detail={current}/> : tab === 'rules' ? <Rules detail={current}/> : tab === 'cost' ? <Costs detail={current}/> : tab === 'dependencies' ? <Dependencies detail={current}/> : tab === 'ai' ? <><Assessment detail={current}/><Questions detail={current} onChange={changed}/></> : tab === 'history' ? <HistoryTab detail={current}/> : <DecisionTab detail={current} onChange={changed}/>}
       </div>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI status: {aiStatusLabels[current.ai.status]}. Advice is unverified and never changes cloud resources.</div>
     </>}

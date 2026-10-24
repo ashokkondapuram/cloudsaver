@@ -24,15 +24,23 @@ export type ResourceAssessment = Omit<ResourceRow, 'pillars' | 'ai' | 'decision'
 };
 export type Followup = {id: string; question: string; created_at: string; answer: {answer: string; evidence_codes: string[]; limitations: string[]}};
 export type AIResult = {model: string; target_id: string; warning: string; cached?: boolean; usage?: {input_tokens: number | null; output_tokens: number | null};
-  advice: {summary: string; risk_level: string; pillars: {pillar: string; observation: string; evidence_codes: string[]}[]; review_questions: string[]; recommended_actions?: Action[]}};
+  confidence_band?: string; knowledge_sources?: {publication_id: string; version: number; title: string}[];
+  advice: {summary: string; risk_level: string; pillars: {pillar: string; observation: string; evidence_codes: string[]}[]; review_questions: string[]; recommended_actions?: Action[]; knowledge_citations?: string[]}};
 export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; findings: Finding[]; ai_context: Record<string, unknown>; ai: AIState;
-  ai_result: AIResult | null; decision: Decision | null; followups: Followup[]; followups_remaining: number};
+  ai_result: AIResult | null; decision: Decision | null; followups: Followup[]; followups_remaining: number;
+  observation?: {observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
+    dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
+  rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean}[];
+  costs?: {billed_cost_usd: number | null; retail_estimate_usd: number | null; modeled_future_cost_usd: number | null; opportunity_usd: number | null; verified_realized_savings_usd: number | null; explanation: string};
+  financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[]};
 export type Batch = {id: string; scan_id: string; target_id: string; status: 'queued' | 'running' | 'waiting_for_budget' | 'completed' | 'cancelled';
   total: number; resume_after: string | null; created_at: string; updated_at: string; counts: Record<string, number>};
 export type HistoryEntry = {scan_id: string; timestamp: string; present: boolean; review_priority?: string; risk_level?: string; rule_ids?: string[];
   pillars?: Record<string, PillarStatus>; retail_estimate_usd?: number | null; changes: string[]};
 export type ResourceHistory = {scans: HistoryEntry[]; ai_results: {assessment_id: string; scan_id: string; created_at: string; risk_level: string; model: string}[]; decisions: Decision[]};
-export type Targets = {enabled: boolean; hourly_attempt_limit: number; targets: {target_id: string; provider: string; model: string; allowed_source_providers?: string[]}[]};
+export type Targets = {enabled: boolean; hourly_attempt_limit: number; routing_mode?: string; platform_policy_version?: number; configuration_reason?: string;
+  knowledge_retrieval?: string; usage?: {attempts_current_hour: number};
+  targets: {target_id: string; provider: string; model: string; destination_region?: string | null; max_input_tokens?: number; max_output_tokens?: number; allowed_source_providers?: string[]}[]};
 
 export const PILLARS = ['cost', 'reliability', 'performance', 'security', 'operations'] as const;
 export const ACTIVE_BATCH = ['queued', 'running', 'waiting_for_budget'];

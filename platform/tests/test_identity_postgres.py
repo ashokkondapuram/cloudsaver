@@ -31,7 +31,7 @@ TABLES = ('directory.customers', 'directory.workspaces', 'directory.workspace_az
           'directory.platform_settings', 'directory.directory_changes', 'identity.api_keys', 'identity.key_events',
           'identity.key_usage_hourly', 'identity.verification_failures_minute', 'directory.access_checks',
           'identity.service_accounts', 'identity.cache_events', 'identity.customer_memberships',
-          'identity.workspace_memberships', 'identity.users')
+          'identity.workspace_memberships', 'identity.users', 'directory.ai_foundry_policy')
 
 
 def test_separate_knowledge_database_governance(token_db):
@@ -136,6 +136,19 @@ def test_rule_parameter_revision_uses_real_jsonb_and_preserves_forced_rls(servic
     assert rule['parameters'] == {'minimum_days': 21}
     with psycopg.connect(token_db[1]) as db:
         assert db.execute("SELECT relforcerowsecurity FROM pg_class WHERE oid='analysis.rule_catalog'::regclass").fetchone() == (True,)
+
+
+def test_global_ai_policy_persists_with_forced_rls_and_audit(service, token_db):
+    row = service.get_ai_policy()
+    policy = row['policy']
+    policy['allowed_models']['azure'] = ['approved-test-model']
+    policy['allowed_regions']['azure'] = ['eastus']
+    changed = service.update_ai_policy({'version': row['version'], 'policy': policy}, OPERATOR)
+    assert changed['version'] == row['version'] + 1
+    assert service.get_ai_policy()['policy']['allowed_models']['azure'] == ['approved-test-model']
+    with psycopg.connect(token_db[1]) as db:
+        assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='directory.ai_foundry_policy'::regclass").fetchone() == (True,True)
+        assert db.execute("SELECT details->>'version' FROM identity.key_events WHERE action='ai_policy_updated' ORDER BY occurred_at DESC LIMIT 1").fetchone()[0] == str(changed['version'])
 
 
 def test_runtime_store_refuses_the_owner_role(token_db):
