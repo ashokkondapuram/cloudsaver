@@ -1,4 +1,6 @@
 # Local developer sign-in for live scans without managed identity or stored secrets.
+# Windows/Docker Desktop Azure-only setup: use compose.azure-local.example.yaml
+# and sign in inside the Linux container instead of mounting a Windows CLI cache.
 # Copy to compose.override.yaml, set CLOUDSAVER_CLOUD_IDENTITY=developer and
 # CLOUDSAVER_INSTALL_AZURE_CLI=true in .env, then sign in on the host first:
 #   az login --tenant <customer tenant ID>

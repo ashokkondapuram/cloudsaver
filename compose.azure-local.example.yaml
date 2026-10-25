@@ -1,0 +1,18 @@
+# Local Azure scans on Docker Desktop, including Windows. No host CLI required.
+# Copy to compose.azure-local.yaml and follow README.md's Azure CLI setup.
+# Set CLOUDSAVER_CLOUD_IDENTITY=developer and CLOUDSAVER_INSTALL_AZURE_CLI=true
+# in the ROOT .env, rebuild the service image, then sign in inside the scanner.
+# Use explicitly: docker compose -f compose.yaml -f compose.azure-local.yaml ...
+# This cache contains developer credentials. Use only for local development.
+x-azure-local: &azure-local
+  environment:
+    AZURE_CONFIG_DIR: /home/appuser/.azure
+  volumes:
+    - azure-developer-cache:/home/appuser/.azure
+
+services:
+  scanner-service: *azure-local
+  scan-worker: *azure-local
+
+volumes:
+  azure-developer-cache:

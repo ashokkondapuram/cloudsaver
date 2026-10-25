@@ -98,6 +98,46 @@ docker compose --env-file .\.env config --quiet
 
 If the copied template also has blank service tokens, use the same Docker command with `--add-identity`, then repeat the platform `--add-callers ../.env` command before starting services. None of these helpers changes passwords stored in an existing PostgreSQL volume.
 
+### Azure scan fails: Azure CLI not found on path
+
+`AzureCliCredential` means the scanner is using local **developer** authentication. The production image excludes Azure CLI unless explicitly enabled at build time. Installing or signing in to Azure CLI on Windows does not install it or establish a Linux-container sign-in. A successful `/api/v1/finops/imports` request confirms that API request succeeded; it does not verify Azure scan credentials.
+
+For Docker Desktop, including Windows, edit the existing **root** `.env` and set these values while preserving the rest of the file:
+
+```dotenv
+CLOUDSAVER_CLOUD_IDENTITY=developer
+CLOUDSAVER_INSTALL_AZURE_CLI=true
+```
+
+From the repository root in PowerShell, copy the Azure-only local override once. If you already customized that file, keep it and review its settings instead of overwriting it. This setup uses a dedicated named volume for the container's CLI cache; it does not require host Python, Azure CLI or a Windows token-cache mount.
+
+```powershell
+Copy-Item .\compose.azure-local.example.yaml .\compose.azure-local.yaml
+$c = @('--env-file', '.\.env', '-f', '.\compose.yaml', '-f', '.\compose.azure-local.yaml')
+
+docker compose @c config --quiet
+# A container restart alone cannot install Azure CLI; rebuild the Python image.
+docker compose @c build scanner-service
+docker compose @c up -d --force-recreate scanner-service
+docker compose @c exec scanner-service az version
+
+# Replace the placeholder with the Microsoft Entra tenant that owns your subscriptions.
+docker compose @c exec scanner-service az login --use-device-code --tenant "YOUR_ENTRA_TENANT_ID"
+docker compose @c exec scanner-service az account list --query "[].{Subscription:id,Tenant:tenantId,Name:name}" --output table
+```
+
+Run each command only after the previous one succeeds. Complete the device-code sign-in in your browser; the scanner's user needs at least Reader access to the subscriptions selected for its workspace. Keep the browser/device sign-in code private. Then retry the scan in CloudSaver. Each additional Entra tenant must be signed in separately, and workspace tenant IDs must match the real owning Entra tenants.
+
+If you use queued scans, also recreate the Celery scan worker with the same override so it uses the rebuilt image and shared CLI cache:
+
+```powershell
+docker compose @c up -d --force-recreate scan-worker
+```
+
+Include both Compose files in subsequent local scanner/worker commands. The override deliberately excludes the agent execution worker, platform and other cloud providers. Existing custom overrides are not automatically loaded when these explicit `-f` arguments are used; include any other reviewed overrides explicitly if needed.
+
+The volume contains developer credentials and survives container recreation. To sign out, use `docker compose @c exec scanner-service az logout`; both scanner and scan worker share that sign-in cache. Use this setup only for development. On Azure, configure an attached managed identity and the reviewed direct/federated access bindings described in [managed identity roles](docs/MANAGED_IDENTITY_ROLES.md), without the local cache override. Setting `managed_identity` alone does not provide an identity on Docker Desktop.
+
 ### Migration fails: role "cloudsaver_app" does not exist
 
 Read the actual migration error before retrying:

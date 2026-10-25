@@ -146,6 +146,8 @@ Platform stores **SHA-256 digests only** in `PLATFORM_IDENTITY_CALLERS` (JSON: `
 
 Keyless access is configured once per stack; workspace bindings live in the platform portal. See [CLOUD_SOURCES.md](CLOUD_SOURCES.md) and [MANAGED_IDENTITY_ROLES.md](MANAGED_IDENTITY_ROLES.md).
 
+Docker Desktop developer scans need Azure CLI **inside** the Python service image and a writable container sign-in cache. Enable `CLOUDSAVER_INSTALL_AZURE_CLI=true`, rebuild, and follow the [local Azure sign-in guide](../README.md#azure-scan-fails-azure-cli-not-found-on-path) using `compose.azure-local.example.yaml`. The scanner and scan worker share its dedicated named volume; host Windows CLI credentials are not mounted.
+
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `CLOUDSAVER_CLOUD_IDENTITY` | Yes | `managed_identity` (Azure) or `developer` (local CLI / ADC) |

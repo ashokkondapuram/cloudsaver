@@ -76,6 +76,10 @@ docs/MANAGED_IDENTITY_ROLES.md.
   (build with CLOUDSAVER_INSTALL_AZURE_CLI=true), the AWS default chain such as an
   SSO profile followed by the same AssumeRole, and gcloud application default
   credentials followed by impersonation. See compose.override.example.yaml.
+  For Azure on Windows/Docker Desktop, use `compose.azure-local.example.yaml`
+  and the [container CLI sign-in instructions](../README.md#azure-scan-fails-azure-cli-not-found-on-path).
+  This installs Azure CLI in the image and uses a Linux named-volume cache shared
+  only by the scanner and scan worker. Host Windows CLI sign-in is not sufficient.
 
 ## Permissions
 

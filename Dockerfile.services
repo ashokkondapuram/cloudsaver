@@ -6,7 +6,8 @@ COPY requirements.txt .
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export PIP_CERT=/run/secrets/proxy_ca; fi; \
     pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home appuser && \
-    mkdir -p /app/data && chown appuser:appuser /app/data
+    mkdir -p /app/data /home/appuser/.azure && \
+    chown appuser:appuser /app/data /home/appuser/.azure && chmod 0700 /home/appuser/.azure
 # Developer sign-in only: Azure CLI in an isolated venv so its pins never touch the app.
 ARG INSTALL_AZURE_CLI=false
 RUN --mount=type=secret,id=proxy_ca \
