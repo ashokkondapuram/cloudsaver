@@ -1,4 +1,7 @@
-# CloudSaver v1.4.0 — full FinOps workspace
+# CloudSaver v1.5.0 — full FinOps workspace
+
+The v1.5.0 upgrade adds keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. Existing restored workflows and deployment fixes remain available.
+
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
 

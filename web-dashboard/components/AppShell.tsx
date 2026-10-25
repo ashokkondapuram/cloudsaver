@@ -17,15 +17,18 @@ import {FindingDrawer, ReviewDrawer} from './drawer/FindingDrawer';
 import {ClaimView} from './ClaimView';
 
 export const navigation = [
-  {href:'/',label:'Overview',icon:LayoutDashboard,group:'WORKSPACE',shortcut:'G D'},
+  {href:'/',label:'Overview',icon:LayoutDashboard,group:'DISCOVER & ANALYZE',shortcut:'G D'},
   {href:'/findings',label:'Inventory & findings',icon:Blocks,group:'',shortcut:'G F'},
   {href:'/resources',label:'Resources & 5-Pillar',icon:BrainCircuit,group:'',shortcut:'G R'},
+  {href:'/services/disks',label:'Service matrices',icon:Database,group:''},
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
-  {href:'/agents',label:'Agent worker',icon:Sparkles,group:'EXECUTION',shortcut:'G A'},
-  {href:'/allocation',label:'Cost allocation',icon:Wallet,group:'FINANCE'},
-  {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:'GOVERNANCE'},
+  {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:'MODEL & ATTRIBUTE'},
+  {href:'/allocation',label:'Cost allocation',icon:Wallet,group:''},
+  {href:'/agents',label:'Agent worker',icon:Sparkles,group:'ACT & GOVERN'},
+  {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:''},
   {href:'/activity',label:'Activity & delivery',icon:Activity,group:''},
-  {href:'/settings',label:'Settings & governance',icon:Settings2,group:'MANAGE',shortcut:'G S'},
+  {href:'/resources/report',label:'Executive report',icon:FileCode2,group:'REPORT & ADMINISTER'},
+  {href:'/settings',label:'Settings & governance',icon:Settings2,group:'',shortcut:'G S'},
 ];
 
 function Brand({compact = false}: {compact?: boolean}) {
@@ -145,10 +148,10 @@ export function AppShell({children}: {children: ReactNode}) {
     return () => {controller.abort();clearInterval(timer);};
   }, [token]);
   if (!workspace) return pathname === '/claim' ? <ClaimView/> : <Login/>;
-  const active = navigation.find(item => item.href === pathname) || navigation[0];
+  const active = navigation.find(item => (item.href === pathname || item.href === '/services/disks' && pathname.startsWith('/services/'))) || navigation[0];
   const scopes = [...new Set((scan?.findings || []).map(scopeOf))];
   const failures = reliability?.counts.filter(c => c.status === 'dead_letter').reduce((sum,c) => sum + c.count,0) || 0;
-  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${pathname === item.href ? 'active' : ''}`} aria-current={pathname === item.href ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.3.0</small></>}</button></div></>;
+  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.5.0</small></>}</button></div></>;
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>
@@ -160,7 +163,7 @@ export function AppShell({children}: {children: ReactNode}) {
     <FindingDrawer/><ReviewDrawer/><CommandPalette/><ScanDialog/>
     <Dialog open={overlay === 'workspace'} onClose={() => setOverlay(null)} title="Connect another workspace"><div className="dialog-content"><ConnectionForm switching/></div></Dialog>
     <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28}/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No dead-letter deliveries were reported at the last refresh.' : 'Open Settings & governance to inspect operational state.'}</p></div>}<Link className="button secondary" href="/settings" onClick={() => setOverlay(null)}>Open settings activity<ArrowRight size={16}/></Link></div></Dialog>
-    <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><nav aria-label="Mobile navigation">{navigation.map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? 'page' : undefined} onClick={() => setMobileOpen(false)}><item.icon size={20}/>{item.label}</Link>)}</nav></Dialog>
+    <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><nav aria-label="Mobile navigation">{navigation.map(item => <Link key={item.href} href={item.href} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} onClick={() => setMobileOpen(false)}><item.icon size={20}/>{item.label}</Link>)}</nav></Dialog>
     {notice && <div className={`toast toast-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'success' ? <Check size={17}/> : <Bell size={17}/>}</span><p>{notice.text}</p><button className="icon-button" aria-label="Dismiss notification" onClick={clearNotice}><X size={16}/></button></div>}
   </div>;
 }

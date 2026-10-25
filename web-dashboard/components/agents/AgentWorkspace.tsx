@@ -4,6 +4,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Bot,Check,Clock,FileCode2,RefreshCw,ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
+import {IaCPreview} from '../V150Views';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState,Notice,SectionTitle} from '../ui/shared';
 import './agents.css';
@@ -97,7 +98,7 @@ export function AgentWorkspace(){
     {selected&&<section className="panel agent-review" aria-label="Agent plan review"><div className="grid-heading"><div><h2>Plan & execution review</h2><p>{selected.id} · version {selected.version} · {labels(selected.state)}</p></div><span className="status-tag">{labels(selected.state)}</span></div><div className="agent-review-body">
       <p className="agent-resource">{selected.resource_id}</p><p>{selected.payload.intent}</p>
       {!selected.payload.plan?<Notice tone="info">{selected.payload.data_erased||selected.payload.data_content_expired?'AI task content is unavailable under the data-retention policy. Audit hashes and execution outcomes remain; expired instructions cannot be replayed.':selected.state==='failed'?'Planning stopped. Review AI Foundry policy, worker health and token budgets before requesting another draft.':'The gateway is waiting for a worker to draft the plan. No cloud action is approved.'}</Notice>:<>
-        <h3>{selected.payload.plan.summary}</h3><ol className="agent-steps">{selected.payload.plan.steps.map((s,i)=><li key={i}><div><strong>{s.operation}</strong> <span className="status-tag">{labels(selected.payload.steps[i]?.state||'pending')}</span></div><p>{s.purpose}</p><p><strong>Connector:</strong> {s.connector_id}</p><pre>{JSON.stringify(s.arguments,null,2)}</pre><p><strong>Verify:</strong> {s.verification}</p><p><strong>Recovery:</strong> {s.rollback}</p>{selected.payload.steps[i]?.result&&<p>{selected.payload.steps[i].result?.code}</p>}</li>)}</ol>
+        {selected.payload.plan.steps.some(s=>s.operation==='gitops.terraform.sync')&&selected.payload.plan_hash&&<IaCPreview taskId={selected.id} planHash={selected.payload.plan_hash}/>}<h3>{selected.payload.plan.summary}</h3><ol className="agent-steps">{selected.payload.plan.steps.map((s,i)=><li key={i}><div><strong>{s.operation}</strong> <span className="status-tag">{labels(selected.payload.steps[i]?.state||'pending')}</span></div><p>{s.purpose}</p><p><strong>Connector:</strong> {s.connector_id}</p><pre>{JSON.stringify(s.arguments,null,2)}</pre><p><strong>Verify:</strong> {s.verification}</p><p><strong>Recovery:</strong> {s.rollback}</p>{selected.payload.steps[i]?.result&&<p>{selected.payload.steps[i].result?.code}</p>}</li>)}</ol>
         {!!selected.payload.connector_bindings?.length&&<details><summary>Approved connector destinations</summary><pre>{JSON.stringify(selected.payload.connector_bindings,null,2)}</pre></details>}
         <details><summary>TypeScript runCode program</summary><pre>{selected.code||'Open this task again to load its program.'}</pre><p className="inline-help">Connector arguments above are bound to the plan hash. The worker requests a single-use gateway permit before every call.</p></details>
         <p className="agent-hash">Plan SHA-256: {selected.payload.plan_hash}</p>

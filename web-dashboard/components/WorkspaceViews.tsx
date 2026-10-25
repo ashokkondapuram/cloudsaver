@@ -12,6 +12,7 @@ import {useWorkspace} from './WorkspaceProvider';
 import {useScopedFindings} from './Overview';
 import {GitOpsPanel, PlanPolicyPanel} from './GitOpsPanel';
 import {ReliabilityPanel} from './ReliabilityPanel';
+import {ExecutionSyncTimeline} from './V150Views';
 import {ServiceAnalysis} from './ServiceAnalysis';
 import {BillingEvidencePanel,AIAssessmentHistory} from './EnterpriseEvidence';
 import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
@@ -30,7 +31,7 @@ function ScanHistory() {
 export function ActivityView() {
   const {token,canAdmin} = useWorkspace();
   const [tab,setTab] = useState('deliveries');
-  return <><div className="page-tabs" role="tablist" aria-label="Activity views"><button role="tab" aria-selected={tab==='deliveries'} id="activity-deliveries-tab" aria-controls="activity-deliveries" onClick={()=>setTab('deliveries')}><Activity size={16}/>Delivery & audit</button><button role="tab" aria-selected={tab==='scans'} id="activity-scans-tab" aria-controls="activity-scans" onClick={()=>setTab('scans')}><History size={16}/>Scan history</button><button role="tab" aria-selected={tab==='ai'} id="activity-ai-tab" aria-controls="activity-ai" onClick={()=>setTab('ai')}><BrainCircuit size={16}/>AI assessments</button></div><div role="tabpanel" id={`activity-${tab}`} aria-labelledby={`activity-${tab}-tab`}>{tab==='deliveries'?<ReliabilityPanel token={token} canAdmin={canAdmin}/>:tab==='ai'?<AIAssessmentHistory/>:<ScanHistory/>}</div></>;
+  return <><div className="page-tabs" role="tablist" aria-label="Activity views"><button role="tab" aria-selected={tab==='deliveries'} id="activity-deliveries-tab" aria-controls="activity-deliveries" onClick={()=>setTab('deliveries')}><Activity size={16}/>Delivery & audit</button><button role="tab" aria-selected={tab==='scans'} id="activity-scans-tab" aria-controls="activity-scans" onClick={()=>setTab('scans')}><History size={16}/>Scan history</button><button role="tab" aria-selected={tab==='ai'} id="activity-ai-tab" aria-controls="activity-ai" onClick={()=>setTab('ai')}><BrainCircuit size={16}/>AI assessments</button><button role="tab" aria-selected={tab==='execution'} id="activity-execution-tab" aria-controls="activity-execution" onClick={()=>setTab('execution')}><GitBranch size={16}/>Execution & IaC</button></div><div role="tabpanel" id={`activity-${tab}`} aria-labelledby={`activity-${tab}-tab`}>{tab==='deliveries'?<ReliabilityPanel token={token} canAdmin={canAdmin}/>:tab==='ai'?<AIAssessmentHistory/>:tab==='execution'?<ExecutionSyncTimeline/>:<ScanHistory/>}</div></>;
 }
 
 function CloudAccounts() {

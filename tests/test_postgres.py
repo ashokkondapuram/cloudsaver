@@ -365,7 +365,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0019_multicloud_governance_and_pillars',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0020_billing_and_agent_gitops',)]
 
 
 
@@ -447,7 +447,7 @@ def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_priv
     rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
     assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
     with psycopg.connect(database[0]) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0019_multicloud_governance_and_pillars'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0020_billing_and_agent_gitops'
         assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
 
 
@@ -1272,3 +1272,21 @@ def test_lean_multicloud_job_intent_fences_scope_and_commits_normalized_cloud_ro
     foreign=dict(saved,scan_id=str(uuid4()))
     with pytest.raises(ValueError,match='registry'):jobs.complete_job(tid,next_job['job_id'],foreign,selection,token=token)
     assert store.get(tid,foreign['scan_id']) is None
+
+
+def test_v150_workflow_journals_enforce_rls_and_persist_fences(database):
+    from app.config import Settings
+    from app.enterprise_store import EnterpriseStore
+    from app.v150_store import WorkflowStore, WorkflowConflict
+    _,url,_=database
+    a,b=workspace(),workspace()
+    flows=WorkflowStore(EnterpriseStore(Settings('azure',':memory:',(a,b),database_url=url)))
+    for table in ('billing_sync_runs','agent_gitops_syncs'):
+        id=flows.begin(a['tenant_id'],table,'exact-binding',{'evidence':'hash-only'},once=True)
+        assert flows.rows(b['tenant_id'],table)==[]
+        flows.finish(a['tenant_id'],table,id,'needs_reconciliation',{'automatic_retry':False})
+        with pytest.raises(WorkflowConflict):flows.begin(a['tenant_id'],table,'exact-binding',{},once=True)
+        with psycopg.connect(url) as db:
+            assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
+            context(db,b['tenant_id'])
+            assert db.execute(sql.SQL('UPDATE {} SET state=%s WHERE id=%s RETURNING id').format(sql.Identifier(table)),('tampered',id)).fetchall()==[]

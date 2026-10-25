@@ -12,6 +12,14 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/services/{service}'):'scoped_read',
+    ('GET','/api/v1/services/{service_name}'):'scoped_read',
+    ('GET','/api/v1/optimization/scans/{scan_id}/auto-scenarios'):'scoped_read',
+    ('GET','/api/v1/gitops/syncs'):'full_scope',
+    ('POST','/api/v1/finops/sync'):'full_scope',
+    ('GET','/api/v1/finops/sync-status'):'full_scope',
+    ('POST','/api/v1/gitops/sync-agent'):'scan_write',
+    ('POST','/api/v1/gitops/preview-and-evaluate'):'scan_write',
     ('GET', '/api/v1/ai/assessments'): 'full_scope',
     ('GET', '/api/v1/ai/assessments/{assessment_id}'): 'full_scope',
     ('POST','/api/v1/ai/governance/holds/{hold_id}/release'): 'full_scope',

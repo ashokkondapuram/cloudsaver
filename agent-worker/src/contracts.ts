@@ -1,9 +1,10 @@
 export type Connector = {
   id: string; tenant_id: string; provider: string; scope_id: string;
-  kind: 'azure_arm' | 'aws_sdk' | 'gcp_rest' | 'k8s_api' | 'http_json'; operations: string[]; endpoint: string | null; token_env: string | null;
+  kind: 'azure_arm' | 'aws_sdk' | 'gcp_rest' | 'k8s_api' | 'gitops_terraform' | 'http_json'; operations: string[]; endpoint: string | null; token_env: string | null;
+  target_id?:string; target_binding?:Record<string,unknown>;
   region?: string | null; role_arn?: string | null; service_account?: string | null;
 };
-export type Step = {connector_id: string; operation: 'resource.inspect' | 'workload.inspect' | 'tags.merge' | 'labels.merge' | 'annotations.merge' | 'snapshot.create' | 'ebs.snapshot.create' | 'disk.snapshot.create' | 'action.submit';
+export type Step = {connector_id: string; operation: 'resource.inspect' | 'workload.inspect' | 'tags.merge' | 'labels.merge' | 'annotations.merge' | 'snapshot.create' | 'ebs.snapshot.create' | 'disk.snapshot.create' | 'gitops.terraform.sync' | 'action.submit';
   arguments: Record<string, unknown>; purpose: string; verification: string; rollback: string};
 export type Plan = {summary: string; steps: Step[]};
 export type Outcome = {status: 'succeeded' | 'failed' | 'uncertain'; code: string; http_status?: number; evidence_digest?: string};
@@ -16,11 +17,19 @@ export function loadConnectors(raw: string): Connector[] {
   const values: unknown = JSON.parse(raw);
   if (!Array.isArray(values) || values.length>100) throw new Error('Invalid connector catalog');
   const result = values.map((value) => {
-    if (!value || typeof value!=='object' || Object.keys(value).some(k=>!['id','tenant_id','provider','scope_id','kind','operations','endpoint','token_env','region','role_arn','service_account'].includes(k))) throw new Error('Invalid connector fields');
+    if (!value || typeof value!=='object' || Object.keys(value).some(k=>!['id','tenant_id','provider','scope_id','kind','operations','endpoint','token_env','region','role_arn','service_account','target_id','target_binding'].includes(k))) throw new Error('Invalid connector fields');
     const c = {...value,endpoint:value.endpoint??null,token_env:value.token_env??null,region:value.region??null,role_arn:value.role_arn??null,service_account:value.service_account??null} as Connector;
     if (!/^[a-z][a-z0-9-]{0,59}$/.test(c.id) || !/^[a-f0-9-]{36}$/i.test(c.tenant_id) || !c.scope_id ||
-        !['azure','aws','gcp','kubernetes'].includes(c.provider) || !['azure_arm','aws_sdk','gcp_rest','k8s_api','http_json'].includes(c.kind) ||
+        !['azure','aws','gcp','kubernetes'].includes(c.provider) || !['azure_arm','aws_sdk','gcp_rest','k8s_api','gitops_terraform','http_json'].includes(c.kind) ||
         !Array.isArray(c.operations) || !c.operations.length || c.operations.some(o=>typeof o!=='string')) throw new Error('Invalid connector grant');
+    if(c.kind==='gitops_terraform'){
+      const targets=JSON.parse(process.env.CLOUDSAVER_GITOPS_TARGETS||'[]') as Record<string,unknown>[];
+      const target=targets.find(t=>t.tenant_id===c.tenant_id&&t.target_id===c.target_id);
+      if(!target||c.operations.join(',')!=='gitops.terraform.sync'||[c.endpoint,c.token_env,c.role_arn,c.service_account,c.region].some(Boolean))throw new Error('An approved repository target is required');
+      if(c.target_binding&&canonical(c.target_binding)!==canonical(target))throw new Error('Repository binding changed');
+      c.target_binding=target;
+    }else if(c.target_id!=null||c.target_binding!=null)throw new Error('Cloud adapters cannot carry repository grants');
+    else {delete c.target_id;delete c.target_binding;}
     return c;
   });
   if (new Set(result.map(c=>c.id)).size!==result.length) throw new Error('Duplicate connector IDs');
@@ -29,7 +38,7 @@ export function loadConnectors(raw: string): Connector[] {
 
 export const readOperations=new Set(['resource.inspect','workload.inspect']);
 export const allowedOperations:Record<Connector['kind'],string[]>={azure_arm:['resource.inspect','tags.merge','snapshot.create'],aws_sdk:['resource.inspect','tags.merge','ebs.snapshot.create'],
-  gcp_rest:['resource.inspect','labels.merge','disk.snapshot.create'],k8s_api:['workload.inspect','annotations.merge'],http_json:[]};
+  gcp_rest:['resource.inspect','labels.merge','disk.snapshot.create'],k8s_api:['workload.inspect','annotations.merge'],gitops_terraform:['gitops.terraform.sync'],http_json:[]};
 export function validateStepData(step:Step,c:Connector):void {
   if(!allowedOperations[c.kind]?.includes(step.operation))throw new Error('Unsupported connector operation');
   const args=step.arguments;
@@ -45,6 +54,10 @@ export function validateStepData(step:Step,c:Connector):void {
     for(const [key,value] of Object.entries(expected)){
       if(!bounds[c.kind]?.[key]||typeof value!==bounds[c.kind][key]||typeof value==='number'&&(!Number.isInteger(value)||value<0||value>1000000)||typeof value==='string'&&!/^[A-Za-z0-9/_-]{1,80}$/.test(value))throw new Error('Invalid expected state');
     }
+    return;
+  }
+  if(step.operation==='gitops.terraform.sync'){
+    if(Object.keys(args).sort().join(',')!=='attributes,patch_mode,target_id'||args.target_id!==c.target_id||args.patch_mode!=='tags_sync'||!args.attributes||typeof args.attributes!=='object'||Array.isArray(args.attributes))throw new Error('Invalid paired metadata arguments');
     return;
   }
   if(step.operation.endsWith('snapshot.create')){
@@ -82,7 +95,7 @@ export function checkAssignment(a: Assignment, local: Connector[]): void {
   if (!Array.isArray(t.payload.plan?.steps) || t.payload.plan.steps.length < 1 || t.payload.plan.steps.length > 8 || a.code !== renderCode(t.payload.plan)) {
     throw new Error('The runCode artifact does not match the reviewed connector program');
   }
-  let writes=0;const inspected=new Set<string>();
+  let writes=0,syncs=0;let metadata:Record<string,unknown>|undefined;const inspected=new Set<string>();
   for (const step of t.payload.plan.steps) {
     const remote = a.connectors.find(c => c.id === step.connector_id);
     const own = local.find(c => c.id === step.connector_id);
@@ -91,8 +104,13 @@ export function checkAssignment(a: Assignment, local: Connector[]): void {
       throw new Error('Connector is outside the worker deployment grant');
     }
     validateStepData(step,own);
-    if(readOperations.has(step.operation))inspected.add(own.id);
-    else if(!inspected.has(own.id)||++writes>1)throw new Error('Each single write requires prior inspection');
+    if(step.operation==='gitops.terraform.sync'){
+      if(++syncs>1||writes!==1||!metadata||step!==t.payload.plan.steps.at(-1)||canonical(step.arguments.attributes)!==canonical(metadata))throw new Error('Repository review must exactly match the prior inspected metadata write');
+    }else if(readOperations.has(step.operation))inspected.add(own.id);
+    else {
+      if(!inspected.has(own.id)||++writes>1)throw new Error('Each single write requires prior inspection');
+      if(['tags.merge','labels.merge','annotations.merge'].includes(step.operation))metadata=step.arguments;
+    }
   }
 }
 

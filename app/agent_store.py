@@ -16,6 +16,14 @@ TERMINAL = {'succeeded','failed','rejected','cancelled','needs_reconciliation','
 class AgentConflict(ValueError): pass
 
 
+def unreconciled(payload):
+    steps=(payload.get('plan') or {}).get('steps',[])
+    paired=any(s['operation']=='gitops.terraform.sync' for s in steps)
+    return any(s.get('state')=='started' for s in payload.get('steps',[])) or bool(paired and any(
+        s.get('state')=='succeeded' and steps[i]['operation'] in ('tags.merge','labels.merge','annotations.merge')
+        for i,s in enumerate(payload.get('steps',[]))))
+
+
 def configured(task, tenant):
     keys = {'azure':('subscription_ids',None),'aws':('aws_accounts','account_id'),
             'gcp':('gcp_projects','project_id'),'kubernetes':('kubernetes_clusters','cluster_id')}
@@ -112,7 +120,7 @@ class AgentRepository:
         if task['state']=='approved' and moment((p.get('approval') or {}).get('expires_at')) and moment(p['approval']['expires_at'])<=now:
             self._save(db,task,'approval_expired','approval_expired','gateway')
         elif task['state'] in {'drafting','running','cancel_requested'} and moment((p.get('lease') or {}).get('expires_at')) and moment(p['lease']['expires_at'])<=now:
-            state='needs_reconciliation' if any(s['state']=='started' for s in p['steps']) else 'failed'
+            state='needs_reconciliation' if unreconciled(p) else 'failed'
             self._save(db,task,state,'lease_expired','gateway',dict(automatic_retry=False))
 
     def review(self, tenant, task_id, version, decision, expected_hash, minutes, catalog):
@@ -122,7 +130,7 @@ class AgentRepository:
             p = task['payload']
             if decision == 'cancel':
                 if task['state'] in TERMINAL: raise AgentConflict('This task is already final.')
-                state = 'cancel_requested' if any(s['state']=='started' for s in p['steps']) else 'cancelled'
+                state = 'cancel_requested' if any(s['state']=='started' for s in p['steps']) else 'needs_reconciliation' if unreconciled(p) else 'cancelled'
                 return self.public(self._save(db,task,state,'cancellation_requested',actor(tenant)))
             if decision == 'redraft':
                 if moment(p.get('data_retention_expires_at')) and moment(p['data_retention_expires_at'])<=self.clock():raise AgentConflict('Task data expired. Create a new explicit instruction instead of reusing expired content.')
@@ -150,7 +158,7 @@ class AgentRepository:
                 task = self._row(db,tid,str(row[0])); p = task['payload']
                 if moment(p.get('data_retention_expires_at')) and moment(p['data_retention_expires_at'])<=now:
                     p['data_content_expired']=True
-                    state='needs_reconciliation' if any(s.get('state')=='started' for s in p.get('steps',[])) else 'cancelled'
+                    state='needs_reconciliation' if unreconciled(p) else 'cancelled'
                     self._save(db,task,state,'task_data_expired','gateway');continue
                 if task['state'] in {'drafting','running','cancel_requested'}:
                     self._expire(db,task)
@@ -228,12 +236,13 @@ class AgentRepository:
             if step['state'] != 'started': raise AgentConflict('Only a started step can report its outcome.')
             step.update(state=outcome['status'],result=outcome,completed_at=self.clock().isoformat())
             state = ('needs_reconciliation' if outcome['status']=='uncertain' else 'failed' if outcome['status']=='failed'
-                else 'cancelled' if task['state']=='cancel_requested' else 'succeeded' if index==len(p['steps'])-1 else 'running')
+                else ('needs_reconciliation' if unreconciled(p) else 'cancelled') if task['state']=='cancel_requested' else 'succeeded' if index==len(p['steps'])-1 else 'running')
             return self.public(self._save(db,task,state,'step_completed','worker:'+worker['id'],dict(index=index,outcome=outcome)))
 
     def fail(self, tenant, task_id, worker, token):
         with self.store.transaction(tenant['tenant_id'],write=True) as db:
             task = self._leased(db,tenant,task_id,worker,token)
             if task['state'] not in {'drafting','running','cancel_requested'}: raise AgentConflict('Task is no longer assigned.')
-            state = 'needs_reconciliation' if any(s['state']=='started' for s in task['payload']['steps']) else 'failed'
+            p=task['payload']
+            state = 'needs_reconciliation' if unreconciled(p) else 'failed'
             return self.public(self._save(db,task,state,'worker_stopped','worker:'+worker['id'],dict(automatic_retry=False)))

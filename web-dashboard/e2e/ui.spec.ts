@@ -94,6 +94,7 @@ test('command palette, navigation shortcuts, and scoped filters retain session',
 test('plan upload preserves duplicate keys for server rejection',async({page})=>{
   const {mutations}=await mockWorkspace(page);await navigate(page,'Automation');
   await page.getByRole('tab',{name:'Plan guardrails',exact:true}).click();
+  await page.getByText('Advanced: offline Terraform plan evaluation',{exact:true}).click();
   await page.getByLabel('Terraform plan JSON',{exact:true}).setInputFiles({name:'plan.json',mimeType:'application/json',buffer:Buffer.from('{"duplicate":1,"duplicate":2}')});
   await page.getByRole('button',{name:'Check plan',exact:true}).click();
   await expect(page.getByRole('tabpanel',{name:'Plan guardrails'}).getByRole('alert')).toContainText('Invalid or unsupported JSON request');

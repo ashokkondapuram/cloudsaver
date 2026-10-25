@@ -114,3 +114,15 @@ test('operational drift after inspection blocks a write even when tags did not c
   assert.equal((await execute(a.task,connector,a.task.payload.plan.steps[0],0)).status,'succeeded');
   assert.equal((await execute(a.task,connector,a.task.payload.plan.steps[1],1)).code,'LIVE_RESOURCE_STATE_DRIFTED');assert.equal(writes,0);
 });
+
+test('paired repository action uses the gateway result and never calls a cloud adapter',async()=>{
+  const a=assignment();const target={tenant_id:tid,target_id:'infra',repository:'example/infra',repository_id:123,base_branch:'main',installation_id:456};
+  const c:Connector={...connector,id:'repo-sync',kind:'gitops_terraform',operations:['gitops.terraform.sync'],target_id:'infra',target_binding:target};
+  a.connectors.push(c);a.task.payload.connector_ids.push(c.id);
+  a.task.payload.plan.steps.push({connector_id:c.id,operation:'gitops.terraform.sync',arguments:{target_id:'infra',patch_mode:'tags_sync',attributes:{tags:{CostCenter:'FINOPS-42'}}},purpose:'Review',verification:'Inspect draft PR',rollback:'Reconcile without replay'});
+  a.code=renderCode(a.task.payload.plan);const calls:number[]=[];
+  await runCode(a,[connector,c],async(path)=>({permitted:true,index:Number(path.match(/steps\/(\d+)/)?.[1]),plan_hash:a.task.payload.plan_hash,outcome:{status:'succeeded',code:'DRAFT_RECORDED',evidence_digest:'b'.repeat(64)}}),async(_t,_c,_s,i)=>{calls.push(i);return {status:'succeeded',code:'VERIFIED'};});
+  assert.deepEqual(calls,[0,1]);
+  a.task.payload.plan.steps[2].arguments.attributes={tags:{CostCenter:'DIFFERENT'}};a.code=renderCode(a.task.payload.plan);
+  assert.throws(()=>checkAssignment(a,[connector,c]));
+});

@@ -149,6 +149,9 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
         if provider=='azure' and (any(p in {'.','..'} for p in body.resource_id.split('/')) or not re.fullmatch(r'/subscriptions/[a-fA-F0-9-]{36}/resourceGroups/[A-Za-z0-9_.()-]+/providers/[A-Za-z0-9.]+(?:/[A-Za-z0-9_.()-]+){2,}',body.resource_id,re.I)):
             raise HTTPException(422,'Unsupported ARM resource identifier.')
         selected = [c for c in catalog() if c.id in body.connector_ids and c.tenant_id==row['tenant_id'] and c.provider==provider and c.scope_id==scope]
+        if any(c.kind=='gitops_terraform' for c in selected):
+            from app.entitlements import enforce_terraform_export
+            enforce_terraform_export(row)
         if len(set(body.connector_ids))!=len(body.connector_ids) or len(selected)!=len(body.connector_ids):
             raise HTTPException(403,'Choose connectors bound to this workspace and resource scope.')
         from app.agent_contract import supports_resource
@@ -193,8 +196,40 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
     def step(task_id: UUID,index: int,action: Literal['start','complete'],body: StepResult,worker=Depends(worker_auth)):
         if index<0 or index>7 or (action=='start' and body.outcome is not None) or (action=='complete' and body.outcome is None):
             raise HTTPException(422,'Invalid step report')
-        return call(repo.step,workspace(body.tenant_id,worker),str(task_id),worker,body.lease_token,index,action,body.plan_hash,
-            body.outcome.model_dump() if body.outcome else None,catalog())
+        row=workspace(body.tenant_id,worker)
+        if action=='start':
+            from app.entitlements import enforce_terraform_export
+            current=repo.get(row,str(task_id))
+            if current and any(s['operation']=='gitops.terraform.sync' for s in (current['payload'].get('plan') or {}).get('steps',[])):
+                enforce_terraform_export(row)
+        outcome=body.outcome.model_dump() if body.outcome else None
+        if action=='complete':
+            task=repo.get(row,str(task_id))
+            plan=(task or {}).get('payload',{}).get('plan') or {}
+            steps=plan.get('steps',[])
+            if 0<=index<len(steps) and steps[index]['operation']=='gitops.terraform.sync':
+                from app.v150_store import WorkflowStore
+                from app.agent_contract import digest
+                recorded=next((r for r in WorkflowStore(persistence).rows(row['tenant_id'],'agent_gitops_syncs',100)
+                    if r['payload'].get('agent_task_id')==str(task_id) and r['payload'].get('plan_hash')==body.plan_hash),None)
+                outcome=(dict(status='succeeded',code='GITOPS_REVIEW_OPENED',evidence_digest=digest(recorded['payload']))
+                         if recorded and recorded['state']=='open' else dict(status='uncertain',code='GITOPS_RECONCILIATION_REQUIRED'))
+        result=call(repo.step,row,str(task_id),worker,body.lease_token,index,action,body.plan_hash,
+                    outcome,catalog())
+        if action=='start':
+            task=repo.get(row,str(task_id))
+            if task['payload']['plan']['steps'][index]['operation']=='gitops.terraform.sync':
+                from app.agent_gitops_sync import build_synchronized_agent_gitops_bundle
+                from app.agent_contract import digest
+                from app.gitops import GitOpsConfig
+                try:
+                    scan=scans.get(row['tenant_id'],task['scan_id'])
+                    paired=build_synchronized_agent_gitops_bundle(task,row,scan,GitOpsConfig.load(),catalog(),publish=True,store=persistence)
+                    result['outcome']=dict(status='succeeded',code='GITOPS_REVIEW_OPENED',evidence_digest=digest(paired))
+                except Exception:
+                    # Cloud action may already have completed; never replay it.
+                    result['outcome']=dict(status='uncertain',code='GITOPS_RECONCILIATION_REQUIRED')
+        return result
 
     @app.post('/internal/v1/agent/tasks/{task_id}/fail')
     def fail(task_id: UUID,body: Lease,worker=Depends(worker_auth)):

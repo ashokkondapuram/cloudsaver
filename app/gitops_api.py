@@ -55,10 +55,46 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
             raise HTTPException(422,str(exc)) from None
         return target,result
 
+    @router.post('/api/v1/gitops/sync-agent')
+    async def sync_agent(request:Request,tenant=Depends(current_tenant)):
+        require_workspace_role(tenant,Role.TENANT_ADMIN)
+        enforce_terraform_export(tenant)
+        from app.agent_store import AgentRepository
+        from app.agent_contract import connectors
+        from app.agent_gitops_sync import build_synchronized_agent_gitops_bundle
+        from app.enterprise_store import EnterpriseStore
+        raw=await bounded_json(request)
+        try:
+            if not isinstance(raw,dict) or set(raw)!={'task_id','plan_hash'}:raise ValueError()
+            task_id=str(UUID(raw['task_id']))
+            task=AgentRepository(EnterpriseStore(settings)).get(tenant,task_id)
+            if not task:raise HTTPException(404,'Owned agent task not found')
+            if raw['plan_hash']!=task['payload'].get('plan_hash'):raise HTTPException(409,'Task plan changed')
+            scan=store.get(tenant['tenant_id'],task['scan_id'])
+            return build_synchronized_agent_gitops_bundle(task,tenant,scan,config,connectors())
+        except (ValueError,KeyError,TypeError):
+            raise HTTPException(422,'An owned drafted task, exact plan hash and configured paired connector are required') from None
+
+    @router.post('/api/v1/gitops/preview-and-evaluate')
+    async def automatic_preview(request:Request,tenant=Depends(current_tenant)):
+        raw=await bounded_json(request)
+        try:payload=ReviewRequest.model_validate(raw)
+        except ValidationError:raise HTTPException(422,'Provide an owned scan, target and selected resources') from None
+        _,result=await run_in_threadpool(package,payload,tenant)
+        return dict(review=result,policy=dict(decision='review_required',projection_only=True,automatic_apply=False,
+            reasons=['Import/configuration review is generated automatically. Repository CI must supply the actual Terraform plan.']),
+            monthly_cost_delta_usd=None)
+
     @router.get('/api/v1/gitops/targets')
     def targets(tenant=Depends(current_tenant)):
         return dict(publishing_enabled=config.enabled,targets=[{k:t[k] for k in ('target_id','repository','base_branch')}
                     for t in config.targets if t['tenant_id']==tenant['tenant_id']])
+
+    @router.get('/api/v1/gitops/syncs')
+    def linked_history(tenant=Depends(current_tenant)):
+        from app.enterprise_store import EnterpriseStore
+        from app.v150_store import WorkflowStore
+        return dict(items=WorkflowStore(EnterpriseStore(settings)).rows(tenant['tenant_id'],'agent_gitops_syncs'))
 
     @router.post('/api/v1/policies/terraform/evaluate')
     async def evaluate(request:Request,tenant=Depends(current_tenant)):

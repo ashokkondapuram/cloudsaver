@@ -67,6 +67,36 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     app.include_router(onboarding_router())
     app.include_router(customer_access_router(allowed))
 
+    @app.get('/api/v1/services/{service_name}')
+    async def service_matrix(service_name:str,scan_id:UUID|None=None,row=Depends(allowed),authorization:str=Header()):
+        from app.v150_analysis import SERVICES
+        if service_name not in SERVICES:raise HTTPException(404,'Unknown service family')
+        return await forward('GET','scanner','/api/v1/services/'+service_name,authorization,
+                             {'scan_id':str(scan_id)} if scan_id else {})
+
+    @app.get('/api/v1/optimization/scans/{scan_id}/auto-scenarios')
+    async def planning_inputs(scan_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/optimization/scans/{scan_id}/auto-scenarios',authorization)
+
+    @app.get('/api/v1/gitops/syncs')
+    async def linked_history(row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner','/api/v1/gitops/syncs',authorization)
+
+    @app.post('/api/v1/finops/sync')
+    async def billing_sync(currency: str='USD',row=Depends(allowed),authorization: str=Header()):
+        return await forward('POST','scanner','/api/v1/finops/sync',authorization,{'currency':currency})
+
+    @app.get('/api/v1/finops/sync-status')
+    async def billing_sync_status(row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner','/api/v1/finops/sync-status',authorization)
+
+    @app.post('/api/v1/gitops/sync-agent')
+    @app.post('/api/v1/gitops/preview-and-evaluate')
+    async def linked_gitops(request: Request,row=Depends(allowed),authorization: str=Header()):
+        from app.schemas import bounded_json
+        return await upstream('POST',targets['scanner'],request.url.path,authorization,
+                              json=await bounded_json(request),transport=transport)
+
     @app.get('/api/v1/ai/governance')
     async def data_governance(row=Depends(allowed),authorization: str = Header()):
         return await forward('GET','scanner','/api/v1/ai/governance',authorization)

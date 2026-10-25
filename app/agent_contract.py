@@ -15,7 +15,8 @@ class Strict(BaseModel):
 
 ALLOWED_OPERATIONS_BY_KIND={
     'azure_arm':{'resource.inspect','tags.merge','snapshot.create'},'aws_sdk':{'resource.inspect','tags.merge','ebs.snapshot.create'},
-    'gcp_rest':{'resource.inspect','labels.merge','disk.snapshot.create'},'k8s_api':{'workload.inspect','annotations.merge'},'http_json':{'action.submit'}}
+    'gcp_rest':{'resource.inspect','labels.merge','disk.snapshot.create'},'k8s_api':{'workload.inspect','annotations.merge'},
+    'gitops_terraform':{'gitops.terraform.sync'},'http_json':{'action.submit'}}
 READ_OPERATIONS={'resource.inspect','workload.inspect'}
 WRITE_OPERATIONS=set().union(*ALLOWED_OPERATIONS_BY_KIND.values())-READ_OPERATIONS
 
@@ -39,7 +40,9 @@ class Connector(Strict):
     tenant_id: str
     provider: Literal['azure', 'aws', 'gcp', 'kubernetes']
     scope_id: str = Field(min_length=1, max_length=128)
-    kind: Literal['azure_arm', 'aws_sdk', 'gcp_rest', 'k8s_api', 'http_json']
+    kind: Literal['azure_arm', 'aws_sdk', 'gcp_rest', 'k8s_api', 'gitops_terraform', 'http_json']
+    target_id: str | None = None
+    target_binding: dict | None = None
     operations: list[str] = Field(min_length=1, max_length=8)
     endpoint: str | None = Field(default=None,max_length=2048)
     token_env: str | None = Field(default=None,max_length=100)
@@ -58,7 +61,16 @@ def connectors():
     result = [Connector.model_validate(item) for item in raw]
     if len({c.id for c in result}) != len(result): raise ValueError('Duplicate connector IDs')
     for c in result:
-        if c.kind == 'azure_arm':
+        if c.kind != 'gitops_terraform' and (c.target_id is not None or c.target_binding is not None):
+            raise ValueError('Repository bindings belong only to GitOps connectors')
+        if c.kind == 'gitops_terraform':
+            from app.gitops import GitOpsConfig
+            if c.operations!=['gitops.terraform.sync'] or any((c.endpoint,c.token_env,c.role_arn,c.service_account,c.region)):
+                raise ValueError('GitOps connectors use only an approved server-side repository binding')
+            target=GitOpsConfig.load().target(c.tenant_id,c.target_id)
+            if c.target_binding is not None and c.target_binding!=target:raise ValueError('Repository grant differs from operator configuration')
+            c.target_binding=target
+        elif c.kind == 'azure_arm':
             if c.provider != 'azure' or not set(c.operations) <= ALLOWED_OPERATIONS_BY_KIND[c.kind] or any((c.endpoint,c.token_env,c.role_arn,c.service_account,c.region)):
                 raise ValueError('Invalid Azure connector')
             UUID(c.scope_id)
@@ -83,7 +95,7 @@ def connectors():
 
 class Step(Strict):
     connector_id: str = Field(pattern=r'^[a-z][a-z0-9-]{0,59}$')
-    operation: Literal['resource.inspect', 'workload.inspect', 'tags.merge', 'labels.merge', 'annotations.merge', 'snapshot.create', 'ebs.snapshot.create', 'disk.snapshot.create', 'action.submit']
+    operation: Literal['resource.inspect', 'workload.inspect', 'tags.merge', 'labels.merge', 'annotations.merge', 'snapshot.create', 'ebs.snapshot.create', 'disk.snapshot.create', 'gitops.terraform.sync', 'action.submit']
     arguments: dict = Field(default_factory=dict)
     purpose: str = Field(min_length=1, max_length=500)
     verification: str = Field(min_length=1, max_length=500)
@@ -104,6 +116,7 @@ def digest(value): return hashlib.sha256(canonical(value).encode()).hexdigest()
 def supports_resource(c,resource_id):
     """Assignment and approval reject unsupported typed adapter targets early."""
     if c.kind=='http_json':return False
+    if c.kind=='gitops_terraform':return True  # The paired cloud adapter validates the actual resource grammar.
     if c.kind=='azure_arm':
         valid=bool(re.fullmatch(r'/subscriptions/'+re.escape(c.scope_id)+r'/resourceGroups/[A-Za-z0-9_.()-]+/providers/[A-Za-z0-9.]+(?:/[A-Za-z0-9_.()-]+){2,}',resource_id,re.I))
         return valid and ('snapshot.create' not in c.operations or bool(re.fullmatch(r'/subscriptions/'+re.escape(c.scope_id)+r'/resourceGroups/[A-Za-z0-9_.()-]+/providers/Microsoft.Compute/disks/[A-Za-z0-9_.()-]+',resource_id,re.I)))
@@ -124,8 +137,24 @@ def render_code(plan):
 def validate_plan(value, task, catalog):
     plan = Plan.model_validate(value).model_dump()
     selected = {c.id: c for c in catalog if c.id in task['payload']['connector_ids']}
+    paired=[c for c in selected.values() if c.kind=='gitops_terraform']
+    if len(paired)>1:raise ValueError('A task can bind only one repository target')
+    if paired:
+        from app.agent_gitops_sync import TERRAFORM_RESOURCE_MAP
+        if task['payload'].get('resource_type','').lower() not in TERRAFORM_RESOURCE_MAP:raise ValueError('No reviewed Terraform mapping for this resource type')
+    metadata=[s for s in plan['steps'] if s['operation'] in ('tags.merge','labels.merge','annotations.merge')]
+    if paired and not any(s['operation']=='gitops.terraform.sync' for s in plan['steps']):
+        if len(metadata)!=1 or len(plan['steps'])>=8:raise ValueError('Paired synchronization requires exactly one bounded metadata mutation')
+        c=paired[0]
+        plan['steps'].append(dict(connector_id=c.id,operation='gitops.terraform.sync',
+            arguments=dict(target_id=c.target_id,patch_mode='tags_sync',attributes=metadata[0]['arguments']),
+            purpose='Prepare a repository review for the exact approved metadata merge',
+            verification='Verify recorded cloud evidence and the linked draft PR; CI and repository review still required',
+            rollback='Do not replay cloud writes; reconcile an uncertain repository outcome independently'))
     inspected = set()
     writes = 0
+    cloud_change=None
+    sync_count=0
     for step in plan['steps']:
         c = selected.get(step['connector_id'])
         if not c or c.tenant_id != task['tenant_id'] or c.provider != task['provider'] or c.scope_id != task['scope_id']:
@@ -137,7 +166,14 @@ def validate_plan(value, task, catalog):
         from app.data_governance import safe_action_data
         safe_action_data(step['arguments'])
         args = step['arguments']
-        if step['operation'] in READ_OPERATIONS:
+        if step['operation']=='gitops.terraform.sync':
+            from app.gitops import GitOpsConfig
+            if not GitOpsConfig.load().enabled:raise ValueError('Paired execution requires publishing to be configured before cloud execution')
+            if (sync_count or cloud_change is None or writes!=1 or step is not plan['steps'][-1]
+                    or args!=dict(target_id=c.target_id,patch_mode='tags_sync',attributes=cloud_change)):
+                raise ValueError('Repository synchronization must follow and match the one approved metadata merge')
+            sync_count+=1
+        elif step['operation'] in READ_OPERATIONS:
             if set(args)-{'expected_state'}:raise ValueError('Inspection accepts only bounded expected state')
             expected=args.get('expected_state',{})
             bounds=EXPECTED_STATE_FIELDS[c.kind]
@@ -158,6 +194,7 @@ def validate_plan(value, task, catalog):
                 if field=='labels' and (not re.fullmatch(r'[a-z][a-z0-9_-]{0,62}',key) or not re.fullmatch(r'[a-z0-9_-]{0,63}',val)):raise ValueError('GCP label syntax is invalid')
                 if field=='annotations' and not re.fullmatch(r'cloudsaver\.io/recommended-[A-Za-z0-9_.-]{1,38}',key):raise ValueError('Only CloudSaver recommendation annotations may be changed')
             writes += 1
+            cloud_change=args
         elif step['operation'] in ('snapshot.create','ebs.snapshot.create','disk.snapshot.create'):
             if (step['operation']=='ebs.snapshot.create' and ':volume/vol-' not in task['resource_id'] or step['operation']=='disk.snapshot.create' and '/disks/' not in task['resource_id']):raise ValueError('Safety snapshots require a managed/persistent disk or EBS volume target')
             if c.id not in inspected or set(args)!={'snapshot_name_prefix','retention_days'} or not isinstance(args['snapshot_name_prefix'],str) or not re.fullmatch(r'[a-z][a-z0-9-]{0,39}',args['snapshot_name_prefix']) or type(args['retention_days']) is not int or not 7<=args['retention_days']<=90:
@@ -174,11 +211,12 @@ def validate_plan(value, task, catalog):
 
 def binding(c):
     # Secret names, endpoint, operations and ownership are approval-bound; secret values are never returned.
-    return c.model_dump()
+    return c.model_dump(exclude={'target_id','target_binding'} if c.kind!='gitops_terraform' else set())
 
 
 def program_hash(task, plan, catalog):
     selected = {s['connector_id'] for s in plan['steps']}
-    return digest(dict(schema=4,data_governance_contract=2, task_id=task['id'], tenant_id=task['tenant_id'], provider=task['provider'],
+    paired=any(s['operation']=='gitops.terraform.sync' for s in plan['steps'])
+    return digest(dict(schema=5 if paired else 4,data_governance_contract=2, task_id=task['id'], tenant_id=task['tenant_id'], provider=task['provider'],
         scope_id=task['scope_id'], resource_id=task['resource_id'], plan=plan, code=render_code(plan),
         connectors=[binding(c) for c in sorted(catalog, key=lambda c: c.id) if c.id in selected]))

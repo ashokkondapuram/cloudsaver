@@ -30,6 +30,9 @@ if not 60 <= tick <= 3600:
     raise ValueError('Scheduler tick must be between 60 and 3600 seconds')
 celery_app.conf.beat_schedule = {'scan-authorized-subscriptions': {
     'task': 'workers.tasks.scheduled_scan_all', 'schedule': float(tick)}}
+if os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true').lower()=='true':
+    celery_app.conf.beat_schedule['sync-authorized-cloud-billing']={
+        'task':'workers.tasks.sync_authorized_cloud_billing','schedule':3600.0,'options':{'expires':3600}}
 ai_tick = int(os.getenv('CLOUDSAVER_AI_BATCH_TICK_SECONDS', '30'))
 if not 10 <= ai_tick <= 3600:
     raise ValueError('AI batch tick must be between 10 and 3600 seconds')
@@ -40,6 +43,24 @@ if enabled('CLOUDSAVER_AI_ENABLED'):
 
 class JobBusy(RuntimeError):
     pass
+
+
+@celery_app.task(name='workers.tasks.sync_authorized_cloud_billing')
+def sync_authorized_cloud_billing():
+    from app.collectors.billing_sync import bindings,sync_workspace_billing
+    from app.enterprise_store import EnterpriseStore
+    from app.focus import FocusRepository
+    settings=Settings.load()
+    result=[]
+    for tenant in settings.tenants:
+        if (tenant.get('plan') or {}).get('access_suspended') is True:continue
+        try:
+            if bindings(tenant):
+                run=sync_workspace_billing(tenant,FocusRepository(EnterpriseStore(settings)),currency=None)
+                result.append(dict(tenant_id=tenant['tenant_id'],status=run['status'],run_id=run['id']))
+        except Exception:
+            result.append(dict(tenant_id=tenant['tenant_id'],status='unavailable'))
+    return result
 
 
 class UnauthorizedJob(ValueError):

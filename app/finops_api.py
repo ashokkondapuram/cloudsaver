@@ -16,6 +16,24 @@ def create_router(repository, current_tenant):
         require_workspace_role(tenant,Role.BILLING_ADMIN)
         return tenant
 
+    @router.post('/sync')
+    async def sync(currency: str = Query('USD',pattern=r'^[A-Z]{3}$'),tenant=Depends(finance)):
+        from app.collectors.billing_sync import sync_workspace_billing
+        from app.v150_store import WorkflowConflict
+        try:
+            return await run_in_threadpool(sync_workspace_billing,tenant,repository,currency=currency)
+        except FocusError as error:
+            raise HTTPException(error.status,str(error)) from None
+        except WorkflowConflict as error:
+            raise HTTPException(409,str(error)) from None
+
+    @router.get('/sync-status')
+    def billing_sync_status(tenant=Depends(finance)):
+        from app.collectors.billing_sync import sync_status
+        try:return sync_status(tenant,repository)
+        except (ValueError,KeyError,TypeError):
+            raise HTTPException(503,'Billing connector configuration is unavailable') from None
+
     @router.post('/imports',status_code=201)
     async def import_evidence(request:Request,tenant=Depends(finance)):
         try:
@@ -42,6 +60,15 @@ def create_router(repository, current_tenant):
             if budget is not None:
                 budget=money(budget)
                 if budget.startswith('-'): raise ValueError('Budget cannot be negative')
+            # Initial hydration is opt-in through an operator-owned connector;
+            # failed/recent runs are not retried on every page load.
+            from app.collectors.billing_sync import bindings,sync_status,sync_workspace_billing
+            from app.v150_store import WorkflowConflict
+            if not repository.imports(tenant,1) and bindings(tenant):
+                status=sync_status(tenant,repository)
+                if status['automatic_sync_enabled'] and not status['recent_syncs']:
+                    try:sync_workspace_billing(tenant,repository,currency=currency)
+                    except (FocusError,WorkflowConflict):pass
             return repository.summary(tenant,start,end,currency,budget)
         except (FocusError,ValueError) as error:
             raise HTTPException(error.status if isinstance(error,FocusError) else 422,

@@ -4,6 +4,7 @@ import {useEffect,useId,useRef,useState} from 'react';
 import {BrainCircuit,FileJson,Upload,Wallet} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime} from '../lib/finops';
+import {AutoBillingStatus} from './V150Views';
 import {useWorkspace} from './WorkspaceProvider';
 import {EmptyState,Loading,Notice,ProviderBadge,SectionTitle} from './ui/shared';
 
@@ -39,7 +40,7 @@ export function BillingEvidencePanel(){
   }
   const visible=data?.identity===token?data:null;
   if(!canBill)return <section className="panel"><SectionTitle title="Cloud billing data">Normalized cloud billing imports</SectionTitle><EmptyState icon={Wallet} title="Finance access required">A workspace or billing administrator can import and inspect billed costs.</EmptyState></section>;
-  return <section className="panel billing-evidence"><SectionTitle title="Cloud billing data" eyebrow="FINOPS LEDGER">Billed costs from explicit imports · separate from resource retail estimates</SectionTitle>
+  return <section className="panel billing-evidence"><SectionTitle title="Cloud billing data" eyebrow="FINOPS LEDGER">Provider-reported billed costs · separate from resource retail estimates</SectionTitle><AutoBillingStatus currency={selection.currency} onSynced={()=>setRevision(v=>v+1)}/>
     <form className="enterprise-filters" onSubmit={event=>{event.preventDefault();setSelection({...draft});}}>
       <label>From (UTC)<input type="date" required value={draft.start} onChange={e=>setDraft({...draft,start:e.target.value})}/></label>
       <label>Until, exclusive (UTC)<input type="date" required value={draft.end} onChange={e=>setDraft({...draft,end:e.target.value})}/></label>
@@ -56,9 +57,9 @@ export function BillingEvidencePanel(){
       <details className="raw-evidence"><summary>Inspect daily coverage ({visible.summary.daily.filter(p=>p.complete).length} of {visible.summary.daily.length} days)</summary><div className="summary-table-scroll" tabIndex={0} aria-label="Daily cloud billing data"><table className="summary-table"><thead><tr><th>UTC date</th><th>Coverage</th><th>Billed cost</th></tr></thead><tbody>{visible.summary.daily.map(row=><tr key={row.date}><td>{row.date}</td><td>{row.complete?'Operator-declared complete':'Incomplete or unverified'}</td><td>{amount(row.billed_cost,visible.summary.currency)}</td></tr>)}</tbody></table></div></details>
       <details className="raw-evidence"><summary>Recent billing imports ({visible.imports.length})</summary>{visible.imports.length?<ul className="assessment-guardrails">{visible.imports.map(row=><li key={row.id}>{row.source_id} · {row.currency} · {row.inserted} new / {row.records} submitted · {row.complete?'declared complete':'partial'} · {dateTime(row.created_at)}</li>)}</ul>:<p className="inline-empty">No imports recorded.</p>}</details>
     </>}
-    <div className="drawer-section"><h3>Import normalized billing JSON</h3><p className="inline-help">Use the documented FOCUS field subset with decimal strings and stable x_ChargeId values. Each file covers one provider, authorized sub-account and currency. This imports your supplied evidence; CloudSaver does not fetch invoices or certify FOCUS conformance.</p><label className="enterprise-file" htmlFor={id}><Upload size={17}/>Choose billing JSON<input id={id} type="file" accept=".json,application/json" disabled={busy} onChange={e=>choose(e.target.files?.[0])}/></label>
+    <details className="drawer-section"><summary>Advanced: Manual FOCUS JSON Override</summary><h3>Import normalized billing JSON</h3><p className="inline-help">Use the documented FOCUS field subset with decimal strings and stable x_ChargeId values. Each file covers one provider, authorized sub-account and currency. This imports your supplied evidence; automatic connectors fetch supported provider charges, without certifying FOCUS conformance.</p><label className="enterprise-file" htmlFor={id}><Upload size={17}/>Choose billing JSON<input id={id} type="file" accept=".json,application/json" disabled={busy} onChange={e=>choose(e.target.files?.[0])}/></label>
       {file?.identity===token&&<><p className="inline-help">{file.name} · Source {file.source} · {file.records} submitted records</p><label className="checkbox-row"><input type="checkbox" checked={ack} disabled={busy} onChange={e=>setAck(e.target.checked)}/>I have reviewed the account scope, amounts and completeness declaration in this file.</label><button className="button primary" disabled={!ack||busy} onClick={upload}>{busy?'Importing cloud billing data…':'Import cloud billing data'}</button></>}
-    </div>
+    </details>
   </section>;
 }
 
