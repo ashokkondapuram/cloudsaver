@@ -77,7 +77,7 @@ def extra_inventory(client,account,region):
         for r in reservation.get('Instances',[]):
             iid=r['InstanceId'];rid=f'arn:aws:ec2:{region}:{account}:instance/{iid}'
             edges=[dict(relationship='vm_to_disk',from_resource_id=rid,to_resource_id=f"arn:aws:ec2:{region}:{account}:volume/{d['Ebs']['VolumeId']}",verification_state='verified',observed_at=now.isoformat()) for d in r.get('BlockDeviceMappings',[]) if d.get('Ebs',{}).get('VolumeId')]
-            add('aws:ec2:instance',rid,iid,dict(power_state=r.get('State',{}).get('Name'),created_at=str(r.get('LaunchTime')),
+            add('aws:ec2:instance',rid,iid,dict(instance_type=r.get('InstanceType'),power_state=r.get('State',{}).get('Name'),created_at=str(r.get('LaunchTime')),
                 imds_v2_required=r.get('MetadataOptions',{}).get('HttpTokens')=='required',tags={t['Key']:t['Value'] for t in r.get('Tags',[])}),edges)
     for r in pages(ec2,'describe_nat_gateways','NatGateways',MaxResults=100):add('aws:ec2:natgateway',f"arn:aws:ec2:{region}:{account}:natgateway/{r['NatGatewayId']}",r['NatGatewayId'],dict(state=r.get('State')))
     elb=client('elbv2')

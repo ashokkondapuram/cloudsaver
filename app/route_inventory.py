@@ -12,6 +12,23 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/outcomes/summary'):'full_scope',
+    ('GET','/api/v1/outcomes/cases'):'full_scope',
+    ('POST','/api/v1/outcomes/cases'):'full_scope',
+    ('GET','/api/v1/outcomes/cases/{case_id}'):'full_scope',
+    ('POST','/api/v1/outcomes/cases/{case_id}/actions'):'full_scope',
+    ('GET','/api/v1/outcomes/cases/{case_id}/billing-evidence'):'full_scope',
+    ('POST','/api/v1/outcomes/evidence/receipts'):'full_scope',
+    ('GET','/api/v1/outcomes/ownership'):'full_scope',
+    ('PUT','/api/v1/outcomes/ownership'):'full_scope',
+    ('GET','/api/v1/outcomes/ownership/history'):'full_scope',
+    ('GET','/api/v1/outcomes/anomalies'):'full_scope',
+    ('POST','/api/v1/outcomes/anomalies/detect'):'full_scope',
+    ('GET','/api/v1/outcomes/anomalies/metrics'):'full_scope',
+    ('GET','/api/v1/outcomes/anomalies/{anomaly_id}'):'full_scope',
+    ('POST','/api/v1/outcomes/anomalies/{anomaly_id}/actions'):'full_scope',
+    ('POST','/api/v1/outcomes/suppressions'):'full_scope',
+
     ('GET','/api/v1/finops/sync-jobs/{job_id}'):'full_scope',
     ('POST','/api/v1/finops/sync-jobs/{job_id}/cancel'):'full_scope',
     ('GET','/api/v1/services/{service}'):'scoped_read',

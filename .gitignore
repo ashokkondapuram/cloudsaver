@@ -21,4 +21,5 @@ compose.azure-local.yaml
 
 # Local verification artifacts
 .coverage
+.coverage.*
 coverage.xml

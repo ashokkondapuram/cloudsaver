@@ -365,7 +365,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0021_billing_jobs',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0022_financial_outcomes',)]
 
 
 
@@ -447,7 +447,7 @@ def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_priv
     rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
     assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
     with psycopg.connect(database[0]) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0021_billing_jobs'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0022_financial_outcomes'
         assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
 
 

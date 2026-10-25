@@ -73,6 +73,77 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     app.include_router(onboarding_router())
     app.include_router(customer_access_router(allowed))
 
+    @app.get('/api/v1/outcomes/summary')
+    async def outcome_summary(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/summary',authorization,dict(request.query_params))
+
+    @app.get('/api/v1/outcomes/cases')
+    async def outcome_cases(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/cases',authorization,dict(request.query_params))
+
+    @app.post('/api/v1/outcomes/cases',status_code=201)
+    async def create_outcome_case(request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],'/api/v1/outcomes/cases',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.get('/api/v1/outcomes/cases/{case_id}')
+    async def outcome_case(case_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/outcomes/cases/{case_id}',authorization,dict(request.query_params))
+
+    @app.post('/api/v1/outcomes/cases/{case_id}/actions')
+    async def outcome_case_action(case_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],f'/api/v1/outcomes/cases/{case_id}/actions',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.get('/api/v1/outcomes/cases/{case_id}/billing-evidence')
+    async def outcome_billing_evidence(case_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/outcomes/cases/{case_id}/billing-evidence',authorization,dict(request.query_params))
+
+    @app.post('/api/v1/outcomes/evidence/receipts',status_code=201)
+    async def outcome_evidence_receipt(request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],'/api/v1/outcomes/evidence/receipts',authorization,json=await bounded_json(request),transport=transport,evidence_signature=request.headers.get('X-Evidence-Signature'))
+
+    @app.get('/api/v1/outcomes/ownership')
+    async def outcome_ownership(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/ownership',authorization,dict(request.query_params))
+
+    @app.put('/api/v1/outcomes/ownership')
+    async def update_outcome_ownership(request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('PUT',targets['scanner'],'/api/v1/outcomes/ownership',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.get('/api/v1/outcomes/ownership/history')
+    async def outcome_ownership_history(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/ownership/history',authorization,dict(request.query_params))
+
+    @app.get('/api/v1/outcomes/anomalies')
+    async def outcome_investigations(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/anomalies',authorization,dict(request.query_params))
+
+    @app.post('/api/v1/outcomes/anomalies/detect')
+    async def detect_outcome_anomalies(request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],'/api/v1/outcomes/anomalies/detect',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.get('/api/v1/outcomes/anomalies/metrics')
+    async def outcome_investigation_metrics(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/outcomes/anomalies/metrics',authorization,dict(request.query_params))
+
+    @app.get('/api/v1/outcomes/anomalies/{anomaly_id}')
+    async def outcome_investigation(anomaly_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/outcomes/anomalies/{anomaly_id}',authorization,dict(request.query_params))
+
+    @app.post('/api/v1/outcomes/anomalies/{anomaly_id}/actions')
+    async def outcome_investigation_action(anomaly_id:UUID,request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],f'/api/v1/outcomes/anomalies/{anomaly_id}/actions',authorization,json=await bounded_json(request),transport=transport)
+
+    @app.post('/api/v1/outcomes/suppressions',status_code=201)
+    async def approve_outcome_exception(request:Request,row=Depends(allowed),authorization:str=Header()):
+        from app.gitops_api import bounded_json
+        return await upstream('POST',targets['scanner'],'/api/v1/outcomes/suppressions',authorization,json=await bounded_json(request),transport=transport)
+
     @app.get('/api/v1/services/{service_name}')
     async def service_matrix(service_name:str,scan_id:UUID|None=None,row=Depends(allowed),authorization:str=Header()):
         from app.v150_analysis import SERVICES

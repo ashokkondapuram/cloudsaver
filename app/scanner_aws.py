@@ -41,7 +41,7 @@ def scan_account(source, *, session=None):
             for source_key, key in [('BackupRetentionPeriod', 'backup_retention_days'), ('Size', 'size_gb'), ('Iops', 'provisioned_iops')]:
                 if type(row.get(source_key)) is int and row[source_key] >= 0:
                     evidence[key] = row[source_key]
-            evidence.update(volume_type=row.get('VolumeType'),storage_type=row.get('StorageType'),throughput_mibps=row.get('Throughput'),allocated_storage_gb=row.get('AllocatedStorage'))
+            evidence.update(instance_class=row.get('DBInstanceClass'),volume_type=row.get('VolumeType'),storage_type=row.get('StorageType'),throughput_mibps=row.get('Throughput'),allocated_storage_gb=row.get('AllocatedStorage'))
             evidence.update(created_at=str(row.get('CreateTime')) if row.get('CreateTime') else None)
             if kind=='volume':evidence.update(disk_state=row.get('State'),association_verified=bool(row.get('Attachments')))
             if kind=='db':evidence.update(power_state=row.get('DBInstanceStatus'),backup_retention_days=row.get('BackupRetentionPeriod'),deletion_protection=row.get('DeletionProtection'))

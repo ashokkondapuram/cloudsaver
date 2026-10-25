@@ -1,4 +1,4 @@
-"""Runnable CloudSaver enterprise API service v1.5.1."""
+"""Runnable CloudSaver enterprise API service v1.6.0."""
 import hashlib
 import hmac
 import logging
@@ -49,7 +49,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
         from database.connection import dispose
         dispose()
 
-    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.5.1', lifespan=lifespan)
+    api = FastAPI(title='CloudSaver — Multi-Cloud FinOps', version='1.6.0', lifespan=lifespan)
     from app.runtime import install
     install(api, settings, redis_required=any(os.getenv(flag, '').lower() == 'true' for flag in (
         'CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'CLOUDSAVER_DELIVERY_ENABLED', 'CLOUDSAVER_INTERACTIVE_JOBS')))
@@ -62,6 +62,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     from app.focus import FocusRepository
     from app.finops_api import create_router as finops_router
     evidence_store=EnterpriseStore(settings)
+    from app.outcome_api import create_router as outcome_router
+    api.include_router(outcome_router(store,evidence_store,current_tenant))
     from app.data_governance_api import create_router as governance_router
     api.include_router(governance_router(evidence_store,current_tenant))
     api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
@@ -105,7 +107,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
     @api.get('/healthz')
     def health():
-        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.5.1'}
+        return {'status': 'healthy', 'service': 'cloudsaver', 'version': '1.6.0'}
 
     @api.get('/api/v1/auth/consent-url')
     def consent_url(tenant=Depends(current_tenant)):
@@ -331,7 +333,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
     @api.get('/', include_in_schema=False)
     def dashboard():
-        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.5.1</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+        return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.6.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
 
     @api.post('/api/v1/scans/{scan_id}/remediation')
     def remediation(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):

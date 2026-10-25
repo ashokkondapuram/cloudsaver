@@ -1,6 +1,6 @@
 # Enterprise readiness remediation and launch gates
 
-Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.5.1 upgrade runbook](releases/1.5.1-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
+Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.6.0 upgrade runbook](releases/1.6.0-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
 
 **Release decision remains NO-GO for a general enterprise production launch.** Source remediation does not provide independent penetration testing, cloud IAM approval, invoice reconciliation, HA/load acceptance, recovery measurements, contractual privacy review, repository-administration enforcement or named human sign-offs. No such evidence is manufactured here.
 
@@ -41,7 +41,7 @@ Every G01–G18 item retains its original priority. Individual owners are **unas
 
 ## Evidence and release decisions
 
-The first regression run reproduced six baseline failures: five gateway workflows and a billing summary GET that attempted ingestion. Their fixes and later full-suite results must be assessed alongside the linked tests and CI logs for the exact release SHA. The coverage gate is an aggregate across `auth`, `agent_contract`, `agent_store`, `provider_access`, `billing_jobs` and `finops_api`, not a claim of 85% coverage of every route or each module separately.
+The first regression run reproduced six baseline failures: five gateway workflows and a billing summary GET that attempted ingestion. Their fixes and later full-suite results must be assessed alongside the linked tests and CI logs for the exact release SHA. At 1.5.1 the aggregate coverage gate covered `auth`, `agent_contract`, `agent_store`, `provider_access`, `billing_jobs` and `finops_api`. Version 1.6.0 adds the four outcome modules listed in its runbook. The aggregate threshold is not a claim of 85% coverage of every route or each module separately.
 
 The Gitleaks gate scans tracked release source files, excluding its self-referential manifest. Four fixed public synthetic test constants have line-specific allow comments; unknown new secrets remain blocked and a generated synthetic credential is a negative control. This is not a Git-history secret audit.
 
@@ -63,3 +63,7 @@ Repository administration was rechecked on 2026-10-25 before publication: the br
 - Tracked-source Gitleaks scan passed and its generated synthetic-secret negative control was rejected. Release manifest verification checks current file hashes and both Alembic graph heads.
 
 GitHub-hosted execution, required-check enforcement, independent reviews and all production/customer acceptance evidence remain separate gates. Local passing commands do not replace them.
+
+## 1.6.0 financial outcomes increment
+
+The [financial outcomes pilot](FINANCIAL_OUTCOMES.md) adds evidence-bound savings cases, direct ownership and delayed billing investigations. Synthetic tests and the reviewed source do not replace provider reconciliation, independent security testing, recovery/load evidence or business sign-offs. Existing G01–G18 launch gates remain; this increment does not turn NO-GO into an enterprise launch approval. New critical financial modules join the aggregate 85% CI coverage gate. Current upgrade graph and artifact inventory are defined by the 1.6.0 runbook and generated manifest.

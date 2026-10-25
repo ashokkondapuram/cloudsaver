@@ -107,6 +107,7 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
 
 INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
     ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
+    ', vmSize=tostring(properties.hardwareProfile.vmSize), skuName=tostring(sku.name)'
     ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)'
     ', resourceLocation=location, managedBy=tostring(managedBy), osDiskId=tostring(properties.storageProfile.osDisk.managedDisk.id)'
     ', dataDisks=properties.storageProfile.dataDisks, networkInterfaces=properties.networkProfile.networkInterfaces'
@@ -124,7 +125,7 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
     observed_at = datetime.now(timezone.utc).isoformat()
     for row in execute_pages(client, INVENTORY_QUERY, subscriptions):
         evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
-        for source, target in (('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
+        for source, target in (('vmSize', 'vm_size'), ('skuName', 'sku_name'), ('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
             if isinstance(row.get(source), str) and row[source]:
                 evidence[target] = row[source]
         if type(row.get('hostedAppCount')) is int and row['hostedAppCount'] >= 0:

@@ -25,6 +25,7 @@ def extra_inventory(reader,project,regions):
             # Deliberately omit environment variables, SQL users, arbitrary spec
             # text, networking addresses and credentials from config projection.
             if kind=='compute.googleapis.com/Instance':
+                e['machine_type']=(data.get('machineType') or '').rsplit('/',1)[-1]
                 edges=[]
                 for disk in data.get('disks',[]):
                     source=disk.get('source','')

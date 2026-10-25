@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {usePathname, useRouter} from 'next/navigation';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {AlertCircle, BrainCircuit, Database, Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
+import {ClipboardCheck, AlertCircle, BrainCircuit, Database, Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime, providerNames, scopeOf, ruleLabel, shortDate} from '../lib/finops';
 import {billingBanner} from '../lib/plan';
@@ -24,6 +24,7 @@ export const navigation = [
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
   {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:'MODEL & ATTRIBUTE'},
   {href:'/allocation',label:'Cost allocation',icon:Wallet,group:''},
+  {href:'/outcomes',label:'Savings & investigations',icon:ClipboardCheck,group:''},
   {href:'/agents',label:'Agent worker',icon:Sparkles,group:'ACT & GOVERN'},
   {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:''},
   {href:'/activity',label:'Activity & delivery',icon:Activity,group:''},
@@ -151,7 +152,7 @@ export function AppShell({children}: {children: ReactNode}) {
   const active = navigation.find(item => (item.href === pathname || item.href === '/services/disks' && pathname.startsWith('/services/'))) || navigation[0];
   const scopes = [...new Set((scan?.findings || []).map(scopeOf))];
   const failures = reliability?.counts.filter(c => c.status === 'dead_letter').reduce((sum,c) => sum + c.count,0) || 0;
-  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.5.1</small></>}</button></div></>;
+  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.6.0</small></>}</button></div></>;
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>

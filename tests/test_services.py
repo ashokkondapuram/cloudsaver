@@ -87,3 +87,33 @@ def test_gateway_no_longer_forwards_billing_webhooks(tmp_path):
     client = TestClient(gateway(configuration(tmp_path), Limiter(), httpx.MockTransport(handler)))
     response = client.post('/api/v1/billing/webhook', content=b'{"type": "test"}', headers={'Stripe-Signature': 't=1,v1=x'})
     assert response.status_code == 410 and response.json()['detail'] == 'Billing webhooks are handled by the platform.'
+
+@pytest.mark.parametrize(('method','path'),[
+    ('GET','/summary'),('GET','/cases'),('POST','/cases'),
+    ('GET',f'/cases/{SID}'),('POST',f'/cases/{SID}/actions'),('GET',f'/cases/{SID}/billing-evidence'),
+    ('POST','/evidence/receipts'),('GET','/ownership'),('PUT','/ownership'),('GET','/ownership/history'),
+    ('GET','/anomalies'),('POST','/anomalies/detect'),('GET','/anomalies/metrics'),
+    ('GET',f'/anomalies/{SID}'),('POST',f'/anomalies/{SID}/actions'),('POST','/suppressions'),
+])
+def test_outcome_gateway_exact_routes_signature_and_bodies(tmp_path,method,path):
+    import json
+    calls=[];payload={'version':7,'note':'Synthetic route contract'}
+    def handler(request):
+        calls.append(request)
+        assert request.url.host=='scanner-service' and request.url.path=='/api/v1/outcomes'+path
+        assert request.headers['authorization']=='Bearer '+KEY and request.headers.get('x-request-id')
+        if method=='GET':assert request.url.params['currency']=='USD'
+        else:assert json.loads(request.content)==payload
+        if path=='/evidence/receipts':assert request.headers['x-evidence-signature']=='a'*64
+        else:assert 'x-evidence-signature' not in request.headers
+        return httpx.Response(200,json={'status':'bounded-core-response'})
+    client=TestClient(gateway(configuration(tmp_path),Limiter(),httpx.MockTransport(handler)))
+    response=client.request(method,'/api/v1/outcomes'+path+('?currency=USD' if method=='GET' else ''),headers={'Authorization':'Bearer '+KEY,'X-Evidence-Signature':'a'*64},**({'json':payload} if method!='GET' else {}))
+    expected=201 if method=='POST' and path in ('/cases','/evidence/receipts','/suppressions') else 200
+    assert response.status_code==expected and response.json()=={'status':'bounded-core-response'} and len(calls)==1
+
+
+def test_outcome_gateway_rejects_duplicate_json_without_forwarding(tmp_path):
+    client=TestClient(gateway(configuration(tmp_path),Limiter(),httpx.MockTransport(lambda _:pytest.fail('No ambiguous evidence may be forwarded'))))
+    response=client.post('/api/v1/outcomes/evidence/receipts',headers={'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},content='{"tenant_id":"one","tenant_id":"two"}')
+    assert response.status_code==422

@@ -58,7 +58,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:1.5.1
+  image: cloudsaver-python:1.6.0
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -138,6 +138,8 @@ services:
       CLOUDSAVER_GITOPS_PUBLISH: ${CLOUDSAVER_GITOPS_PUBLISH:-false}
       CLOUDSAVER_GITHUB_APP_ID: ${CLOUDSAVER_GITHUB_APP_ID:-}
       CLOUDSAVER_GITHUB_APP_PRIVATE_KEY: ${CLOUDSAVER_GITHUB_APP_PRIVATE_KEY:-}
+      # Signing secret is available only to the core verifier, never the browser/agent.
+      CLOUDSAVER_EVIDENCE_KEY_OUTCOMES: ${CLOUDSAVER_EVIDENCE_KEY_OUTCOMES:-}
       CLOUDSAVER_PLAN_POLICY: ${CLOUDSAVER_PLAN_POLICY:-}
     # The normal Compose stack supports developer sign-in without an override.
     # Managed-identity authentication does not read this local CLI cache.

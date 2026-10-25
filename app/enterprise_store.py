@@ -9,7 +9,8 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
           'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics',
           'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions',
           'agent_tasks', 'agent_task_events','ai_data_events','ai_data_retention','ai_data_holds',
-          'billing_sync_runs','agent_gitops_syncs','billing_sync_jobs')
+          'billing_sync_runs','agent_gitops_syncs','billing_sync_jobs','finops_ownership','finops_anomalies',
+          'finops_anomaly_events','finops_suppressions','savings_financial_claims')
 
 
 class Connection:
@@ -40,7 +41,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0021_billing_jobs before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0022_financial_outcomes before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -106,6 +107,27 @@ class EnterpriseStore:
                     BEGIN SELECT RAISE(ABORT,'Agent audit events are append-only'); END;
                 UPDATE agent_tasks SET payload=json_set(payload,'$.data_retention_expires_at',strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'))
                     WHERE json_extract(payload,'$.data_retention_expires_at') IS NULL;
+                CREATE TABLE IF NOT EXISTS finops_ownership (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,resource_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,payload TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,provider,scope_id,resource_id,version));
+                CREATE TABLE IF NOT EXISTS finops_anomalies (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,fingerprint TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,resource_id TEXT,currency TEXT NOT NULL,
+                    state TEXT NOT NULL,version INTEGER NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(tenant_id,fingerprint));
+                CREATE TABLE IF NOT EXISTS finops_anomaly_events (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,anomaly_id TEXT NOT NULL,version INTEGER NOT NULL,action TEXT NOT NULL,payload TEXT NOT NULL,
+                    actor TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,anomaly_id,version));
+                CREATE TABLE IF NOT EXISTS finops_suppressions (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,resource_id TEXT,start_date TEXT NOT NULL,end_date TEXT NOT NULL,
+                    payload TEXT NOT NULL,actor TEXT NOT NULL,created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS savings_financial_claims (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,case_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,resource_id TEXT NOT NULL,currency TEXT NOT NULL,
+                    period_start TEXT NOT NULL,period_end TEXT NOT NULL,receipt_id TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,amount TEXT NOT NULL,evidence TEXT NOT NULL,ledger_digest TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,case_id,receipt_id));
+                CREATE TRIGGER IF NOT EXISTS finops_ownership_no_update BEFORE UPDATE ON finops_ownership BEGIN SELECT RAISE(ABORT,'Ownership versions are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS finops_ownership_no_delete BEFORE DELETE ON finops_ownership BEGIN SELECT RAISE(ABORT,'Ownership versions are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS finops_anomaly_events_no_update BEFORE UPDATE ON finops_anomaly_events BEGIN SELECT RAISE(ABORT,'Investigation events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS finops_anomaly_events_no_delete BEFORE DELETE ON finops_anomaly_events BEGIN SELECT RAISE(ABORT,'Investigation events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_claims_no_update BEFORE UPDATE ON savings_financial_claims BEGIN SELECT RAISE(ABORT,'Financial claims are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS savings_claims_no_delete BEFORE DELETE ON savings_financial_claims BEGIN SELECT RAISE(ABORT,'Financial claims are append-only'); END;
                 CREATE TABLE IF NOT EXISTS savings_cases (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,
                     resource_id TEXT NOT NULL,baseline_scan_id TEXT NOT NULL,request_key TEXT NOT NULL,fingerprint TEXT NOT NULL,
