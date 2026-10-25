@@ -118,14 +118,17 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
 
     @router.get('/api/v1/gitops/requests')
     def history(limit:int=50,tenant=Depends(current_tenant)):
+        from app.data_scope import scan_visible
         if not 1<=limit<=100:
             raise HTTPException(422,'limit must be between 1 and 100')
-        return repository.list(tenant['tenant_id'],limit)
+        items = [row for row in repository.list(tenant['tenant_id'],limit) if scan_visible(store, tenant, row['scan_id'])]
+        return items
 
     @router.get('/api/v1/gitops/requests/{request_id}')
     def detail(request_id:UUID,tenant=Depends(current_tenant)):
+        from app.data_scope import scan_visible
         row = repository.get(tenant['tenant_id'],str(request_id))
-        if row is None:
+        if row is None or not scan_visible(store, tenant, row['scan_id']):
             raise HTTPException(404,'Review request not found')
         return row
 

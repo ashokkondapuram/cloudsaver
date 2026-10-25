@@ -211,19 +211,26 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
     @router.get('/ai-batches')
     def list_batches(scan_id: UUID | None = None, limit: int = Query(20, ge=1, le=50), tenant=Depends(current_tenant)):
-        return dict(items=repo.batches(tenant['tenant_id'], scan_id=str(scan_id) if scan_id else None, limit=limit),
-                    hourly_attempt_limit=gateway.limit)
+        from app.data_scope import scan_visible
+        items = repo.batches(tenant['tenant_id'], scan_id=str(scan_id) if scan_id else None, limit=limit)
+        items = [batch for batch in items if scan_visible(store, tenant, batch['scan_id'])]
+        return dict(items=items, hourly_attempt_limit=gateway.limit)
 
     @router.get('/ai-batches/{batch_id}')
     def get_batch(batch_id: UUID, tenant=Depends(current_tenant)):
+        from app.data_scope import scan_visible
         batch = repo.batch(tenant['tenant_id'], str(batch_id))
-        if batch is None:
+        if batch is None or not scan_visible(store, tenant, batch['scan_id']):
             raise HTTPException(404, 'Batch not found')
         return batch
 
     @router.post('/ai-batches/{batch_id}/cancel')
     def cancel_batch(batch_id: UUID, tenant=Depends(current_tenant)):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
+        from app.data_scope import scan_visible
+        existing = repo.batch(tenant['tenant_id'], str(batch_id))
+        if existing is None or not scan_visible(store, tenant, existing['scan_id']):
+            raise HTTPException(404, 'Batch not found')
         batch = repo.cancel(tenant['tenant_id'], str(batch_id))
         if batch is None:
             raise HTTPException(404, 'Batch not found')
@@ -268,7 +275,10 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
     @router.get('/resources/{resource_key}/decisions')
     def decisions(resource_key: str = Path(pattern=KEY), tenant=Depends(current_tenant)):
-        return dict(items=repo.decisions(tenant['tenant_id'], resource_key))
+        from app.data_scope import scan_visible
+        items = [row for row in repo.decisions(tenant['tenant_id'], resource_key)
+                 if scan_visible(store, tenant, row['scan_id'])]
+        return dict(items=items)
 
     @router.post('/resources/{resource_key}/decisions', status_code=201)
     async def decide(request: Request, resource_key: str = Path(pattern=KEY), tenant=Depends(current_tenant)):
@@ -299,13 +309,13 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                            scan_id: UUID | None = None, resource_reference: str | None = Query(None,pattern=r'^[a-f0-9]{64}$'),
                            tenant=Depends(current_tenant)):
         try:
-            return ledger.page(tenant['tenant_id'],limit,str(before) if before else None,str(scan_id) if scan_id else None,resource_reference)
+            return ledger.page(tenant,limit,str(before) if before else None,str(scan_id) if scan_id else None,resource_reference)
         except AIError as error:
             raise HTTPException(error.status,str(error)) from None
 
     @router.get('/ai/assessments/{assessment_id}')
     def assessment_record(assessment_id: UUID,tenant=Depends(current_tenant)):
-        result=ledger.get(tenant['tenant_id'],str(assessment_id))
+        result=ledger.get(tenant,str(assessment_id))
         if result is None:
             raise HTTPException(404,'Assessment not found')
         return result
@@ -313,7 +323,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
     @router.get('/ai/usage')
     def usage(days: int = Query(30,ge=1,le=90),tenant=Depends(current_tenant)):
         try:
-            return ledger.usage(tenant['tenant_id'],days)
+            return ledger.usage(tenant,days)
         except AIError as error:
             raise HTTPException(error.status,str(error)) from None
 

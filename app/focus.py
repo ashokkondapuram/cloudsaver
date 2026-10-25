@@ -97,6 +97,18 @@ class ImportRequest(BaseModel):
 
 
 def authorized(provider,account,tenant):
+    allowed = tenant.get('allowed_providers')
+    if allowed is not None and provider not in allowed:
+        return False
+    limits = (tenant.get('scope_restrictions') or {}).get(provider)
+    if limits is not None:
+        if provider == 'azure':
+            try:
+                account = str(UUID(account))
+            except ValueError:
+                return False
+            return account.lower() in {value.lower() for value in limits}
+        return str(account) in limits
     if provider=='azure':
         try: account=str(UUID(account))
         except ValueError: return False

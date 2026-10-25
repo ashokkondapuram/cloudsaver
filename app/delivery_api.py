@@ -57,17 +57,30 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
         return {'available':True,'dispatcher_enabled':enabled(),
                 'targets':[t.public() for t in current_targets(tenant['tenant_id'])],**repository.summary(tenant['tenant_id'])}
 
+    def visible_delivery(workspace, event):
+        from app.data_scope import restricted, scan_visible
+        if event is None:
+            return False
+        scan_id = event.get('scan_id')
+        if not restricted(workspace) or not scan_id:
+            return True
+        return scan_visible(store, workspace, scan_id)
+
     @router.get('/api/v1/operations/deliveries')
     def deliveries(limit:int=Query(50,ge=1,le=100),status:str|None=Query(None,pattern='^(pending|leased|published|delivered|dead_letter)$'),before:UUID|None=None,tenant=Depends(current_tenant)):
         available()
         try:
-            return repository.page(tenant['tenant_id'],limit,status,str(before) if before else None)
+            page = repository.page(tenant['tenant_id'],limit,status,str(before) if before else None)
         except DeliveryConflict:
             raise HTTPException(422,'Invalid delivery cursor') from None
+        page['items'] = [item for item in page['items'] if visible_delivery(tenant, item)]
+        return page
 
     @router.get('/api/v1/operations/deliveries/{event_id}/audit')
     def history(event_id:UUID,limit:int=Query(50,ge=1,le=100),before:UUID|None=None,tenant=Depends(current_tenant)):
         available()
+        if not visible_delivery(tenant, repository.get(tenant['tenant_id'],str(event_id))):
+            raise HTTPException(404,'Delivery not found')
         try:
             result=repository.history(tenant['tenant_id'],str(event_id),limit,str(before) if before else None)
         except DeliveryConflict:
@@ -80,7 +93,7 @@ def create_router(settings,store,current_tenant,*,targets=None,repository=None):
     def replay(event_id:UUID,tenant=Depends(current_tenant),payload:ReplayRequest=Depends(replay_payload)):
         require_workspace_role(tenant,Role.TENANT_ADMIN)
         available()
-        if not repository.get(tenant['tenant_id'],str(event_id)):
+        if not visible_delivery(tenant, repository.get(tenant['tenant_id'],str(event_id))):
             raise HTTPException(404,'Delivery not found')
         if not enabled():
             raise HTTPException(503,'Delivery dispatcher is disabled')

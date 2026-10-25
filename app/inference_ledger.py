@@ -154,10 +154,17 @@ class InferenceLedger:
         result['metadata']=decode(result['metadata'])
         return result
 
-    def page(self,tenant_id,limit=25,before=None,scan_id=None,resource_reference=None):
+    @staticmethod
+    def _tenant(tenant):
+        return tenant if isinstance(tenant, dict) else {'tenant_id': tenant}
+
+    def page(self,tenant,limit=25,before=None,scan_id=None,resource_reference=None):
         from app.data_retention import DataRetention
+        from app.data_scope import predicate
+        tenant=self._tenant(tenant);tenant_id=tenant['tenant_id']
         DataRetention(self.store).purge(tenant_id)
         from app.ai_advisory import AIError
+        scope_filter,scope_args=predicate(tenant,"metadata->>'source_provider'","metadata->>'scope_id'")
         with self.store.transaction(tenant_id) as db:
             cursor=None
             if before:
@@ -167,21 +174,26 @@ class InferenceLedger:
             # JSON field filtering uses the shared SQLite/PostgreSQL ->> operator.
             rows=db.execute(f'''SELECT {COLUMNS} FROM ai_inference_attempts WHERE tenant_id=%s
                 AND COALESCE(metadata->>'kind','')<>'agent_plan'
+                {scope_filter}
                 AND (CAST(%s AS TEXT) IS NULL OR scan_id=%s)
                 AND (CAST(%s AS TEXT) IS NULL OR metadata->>'resource_reference'=%s)
                 AND (CAST(%s AS TEXT) IS NULL OR created_at<%s OR (created_at=%s AND id<%s))
                 ORDER BY created_at DESC,id DESC LIMIT %s''',
-                (tenant_id,scan_id,scan_id,resource_reference,resource_reference,
+                (tenant_id,*scope_args,scan_id,scan_id,resource_reference,resource_reference,
                  cursor[0] if cursor else None,cursor[0] if cursor else None,cursor[0] if cursor else None,cursor[1] if cursor else None,limit+1)).fetchall()
             return dict(items=[self.public(r) for r in rows[:limit]],next_cursor=str(rows[limit-1][0]) if len(rows)>limit else None,
                         durable=True)
 
-    def get(self,tenant_id,attempt_id):
+    def get(self,tenant,attempt_id):
         from app.data_retention import DataRetention
+        from app.data_scope import metadata_visible
+        tenant=self._tenant(tenant);tenant_id=tenant['tenant_id']
         DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             row=db.execute(f'SELECT {COLUMNS},response FROM ai_inference_attempts WHERE tenant_id=%s AND id=%s',(tenant_id,attempt_id)).fetchone()
             if not row:
+                return None
+            if not metadata_visible(tenant,decode(row[3])):
                 return None
             if decode(row[3]).get('kind')=='agent_plan':
                 # Planning shares metering, but its response is not an assessment/advisory schema.
@@ -194,7 +206,9 @@ class InferenceLedger:
             result['events']=[dict(action=r[0],created_at=r[1]) for r in db.execute('SELECT action,created_at FROM ai_inference_events WHERE tenant_id=%s AND attempt_id=%s ORDER BY created_at,id',(tenant_id,attempt_id)).fetchall()]
             return result
 
-    def usage(self,tenant_id,days=30):
+    def usage(self,tenant,days=30):
+        from app.data_scope import metadata_visible
+        tenant=self._tenant(tenant);tenant_id=tenant['tenant_id']
         with self.store.transaction(tenant_id) as db:
             start=(self.now(db)-timedelta(days=days)).isoformat()
             rows=db.execute("SELECT metadata,status,input_tokens,output_tokens FROM ai_inference_attempts WHERE tenant_id=%s AND created_at>=%s ORDER BY created_at LIMIT 10001",(tenant_id,start)).fetchall()
@@ -203,7 +217,10 @@ class InferenceLedger:
             raise AIError('Usage window exceeds 10000 attempts; select fewer days',422)
         groups={}
         for raw,status,input_tokens,output_tokens in rows:
-            meta=decode(raw);key=(meta['provider'],meta['model'],meta['target_id'],meta.get('cost_center','unassigned'),meta.get('application_id','unassigned'))
+            meta=decode(raw)
+            if not metadata_visible(tenant,meta):
+                continue
+            key=(meta['provider'],meta['model'],meta['target_id'],meta.get('cost_center','unassigned'),meta.get('application_id','unassigned'))
             group=groups.setdefault(key,dict(provider=key[0],model=key[1],target_id=key[2],cost_center=key[3],application_id=key[4],attribution_source='observed_tags_unverified',attempts=0,completed=0,
                 incomplete_outcomes=0,unmetered_completions=0,input_tokens=None,output_tokens=None,billed_cost_usd=None))
             group['attempts']+=1;group['completed']+=status=='completed';group['incomplete_outcomes']+=status!='completed'

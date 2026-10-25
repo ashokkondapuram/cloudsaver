@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "a9c9152ee2ce76d91db2fb171b432f07caaca6ba5af76a34de83bb39d72ae53a",
+  "inventory_sha256": "fd5f09f8137abe4d3e78b9f1390af8b38954b3bbe2a5ba170b24db63826a7bd3",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -386,13 +386,13 @@
     },
     {
       "path": "app/data_scope.py",
-      "sha256": "d72418d3870fc3e45e88992778de7738718f6b2b2e83d228bb8c81dbc6511e59",
-      "bytes": 981
+      "sha256": "dc620095fac623e2cd5c1fd6f6c1595e68fbbabda0c720ae86a177c3b84dd425",
+      "bytes": 2903
     },
     {
       "path": "app/delivery_api.py",
-      "sha256": "3e45f19ecb69589d6c29e617a7e75793f6cf347cacf348c8bc5c53e1fe7c1ab3",
-      "bytes": 5143
+      "sha256": "7cc05fb6fea202a2a28f381c5e1f94d336d1fb35adb82b99fbf9ad96af16ae7f",
+      "bytes": 5757
     },
     {
       "path": "app/delivery_config.py",
@@ -431,8 +431,8 @@
     },
     {
       "path": "app/focus.py",
-      "sha256": "7285135354c690c810251c5e3eaffba5ec66c66e8a3fd5865e846777df9d1f10",
-      "bytes": 22069
+      "sha256": "7afc61659521c6ff372a3c69ee8f46a0a2629309dd3ffba35bd79f42009b66a0",
+      "bytes": 22553
     },
     {
       "path": "app/foundry.py",
@@ -466,8 +466,8 @@
     },
     {
       "path": "app/gitops_api.py",
-      "sha256": "4df202ae25160f393437fb97f469fbcc96cceca2709f707d062f02c5e9e84f78",
-      "bytes": 8367
+      "sha256": "ccaa21d42546dee54e359562c2000bb9aca49889cb11ca8dee431b99efd15c7d",
+      "bytes": 8600
     },
     {
       "path": "app/gitops_store.py",
@@ -506,8 +506,8 @@
     },
     {
       "path": "app/inference_ledger.py",
-      "sha256": "a88a30127ff5b6bff649d7364c826113af52dac201cddab9d613c713ac8e0abf",
-      "bytes": 14949
+      "sha256": "bb4c1cb1665e38e899eb4c0cc9b8040ebac2acc150d403aee078f811126eb467",
+      "bytes": 15731
     },
     {
       "path": "app/inventory.py",
@@ -641,8 +641,8 @@
     },
     {
       "path": "app/resource_api.py",
-      "sha256": "61eb866bf198032ade5d5d419f28c5594496da0491a4c53466a5d2e186c4e38c",
-      "bytes": 20105
+      "sha256": "be62704e9231053f7ea2dbcb8b8ff2b1c50f372b2495ade3918dac54fdd94db8",
+      "bytes": 20715
     },
     {
       "path": "app/resource_assessment.py",
@@ -666,8 +666,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "426b74149c177cf6f205b83540530eadd9e767f333beb80ffa64c8168be2ca67",
-      "bytes": 10346
+      "sha256": "ef5535068d0c99ec89466588e2ea23ec6447434dc8df3e3738dbc26116604e71",
+      "bytes": 10260
     },
     {
       "path": "app/runtime.py",
@@ -998,6 +998,11 @@
       "path": "docs/V1_MASTER_GUIDE.md",
       "sha256": "e5b57ddf40818e422b366b579cdb9f9d55739eb7ae59cf4448225f93d4a44762",
       "bytes": 13304
+    },
+    {
+      "path": "docs/V2_0_ARCHITECTURAL_ROADMAP.md",
+      "sha256": "989f03087d044908f16090d311d911a9ab33129d45b5ce0b8cb729b9f03a4bd0",
+      "bytes": 16030
     },
     {
       "path": "docs/WORKLOAD_ASSESSMENTS.md",
