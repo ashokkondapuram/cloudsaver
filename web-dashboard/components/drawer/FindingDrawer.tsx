@@ -21,7 +21,7 @@ export function CodeReview({findings}: {findings:Finding[]}) {
   const [busy,setBusy] = useState(''), [error,setError] = useState('');
   const controller = useRef<AbortController | null>(null);
   const resources = [...new Set(findings.map(f => f.resource_id))];
-  const fingerprint = JSON.stringify([scan?.scan_id,resources]);
+  const fingerprint = JSON.stringify([workspace?.tenant_id,token,scan?.scan_id,resources]);
   const current = useRef(fingerprint); current.current = fingerprint;
   useEffect(() => {controller.current?.abort();setResult(null);setError('');setBusy('');return()=>controller.current?.abort();}, [fingerprint]);
   const common = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic' && canAdmin && resources.length > 0 && resources.length <= 50;
@@ -31,6 +31,7 @@ export function CodeReview({findings}: {findings:Finding[]}) {
   const canBash = common && !protectedCount && sameProvider && findings.every(f => providerOf(f) === 'azure' && bashRules.has(f.rule_id));
   const reason = !canAdmin ? 'A workspace administrator can generate review artifacts.' : scan?.data_origin === 'legacy_synthetic' ? 'Historical synthetic snapshots cannot generate code.' : !resources.length ? 'Select at least one resource to review.' : resources.length > 50 ? 'Choose up to 50 unique resources per review.' : !sameProvider ? 'Choose resources from one provider per review.' : !canTerraform && !canBash ? 'These finding types or your current plan do not support code export.' : '';
   async function generate(kind:'terraform'|'bash') {
+    if(result?.kind===kind)return;
     controller.current?.abort(); const request = new AbortController();controller.current = request;
     const version = fingerprint;setBusy(kind);setError('');setResult(null);
     try {

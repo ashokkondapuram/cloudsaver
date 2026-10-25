@@ -169,13 +169,14 @@ def test_history_reports_changes_across_scans():
     assert changes(dict(present=False), dict(present=True)) == ['appeared']
 
 
-def test_csv_report_escapes_formulas():
-    item = dict(provider='azure', scope_id=SUB, resource_name='=HYPERLINK("x")', resource_type='disk', resource_group='rg',
+@pytest.mark.parametrize("prefix", ["", " ", "\t", "\n"])
+def test_csv_report_escapes_formulas(prefix):
+    item = dict(provider='azure', scope_id=SUB, resource_name=prefix+'=HYPERLINK("x")', resource_type='disk', resource_group='rg',
                 resource_id='/x', service_category='storage', rule_ids=['A', 'B'], review_priority='high', disposition='requires_review',
                 pillars={p: 'unknown' for p in PILLARS}, retail_estimate_usd=None, evidence_digest='0' * 64,
                 ai=dict(status='not_run', risk_level=None, summary=None), decision=None)
     report = csv_report([item])
-    assert report.startswith('\ufeffprovider,') and '\'=HYPERLINK' in report and 'A;B' in report
+    assert report.startswith('\ufeffprovider,') and ("'"+prefix+'=HYPERLINK') in report and 'A;B' in report
 
 
 @pytest.fixture

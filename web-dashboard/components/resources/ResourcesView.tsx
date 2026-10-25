@@ -5,6 +5,7 @@ import {useRouter, useSearchParams} from 'next/navigation';
 import {BrainCircuit, ChevronRight, Download, FileCode2, Filter, Loader2, Printer, Search, Server, ShieldCheck, X} from 'lucide-react';
 import {categories, categoryOf, knownPrice, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
 import {identityOf} from '../../lib/resources';
+import {resourceCsv} from '../../lib/resource-csv';
 import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
@@ -100,7 +101,7 @@ function matchesDiscovery(row: ResourceRow, scanFindings: Finding[], category: C
 }
 
 export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing}) {
-  const {scan, token, canAdmin, notify, openReview, setSelection} = useWorkspace();
+  const {scan, token, canAdmin, notify, openReview, setSelection, scope} = useWorkspace();
   const router = useRouter(), params = useSearchParams();
   const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
   const {page, error, reload} = useResources(scan?.scan_id, token, live);
@@ -113,7 +114,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   useEffect(() => {setFilters(f => ({...f, provider: params.get('provider') || initialProvider || ''})); setCategory(initialCategory); setIntent(initialIntent); setPricing(initialPricing);}, [params, initialProvider, initialCategory, initialIntent, initialPricing]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id]);
   const findings = scan?.findings || [];
-  const rows = useMemo(() => (page?.items || []).filter(r => matches(r, filters, deferred) && matchesDiscovery(r, findings, category, intent, pricing)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred, findings, category, intent, pricing]);
+  const rows = useMemo(() => (page?.items || []).filter(r => (!scope.length || scope.includes(r.scope_id)) && matches(r, filters, deferred) && matchesDiscovery(r, findings, category, intent, pricing)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred, findings, category, intent, pricing, scope]);
   const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)), [page, selected]);
   const reviewFindings = useMemo(() => {
     if (!scan || !chosen.length) return [];
@@ -141,10 +142,8 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     if (!scan) return;
     setExporting(true);
     try {
-      const search = new URLSearchParams(Object.entries({...filters, q: query}).filter(([, v]) => v)).toString();
-      const report = await api<{filename: string; rows: number; content: string}>(`/scans/${scan.scan_id}/resources/export${search ? `?${search}` : ''}`, token);
-      downloadFile(report.content, report.filename, 'text/csv;charset=utf-8');
-      notify(`CSV download prepared for ${report.rows.toLocaleString()} resources.`);
+      downloadFile(resourceCsv(rows), `cloudsaver-resources-${scan.scan_id}.csv`, 'text/csv;charset=utf-8');
+      notify(`CSV download prepared for ${rows.length.toLocaleString()} visible resources.`);
     } catch (cause) {notify((cause as Error).message, 'error');} finally {setExporting(false);}
   }
   async function cancel() {
@@ -164,6 +163,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
   return <>
+    {page.total > page.items.length && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
     <div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
       <article><span>AI assessed</span><strong>{(summary.ai_status.completed || 0).toLocaleString()}</strong><small>{(summary.ai_status.stale || 0).toLocaleString()} stale · {(summary.ai_status.not_run || 0).toLocaleString()} not run</small></article>

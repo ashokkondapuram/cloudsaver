@@ -171,7 +171,7 @@ def test_keyless_billing_readers_bind_exact_scopes_and_report_real_granularity(m
     def bq_post(url,token,body):
         assert url.startswith('https://bigquery.googleapis.com/')
         assert 'project.id=@scope' in body['query'] and body['maximumBytesBilled']=='1000000000'
-        return dict(jobComplete=True,totalRows='1',rows=[{'f':[{'v':v} for v in ['2026-10-01','USD','regular','10','8']]}])
+        return dict(jobComplete=True,totalRows='1',rows=[{'f':[{'v':v} for v in ['2026-10-01','USD','regular',None,'10','8']]}])
     monkeypatch.setattr('app.collectors.billing_sync._post',bq_post)
     tenant=dict(workspace(),gcp_projects=[dict(project_id='test-project')])
     rows,grain,_=gcp_rows(dict(scope_id='test-project',billing_project='billing-project',dataset='billing',table='export'),tenant,date(2026,10,1),date(2026,10,2))

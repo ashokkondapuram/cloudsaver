@@ -16,7 +16,7 @@ def _load():
 def _run(fn):
     sql = []
     alembic = types.ModuleType("alembic")
-    alembic.op = types.SimpleNamespace(execute=sql.append)
+    alembic.op = types.SimpleNamespace(execute=sql.append, get_bind=lambda: types.SimpleNamespace(execute=lambda _: types.SimpleNamespace(scalar=lambda: False)))
     saved = sys.modules.get("alembic")
     sys.modules["alembic"] = alembic
     try:
@@ -57,4 +57,5 @@ def test_evidence_tables_are_append_only():
 def test_downgrade_drops_all_tables():
     m = _load()
     sql = _run(m.downgrade)
-    assert len(sql) == len(m.TABLES)
+    assert sum(statement.startswith("DROP TABLE") for statement in sql) == len(m.TABLES)
+    assert any("ACCESS EXCLUSIVE" in statement for statement in sql)

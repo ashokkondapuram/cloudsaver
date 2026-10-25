@@ -157,12 +157,28 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
     @router.get('/api/v1/gitops/resource-mapping')
     def resource_mapping(resource_id: str = Query(..., min_length=1, max_length=2048), tenant=Depends(current_tenant)):
         from app.gitops_ast_mapper import GitOpsAstMapper
+        from app.cloud_scope import validate_finding_scope
+        from app.data_scope import resource_visible
+        scan = next(iter(store.list(tenant['tenant_id'], 50)), None)
+        rows = (scan or {}).get('inventory') or (scan or {}).get('findings') or []
+        def matches(row):
+            candidate = row.get('resource_id', '')
+            return candidate.lower() == resource_id.lower() if row.get('cloud_provider', 'azure') == 'azure' else candidate == resource_id
+        owned = next((row for row in rows if matches(row)), None)
+        if owned is None:
+            raise HTTPException(404, 'Resource mapping not found')
         try:
-            return GitOpsAstMapper().lookup(resource_id)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from None
-        except KeyError:
-            raise HTTPException(404, 'No index entry for resource_id') from None
+            validate_finding_scope(owned, tenant)
+            provider = owned.get('cloud_provider', 'azure')
+            if not resource_visible(tenant, provider, owned.get('scope_id') or owned.get('subscription_id')):
+                raise ValueError('Resource is outside the current scope')
+            mapping = GitOpsAstMapper().lookup(owned['resource_id'])
+            repositories = {row['repository'] for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
+            if mapping.repository not in repositories:
+                raise ValueError('Repository is not granted')
+            return mapping
+        except (ValueError, KeyError):
+            raise HTTPException(404, 'Resource mapping not found') from None
 
     @router.post('/api/v1/gitops/requests',status_code=201)
     async def publish(request:Request,tenant=Depends(current_tenant)):

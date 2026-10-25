@@ -29,7 +29,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip check
       - name: Unit and disposable PostgreSQL/Redis fault tests
-        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov=app.governance_store --cov=app.governance_evidence --cov=app.governance_api --cov-report=term-missing --cov-fail-under=85
+        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.control_plane --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov=app.governance_store --cov=app.governance_evidence --cov=app.governance_api --cov-report=term-missing --cov-fail-under=85
 
   dashboard:
     runs-on: ubuntu-latest

@@ -29,7 +29,7 @@ class GitOpsAstMapper:
 
     @staticmethod
     def _load_index() -> dict[str, dict[str, str]]:
-        raw = os.getenv("CLOUDSAVER_GITOPS_AST_INDEX", "{}")
+        raw = os.getenv("CLOUDSAVER_GITOPS_AST_INDEX") or "{}"
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:

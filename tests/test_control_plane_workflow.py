@@ -21,11 +21,11 @@ def test_conflicts():
 
 def test_approval_bound_to_exact_version():
     p1 = plan(v=1)
-    ap = Approval(p1.identity(), "alice", datetime.now(timezone.utc) + timedelta(hours=1))
+    ap = Approval(p1.identity(), "alice", datetime.now(timezone.utc) + timedelta(hours=1), True)
     assert approval_valid(ap, p1)[0]
     assert not approval_valid(ap, plan(v=2))[0]
     assert not approval_valid(ap, p1, revoked=frozenset({"alice"}))[0]
-    old = Approval(p1.identity(), "alice", datetime.now(timezone.utc) - timedelta(seconds=1))
+    old = Approval(p1.identity(), "alice", datetime.now(timezone.utc) - timedelta(seconds=1), True)
     assert not approval_valid(old, p1)[0]
     assert not approval_valid(Approval(p1.identity(), "bot", ap.expires_at, False), p1)[0]
 

@@ -15,7 +15,9 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
           'observability_connectors','observability_jobs','observability_snapshots')
 
 
-TABLES=TABLES+GOVERNANCE_TABLES
+CONTROL_PLANE_TABLES = ('cp_financial_scenarios','cp_action_assessments','cp_plans','cp_plan_versions',
+                       'cp_plan_approvals','cp_gitops_deliveries','cp_gitops_checks','cp_commitment_reminders')
+TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES
 
 
 class Connection:
@@ -46,7 +48,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0025_observability_connectors before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0026_control_plane before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:

@@ -12,7 +12,7 @@ STATES = ("draft", "evidence_required", "assessed", "review_requested", "approve
 
 
 def digest(obj) -> str:
-    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,9 @@ class PlanVersion:
 
     def identity(self) -> str:
         return digest({"p": self.plan_id, "v": self.version, "t": sorted(self.targets),
-                       "a": self.parameters, "pol": self.policy_digest, "ev": self.evidence_digest})
+                       "a": self.parameters, "pol": self.policy_digest, "ev": self.evidence_digest,
+                       "exclusive_targets": sorted(self.exclusive_targets),
+                       "consumes_ha_headroom": sorted(self.consumes_ha_headroom), "skus": self.skus})
 
 
 def detect_conflicts(plans: list[PlanVersion]) -> list[dict]:
@@ -56,16 +58,18 @@ class Approval:
     plan_identity: str
     approver: str
     expires_at: datetime
-    verified_human: bool = True
+    verified_human: bool = False
 
 
 def approval_valid(approval: Approval, plan: PlanVersion, now: datetime | None = None,
                    revoked: frozenset = frozenset()) -> tuple[bool, str]:
     now = now or datetime.now(timezone.utc)
-    if not approval.verified_human:
+    if approval.verified_human is not True or not approval.approver:
         return False, "approver is not a verified human"
     if approval.approver in revoked:
         return False, "approver revoked"
+    if not isinstance(approval.expires_at, datetime) or approval.expires_at.utcoffset() is None:
+        return False, "approval requires an aware expiration"
     if approval.expires_at <= now:
         return False, "approval expired"
     if approval.plan_identity != plan.identity():

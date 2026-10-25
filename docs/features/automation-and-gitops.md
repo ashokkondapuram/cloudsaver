@@ -47,7 +47,7 @@ If publishing fails, retry from the same preview. The browser reuses its idempot
 
 ### Look up where a resource is defined
 
-Call `GET /api/v1/gitops/resource-mapping?resource_id=...` to look up a cloud resource ID in the operator-supplied `CLOUDSAVER_GITOPS_AST_INDEX`. The response returns the repository, file path and IaC kind. This is a read-only index lookup; there is no dashboard control for it.
+Call `GET /api/v1/gitops/resource-mapping?resource_id=...` to look up an operator-supplied index entry. The resource must occur in the latest visible owned scan, pass current cloud-scope authorization, and map to a repository explicitly granted to the workspace. Foreign, unobserved and ungranted entries receive the same 404. The response returns repository, file path and IaC kind. This read-only API is also forwarded by the dashboard proxy; no dedicated screen or generated AST patch is claimed.
 
 ## How it works
 

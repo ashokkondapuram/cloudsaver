@@ -64,6 +64,7 @@ test('viewer can inspect evidence but cannot generate review artifacts or scan',
   await navigate(page,'Resources');
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
+  await drawer.getByRole('tab',{name:'Code',exact:true}).click();
   await expect(drawer.getByRole('button',{name:'Preview Terraform imports',exact:true})).toBeDisabled();
   await expect(drawer.getByRole('button',{name:'Preview Bash script',exact:true})).toBeDisabled();
   expect(mutations).toEqual([]);

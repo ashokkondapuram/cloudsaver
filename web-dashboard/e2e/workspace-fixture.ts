@@ -58,12 +58,14 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
   if(options.protected)(findings[0].evidence.tags as Record<string,string>).Role='DR-Standby';
   const current={scan_id:scanId,timestamp:scanTime,mode:'azure',status:'completed',data_origin:options.legacy?'legacy_synthetic':undefined,subscriptions_scanned:4,total_items_found:findings.length,total_monthly_waste_usd:null,realizable_monthly_savings_usd:null,cloud_providers:['azure','aws','gcp','kubernetes'],findings:options.legacy?findings.map(f=>({...f,estimated_monthly_waste_usd:null,cost_attribution:undefined})):findings};
   const mutations:{path:string;body:any;raw:string}[]=[];
+  let resourceReads=0;
   await page.route('**/api/v1/**',async route=>{
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
     if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
     else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources$/.test(path)){
+      resourceReads++;
       const items=buildResourceItems(findings);
       response={scan_id:path.split('/')[4],observed_at:scanTime,total:items.length,items,summary:{total:items.length,ai_status:{not_run:items.length},ai_risk:{},decision:{none:items.length},review_priority:{high:items.length},resolved_count:0,no_longer_observed_count:0}};
     }
@@ -75,7 +77,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     else if(path==='/api/v1/ai-batches')response={items:[]};
     else if(path==='/api/v1/ai/governance')response={policy:{status:'processing_blocked',processors:[]},records:[],active_holds:[],events:[],counts:{}};
     else if(path==='/api/v1/settings/ai')response=foundryView(false);
-    else if(path.startsWith('/api/v1/services/'))response={latest:null,history:[],resources:[]};
+    else if(path.startsWith('/api/v1/services/'))response={service:path.split('/').pop(),total:0,warning:'TEST FIXTURE: No matching service rows.',items:[]};
     else if(path==='/api/v1/scans')response=[current];
     else if(path==='/api/v1/settings')response={editable:false,settings:{tenant_id:tenantId,name:'Interface QA workspace',version:1,plan_tier:'GROWTH',subscription_ids:[subscriptionId],aws_accounts:[],gcp_projects:[],kubernetes_clusters:[],schedule:{frequency:'manual'},alerts:{enabled:false,channel:null,webhook_configured:false}},limits:{max_subscriptions:20,allowed_scan_frequencies:['manual','daily'],can_dispatch_automated_alerts:true},platform:null,identity:{identity_mode:'managed_identity',azure_access:'federated',aws_external_id:tenantId}};
     else if(path==='/api/v1/ai/targets')response={enabled:!!options.ai,hourly_attempt_limit:10,targets:options.ai?[{target_id:'approved-review',provider:'azure',model:'operator-model'}]:[]};
@@ -125,6 +127,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
   await page.getByLabel('Workspace access key or Entra Bearer token').fill('test-only-browser-credential');
   await page.getByRole('button',{name:'Connect workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
+  await expect.poll(()=>resourceReads).toBeGreaterThan(0);
   return {mutations,findings:current.findings};
 }
 
@@ -137,4 +140,11 @@ export async function navigate(page:Page,label:string){
     await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:target,exact:true}).click();
   }else await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:target,exact:true}).click();
   if(settings[label])await page.getByRole('tab',{name:settings[label],exact:true}).click();
+}
+
+export async function inspectFindingAssessment(page:Page){
+  const resource=page.getByRole('dialog',{name:'Resource details',exact:true});
+  await expect(page.getByRole('dialog')).toBeVisible();
+  if(await resource.isVisible())await resource.getByRole('tab',{name:/^Findings/}).click();
+  else await page.getByRole('dialog',{name:'Finding details',exact:true}).getByRole('tab',{name:'360° assessment',exact:true}).click();
 }

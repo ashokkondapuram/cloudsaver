@@ -1,12 +1,12 @@
 import {test,expect} from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import {mockWorkspace,navigate,scanId} from './workspace-fixture';
+import {mockWorkspace,navigate,scanId,inspectFindingAssessment} from './workspace-fixture';
 
 test('five-pillar assessment preserves protection and gates explicit AI processing',async({page})=>{
   test.setTimeout(60000); // Axe and screenshots run within this workflow on shared CI runners.
   const {mutations}=await mockWorkspace(page,{ai:true,protected:true});
   await navigate(page,'Resources');
-  await page.getByRole('button',{name:/^archive-data-01/}).click();
+  await page.getByRole('button',{name:/^archive-data-01/}).click();await inspectFindingAssessment(page);
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('heading',{name:'Protected resource',exact:true})).toBeVisible();
   await expect(drawer.getByText(/Destructive script generation is blocked/)).toBeVisible();
@@ -46,7 +46,7 @@ test('service analysis labels partial pricing and protected counts without invok
 
 test('viewer and disabled integrations retain the deterministic assessment',async({page})=>{
   const {mutations}=await mockWorkspace(page,{role:'Viewer',ai:true});
-  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();await inspectFindingAssessment(page);
   await expect(page.getByRole('heading',{name:'Independent review required',exact:true})).toBeVisible();
   await expect(page.getByRole('checkbox',{name:/I acknowledge external processing/})).toBeDisabled();
   await expect(page.getByRole('button',{name:'Request AI advisory',exact:true})).toBeDisabled();
@@ -60,11 +60,11 @@ test('late AI response cannot appear in another finding after the drawer closes'
     await gate;
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({cached:false,warning:'Late old response',guardrails:[],advice:{summary:'STALE OLD RESOURCE RESPONSE',risk_level:'unknown',pillars:[],review_questions:[]}})}).catch(()=>{});
   });
-  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();await inspectFindingAssessment(page);
   await page.getByRole('checkbox',{name:/I acknowledge external processing/}).check();
   await page.getByRole('button',{name:'Request AI advisory',exact:true}).click();
   await expect(page.getByRole('button',{name:'Requesting advisory…',exact:true})).toBeVisible();
-  await page.keyboard.press('Escape');await page.getByRole('button',{name:/^archive-data-05/}).click();
+  await page.keyboard.press('Escape');await page.getByRole('button',{name:/^archive-data-05/}).click();await inspectFindingAssessment(page);
   release();
   await expect(page.getByRole('button',{name:'Request AI advisory',exact:true})).toBeVisible();
   await expect(page.getByText('STALE OLD RESOURCE RESPONSE')).toHaveCount(0);
@@ -73,7 +73,7 @@ test('late AI response cannot appear in another finding after the drawer closes'
 
 test('stale evidence exposes provenance in the resource drawer',async({page})=>{
   const {mutations}=await mockWorkspace(page,{ai:true,protected:true});
-  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();await inspectFindingAssessment(page);
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('heading',{name:'Assessment provenance',exact:true})).toBeVisible();
   await expect(drawer.getByText(/Policy 2026-10-23.1/)).toBeVisible();

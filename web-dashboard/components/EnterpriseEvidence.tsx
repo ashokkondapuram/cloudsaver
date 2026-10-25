@@ -80,7 +80,7 @@ export function CommitmentsPanel(){
   const [data,setData]=useState<{identity:string;value:Commitments}|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0);
   useEffect(()=>{
     const request=new AbortController();setData(null);setError('');
-    if(canBill&&token)api<Commitments>('/finops/commitments',token,{signal:request.signal}).then(value=>{if(!request.signal.aborted)setData({identity:token,value});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
+    if(canBill&&token)api<Commitments>('/finops/commitments',token,{signal:request.signal}).then(value=>{if(!value?.summary||!Array.isArray(value.items)||!Array.isArray(value.scopes)||!value.summary.unused_commitment_cost||typeof value.summary.unused_commitment_cost!=='object'||Array.isArray(value.summary.unused_commitment_cost))throw new Error('Commitment evidence is incomplete. Refresh after a successful billing sync.');if(!request.signal.aborted)setData({identity:token,value});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
     return()=>request.abort();
   },[token,canBill,revision]);
   if(!canBill)return null;

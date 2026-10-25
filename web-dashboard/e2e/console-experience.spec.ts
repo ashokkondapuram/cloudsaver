@@ -14,34 +14,36 @@ test('latest console defaults to dark and preserves only the chosen appearance p
 });
 
 test('provider/category facets, price gaps and protected intent combine without treating zero as unknown',async({page})=>{
-  await mockWorkspace(page,{protected:true,zeroPrice:true,legacy:true});await navigate(page,'Resources');
-  await expect(page.getByRole('region',{name:'Snapshot evidence summary'})).toContainText('1');
+  await mockWorkspace(page,{protected:true,zeroPrice:true});await navigate(page,'Resources');
+  await expect(page.locator('.resource-table tbody tr').filter({hasText:'archive-data-01'})).toContainText('$0.00');
   await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Missing prices',exact:true}).click();
-  await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(9);
-  await page.getByRole('button',{name:/^Azure \d+ findings$/}).click();
-  await expect(page.getByRole('heading',{name:'No matching findings',exact:true})).toBeVisible();
+  await expect(page.locator('.resource-table tbody tr')).toHaveCount(9);
+  await page.getByRole('button',{name:/^Azure \d+$/}).click();
+  await expect(page.getByRole('heading',{name:'No matching resources',exact:true})).toBeVisible();
   await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Protected intent',exact:true}).click();
-  await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(1);
+  await expect(page.locator('.resource-table tbody tr')).toHaveCount(1);
   await page.getByRole('button',{name:/^archive-data-01/}).click();
-  await page.getByRole('tab',{name:'Review code',exact:true}).click();
+  await page.getByRole('tab',{name:'Code',exact:true}).click();
   await expect(page.getByRole('button',{name:'Preview Bash script',exact:true})).toBeDisabled();
   await expect(page.getByRole('button',{name:'Preview Terraform imports',exact:true})).toBeEnabled();
 });
 
-test('drawer comparison follows sorted filtered results and preserves the active assessment tab',async({page})=>{
+test('historical drawer comparison preserves review context without fabricating a live assessment',async({page})=>{
   await page.setViewportSize({width:1440,height:1100});
   await mockWorkspace(page,{protected:true,legacy:true});await navigate(page,'Resources');
   await page.getByRole('button',{name:/^Azure \d+ findings$/}).click();
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   const dialog=page.getByRole('dialog',{name:'Finding details',exact:true});
-  await expect(dialog.getByRole('region',{name:'Five-pillar evidence map'})).toBeVisible();
-  await dialog.getByRole('button',{name:'Inspect security checks',exact:true}).click();
-  await expect(dialog.locator('details[open]').filter({hasText:'Security'}).first()).toBeVisible();
+  await dialog.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  await expect(dialog.getByRole('alert')).toContainText('Assessment requires a completed live scan observation.');
+  await expect(dialog.getByRole('button',{name:'Request AI advisory',exact:true})).toHaveCount(0);
   await dialog.getByRole('button',{name:'Next finding',exact:true}).click();
-  await expect(dialog.getByRole('heading',{name:'Independent review required',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('tab',{name:'360° assessment',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(dialog.getByRole('alert')).toContainText('Assessment requires a completed live scan observation.');
   await expect(dialog.locator('.finding-navigation')).toContainText('2 / 3');
   await dialog.getByRole('button',{name:'Previous finding',exact:true}).click();
-  await expect(dialog.getByRole('heading',{name:'Protected resource',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('tab',{name:'360° assessment',exact:true})).toHaveAttribute('aria-selected','true');
+  await expect(dialog.getByRole('alert')).toContainText('Assessment requires a completed live scan observation.');
   await dialog.locator('.drawer-tab-content').evaluate(el=>el.scrollTop=0);
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:test.info().outputPath('dark-assessment-radar.png'),fullPage:true});

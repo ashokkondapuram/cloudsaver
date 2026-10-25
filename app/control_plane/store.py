@@ -55,8 +55,10 @@ def save_financial_scenario(store, tenant_id, idempotency_key, currency, request
                    "ON CONFLICT (tenant_id,idempotency_key) DO NOTHING",
                    (new_id, tenant_id, idempotency_key, currency, db.json(request), db.json(result),
                     result.get("status", "unknown"), evidence_digest, actor_hash, _now()))
-        row = db.execute("SELECT id FROM cp_financial_scenarios WHERE tenant_id=%s AND idempotency_key=%s",
+        row = db.execute("SELECT id,input,currency,evidence_digest FROM cp_financial_scenarios WHERE tenant_id=%s AND idempotency_key=%s",
                          (tenant_id, idempotency_key)).fetchone()
+        if _load(row[1]) != request or row[2] != currency or row[3] != evidence_digest:
+            raise ConflictError("idempotency key was already used for a different scenario")
     return str(row[0])
 
 
@@ -78,8 +80,10 @@ def save_action_assessment(store, tenant_id, idempotency_key, action_id, outcome
                    "ON CONFLICT (tenant_id,idempotency_key) DO NOTHING",
                    (new_id, tenant_id, idempotency_key, action_id, outcome["rule_version"], db.json(outcome["findings"]),
                     outcome["decision"], evidence_digest, policy_digest, actor_hash, _now()))
-        row = db.execute("SELECT id FROM cp_action_assessments WHERE tenant_id=%s AND idempotency_key=%s",
+        row = db.execute("SELECT id,action_id,evidence_digest,policy_digest FROM cp_action_assessments WHERE tenant_id=%s AND idempotency_key=%s",
                          (tenant_id, idempotency_key)).fetchone()
+        if tuple(row[1:]) != (action_id, evidence_digest, policy_digest):
+            raise ConflictError("idempotency key was already used for a different assessment")
     return str(row[0])
 
 
@@ -105,7 +109,7 @@ def add_plan_version(store, tenant_id, plan_id, expected_version, identity_diges
                      policy_digest, evidence_digest, actor_hash):
     """expected_version is the caller's latest version (0 for the first). A stale value raises ConflictError."""
     version_id, now = str(uuid4()), _now()
-    with store.transaction(tenant_id) as db:
+    with store.transaction(tenant_id, write=True) as db:
         if db.execute("SELECT 1 FROM cp_plans WHERE tenant_id=%s AND id=%s", (tenant_id, plan_id)).fetchone() is None:
             raise NotFoundError()
         row = db.execute("SELECT COALESCE(MAX(version),0) FROM cp_plan_versions WHERE tenant_id=%s AND plan_id=%s",
@@ -125,7 +129,18 @@ def transition_state(store, tenant_id, version_id, from_state, to_state):
     """Compare-and-set; a concurrent change or illegal transition raises ConflictError."""
     if to_state not in ALLOWED.get(from_state, ()):
         raise ConflictError(f"illegal transition {from_state} -> {to_state}")
-    with store.transaction(tenant_id) as db:
+    with store.transaction(tenant_id, write=True) as db:
+        if to_state in ("approved", "queued", "running"):
+            authority = db.execute(
+                "SELECT 1 FROM cp_plan_approvals a JOIN cp_plan_versions v "
+                "ON v.tenant_id=a.tenant_id AND v.id=a.plan_version_id "
+                "WHERE a.tenant_id=%s AND v.id=%s AND a.verified_human=true "
+                "AND a.identity_digest=v.identity_digest AND a.expires_at>%s "
+                "AND NOT EXISTS(SELECT 1 FROM cp_plan_versions newer WHERE newer.tenant_id=v.tenant_id "
+                "AND newer.plan_id=v.plan_id AND newer.version>v.version) LIMIT 1",
+                (tenant_id, version_id, _now())).fetchone()
+            if authority is None:
+                raise ConflictError("a current exact-version human approval is required")
         cur = db.execute("UPDATE cp_plan_versions SET state=%s,updated_at=%s WHERE tenant_id=%s AND id=%s AND state=%s",
                          (to_state, _now(), tenant_id, version_id, from_state))
         if _rowcount(cur) != 1:
@@ -144,16 +159,22 @@ def get_plan_version(store, tenant_id, version_id):
 
 def record_approval(store, tenant_id, version_id, identity_digest, approver_hash, verified_human, expires_at):
     """Refuses unless the digest matches the stored version, so edited plans cannot inherit approval."""
-    if not verified_human:
+    if verified_human is not True:
         raise ConflictError("approvals require a verified human")
+    if not isinstance(expires_at, datetime) or expires_at.utcoffset() is None or expires_at <= datetime.now(timezone.utc):
+        raise ConflictError("approval requires a future timezone-aware expiration")
     approval_id = str(uuid4())
-    with store.transaction(tenant_id) as db:
-        row = db.execute("SELECT identity_digest FROM cp_plan_versions WHERE tenant_id=%s AND id=%s",
+    with store.transaction(tenant_id, write=True) as db:
+        row = db.execute("SELECT identity_digest,state FROM cp_plan_versions v WHERE tenant_id=%s AND id=%s "
+                         "AND NOT EXISTS(SELECT 1 FROM cp_plan_versions newer WHERE newer.tenant_id=v.tenant_id "
+                         "AND newer.plan_id=v.plan_id AND newer.version>v.version)",
                          (tenant_id, version_id)).fetchone()
         if row is None:
             raise NotFoundError()
         if row[0] != identity_digest:
             raise ConflictError("approval does not match this plan version")
+        if row[1] != "review_requested":
+            raise ConflictError("plan must request review before approval")
         db.execute("INSERT INTO cp_plan_approvals(id,tenant_id,plan_version_id,identity_digest,approver_hash,"
                    "verified_human,expires_at,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                    (approval_id, tenant_id, version_id, identity_digest, approver_hash, True, expires_at, _now()))
@@ -170,6 +191,9 @@ def claim_delivery(store, tenant_id, delivery_id, repo_id):
 
 
 def record_check(store, tenant_id, rec, conclusion):
+    from app.control_plane.gitops_checks import check_conclusion
+    if type(rec.trusted_plan) is not bool or conclusion != check_conclusion(rec):
+        raise ConflictError("check conclusion conflicts with validated plan evidence")
     with store.transaction(tenant_id) as db:
         db.execute("INSERT INTO cp_gitops_checks(id,tenant_id,repo_id,base_sha,head_sha,plan_digest,policy_digest,"
                    "evidence_digest,decision,trusted_plan,conclusion,created_at) "

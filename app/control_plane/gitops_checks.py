@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from dataclasses import dataclass
 
 MAX_BODY = 1_000_000
@@ -10,10 +11,12 @@ MAX_BODY = 1_000_000
 
 def verify_signature(secret: bytes, raw_body: bytes, header: str | None) -> bool:
     """GitHub X-Hub-Signature-256 validation on the raw, bounded request body."""
-    if not header or not header.startswith("sha256=") or len(raw_body) > MAX_BODY:
+    if (not isinstance(secret, bytes) or not secret or not isinstance(raw_body, bytes)
+            or not isinstance(header, str) or not re.fullmatch(r"sha256=[a-fA-F0-9]{64}", header)
+            or len(raw_body) > MAX_BODY):
         return False
     expected = "sha256=" + hmac.new(secret, raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header)
+    return hmac.compare_digest(expected, header.lower())
 
 
 class DeliveryDeduper:
@@ -45,7 +48,7 @@ class CheckRecord:
 
 def check_conclusion(rec: CheckRecord) -> str:
     """Only a trusted plan with an eligible decision passes; skipped/neutral never satisfies."""
-    if not rec.trusted_plan:
+    if rec.trusted_plan is not True:
         return "failure"
     return "success" if rec.decision == "eligible_for_review" else "failure"
 

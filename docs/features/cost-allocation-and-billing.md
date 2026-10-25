@@ -108,7 +108,7 @@ Snapshots are append-only rows in `cloud_commitment_snapshots`. The Commitments 
 
 ### Unit economics preview
 
-`compute_elasticity_ratio` in [app/unit_economics.py](../../app/unit_economics.py) divides the cost change ratio by the volume change ratio. It flags `unit_efficiency_regression` when the result is above 1.15 and always returns `advisory_only: true`. This endpoint is available through the API only. The dashboard does not call it.
+`compute_elasticity_ratio` in [app/unit_economics.py](../../app/unit_economics.py) divides percentage cost growth by percentage volume growth. It separately returns the ratio of current to prior cost per unit. `growth_elasticity_regression` applies the 1.15 threshold to positive-volume growth; `unit_efficiency_regression` applies it to unit-cost deterioration, including declining-volume cases. Prior cost and both volumes must be positive; zero prior cost and unchanged volume return 422 rather than an invented ratio. Results remain manually supplied, `advisory_only: true` scenarios. The dashboard proxy forwards the endpoint, but no automatic billing/volume attribution screen is claimed.
 
 ## API reference
 

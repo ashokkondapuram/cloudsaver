@@ -1,6 +1,30 @@
 """Deterministic action-safety rules AG-* (pilot). Unknown mandatory evidence blocks."""
 from __future__ import annotations
 
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class SafetyEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
+    claims_positive_benefit: bool | None = None
+    absorption_proven: bool | None = None
+    fees_remain: bool | None = None
+    ip_dependency_confirmed: bool | None = None
+    external_owner_known: bool | None = None
+    removes_quorum_member: bool | None = None
+    violates_capacity_floor: bool | None = None
+    is_standby_or_replica: bool | None = None
+    active_hold: bool | None = None
+    destructive: bool | None = None
+    restore_verified: bool | None = None
+    capacity_reduction: bool | None = None
+    memory_history_days: int | None = Field(default=None, ge=0, le=3650)
+    valid_sample_ratio: float | None = Field(default=None, ge=0, le=1)
+    insufficient_headroom: bool | None = None
+    owner: str | None = Field(default=None, min_length=1, max_length=200)
+    responder_reachable: bool | None = None
+    rollback_supported: bool | None = None
+
 RULE_VERSION = "0.1"
 PASS, FAIL, UNKNOWN, NA = "pass", "fail", "unknown", "not_applicable"
 
@@ -14,15 +38,15 @@ def _tri(value, fail_when):
 def _cost(e):
     if e.get("claims_positive_benefit") is None or e.get("absorption_proven") is None:
         return UNKNOWN
-    if e["claims_positive_benefit"] and not e["absorption_proven"] and e.get("fees_remain", True):
-        return FAIL
+    if e["claims_positive_benefit"] and not e["absorption_proven"]:
+        return UNKNOWN if e["fees_remain"] is None else FAIL if e["fees_remain"] else PASS
     return PASS
 
 
 def _id(e):
     if e.get("ip_dependency_confirmed"):
         return FAIL
-    return UNKNOWN if e.get("external_owner_known") is not True and e.get("ip_dependency_confirmed") is None else PASS
+    return PASS if e.get("external_owner_known") is True and e.get("ip_dependency_confirmed") is False else UNKNOWN
 
 
 def _ha(e):
@@ -42,19 +66,23 @@ def _ret(e):
 
 
 def _rec(e):
-    if not e.get("destructive"):
+    if e.get("destructive") is None:
+        return UNKNOWN
+    if e["destructive"] is False:
         return NA
     return _tri(e.get("restore_verified"), lambda v: not v)
 
 
 def _perf(e):
-    if not e.get("capacity_reduction"):
+    if e.get("capacity_reduction") is None:
+        return UNKNOWN
+    if e["capacity_reduction"] is False:
         return NA
     if e.get("memory_history_days") is None or e.get("valid_sample_ratio") is None:
         return UNKNOWN
     if e["memory_history_days"] < 14 or e["valid_sample_ratio"] < 0.95:
         return UNKNOWN
-    return FAIL if e.get("insufficient_headroom") else PASS
+    return _tri(e.get("insufficient_headroom"), bool)
 
 
 def _ops(e):
@@ -72,6 +100,11 @@ RULES = {
 
 def evaluate(action: dict, evidence: dict) -> dict:
     """Return findings and an eligibility decision. Never means execution approved."""
+    if not isinstance(action, dict) or not isinstance(action.get("id"), str) or not action["id"].strip():
+        raise ValueError("An action identity is required")
+    if type(action.get("supported", False)) is not bool:
+        raise ValueError("Action support must be resolved as a boolean")
+    evidence = SafetyEvidence.model_validate(evidence).model_dump()
     findings = {rid: fn(evidence) for rid, fn in RULES.items()}
     if not action.get("supported", False):
         decision = "unsupported"

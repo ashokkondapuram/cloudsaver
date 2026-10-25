@@ -39,7 +39,7 @@ test('viewers cannot request ownership through the workload page',async({page})=
   const calls=await setup(page,{viewer:true});await expect(page.getByRole('heading',{name:'Finance access required'})).toBeVisible();expect(calls).toEqual([]);
 });
 test('source authorization error is visible with no fallback or partial totals',async({page})=>{
-  const calls=await setup(page,{denied:true});await expect(page.getByRole('alert')).toContainText('Scope denied');
+  const calls=await setup(page,{denied:true});await expect(page.getByRole('region',{name:'Workload assessments'}).getByRole('alert')).toContainText('Scope denied');
   await expect(page.getByRole('button',{name:'payments / production',exact:true})).toHaveCount(0);
   expect(calls.some(call=>call.path.includes('/resources'))).toBe(false);
 });

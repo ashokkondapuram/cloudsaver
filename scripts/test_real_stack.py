@@ -31,6 +31,7 @@ def main():
             evidence_key=secrets.token_hex(32)
             env=os.environ.copy();env.update(CLOUDSAVER_ENVIRONMENT='development',CLOUDSAVER_AUTH_MODE='workspace',CLOUDSAVER_KEY_VERIFIER='local',CLOUDSAVER_DIRECTORY_MODE='registry',CLOUDSAVER_TENANT_REGISTRY='env',CLOUDSAVER_DATABASE_URL='',CLOUDSAVER_DB=database,CLOUDSAVER_TENANTS=json.dumps([workspace()]),CLOUDSAVER_GITOPS_TARGETS=json.dumps([TARGET]),CLOUDSAVER_GITOPS_PUBLISH='false',CLOUDSAVER_AI_ENABLED='false',CLOUDSAVER_BILLING_CONNECTORS='[]',SCANNER_SERVICE_URL=f'http://127.0.0.1:{core}',API_GATEWAY_URL=f'http://127.0.0.1:{gateway}',REDIS_URL=f'redis://127.0.0.1:{redis_port}/0',NEXT_TELEMETRY_DISABLED='1')
             env['CLOUDSAVER_EVIDENCE_SOURCES']=json.dumps([dict(tenant_id=TENANT,source_id='stack-collector',providers=['azure'],kinds=['audit'],scope_ids=workspace()['subscription_ids'],key_env='CLOUDSAVER_EVIDENCE_KEY_OUTCOMES')])
+            env['CLOUDSAVER_GITOPS_AST_INDEX']=json.dumps({scan['findings'][0]['resource_id']:dict(repository=TARGET['repository'],file_path='review.tf',iac_kind='terraform')})
             commands=[([sys.executable,'-m','uvicorn','app.main:create_app','--factory','--host','127.0.0.1','--port',str(core),'--no-access-log'],ROOT),([sys.executable,'-m','uvicorn','services.gateway:create_app','--factory','--host','127.0.0.1','--port',str(gateway),'--no-access-log'],ROOT),(['node','node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',str(dashboard)],ROOT/'web-dashboard')]
             for i,(cmd,cwd) in enumerate(commands):
                 log=open(Path(folder)/f'service-{i}.log','w+');logs.append(log)
@@ -49,6 +50,16 @@ def main():
                 resource=scan['findings'][0];selection=dict(resource_id=resource['resource_id'],rule_id=resource['rule_id'])
                 review=dict(scan_id=scan['scan_id'],target_id='infra',resource_ids=[resource['resource_id']])
                 base='/api/v1/scans/'+scan['scan_id']
+                # Advisory reads must traverse the same BFF/gateway boundary as the console.
+                economic=client.get(f'http://127.0.0.1:{dashboard}/api/v1/finops/unit-economics/preview',
+                    headers=headers,params=dict(prior_cost='100',current_cost='130',prior_volume='100',current_volume='120'))
+                assert economic.status_code==200 and economic.json()['elasticity_ratio']=='1.5'
+                mapping=client.get(f'http://127.0.0.1:{dashboard}/api/v1/gitops/resource-mapping',
+                    headers=headers,params=dict(resource_id=resource['resource_id']))
+                assert mapping.status_code==200 and mapping.json()['repository']==TARGET['repository']
+                missing=client.get(f'http://127.0.0.1:{dashboard}/api/v1/gitops/resource-mapping',
+                    headers=headers,params=dict(resource_id='not-owned'))
+                assert missing.status_code==404
                 # Get the actual deterministic evidence digest before testing the AI gate.
                 analysis=client.post(f'http://127.0.0.1:{core}'+base+'/analysis/resource',headers=headers,json=selection)
                 assert analysis.status_code==200,analysis.status_code

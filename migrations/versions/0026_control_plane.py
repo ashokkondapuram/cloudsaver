@@ -28,8 +28,9 @@ TABLES = {
           'verification_pending','verified','failed','reconciliation_required','cancelled','expired')))""", 'SELECT,INSERT'),
     'cp_plan_approvals': ("""CREATE TABLE cp_plan_approvals (
         id uuid PRIMARY KEY,tenant_id uuid NOT NULL,plan_version_id uuid NOT NULL,identity_digest char(64) NOT NULL,
-        approver_hash char(64) NOT NULL,verified_human boolean NOT NULL,expires_at timestamptz NOT NULL,
+        approver_hash char(64) NOT NULL,verified_human boolean NOT NULL CHECK (verified_human=true),expires_at timestamptz NOT NULL,
         created_at timestamptz NOT NULL,
+        CHECK (expires_at>created_at),
         FOREIGN KEY (tenant_id,plan_version_id) REFERENCES cp_plan_versions(tenant_id,id))""", 'SELECT,INSERT'),
     'cp_gitops_deliveries': ("""CREATE TABLE cp_gitops_deliveries (
         id uuid PRIMARY KEY,tenant_id uuid NOT NULL,delivery_id text NOT NULL,repo_id bigint NOT NULL,
@@ -39,6 +40,7 @@ TABLES = {
         head_sha varchar(64) NOT NULL,plan_digest char(64) NOT NULL,policy_digest char(64) NOT NULL,
         evidence_digest char(64) NOT NULL,decision varchar(24) NOT NULL,trusted_plan boolean NOT NULL,
         conclusion varchar(16) NOT NULL,created_at timestamptz NOT NULL,
+        CHECK (conclusion=CASE WHEN trusted_plan=true AND decision='eligible_for_review' THEN 'success' ELSE 'failure' END),
         UNIQUE(tenant_id,repo_id,base_sha,head_sha,plan_digest,policy_digest,evidence_digest))""", 'SELECT,INSERT'),
     'cp_commitment_reminders': ("""CREATE TABLE cp_commitment_reminders (
         id uuid PRIMARY KEY,tenant_id uuid NOT NULL,commitment_id text NOT NULL,threshold_days integer NOT NULL,
@@ -66,5 +68,17 @@ def upgrade():
 
 def downgrade():
     from alembic import op
+    from sqlalchemy import text
+    db = op.get_bind()
+    op.execute("LOCK TABLE " + ",".join(TABLES) + " IN ACCESS EXCLUSIVE MODE")
+    for table in TABLES:
+        op.execute(f'ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY')
+    try:
+        populated = any(db.execute(text(f'SELECT EXISTS(SELECT 1 FROM {table})')).scalar() for table in TABLES)
+    finally:
+        for table in TABLES:
+            op.execute(f'ALTER TABLE {table} FORCE ROW LEVEL SECURITY')
+    if populated:
+        raise RuntimeError("Control-plane history requires a reviewed data-preserving rollback")
     for table in reversed(list(TABLES)):
         op.execute(f'DROP TABLE {table}')

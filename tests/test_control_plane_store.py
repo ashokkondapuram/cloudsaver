@@ -2,6 +2,8 @@
 They verify tenant filtering, idempotency and guards; they do not execute SQL on PostgreSQL."""
 from contextlib import contextmanager
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.control_plane import store as cs
@@ -36,7 +38,7 @@ class FakeStore:
         self.db, self.tenants = FakeDb(script), []
 
     @contextmanager
-    def transaction(self, tenant_id):
+    def transaction(self, tenant_id, *, write=False):
         self.tenants.append(tenant_id)
         yield self.db
 
@@ -44,7 +46,7 @@ class FakeStore:
 def test_every_read_and_write_filters_by_tenant():
     with pytest.raises(cs.NotFoundError):
         cs.get_plan_version(FakeStore([Cur()]), "t1", "x")
-    s = FakeStore([Cur(), Cur([("id1",)])])
+    s = FakeStore([Cur(), Cur([("id1", {}, "USD", None)])])
     cs.save_financial_scenario(s, "t1", "key-0001", "USD", {}, {"status": "computed"}, "h")
     assert s.tenants == ["t1"]
     for sql, params in s.db.calls:
@@ -52,7 +54,7 @@ def test_every_read_and_write_filters_by_tenant():
 
 
 def test_idempotent_scenario_returns_existing_id():
-    s = FakeStore([Cur(), Cur([("existing",)])])
+    s = FakeStore([Cur(), Cur([("existing", {}, "USD", None)])])
     assert cs.save_financial_scenario(s, "t1", "key-0001", "USD", {}, {}, "h") == "existing"
     assert "ON CONFLICT (tenant_id,idempotency_key) DO NOTHING" in s.db.calls[0][0]
 
@@ -75,15 +77,15 @@ def test_illegal_and_concurrent_transitions():
         cs.transition_state(FakeStore(), "t1", "v", "draft", "running")
     with pytest.raises(cs.ConflictError):
         cs.transition_state(FakeStore([Cur(rowcount=0)]), "t1", "v", "approved", "queued")
-    cs.transition_state(FakeStore([Cur(rowcount=1)]), "t1", "v", "approved", "queued")
+    cs.transition_state(FakeStore([Cur([(1,)]), Cur(rowcount=1)]), "t1", "v", "approved", "queued")
 
 
 def test_approval_requires_matching_digest_and_human():
     with pytest.raises(cs.ConflictError):
-        cs.record_approval(FakeStore([Cur([("other",)])]), "t1", "v", "digest", "a", True, "2030-01-01")
+        cs.record_approval(FakeStore([Cur([("other",)])]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
     with pytest.raises(cs.ConflictError):
-        cs.record_approval(FakeStore(), "t1", "v", "digest", "a", False, "2030-01-01")
-    assert cs.record_approval(FakeStore([Cur([("digest",)]), Cur()]), "t1", "v", "digest", "a", True, "2030-01-01")
+        cs.record_approval(FakeStore(), "t1", "v", "digest", "a", False, datetime(2030, 1, 1, tzinfo=timezone.utc))
+    assert cs.record_approval(FakeStore([Cur([("digest", "review_requested")]), Cur()]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
 
 
 def test_replay_protection_and_reminders():

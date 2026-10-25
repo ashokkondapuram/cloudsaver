@@ -199,3 +199,5 @@
 .stacked-field textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--slate-700);font-family:var(--font-mono,monospace);font-size:12px;line-height:1.5}
 .panel>form.drawer-section>.button-row,.panel>form.drawer-section>.notice{margin:12px 24px}
 .panel>form.drawer-section>h3{margin:20px 24px 0}
+/* Keep action controls inside narrow screens; table scrolling remains local. */
+@media(max-width:600px){.page-heading-actions{width:100%;max-width:100%;min-width:0;flex-wrap:wrap}.page-heading-actions>*{max-width:100%}}

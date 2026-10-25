@@ -79,7 +79,7 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Current state**: a read-only lookup from a static index, plus a placeholder patch preview.
 - **Inputs**: the index comes from `CLOUDSAVER_GITOPS_AST_INDEX`, a JSON object keyed by cloud resource ID. Each entry has `repository`, `file_path` and `iac_kind`. `lookup(resource_id)` accepts 1 to 2,048 characters.
 - **Outputs**: `ResourceMapping` with `cloud_resource_id`, `repository`, `file_path` and `iac_kind`. `patch_preview(mapping, change)` returns a placeholder Terraform or OpenTofu `import` block for those kinds and raises `NotImplementedError` for any other kind (for example Bicep). `change` isn't used.
-- **Limitation**: the index is global to the deployment, not tenant-scoped, and no code builds it from repositories.
+- **Limitation**: the configured index is deployment-wide, but the API enforces owned observation, cloud scope and workspace repository grants before disclosing an entry. No code builds the index from repositories.
 - **To make it production-ready**: a tenant-scoped index built by parsing your repositories, real diffs generated from the requested change, support for more IaC kinds, and integration with the existing GitOps review routes.
 
 ### Unit economics preview
@@ -87,7 +87,7 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Purpose**: tell you whether cost grew faster than business volume between two aligned periods.
 - **Current state**: an API endpoint over pure decimal math; there's no dashboard view.
 - **Inputs**: `prior_cost`, `current_cost`, `prior_volume`, `current_volume` as strict decimal strings (1 to 32 characters each).
-- **Outputs**: `cost_change_ratio`, `volume_change_ratio`, `elasticity_ratio` and `advisory_only: True`, plus `unit_efficiency_regression: True` when elasticity exceeds 1.15. If `prior_cost` is 0, the cost ratio is reported as 0.
+- **Outputs**: `cost_change_ratio`, `volume_change_ratio`, `elasticity_ratio` and `advisory_only: True`, plus `unit_efficiency_regression: True` when elasticity exceeds 1.15. Prior cost must be positive; a zero baseline is rejected rather than reported as zero growth.
 - **Errors**: 422 when either volume isn't positive or both volumes are equal.
 - **To make it production-ready**: source costs from FinOps imports and volumes from a business metric feed, align the periods automatically, and add a dashboard view.
 
@@ -105,7 +105,7 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 | GET | `/api/v1/gitops/resource-mapping` | Look up the repository file for `resource_id` | Any role; `scoped_read` |
 | GET | `/api/v1/auth/consent-url` | Placeholder; always returns 501 | `TenantAdmin`; `agnostic` |
 
-All three are forwarded by [services/gateway.py](../../services/gateway.py). The dashboard proxy in [web-dashboard/app/api/[...path]/route.ts](../../web-dashboard/app/api/[...path]/route.ts) allows `auth/consent-url` but not `finops/unit-economics/preview` or `gitops/resource-mapping`, so those two return 404 through the dashboard. Call them through the gateway or API directly.
+All three are forwarded by [services/gateway.py](../../services/gateway.py). The dashboard proxy forwards both advisory read endpoints as GET operations. Resource mapping additionally requires an observed owned resource and a workspace-granted repository; it is not an unrestricted global index lookup.
 
 ## Data and evidence
 

@@ -3,6 +3,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 from decimal import Decimal
 
 from app.assessment import PILLARS, ai_context, assess, category as service_category
@@ -243,7 +244,7 @@ def csv_report(items):
 
     def cell(value):
         text = '' if value is None else str(value)
-        return "'" + text if text[:1] in ('=', '+', '-', '@', '\t', '\r') else text
+        return "'" + text if re.match(r"^\s*[=+@-]|^[\t\r\n]", text) else text
 
     out = io.StringIO()
     writer = csv.writer(out, lineterminator='\r\n')

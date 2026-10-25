@@ -5,12 +5,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class _Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
 
 class FinancialScenarioRequest(_Strict):
     idempotency_key: str = Field(min_length=8, max_length=128)
-    currency: str = Field(min_length=3, max_length=3)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
     commitment_fee: str | None = Field(default=None, pattern=r"^\d+(\.\d+)?$")
     uncommitted_baseline: str | None = Field(default=None, pattern=r"^\d+(\.\d+)?$")
     uncommitted_if_absorbed: str | None = Field(default=None, pattern=r"^\d+(\.\d+)?$")
