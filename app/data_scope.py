@@ -6,6 +6,11 @@ def restricted(tenant):
     return tenant.get('allowed_providers') is not None or bool(tenant.get('scope_restrictions'))
 
 
+def resource_visible(tenant, provider, scope_id):
+    """Governance/outcomes rows keyed by provider and scope."""
+    return metadata_visible(tenant, {'provider': provider, 'scope_id': scope_id})
+
+
 def metadata_visible(tenant, metadata):
     """Provider-scoped keys only see labelled AI rows inside their grant."""
     if not restricted(tenant):

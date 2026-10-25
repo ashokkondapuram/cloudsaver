@@ -20,6 +20,7 @@ from app.governance_contracts import (
     Decision,
     Envelope,
 )
+from app.data_scope import scan_visible
 
 
 def latest_observation(store, t, f, requested=None):
@@ -30,6 +31,7 @@ def latest_observation(store, t, f, requested=None):
         if (
             scan.get("status") != "completed"
             or scan.get("data_origin") == "legacy_synthetic"
+            or not scan_visible(store, t, scan["scan_id"])
         ):
             continue
         resources = [*scan.get("inventory", []), *scan.get("findings", [])]

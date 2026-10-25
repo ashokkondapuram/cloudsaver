@@ -9,6 +9,7 @@ from app.outcome_contracts import human
 from app.governance_contracts import CONTROL, ROLES
 from app import governance_evidence as evidence
 from app.telemetry_contract import moment
+from app.data_scope import metadata_visible, predicate
 
 
 class GovernanceConflict(ValueError):
@@ -106,9 +107,28 @@ class Governance:
             updated_at=str(row[5]),
         )
 
+    def _finding_scope_visible(self, db, t, finding_id):
+        row = db.execute(
+            "SELECT provider,scope_id FROM gov_findings WHERE tenant_id=%s AND id=%s",
+            (t["tenant_id"], finding_id),
+        ).fetchone()
+        if not row:
+            return False
+        return metadata_visible(t, {"provider": row[0], "scope_id": row[1]})
+
+    def _visible(self, db, t, kind, item):
+        if kind == "finding":
+            p = item["payload"]
+            return metadata_visible(t, {"provider": p.get("provider"), "scope_id": p.get("scope_id")})
+        if kind == "exception":
+            return self._finding_scope_visible(db, t, item["payload"]["finding_id"])
+        if kind == "risk":
+            return all(self._finding_scope_visible(db, t, fid) for fid in item["payload"]["finding_ids"])
+        return True
+
     def _required(self, db, t, kind, id):
         value = self._get(db, t, kind, id)
-        if value is None:
+        if value is None or not self._visible(db, t, kind, value):
             raise KeyError("Owned governance record not found")
         return value
 
@@ -532,15 +552,21 @@ class Governance:
     def list(self, t, kind):
         with self.store.transaction(t["tenant_id"]) as db:
             self._read(db, t)
+            table = MUTABLE[kind]
+            where = "tenant_id=%s"
+            args = [t["tenant_id"]]
+            if kind == "finding":
+                extra, extra_args = predicate(t, "provider", "scope_id")
+                where += extra
+                args.extend(extra_args)
             rows = db.execute(
-                "SELECT id FROM "
-                + MUTABLE[kind]
-                + " WHERE tenant_id=%s ORDER BY updated_at DESC,id DESC LIMIT 1001",
-                (t["tenant_id"],),
+                f"SELECT id FROM {table} WHERE {where} ORDER BY updated_at DESC,id DESC LIMIT 1001",
+                tuple(args),
             ).fetchall()
             if len(rows) > 1000:
                 raise ValueError("Governance record limit exceeded")
-            return [self._get(db, t, kind, str(r[0])) for r in rows]
+            items = [self._get(db, t, kind, str(r[0])) for r in rows]
+            return [item for item in items if item and self._visible(db, t, kind, item)]
 
     def detail(self, t, kind, id):
         with self.store.transaction(t["tenant_id"]) as db:
@@ -1722,10 +1748,13 @@ class Governance:
         latest = {}
         for row in rows:
             a = decode(row[0])
+            target = a.get("target") or {}
+            if not metadata_visible(
+                t, {"provider": target.get("provider"), "scope_id": target.get("scope_id")}
+            ):
+                continue
             latest.setdefault(
-                tuple(
-                    a["target"].get(k) for k in ("provider", "scope_id", "resource_id")
-                ),
+                tuple(target.get(k) for k in ("provider", "scope_id", "resource_id")),
                 a,
             )
         for f in findings:

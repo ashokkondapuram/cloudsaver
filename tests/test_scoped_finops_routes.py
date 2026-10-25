@@ -39,7 +39,7 @@ def test_enforce_route_allows_scoped_finops_and_ai_reads(limited_aws_tenant):
 
 def test_enforce_route_still_blocks_true_full_scope_routes(limited_aws_tenant):
     with pytest.raises(HTTPException) as error:
-        enforce_route('GET', '/api/v1/governance/summary', limited_aws_tenant, ['azure', 'aws'])
+        enforce_route('GET', '/api/v1/governance/access', limited_aws_tenant, ['azure', 'aws'])
     assert error.value.status_code == 403
 
 
