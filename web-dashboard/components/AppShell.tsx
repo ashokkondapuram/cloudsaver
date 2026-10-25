@@ -35,7 +35,44 @@ export const navigation = [
 ];
 
 function Brand({compact = false}: {compact?: boolean}) {
-  return <Link href="/" className="brand" aria-label={compact ? 'CloudSaver overview' : undefined}><span className="brand-symbol"><Cloud size={22}/><span/></span>{!compact && <span>CloudSaver<small aria-hidden="true">FINOPS WORKSPACE</small></span>}</Link>;
+  return (
+    <Link
+      href="/"
+      className="brand"
+      aria-label={compact ? 'CloudSaver overview' : undefined}
+      style={{display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none'}}
+    >
+      <svg width="34" height="34" viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{flexShrink: 0}}>
+        <rect x="2" y="2" width="60" height="60" rx="16" fill="#4338CA" />
+        <path
+          d="M21 44H18C12.5 44 8 39.5 8 34C8 29.1 11.5 25 16.2 24.1C18.1 17.2 24.4 12 32 12C39.2 12 45.3 16.7 47.4 23.2C52.3 24 56 28.2 56 33.5C56 39.3 51.3 44 45.5 44H31"
+          stroke="#FFFFFF"
+          strokeWidth="4.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M29 19L31.2 25.8L38 28L31.2 30.2L29 37L26.8 30.2L20 28L26.8 25.8L29 19Z"
+          fill="#FFFFFF"
+        />
+        <path
+          d="M21 46L31 35L36.5 40.5L47 29M47 29H39.5M47 29V36.5"
+          stroke="#10B981"
+          strokeWidth="4.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {!compact && (
+        <span style={{fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1}}>
+          <span style={{color: '#4F46E5'}}>C</span>
+          <span style={{color: 'var(--text)'}}>loud</span>
+          <span style={{background: 'linear-gradient(135deg, #10B981 0%, var(--text) 55%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>S</span>
+          <span style={{color: 'var(--text)'}}>aver</span>
+        </span>
+      )}
+    </Link>
+  );
 }
 
 function ConnectionForm({switching = false}: {switching?: boolean}) {

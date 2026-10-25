@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "1f27a76189500a7a6aa30aad6852ee6a2e5c66fc98b008d1024cfee1642f4db6",
+  "inventory_sha256": "98e3e10ad1554f75f47068838cddd76ab9cdad5d7cab36818c9a167ff7ae730e",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -2661,8 +2661,8 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "60b4af2a0c308d1807b76b65e23df2e3062c3835d1fb7bce818d32d64a1f0b9a",
-      "bytes": 23065
+      "sha256": "6e5caec1ca5ac432a8e6135560e1132e46908db16ae762a07cef515b5042dd69",
+      "bytes": 24396
     },
     {
       "path": "web-dashboard/components/ClaimView.tsx",
