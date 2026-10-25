@@ -23,16 +23,16 @@ async function setup(page:Page,options:{viewer?:boolean;denied?:boolean;unmapped
 test('workload view groups five pillars and exposes non-executable review steps',async({page})=>{
   const calls=await setup(page);
   await page.getByRole('button',{name:'payments / production',exact:true}).click();
-  await expect(page.getByText('cost: risk 0; unknown 1; observed 0',{exact:true})).toBeVisible();
-  await expect(page.getByText('security: risk 1; unknown 0; observed 0',{exact:true})).toBeVisible();
-  await page.getByText('Review VM rightsizing — blocked pending live checks and approval',{exact:true}).click();
+  await expect(page.getByText('Cost: 0 at risk · 1 unknown · 0 observed',{exact:true})).toBeVisible();
+  await expect(page.getByText('Security: 1 at risk · 0 unknown · 0 observed',{exact:true})).toBeVisible();
+  await page.getByText('Review VM rightsizing — needs live checks and approval',{exact:true}).click();
   await expect(page.getByText('Fresh representative CPU, memory, disk and network history',{exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Inspect resource evidence'})).toHaveAttribute('href',`/resources?resource=${'a'.repeat(64)}`);
   expect(calls.length).toBeGreaterThanOrEqual(2);expect(calls.every(call=>call.method==='GET')).toBe(true);
   await expect(page.getByRole('button',{name:/execute|approve|resize/i})).toHaveCount(0);
 });
 test('unmapped resources are not assigned to guessed applications',async({page})=>{
-  await setup(page,{unmapped:true});await expect(page.getByText(/Unassigned resources: 1/)).toBeVisible();
+  await setup(page,{unmapped:true});await expect(page.locator('.settings-key-values div',{hasText:'Unassigned resources'})).toContainText('1');
   await expect(page.getByRole('button',{name:'payments / production',exact:true})).toHaveCount(0);
 });
 test('viewers cannot request ownership through the workload page',async({page})=>{

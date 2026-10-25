@@ -61,7 +61,7 @@ test('shared workspace keys cannot approve a saved financial change',async({page
 test('cost investigation exposes delayed categories and accountable resolution',async({page})=>{
   const calls=await setup(page,{role:'BillingAdmin',human:true});await page.getByRole('tab',{name:'Cost investigations',exact:true}).click();await page.getByRole('button',{name:'Open investigation',exact:true}).click();const drawer=page.getByRole('dialog',{name:'Cost anomaly investigation'});
   await expect(drawer.getByText(/not a real-time cloud alert or a proven root cause/)).toBeVisible();await expect(drawer.getByRole('heading',{name:'Charge-category contributions'})).toBeVisible();
-  await drawer.getByLabel('Investigation note').fill('Owner confirmed an unexpected batch job.');await drawer.getByRole('button',{name:'acknowledge',exact:true}).click();await drawer.getByRole('button',{name:'investigate',exact:true}).click();await drawer.getByRole('button',{name:'resolve',exact:true}).click();await expect(drawer.getByLabel('Investigation note')).toHaveCount(0);
+  await drawer.getByLabel('Investigation note').fill('Owner confirmed an unexpected batch job.');await drawer.getByRole('button',{name:'Acknowledge',exact:true}).click();await drawer.getByRole('button',{name:'Investigate',exact:true}).click();await drawer.getByRole('button',{name:'Resolve',exact:true}).click();await expect(drawer.getByLabel('Investigation note')).toHaveCount(0);
   expect(calls.filter(c=>c.path.endsWith('/actions')).map(c=>c.body.action)).toEqual(['acknowledge','investigate','resolve']);expect(calls.at(-1)?.body.resolution).toBe('actionable');
 });
 

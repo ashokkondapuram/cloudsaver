@@ -129,12 +129,12 @@ function Value({label, value}: {label: string; value: string | null | undefined}
 }
 
 export function IdentityOnboardingPanel() {
-  const {data} = useSettings();
-  if (!data) return null;
+  const {data, error} = useSettings();
+  if (!data) return error ? null : <Loading label="Loading identity settings…"/>;
   const identity = data.identity;
   const localSignIn = identity.identity_mode === 'developer';
   return <section className="panel">
-    <SectionTitle title="Resource access" action={<span className="state-badge configured"><Fingerprint size={14}/>{localSignIn ? 'Local sign-in (Azure CLI)' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Copy the commands below to grant read-only access.</SectionTitle>
+    <SectionTitle title="Resource access" action={<span className="state-badge configured"><Fingerprint size={14}/>{localSignIn ? 'Local sign-in with Azure CLI' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Copy the commands below to grant read-only access.</SectionTitle>
     {localSignIn && <Notice tone="info">Scans use your local Azure CLI, AWS, and gcloud credentials. Hosted deployments use a managed identity instead.</Notice>}
     <p className="inline-help"><a className="text-link" href={`/${identity.setup_guide_path || 'docs/MANAGED_IDENTITY_ROLES.md'}`} target="_blank" rel="noreferrer">View setup guide</a></p>
     <div className="identity-grid">
@@ -146,7 +146,7 @@ export function IdentityOnboardingPanel() {
 }
 
 export function ResourceAccessIdentityEditor() {
-  const {data, reload} = useSettings();
+  const {data, error: loadError, reload} = useSettings();
   const {save, saving, error} = useSave(data, reload);
   const [azureAppClientId, setAzureAppClientId] = useState('');
   const [gcpServiceAccount, setGcpServiceAccount] = useState('');
@@ -155,7 +155,7 @@ export function ResourceAccessIdentityEditor() {
     setAzureAppClientId(data.settings.identity?.azure_app_client_id || '');
     setGcpServiceAccount(data.settings.identity?.gcp_service_account || '');
   }, [data]);
-  if (!data) return null;
+  if (!data) return loadError ? null : <Loading label="Loading identity settings…"/>;
   if (data.directory_mode === 'cutover') {
     return <section className="panel">
       <SectionTitle title="Identity overrides"/>
@@ -171,10 +171,10 @@ export function ResourceAccessIdentityEditor() {
   return <section className="panel">
     <SectionTitle title="Identity overrides">Point CloudSaver at your own Azure app registration or GCP service account instead of the platform default.</SectionTitle>
     {error && <Notice tone="error">{error}</Notice>}
-    <label className="field-label">Azure app client ID</label>
-    <input className="input" value={azureAppClientId} onChange={event => setAzureAppClientId(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
-    <label className="field-label">GCP service account</label>
-    <input className="input" value={gcpServiceAccount} onChange={event => setGcpServiceAccount(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
+    <label className="field-label" htmlFor="identity-azure-app-client-id">Azure app client ID</label>
+    <input id="identity-azure-app-client-id" className="input" value={azureAppClientId} onChange={event => setAzureAppClientId(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
+    <label className="field-label" htmlFor="identity-gcp-service-account">GCP service account</label>
+    <input id="identity-gcp-service-account" className="input" value={gcpServiceAccount} onChange={event => setGcpServiceAccount(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
     {data.editable && <div className="panel-bottom-action"><button type="button" className="button secondary" disabled={saving} onClick={() => void submit()}><Save size={15}/>Save</button></div>}
   </section>;
 }
@@ -204,7 +204,7 @@ export function ScheduleAlertsEditor() {
     save({alerts: {enabled: false, channel: alerts.channel, remove_webhook: true}}, 'Webhook removed. Alerts are off.');
   }
   return <form className="panel settings-form" onSubmit={submit}>
-    <SectionTitle title="Schedule & alerts" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose how often CloudSaver scans and where it sends results</SectionTitle>
+    <SectionTitle title="Schedule and alerts" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose how often CloudSaver scans and where it sends results</SectionTitle>
     <ReadOnlyNotice data={data}/>
     {saveError && <Notice tone="error">{saveError}</Notice>}
     <fieldset className="settings-fieldset" disabled={!editable || saving}>

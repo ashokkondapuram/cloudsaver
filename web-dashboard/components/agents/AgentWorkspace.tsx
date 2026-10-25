@@ -3,7 +3,8 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Bot,Check,Clock,FileCode2,RefreshCw,ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
-import {dateTime} from '../../lib/finops';
+import {dateTime,providerNames} from '../../lib/finops';
+import {sentence} from '../../lib/resources';
 import {IaCPreview} from '../V150Views';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState,Notice,SectionTitle} from '../ui/shared';
@@ -17,7 +18,7 @@ type Task={id:string;resource_id:string;state:string;version:number;created_at:s
   connector_bindings?:Connector[];steps:{state:string;result?:{code:string}}[]};code?:string;
   events?:{version:number;action:string;created_at:string}[]};
 type Resource={resource_id:string;resource_name:string;cloud_provider:string;scope_id?:string;subscription_id?:string};
-const labels=(s:string)=>s.replaceAll('_',' ');
+const labels=sentence;
 const active=new Set(['draft_queued','drafting','approved','running','cancel_requested']);
 
 export function AgentWorkspace(){
@@ -84,7 +85,7 @@ export function AgentWorkspace(){
     <div className="agent-process" aria-label="Agent task lifecycle">{[[Bot,'1. AI drafts'],[FileCode2,'2. You review'],[ShieldCheck,'3. You approve'],[Check,'4. Worker executes']].map(([Icon,label])=>{const I=Icon as typeof Bot;return <span key={String(label)}><I size={18}/>{String(label)}</span>;})}</div>
     <div className="agent-columns"><section className="panel agent-compose"><h2>Assign a resource task</h2><p>Choose the exact resource and connector permissions. Explicit instructions go to your approved AI Foundry model. Do not include credentials or personal information.</p>
       {!canAdmin?<Notice tone="info">A workspace administrator can assign and approve tasks. You can inspect the task history below.</Notice>:<form onSubmit={submit}>
-        <label>Resource from selected scan<select required value={resource} onChange={e=>{setResource(e.target.value);setSelectedConnectors([]);setTarget('');}}><option value="">Choose a resource</option>{resources.map(r=><option key={r.resource_id} value={r.resource_id}>{r.resource_name} · {r.cloud_provider}</option>)}</select></label>
+        <label>Resource from selected scan<select required value={resource} onChange={e=>{setResource(e.target.value);setSelectedConnectors([]);setTarget('');}}><option value="">Choose a resource</option>{resources.map(r=><option key={r.resource_id} value={r.resource_id}>{r.resource_name} · {providerNames[r.cloud_provider]??r.cloud_provider}</option>)}</select></label>
         {!resources.length&&<p className="inline-help">Select a recent completed live scan to assign a task.</p>}
         <label>Approved planning model<select required value={target} onChange={e=>setTarget(e.target.value)}><option value="">Choose a model</option>{availableTargets.map(t=><option key={t.target_id}>{t.target_id}</option>)}</select></label>
         {chosen&&!availableTargets.length&&<p className="inline-help">Configure an approved same-cloud model in Settings → AI & data governance.</p>}
@@ -100,7 +101,7 @@ export function AgentWorkspace(){
       {!selected.payload.plan?<Notice tone="info">{selected.payload.data_erased||selected.payload.data_content_expired?'AI task content is unavailable under the data-retention policy. Audit hashes and execution outcomes remain; expired instructions cannot be replayed.':selected.state==='failed'?'Planning stopped. Review AI Foundry policy, worker health and token budgets before requesting another draft.':'The gateway is waiting for a worker to draft the plan. No cloud action is approved.'}</Notice>:<>
         {selected.payload.plan.steps.some(s=>s.operation==='gitops.terraform.sync')&&selected.payload.plan_hash&&<IaCPreview taskId={selected.id} planHash={selected.payload.plan_hash}/>}<h3>{selected.payload.plan.summary}</h3><ol className="agent-steps">{selected.payload.plan.steps.map((s,i)=><li key={i}><div><strong>{s.operation}</strong> <span className="status-tag">{labels(selected.payload.steps[i]?.state||'pending')}</span></div><p>{s.purpose}</p><p><strong>Connector:</strong> {s.connector_id}</p><pre>{JSON.stringify(s.arguments,null,2)}</pre><p><strong>Verify:</strong> {s.verification}</p><p><strong>Recovery:</strong> {s.rollback}</p>{selected.payload.steps[i]?.result&&<p>{selected.payload.steps[i].result?.code}</p>}</li>)}</ol>
         {!!selected.payload.connector_bindings?.length&&<details><summary>Approved connector destinations</summary><pre>{JSON.stringify(selected.payload.connector_bindings,null,2)}</pre></details>}
-        <details><summary>TypeScript runCode program</summary><pre>{selected.code||'Open this task again to load its program.'}</pre><p className="inline-help">Connector arguments above are bound to the plan hash. The worker requests a single-use gateway permit before every call.</p></details>
+        <details><summary>Worker program</summary><pre>{selected.code||'Open this task again to load its program.'}</pre><p className="inline-help">Connector arguments above are bound to the plan hash. The worker requests a single-use gateway permit before every call.</p></details>
         <p className="agent-hash">Plan SHA-256: {selected.payload.plan_hash}</p>
         {selected.payload.approval&&<p><Clock size={15}/> Approval expires {dateTime(selected.payload.approval.expires_at)}</p>}
       </>}

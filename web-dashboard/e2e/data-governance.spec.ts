@@ -26,7 +26,7 @@ test('data owner reviews classification and explicitly erases content with an in
   await expect(page.getByRole('cell').filter({hasText:'DATA-REVIEW-42'})).toBeVisible();
   await page.getByRole('button',{name:'Erase AI content',exact:true}).click();
   const form=page.getByRole('form',{name:'Privacy action review'});const confirm=form.getByRole('button',{name:'Confirm content erasure'});
-  await expect(confirm).toBeDisabled();await form.getByLabel('Internal review reference').fill('PRIVACY-42');
+  await expect(confirm).toBeDisabled();await form.getByLabel('Review reference').fill('PRIVACY-42');
   await form.getByRole('checkbox').check();await confirm.click();
   await expect(page.getByRole('cell').filter({hasText:'Content erased'})).toBeVisible();expect(mutations).toEqual([{review_reference:'PRIVACY-42'}]);
 });
@@ -49,7 +49,7 @@ test('unregistered environment exposes a blocked state without starting inferenc
 test('legal hold requires explicit confirmation and then disables erasure controls',async({page})=>{
   await mockWorkspace(page);const mutations=await mock(page);await navigate(page,'AI data governance');
   await page.getByRole('button',{name:'Place legal hold',exact:true}).click();const form=page.getByRole('form',{name:'Privacy action review'});
-  await form.getByLabel('Internal review reference').fill('LEGAL-42');await form.getByLabel('Hold expiry (within 30 days)').fill('2026-10-30T12:00');
+  await form.getByLabel('Review reference').fill('LEGAL-42');await form.getByLabel('Hold expiry (within 30 days)').fill('2026-10-30T12:00');
   await form.getByRole('checkbox').check();await form.getByRole('button',{name:'Confirm legal hold'}).click();
   await expect(page.getByRole('cell').filter({hasText:'LEGAL-42'})).toBeVisible();await expect(page.getByRole('button',{name:'Erase AI content',exact:true})).toBeDisabled();
   expect(mutations[0]).toMatchObject({review_reference:'LEGAL-42'});expect(typeof mutations[0].hold_until).toBe('string');

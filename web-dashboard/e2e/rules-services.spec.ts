@@ -23,7 +23,7 @@ test('rule changes require a saved-observation preview before applying', async (
   const dialog = page.getByRole('dialog', {name: 'Review rule policy changes'});
   await expect(dialog).toContainText('1 resources change');
   expect(requests.map(r => r.method)).toEqual(['POST']);
-  await dialog.getByRole('button', {name: 'Apply reviewed changes'}).click();
+  await dialog.getByRole('button', {name: 'Apply changes'}).click();
   await expect(dialog).not.toBeVisible();
   expect(requests.map(r => r.method)).toEqual(['POST', 'PUT']);
   await expect(page.getByRole('checkbox', {name: 'Enable Retained unattached disk review'})).not.toBeChecked();

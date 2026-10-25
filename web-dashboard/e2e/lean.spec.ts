@@ -27,8 +27,10 @@ test('unified resources keep imported billing separate from retail estimates and
   await page.getByLabel('Cloud provider',{exact:true}).selectOption('azure');await expect(page.getByRole('button',{name:'View analysis for aws-disk'})).toHaveCount(0);
   await page.getByLabel('Pillar status',{exact:true}).selectOption('unknown');await expect(page.getByRole('button',{name:'View analysis for review-disk'})).toBeVisible();
   await page.getByRole('button',{name:'View analysis for review-disk'}).click();const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
+  await drawer.getByRole('tab',{name:'Costs',exact:true}).click();
   await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();await expect(drawer.getByText('$12.50',{exact:true})).toBeVisible();await expect(drawer.getByText('$15.00',{exact:true})).toBeVisible();
-  await expect(drawer.getByRole('heading',{name:'Saved utilization telemetry'})).toBeVisible();await expect(drawer.getByText('Insufficient or unverified')).toBeVisible();
+  await drawer.getByRole('tab',{name:'Evidence',exact:true}).click();
+  await expect(drawer.getByRole('heading',{name:'Utilization telemetry'})).toBeVisible();await expect(drawer.getByText('Unverified',{exact:true})).toBeVisible();
   const audit=await new AxeBuilder({page}).include('dialog[open]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
 });
 
@@ -36,7 +38,7 @@ test('resource handoff selects the same owned resource in the agent workspace',a
   await mockWorkspace(page);await resources(page);
   await page.route('**/api/v1/agents/catalog',r=>r.fulfill({json:{enabled:false,connectors:[]}}));await page.route('**/api/v1/agents/tasks',r=>r.fulfill({json:{items:[]}}));
   await navigate(page,'Resource analysis');await page.getByRole('button',{name:'View analysis for review-disk'}).click();
-  await page.getByRole('link',{name:'Draft a safe tag or snapshot plan'}).click();await expect(page.getByLabel('Resource from selected scan')).toHaveValue(resource().resource_id);
+  await page.getByRole('link',{name:'Draft a tag or snapshot plan'}).click();await expect(page.getByLabel('Resource from selected scan')).toHaveValue(resource().resource_id);
 });
 
 test('mobile resource explorer and consolidated AI settings fit the viewport',async({page})=>{

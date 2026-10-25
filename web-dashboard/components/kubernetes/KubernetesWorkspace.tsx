@@ -5,6 +5,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Boxes, Download, FileCode2, ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money} from '../../lib/finops';
+import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
@@ -19,8 +20,9 @@ type Capacity={allocatable:number|null;requested:number|null;daemonset:number|nu
 type Cluster={cluster_id:string;coverage:Record<string,number>;sources:Source[];capacity:Record<'cpu'|'memory',Capacity>;billed_node_cost_usd?:number|null;realizable_node_savings_usd?:number|null;reconciliation_status:string};
 type View={scan_id:string;observed_at:string;clusters:Cluster[];resources:Resource[];financial_note:string;rule_matrix:{rule_id:string;name:string;pillar:string;outcomes:Record<string,number>}[]};
 type Patch={filename:string;content:string;diff:string;replicas_reviewed:number;warning:string;review_commands:string[]};
-const label=(value:string)=>value.replaceAll('_',' ');
-const amount=(value:number|null|undefined,unit='')=>value==null?'Unknown':value.toLocaleString(undefined,{maximumFractionDigits:2})+unit;
+const labelOverrides:Record<string,string>={OOMKILL_OBSERVED:'Out-of-memory kill observed'};
+const label=(value:string)=>labelOverrides[value]||sentence(value);
+const amount=(value:number|null|undefined,unit='')=>value==null?'Unknown':value.toLocaleString('en-US',{maximumFractionDigits:2})+unit;
 
 function CapacityBar({value,dimension}:{value:Capacity;dimension:'cpu'|'memory'}) {
   const divisor=dimension==='memory'?1024**3:1,unit=dimension==='memory'?' GiB':' cores';
@@ -83,12 +85,12 @@ export function KubernetesWorkspace() {
         <label>Namespace<select value={namespace} onChange={e=>setNamespace(e.target.value)}><option value="">All namespaces</option>{options('namespace').map(x=><option key={x}>{x}</option>)}</select></label>
         <label>Object type<select value={kind} onChange={e=>setKind(e.target.value)}><option value="">All objects</option>{options('resource_type').map(x=><option key={x} value={x}>{x.split('/')[1]}</option>)}</select></label>
         <label>QoS<select value={qos} onChange={e=>setQos(e.target.value)}><option value="">All QoS classes</option>{['Guaranteed','Burstable','BestEffort'].map(x=><option key={x}>{x}</option>)}</select></label>
-        <label>Review signal<select value={risk} onChange={e=>setRisk(e.target.value)}><option value="">All evidence</option><option value="review">Review required</option><option value="OOMKILL_OBSERVED">OOMKill observed</option><option value="COORDINATED_HPA_REVIEW_REQUIRED">HPA coordination</option></select></label>
+        <label>Review signal<select value={risk} onChange={e=>setRisk(e.target.value)}><option value="">All evidence</option><option value="review">Review required</option><option value="OOMKILL_OBSERVED">Out-of-memory kill observed</option><option value="COORDINATED_HPA_REVIEW_REQUIRED">HPA coordination</option></select></label>
         <label>Search<input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Workload, pod or resource"/></label></div>
         <div className="grid-scroll" tabIndex={0} aria-label="Scrollable Kubernetes resource table"><table className="data-table"><thead><tr><th>Resource</th><th>Namespace / controller</th><th>QoS / HPA</th><th>Review signals</th><th>Request slack estimate</th><th>Node savings</th></tr></thead><tbody>{rows.slice(page*50,(page+1)*50).map(r=><tr key={r.resource_id}><td><button className="resource-name" onClick={()=>setSelected(r)}>{r.resource_name}<small>{r.resource_type.split('/')[1]}</small></button></td><td>{r.namespace||'Cluster scope'}<small>{r.evidence.controller?.name||'—'}</small></td><td>{r.evidence.qos_class||'Unknown'}<small>HPA {r.evidence.hpa_present==null?'unknown':r.evidence.hpa_present?'present':'absent'}</small></td><td>{r.evaluations.filter(e=>e.outcome==='condition_detected').length} detected / {r.evaluations.filter(e=>e.outcome==='insufficient_evidence').length} unknown</td><td>{r.costs.workload_request_slack_estimate_usd==null?'Unknown':money(r.costs.workload_request_slack_estimate_usd)}</td><td>{r.costs.realizable_node_savings_usd==null?'Unknown':money(r.costs.realizable_node_savings_usd)}</td></tr>)}</tbody></table></div>
         {!rows.length&&<p className="k8s-empty">No resources match these filters.</p>}<div className="grid-pagination"><span>{rows.length?`${page*50+1}–${Math.min(rows.length,(page+1)*50)} of ${rows.length}`:'0 resources'}</span><button className="button secondary small" disabled={page===0} onClick={()=>setPage(p=>p-1)}>Previous</button><button className="button secondary small" disabled={(page+1)*50>=rows.length} onClick={()=>setPage(p=>p+1)}>Next</button></div>
       </section>
-      <section className="panel"><div className="grid-heading"><div><h2>Rule evidence matrix</h2><p>Detected conditions retain their safety blocks; missing history never becomes a pass.</p></div></div><div className="summary-table-scroll"><table className="data-table"><thead><tr><th>Rule</th><th>Pillar</th><th>Saved outcomes</th></tr></thead><tbody>{data.rule_matrix.map(r=><tr key={r.rule_id}><td>{r.name}</td><td>{r.pillar}</td><td>{Object.entries(r.outcomes).map(([state,count])=>`${count} ${label(state)}`).join(' · ')||'No eligible observations'}</td></tr>)}</tbody></table></div></section>
+      <section className="panel"><div className="grid-heading"><div><h2>Rule evidence matrix</h2><p>Detected conditions retain their safety blocks; missing history never becomes a pass.</p></div></div><div className="summary-table-scroll"><table className="data-table"><thead><tr><th>Rule</th><th>Pillar</th><th>Saved outcomes</th></tr></thead><tbody>{data.rule_matrix.map(r=><tr key={r.rule_id}><td>{r.name}</td><td>{r.pillar}</td><td>{Object.entries(r.outcomes).map(([state,count])=>`${count} ${label(state).toLowerCase()}`).join(' · ')||'No eligible observations'}</td></tr>)}</tbody></table></div></section>
       <ResourceReview key={selected?.resource_id||'closed'} resource={selected} scanId={data.scan_id} onClose={()=>setSelected(null)}/>
     </>}
   </>;

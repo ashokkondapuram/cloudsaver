@@ -45,7 +45,9 @@ test('detail drawer preserves context and previews actual returned review code',
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('heading',{name:'Resource identity'})).toBeVisible();
+  await drawer.getByRole('tab',{name:'Costs',exact:true}).click();
   await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();
+  await drawer.getByRole('tab',{name:'Code',exact:true}).click();
   await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();
   await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();
   await expect(drawer.getByLabel('Generated code preview')).toContainText('TEST FIXTURE import review');
@@ -107,7 +109,7 @@ test('GitOps requires file review acknowledgment before publishing a draft',asyn
   const publish=page.getByRole('button',{name:'Open draft PR',exact:true});
   await expect(publish).toBeDisabled();
   await page.getByRole('checkbox',{name:/I reviewed these files/}).check();await publish.click();
-  await expect(page.getByRole('link',{name:/View open PR/})).toBeVisible();
+  await expect(page.getByRole('link',{name:/View pull request/})).toBeVisible();
   expect(mutations.map(m=>m.path)).toEqual(['/api/v1/gitops/preview','/api/v1/gitops/requests']);
   expect(mutations[1].body.idempotency_key).toBeTruthy();
 });

@@ -2,6 +2,8 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {api} from '../../lib/api';
+import {providerNames} from '../../lib/finops';
+import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading, Notice, SectionTitle} from '../ui/shared';
 import {Dialog} from '../ui/dialog';
@@ -18,14 +20,15 @@ export function CustomerRuleSettings() {
   const [data, setData] = useState<Policy | null>(null), [error, setError] = useState('');
   const [draft, setDraft] = useState<Record<string, Change>>({}), [provider, setProvider] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null), [busy, setBusy] = useState(false);
+  const [service,setService]=useState(''),[search,setSearch]=useState('');
   const load = useCallback(async (signal?: AbortSignal) => {
     try {setData(await api<Policy>('/rules/effective', token, {signal})); setDraft({}); setError('');}
     catch (cause) {if (!signal?.aborted) setError((cause as Error).message);}
   }, [token]);
   useEffect(() => {setData(null); setDraft({}); setPreview(null); const c = new AbortController(); void load(c.signal); return () => c.abort();}, [load, workspace?.tenant_id]);
-  const [service,setService]=useState(''),[search,setSearch]=useState('');
   const restricted = !!workspace?.scope_restrictions;
   const canEdit = canAdmin && !restricted;
+  const rows = data ? data.items.filter(r => (!provider || r.provider === provider)&&(!service||r.service_category===service)&&(!search||[r.id,r.name,r.resource_type].join(' ').toLowerCase().includes(search.toLowerCase()))) : [];
   function edit(rule: Rule, changes: Partial<Change>) {
     setPreview(null);
     setDraft(current => {
@@ -43,27 +46,27 @@ export function CustomerRuleSettings() {
     } catch (cause) {setError((cause as Error).message); setPreview(null);} finally {setBusy(false);}
   }
   return <>
-    <section className="panel"><SectionTitle title="Analysis rules">Published provider and service rules with effective workspace parameters.</SectionTitle>
+    <section className="panel"><SectionTitle title="Analysis rules">Review and adjust which rules run in this workspace.</SectionTitle>
       {error && <Notice tone="error">{error}</Notice>}
       {restricted && <Notice>Your key is scope-limited. Workspace-wide rule changes require an unrestricted authorized administrator.</Notice>}
       {!canAdmin && <Notice>Read-only rule policy. A workspace administrator can request changes.</Notice>}
       {!data ? <Loading label="Loading published rules…"/> : <>
         <label className="field-label">Provider<select value={provider} onChange={e => setProvider(e.target.value)}>
-          <option value="">All providers</option>{[...new Set(data.items.map(r => r.provider))].sort().map(p => <option key={p}>{p}</option>)}</select></label>
-        <div className="optimization-form"><label>Service category<select value={service} onChange={e=>setService(e.target.value)}><option value="">All services</option>{[...new Set(data.items.map(r=>r.service_category).filter(Boolean))].sort().map(c=><option key={c}>{c}</option>)}</select></label>
+          <option value="">All providers</option>{[...new Set(data.items.map(r => r.provider))].sort().map(p => <option key={p} value={p}>{providerNames[p]??p}</option>)}</select></label>
+        <div className="optimization-form"><label>Service category<select value={service} onChange={e=>setService(e.target.value)}><option value="">All services</option>{[...new Set(data.items.map(r=>r.service_category).filter(Boolean))].sort().map(c=><option key={c} value={c}>{sentence(c!)}</option>)}</select></label>
           <label>Find a resource rule<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rule name, ID or resource type"/></label></div>
         <div className="summary-table-scroll"><table className="summary-table"><thead><tr><th>Rule and service</th><th>Effective state</th><th>Delegated parameters</th></tr></thead><tbody>
-          {data.items.filter(r => (!provider || r.provider === provider)&&(!service||r.service_category===service)&&(!search||[r.id,r.name,r.resource_type].join(' ').toLowerCase().includes(search.toLowerCase()))).map(rule => <tr key={rule.id}>
-            <td><strong>{rule.name}</strong><p>{rule.provider} · {rule.resource_type}</p><small>{rule.description}</small></td>
+          {rows.map(rule => <tr key={rule.id}>
+            <td><strong>{rule.name}</strong><p>{providerNames[rule.provider]??rule.provider} · {rule.resource_type}</p><small>{rule.description}</small></td>
             <td><label><input type="checkbox" aria-label={`Enable ${rule.name}`} checked={draft[rule.id]?.enabled ?? rule.enabled}
               disabled={!canEdit || busy || rule.status !== 'published' || !!rule.unavailable_reason} onChange={e => edit(rule, {enabled: e.target.checked})}/>
               {rule.unavailable_reason || (rule.status !== 'published' ? 'Retired' : 'Enabled for evaluation')}</label></td>
-            <td>{Object.entries(rule.allowed_override_bounds).map(([key, bounds]) => <label key={key} className="field-label">{key.replaceAll('_', ' ')}
+            <td>{Object.entries(rule.allowed_override_bounds).map(([key, bounds]) => <label key={key} className="field-label">{sentence(key)}
               <input type="number" min={bounds.minimum} max={bounds.maximum} step={1} disabled={!canEdit || busy}
                 value={(draft[rule.id]?.parameters ?? rule.parameters)[key]}
                 onChange={e => edit(rule, {parameters: {...(draft[rule.id]?.parameters ?? rule.parameters), [key]: Number(e.target.value)}})}/>
               <small>{bounds.minimum}–{bounds.maximum}</small></label>)}</td>
-          </tr>)}</tbody></table></div>
+          </tr>)}{!rows.length && <tr><td colSpan={3}>No rules match your filters.</td></tr>}</tbody></table></div>
         <p className="inline-help">Enabled rules can still have insufficient evidence. Disabling a rule does not remove historical findings or change mandatory protection controls.</p>
         {canEdit && <button className="button primary" disabled={busy || !Object.keys(draft).length} onClick={() => void submit(false)}>{busy ? 'Preparing…' : `Preview ${Object.keys(draft).length} rule changes`}</button>}
       </>}
@@ -72,7 +75,7 @@ export function CustomerRuleSettings() {
       <div className="dialog-content"><p>{preview?.message}</p><p>{preview?.resources_changed === null ? 'No saved scan is available to estimate impact.' : `${preview?.resources_changed} resources change their evaluation state in the saved snapshot.`}</p>
         <p>Historical snapshots retain the original policy. New settings apply to the next scan.</p></div>
       <div className="dialog-actions"><button className="button secondary" disabled={busy} onClick={() => setPreview(null)}>Cancel</button>
-        <button className="button primary" disabled={busy} onClick={() => void submit(true)}>Apply reviewed changes</button></div>
+        <button className="button primary" disabled={busy} onClick={() => void submit(true)}>Apply changes</button></div>
     </Dialog>
   </>;
 }

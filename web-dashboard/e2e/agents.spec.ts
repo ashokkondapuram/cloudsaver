@@ -39,7 +39,7 @@ test('viewer can inspect plans without assigning or approving tasks on mobile',a
   await navigate(page,'Agent workspace');await page.getByRole('button',{name:/Set CostCenter to FINOPS-42/}).click();
   await expect(page.getByRole('button',{name:'Approve this plan'})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Request AI execution plan'})).toHaveCount(0);
-  await page.getByText('TypeScript runCode program',{exact:true}).click();
+  await page.getByText('Worker program',{exact:true}).click();
   await expect(page.getByText(/export async function run/)).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   const audit=await new AxeBuilder({page}).include('main').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);

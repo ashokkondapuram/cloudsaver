@@ -10,13 +10,13 @@ test('billing import is explicit, preserves decimal evidence and isolates curren
   await panel.getByLabel('From (UTC)',{exact:true}).fill('2026-10-01');await panel.getByLabel('Until, exclusive (UTC)').fill('2026-10-22');
   await panel.getByLabel('Monthly budget (optional)').fill('300');await panel.getByRole('button',{name:'Apply billing period'}).click();
   const file={name:'test-billing.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(billingFile()))};
-  await panel.getByText('Advanced: Manual FOCUS JSON Override',{exact:true}).click();
+  await panel.getByText('Advanced: import FOCUS billing JSON manually',{exact:true}).click();
   await panel.getByLabel('Choose billing JSON',{exact:false}).setInputFiles(file);
   const submit=panel.getByRole('button',{name:'Import cloud billing data',exact:true});await expect(submit).toBeDisabled();expect(writes).toHaveLength(0);
   await panel.getByRole('checkbox',{name:/I have reviewed the account scope/}).check();await submit.click();
   await expect(panel.getByText(/Import saved: 21 new charges/)).toBeVisible();expect(writes).toHaveLength(1);
   expect(writes[0].records[0].BilledCost).toBe('10.00000000');expect(writes[0].source_id).toBe('test-export-october');
-  await expect(panel.getByText('USD 310.00000000',{exact:true})).toBeVisible();
+  await expect(panel.getByText('$310.00',{exact:true})).toBeVisible();
   await expect(panel.getByText('Projected above the supplied budget',{exact:true})).toBeVisible();
   const accessibility=await new AxeBuilder({page}).include('.billing-evidence').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(accessibility.violations).toEqual([]);
   await panel.screenshot({path:test.info().outputPath('billing-evidence-v100.png')});

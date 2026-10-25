@@ -7,6 +7,8 @@ import type {AccessEvent, AccessKey, CustomerRole, CustomerUser, ServiceAccount,
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
+import {dateTime} from '../../lib/finops';
+import {sentence} from '../../lib/resources';
 
 const WORKSPACE_ROLES = ['TenantAdmin', 'BillingAdmin', 'Viewer'];
 const ROLE_LABELS: Record<string, string> = {
@@ -21,16 +23,9 @@ const ACTION_LABELS: Record<string, string> = {
   issued: 'Key issued', revoked: 'Key revoked', rotated: 'Key rotated', bootstrap_issued: 'Onboarding key issued',
 };
 
-function when(value: string | null) {
-  if (!value) return 'Never';
-  const d = new Date(value);
-  if (Number.isNaN(d.valueOf())) return 'Unknown';
-  const date = d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
-  const time = d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'});
-  return `${date} at ${time}`;
-}
+const when = (value: string | null) => value ? dateTime(value) : 'Never';
 
-const roleList = (roles: string[]) => roles.map(r => ROLE_LABELS[r] || r).join(', ');
+const roleList = (roles: string[]) => roles.map(r => ROLE_LABELS[r] || sentence(r)).join(', ');
 const defaultExpiry = () => new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 
 type Data = {users: CustomerUser[]; members: WorkspaceMember[]; accounts: ServiceAccount[]; keys: AccessKey[]; audit: AccessEvent[]};
@@ -129,7 +124,7 @@ export function AccessSettings() {
       <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{data.users.map(user => <tr key={user.user_id}>
-          <td>{user.display_name}</td><td>{user.email || '—'}</td><td>{ROLE_LABELS[user.customer_role]}</td>
+          <td>{user.display_name}</td><td>{user.email || '—'}</td><td>{ROLE_LABELS[user.customer_role] || sentence(user.customer_role)}</td>
           <td>{user.membership_status === 'active' ? 'Active' : 'Suspended'}</td>
           {isAdmin && <td className="row-actions">{!keyAdmin && user.customer_role !== 'CustomerOwner' && user.user_id !== workspace?.subject_id && <>
             {user.membership_status === 'active'
@@ -184,7 +179,7 @@ export function AccessSettings() {
         <thead><tr><th>Name</th><th>Issued to</th><th>Roles</th><th>Status</th><th>Expires</th><th>Last used</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{data.keys.map(key => <tr key={key.key_id}>
           <td>{key.name}<br/><code>{key.key_id}</code></td><td>{subject(key)}</td><td>{roleList(key.roles)}{key.scope_restrictions && <><br/><small>Limited scopes</small></>}</td>
-          <td className="capitalize">{key.status.replace('_', ' ')}</td><td>{when(key.expires_at)}</td><td>{when(key.last_used_at)}</td>
+          <td>{sentence(key.status)}</td><td>{when(key.expires_at)}</td><td>{when(key.last_used_at)}</td>
           {isAdmin && <td className="row-actions">{key.subject_type !== 'operator' && !['revoked', 'expired'].includes(key.status) && key.key_id !== workspace?.key_id && <>
             <button type="button" className="button secondary small" onClick={() => void act(async () => {const rotated = await api<{secret: string}>(`/customer/keys/${key.key_id}/rotate`, token, {body: {overlap_hours: 24}}); setSecret(rotated.secret);}, 'Key rotated. The old key keeps working for 24 hours.')}>Rotate</button>
             <button type="button" className="button secondary small" onClick={() => setPending({kind: 'confirm', title: `Revoke ${key.name}?`, label: 'Revoke key',
@@ -200,13 +195,13 @@ export function AccessSettings() {
       {data.audit.length ? <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>When</th><th>Change</th><th>By</th></tr></thead>
         <tbody>{data.audit.slice(0, 50).map(event => <tr key={event.id}>
-          <td>{when(event.occurred_at)}</td><td>{ACTION_LABELS[event.action] || event.action.replaceAll('_', ' ')}</td>
+          <td>{when(event.occurred_at)}</td><td>{ACTION_LABELS[event.action] || sentence(event.action)}</td>
           <td>{event.actor_type === 'customer' ? names.get(event.actor) || 'Your organization' : event.actor_type === 'operator' ? 'Platform operator' : 'System'}</td>
         </tr>)}</tbody>
       </table></div> : <p className="inline-help">No activity yet.</p>}
     </section>
 
-    <InviteDialog open={pending?.kind === 'invite'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/users/invite', token, {body}), `User access added for ${body.email}. Email delivery is not configured.`)}/>
+    <InviteDialog open={pending?.kind === 'invite'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/users/invite', token, {body}), `You added access for ${body.email}. Email delivery isn’t configured, so share sign-in details with them directly.`)}/>
     <MemberDialog pending={pending?.kind === 'member' ? pending : null} users={data.users} members={data.members} onClose={() => setPending(null)}
       onSubmit={(userId, roles, version) => act(() => api(`/customer/members/${userId}`, token, {method: 'PUT', body: {roles, version}}), 'Workspace access saved.')}/>
     <AccountDialog open={pending?.kind === 'account'} onClose={() => setPending(null)} onSubmit={body => act(() => api('/customer/service-accounts', token, {body}), `${body.name} created.`)}/>

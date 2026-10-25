@@ -36,7 +36,7 @@ async function workspace(page:Page,admin=true){
     await page.getByRole('button',{name:'Open navigation'}).click();
     await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:'Activity & delivery'}).click();
   }else await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:'Activity & delivery'}).click();
-  await expect(page.getByRole('heading',{name:'Delivery reliability'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Delivery status'})).toBeVisible();
   return mutations;
 }
 
@@ -51,7 +51,7 @@ test('admin inspects failures, acknowledges ambiguity and queues exactly one rep
   await expect(retry).toBeDisabled();
   await page.getByRole('checkbox',{name:'I understand this may send a duplicate notification.'}).check();
   await retry.click();
-  await expect(page.getByText('replay requested',{exact:true})).toBeVisible();
+  await expect(page.getByText('Replay requested',{exact:true})).toBeVisible();
   expect(mutations).toEqual([{acknowledge_duplicate_risk:true}]);
   expect(errors).toEqual([]);
 });

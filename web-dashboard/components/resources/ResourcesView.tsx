@@ -121,6 +121,8 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     return scan.findings.filter(f => keys.has(identityOf(f.cloud_provider || 'azure', f.resource_id)));
   }, [scan, chosen]);
   useEffect(() => {setSelection(reviewFindings); return () => setSelection([]);}, [reviewFindings, setSelection]);
+  const providerCounts = useMemo(() => Object.fromEntries([...new Set(findings.map(f => f.cloud_provider || 'azure'))].map(p => [p, findings.filter(f => (f.cloud_provider || 'azure') === p).length])), [findings]);
+  const categoryCounts = useMemo(() => Object.fromEntries(categories.map(([id]) => [id, findings.filter(f => categoryOf(f) === id).length])), [findings]);
   const open = useCallback((key: string | null) => {
     const next = new URLSearchParams(params.toString());
     if (key) next.set('resource', key); else next.delete('resource');
@@ -159,17 +161,16 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const toggleAll = () => setSelected(previous => {const next = new Set(previous); rows.forEach(r => allVisible ? next.delete(r.resource_key) : next.add(r.resource_key)); return next;});
   const toggle = (key: string) => setSelected(previous => {const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next;});
   const select = (name: keyof Filters, options: [string, string][], aria: string) => <label><span className="sr-only">{aria}</span><select aria-label={aria} value={filters[name]} onChange={e => setFilters(f => ({...f, [name]: e.target.value}))}>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>;
-  const providerCounts = useMemo(() => Object.fromEntries([...new Set(findings.map(f => f.cloud_provider || 'azure'))].map(p => [p, findings.filter(f => (f.cloud_provider || 'azure') === p).length])), [findings]);
-  const categoryCounts = useMemo(() => Object.fromEntries(categories.map(([id]) => [id, findings.filter(f => categoryOf(f) === id).length])), [findings]);
   const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
   return <>
-    <p className="inline-help">{summary.resolved_count??'Unknown'} previously flagged resources now have no findings; {summary.no_longer_observed_count??'unknown'} are no longer observed. Absence does not prove deletion or savings.</p><div className="resource-summary">
+    <div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
       <article><span>AI assessed</span><strong>{(summary.ai_status.completed || 0).toLocaleString()}</strong><small>{(summary.ai_status.stale || 0).toLocaleString()} stale · {(summary.ai_status.not_run || 0).toLocaleString()} not run</small></article>
       <article><span>High or critical AI risk</span><strong>{((summary.ai_risk.high || 0) + (summary.ai_risk.critical || 0)).toLocaleString()}</strong><small>Unverified model suggestions</small></article>
       <article><span>Decisions</span><strong>{(summary.total - (summary.decision.none || 0)).toLocaleString()}</strong><small>{(summary.decision.defer || 0).toLocaleString()} deferred</small></article>
     </div>
+    {summary.resolved_count != null && summary.no_longer_observed_count != null && <p className="resource-summary-note">Since the previous scan: {summary.resolved_count.toLocaleString()} resources no longer have findings and {summary.no_longer_observed_count.toLocaleString()} are no longer observed. This doesn’t prove deletion or savings.</p>}
     {batch && <BatchBanner batch={batch} onCancel={cancel} canAdmin={canAdmin}/>}
     <section className="panel resources-panel" aria-label="Resources">
       <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One place per resource — findings, pillars, pricing, AI, and decisions · observed {dateTime(page.observed_at)}</p></div>

@@ -5,7 +5,7 @@ import type {LucideIcon} from 'lucide-react';
 
 export type PageTab = {id: string; label: string; icon?: LucideIcon};
 
-export function PageTabs({id, label, tabs, value, onChange}: {id: string; label: string; tabs: PageTab[]; value: string; onChange: (value: string) => void}) {
+export function PageTabs({id, label, tabs, value, onChange, className = 'page-tabs'}: {id: string; label: string; tabs: PageTab[]; value: string; onChange: (value: string) => void; className?: string}) {
   function onKeyDown(event: KeyboardEvent) {
     if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -14,5 +14,5 @@ export function PageTabs({id, label, tabs, value, onChange}: {id: string; label:
     onChange(tabs[next].id);
     document.getElementById(`${id}-${tabs[next].id}-tab`)?.focus();
   }
-  return <div className="page-tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>{tabs.map(tab => <button key={tab.id} role="tab" id={`${id}-${tab.id}-tab`} aria-controls={`${id}-${tab.id}`} aria-selected={value === tab.id} tabIndex={value === tab.id ? 0 : -1} onClick={() => onChange(tab.id)}>{tab.icon && <tab.icon size={16}/>}{tab.label}</button>)}</div>;
+  return <div className={className} role="tablist" aria-label={label} onKeyDown={onKeyDown}>{tabs.map(tab => <button key={tab.id} role="tab" id={`${id}-${tab.id}-tab`} aria-controls={`${id}-${tab.id}`} aria-selected={value === tab.id} tabIndex={value === tab.id ? 0 : -1} onClick={() => onChange(tab.id)}>{tab.icon && <tab.icon size={16}/>}{tab.label}</button>)}</div>;
 }

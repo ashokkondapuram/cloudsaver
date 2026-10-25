@@ -11,6 +11,27 @@ Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI
 
 This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
 
+## Feature guides
+
+Every feature has its own detailed guide covering the dashboard workflow, backend modules, API endpoints, permissions, configuration, guardrails and tests. Browse them all in the [feature guide index](docs/features/README.md).
+
+| Area | Guides |
+| --- | --- |
+| Analyze | [Overview](docs/features/overview.md) · [Resources](docs/features/resources.md) · [Workload assessments](docs/features/workload-assessments.md) · [Services](docs/features/services.md) · [Kubernetes](docs/features/kubernetes.md) · [AI assessments](docs/features/ai-assessments.md) |
+| Optimize and account | [Optimization evidence](docs/features/optimization-evidence.md) · [Cost allocation and billing](docs/features/cost-allocation-and-billing.md) · [Savings and investigations](docs/features/savings-and-investigations.md) · [Risk and compliance](docs/features/risk-and-compliance.md) |
+| Act | [Agent worker](docs/features/agent-worker.md) · [Automation and GitOps](docs/features/automation-and-gitops.md) · [Activity and delivery](docs/features/activity-and-delivery.md) |
+| Administer | [Settings](docs/features/settings.md) · [Onboarding and access](docs/features/onboarding-and-access.md) · [Scanning and analysis rules](docs/features/scanning-and-analysis-rules.md) · [Platform portal](docs/features/platform-portal.md) |
+| Roadmap | [V2 scaffolds](docs/features/v2-scaffolds.md) |
+
+### Reference guides
+
+| Topic | Guide |
+| --- | --- |
+| Environment and setup | [Environment](docs/ENVIRONMENT.md) · [Cloud sources](docs/CLOUD_SOURCES.md) · [Managed identity roles](docs/MANAGED_IDENTITY_ROLES.md) · [Client-managed users and keys](docs/CLIENT_MANAGED_USERS_AND_KEYS.md) |
+| Operations | [Operations](docs/OPERATIONS.md) · [Delivery](docs/DELIVERY.md) · [Production hardening](docs/PRODUCTION_HARDENING.md) · [Platform billing](docs/PLATFORM_BILLING.md) |
+| AI and governance | [Assessment AI](docs/ASSESSMENT_AI.md) · [AI data governance](docs/AI_DATA_GOVERNANCE.md) · [Risk and compliance](docs/RISK_AND_COMPLIANCE.md) · [Agentic worker](docs/AGENTIC_WORKER.md) · [GitOps](docs/GITOPS.md) |
+| Product and roadmap | [UI and UX](docs/UI_UX.md) · [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md) · [V2.0 roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md) · [Implementation status](docs/IMPLEMENTATION_STATUS.md) · [Release notes](docs/releases) |
+
 ## Customer views
 
 | View | Purpose |

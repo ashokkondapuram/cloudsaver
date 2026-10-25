@@ -161,3 +161,5 @@ html[data-theme=dark] .bulk-toolbar{background:#1e293b;border-color:#52607b;box-
   .app-main{margin-left:0!important;width:100%!important}.page-content{padding:0!important;max-width:none}
   .resource-report{max-width:none;color:#000}.resource-report *{color:#000!important;background:transparent!important}
 }
+html[data-theme=dark] .metric-featured{background:linear-gradient(115deg,var(--surface) 35%,#1d2048);border-color:#353a72}
+html[data-theme=dark] .priority-row:hover{background:#ffffff08}

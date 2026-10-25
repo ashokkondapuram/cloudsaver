@@ -46,7 +46,7 @@ test('a change approver explicitly reviews the exact plan and cannot close a pro
  const mutations=await setup(page,{roles:['ChangeApprover']});await page.getByRole('tab',{name:'Approvals',exact:true}).click();await page.getByRole('button',{name:'Review finding',exact:true}).click();const drawer=page.getByRole('dialog',{name:'Governance finding review'});
  await expect(drawer.getByRole('heading',{name:'Exact reviewed change plan'})).toBeVisible();await expect(drawer.getByRole('button',{name:'Approve verified closure'})).toHaveCount(0);const approve=drawer.getByRole('button',{name:'Approve bound change plan',exact:true});await expect(approve).toBeDisabled();
  await drawer.getByLabel('Decision / investigation note',{exact:true}).fill('Reviewed the exact target, dependencies and rollback.');await drawer.getByLabel('I reviewed the exact resource, target configuration, dependencies, validation and rollback.').check();await approve.click();
- await expect(drawer.getByText('approved · revision 4',{exact:true})).toBeVisible();expect(mutations[0].body.action).toBe('approve');expect(mutations[0].body.version).toBe(3);
+ await expect(drawer.getByText('Approved · revision 4',{exact:true})).toBeVisible();expect(mutations[0].body.action).toBe('approve');expect(mutations[0].body.version).toBe(3);
  const audit=await new AxeBuilder({page}).include('dialog[open]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
 });
 
@@ -57,7 +57,7 @@ test('security analyst confirms classification and named owners before creating 
 });
 
 test('accepted-risk decision remains separate from failed technical control',async({page})=>{
- const mutations=await setup(page,{roles:['BusinessRiskOwner']});await page.getByRole('tab',{name:'Exceptions',exact:true}).click();await page.getByLabel('Exception decision note',{exact:true}).fill('Authorized within documented senior risk delegation.');await page.getByRole('button',{name:'Authorize time-limited risk',exact:true}).click();await expect(page.getByText(/Accepted by business-owner/)).toBeVisible();expect(mutations[0].body.action).toBe('approve');await page.getByRole('tab',{name:'Evidence',exact:true}).click();await expect(page.locator('.gov-assessment-counts .gov-fail')).toHaveText('fail');
+ const mutations=await setup(page,{roles:['BusinessRiskOwner']});await page.getByRole('tab',{name:'Exceptions',exact:true}).click();await page.getByLabel('Exception decision note',{exact:true}).fill('Authorized within documented senior risk delegation.');await page.getByRole('button',{name:'Authorize time-limited risk',exact:true}).click();await expect(page.getByText(/Accepted by business-owner/)).toBeVisible();expect(mutations[0].body.action).toBe('approve');await page.getByRole('tab',{name:'Evidence',exact:true}).click();await expect(page.locator('.gov-assessment-counts .gov-fail')).toHaveText('Fail');
 });
 
 test('keys and automation cannot exercise human approval controls',async({page})=>{

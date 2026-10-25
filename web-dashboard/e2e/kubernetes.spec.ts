@@ -21,7 +21,7 @@ test('Kubernetes workspace preserves missing-source evidence and review-only pat
   await navigate(page,'Kubernetes & containers');
   await expect(page.getByRole('heading',{name:'Kubernetes & containers',exact:true})).toBeVisible();
   await expect(page.getByText('prometheus:memory',{exact:true})).toBeVisible();
-  await expect(page.getByText('partial telemetry',{exact:true})).toBeVisible();
+  await expect(page.getByText('Partial telemetry',{exact:true})).toBeVisible();
   await page.getByLabel('Search',{exact:true}).fill('no-such-resource');
   await expect(page.getByText('No resources match these filters.')).toBeVisible();
   await page.getByLabel('Search',{exact:true}).fill('checkout');
@@ -43,7 +43,7 @@ test('viewer can inspect Kubernetes safety blocks without patch controls on mobi
   await navigate(page,'Kubernetes & containers');
   await page.getByRole('button',{name:'checkout-api Container'}).click();
   const drawer=page.getByRole('dialog',{name:'Kubernetes resource review'});
-  await expect(drawer.getByText('Blocked: OOMKILL OBSERVED')).toBeVisible();
+  await expect(drawer.getByText('Blocked: Out-of-memory kill observed')).toBeVisible();
   await expect(drawer.getByRole('button',{name:/Preview.*request patch/})).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.screenshot({path:test.info().outputPath('kubernetes-mobile-review.png'),fullPage:true});

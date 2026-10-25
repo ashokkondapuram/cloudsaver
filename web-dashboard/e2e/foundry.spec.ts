@@ -42,8 +42,8 @@ test('metadata diagnostics do not display invocation RBAC as verified', async ({
     stages: [{check: 'federated_identity', status: 'verified'}, {check: 'model_invocation_permissions_and_quota', status: 'not_tested'}], inference_invoked: false}}));
   await page.goto('/settings?tab=ai');
   await page.getByRole('button', {name: 'Test Azure AI Foundry connection'}).click();
-  await expect(page.getByRole('status').filter({hasText: 'inference permission unverified'})).toBeVisible();
-  await expect(page.getByText('model invocation permissions and quota: not tested')).toBeVisible();
+  await expect(page.getByRole('status').filter({hasText: 'Inference permission isn’t verified.'})).toBeVisible();
+  await expect(page.getByText('Model invocation permissions and quota: Not tested')).toBeVisible();
   await expect(page.getByRole('checkbox', {name: 'Enable opt-in AI advisory'})).not.toBeChecked();
 });
 

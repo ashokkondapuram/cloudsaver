@@ -16,11 +16,12 @@ export const providerNames: Record<string, string> = {azure: 'Azure', aws: 'AWS'
 export const providerColors: Record<string, string> = {azure: '#2563eb', aws: '#c2410c', gcp: '#15803d', kubernetes: '#7c3aed'};
 export const terraformRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL']);
 export const bashRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG']);
-export const ruleLabel = (rule: string) => labels[rule] || rule.replaceAll('_', ' ').toLowerCase();
+const acronyms = new Set(['AWS', 'GCP', 'VM', 'VMS', 'IP', 'IPS', 'EBS', 'EIP', 'RDS', 'NAT', 'SQL', 'ELB', 'ALB', 'NLB', 'EC2', 'S3', 'AKS', 'EKS', 'GKE', 'CPU', 'GPU', 'NIC', 'NSG', 'DNS', 'API', 'AI', 'TLS', 'SKU', 'IOPS', 'PVC', 'LB']);
+export const ruleLabel = (rule: string) => labels[rule] || rule.replace(/^K8S_/, 'Kubernetes_').split('_').filter(Boolean).map((word, index) => acronyms.has(word.toUpperCase()) ? word.toUpperCase() : index ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
 export const providerOf = (finding: Finding) => finding.cloud_provider || 'azure';
 export const scopeOf = (finding: Finding) => finding.scope_id || finding.subscription_id;
 export const findingKey = (finding: Finding) => JSON.stringify([providerOf(finding), providerOf(finding) === 'azure' ? finding.resource_id.toLowerCase() : finding.resource_id, finding.rule_id]);
-export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? 'Not estimated' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 2}).format(value);
+export const money = (value: number | null | undefined) => value == null || !Number.isFinite(value) ? 'Not estimated' : new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
 export const dateTime = (value: string) => {const d = new Date(value); return Number.isNaN(d.valueOf()) ? 'Unknown time' : `${d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})} at ${d.toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'})}`;};
 export const shortDate = (value: string) => {const d = new Date(value); return Number.isNaN(d.valueOf()) ? 'an unknown date' : d.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});};
 export const compact = (value: number) => new Intl.NumberFormat('en-US', {notation: value >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1}).format(value);

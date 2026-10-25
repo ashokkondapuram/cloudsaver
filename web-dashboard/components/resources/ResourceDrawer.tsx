@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {BrainCircuit, CheckCircle2, MessageSquareText, ShieldCheck} from 'lucide-react';
+import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
-import {dateTime, money, ruleLabel} from '../../lib/finops';
-import {aiStatusLabels, decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
+import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
+import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
+import {PageTabs} from '../ui/PageTabs';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, PillarDots} from './ResourceParts';
@@ -18,21 +19,20 @@ import {findingKey} from '../../lib/finops';
 function Evidence({detail}: {detail: ResourceDetail}) {
   const text = JSON.stringify(detail.observation?.configuration_snapshot || {}, null, 2);
   return <div className="drawer-section"><h3>Evidence provenance</h3>
-    <p>Collector: {detail.observation?.collector_version || 'Not recorded'} · Schema: {detail.observation?.evidence_schema_version || 'Legacy'}</p>
-    <p>Observed: {detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}. Configuration older than 24 hours requires refresh.</p>
-    {detail.assessment.pillars.flatMap(pillar => pillar.checks).map(check => <article key={`${check.pillar}:${check.code}`}><h4>{sentence(check.code)} · {check.status}</h4><p>{check.explanation}</p><small>Evidence fields: {check.evidence_fields.join(', ') || 'None returned'}</small></article>)}
-    <details><summary>Saved configuration ({text.length > 16000 ? 'truncated' : 'available fields'})</summary><pre style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{text.slice(0, 16000)}</pre></details>
+    <dl className="settings-key-values"><div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div><div><dt>Schema</dt><dd>{detail.observation?.evidence_schema_version || 'Legacy'}</dd></div><div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div></dl>
+    <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence appears on the Overview tab.</p>
+    <details className="drawer-disclosure"><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>
   </div>;
 }
 
 function Telemetry({detail}:{detail:ResourceDetail}) {
   const metrics=detail.observation?.evidence?.metrics||{};const summaries=detail.observation?.evidence?.metric_summaries||{};
-  return <section className="drawer-section"><h3>Saved utilization telemetry</h3><p>Collector-validated 30-day five-minute windows need at least 95% coverage and no gap over one hour. Missing observations remain unknown; legacy summaries retain their own windows.</p>{!Object.keys(metrics).length?<Notice>No metric history was collected for this resource.</Notice>:<div className="grid-scroll" tabIndex={0} aria-label="Saved metric windows"><table className="data-table"><thead><tr><th>Metric</th><th>Window</th><th>Samples</th><th>Validated coverage</th><th>P95 / P99</th></tr></thead><tbody>{Object.entries(metrics).map(([name,m])=>{const summary=summaries[name]||m;return <tr key={name}><td>{sentence(name)}</td><td>{m.window_start?dateTime(m.window_start):'Unknown'} → {m.window_end?dateTime(m.window_end):'Unknown'}</td><td>{m.points?.length??'Summary only'}</td><td>{summary.sufficient===true&&summary.coverage_ratio!=null?`${(summary.coverage_ratio*100).toFixed(1)}%`:'Insufficient or unverified'}</td><td>{summary.p95??'Unknown'} / {summary.p99??'Unknown'}</td></tr>;})}</tbody></table></div>}<p>Low utilization alone does not establish a safe target or approval to change capacity.</p></section>;
+  return <section className="drawer-section"><h3>Utilization telemetry</h3><p className="inline-help">Validated 30-day windows need at least 95% coverage and no gap over one hour. Missing observations stay unknown.</p>{!Object.keys(metrics).length?<Notice>No metric history was collected for this resource.</Notice>:<div className="summary-table-scroll" tabIndex={0} aria-label="Saved metric windows"><table className="summary-table"><thead><tr><th>Metric</th><th>Window</th><th>Samples</th><th>Coverage</th><th>P95 / P99</th></tr></thead><tbody>{Object.entries(metrics).map(([name,m])=>{const summary=summaries[name]||m;return <tr key={name}><td>{sentence(name)}</td><td>{m.window_start?shortDate(m.window_start):'Unknown'} – {m.window_end?shortDate(m.window_end):'Unknown'}</td><td>{m.points?.length.toLocaleString()??'Summary only'}</td><td>{summary.sufficient===true&&summary.coverage_ratio!=null?`${(summary.coverage_ratio*100).toFixed(1)}%`:'Unverified'}</td><td>{summary.p95??'—'} / {summary.p99??'—'}</td></tr>;})}</tbody></table></div>}<p className="inline-help">Low utilization alone doesn’t establish a safe target or approval to change capacity.</p></section>;
 }
 
 function Rules({detail}: {detail: ResourceDetail}) {
-  return <div className="drawer-section"><h3>Frozen rule evaluations</h3>{!detail.rule_evaluations?.length ? <Notice>No per-rule evaluation records exist in this observation. An absence of findings does not establish a pass.</Notice> : detail.rule_evaluations.map(rule => <article key={rule.rule_id}>
-    <h4>{rule.rule_id}</h4><p>{sentence(rule.outcome)} · version {rule.rule_version}</p><p>{rule.reason}</p>{rule.destructive_actions_blocked && <strong>Protected — destructive actions blocked</strong>}</article>)}</div>;
+  return <div className="drawer-section"><h3>Rule evaluations</h3>{!detail.rule_evaluations?.length ? <Notice>This observation has no per-rule evaluation records. No findings doesn’t mean a rule passed.</Notice> : <div className="drawer-card-list">{detail.rule_evaluations.map(rule => <article key={rule.rule_id} className="drawer-card">
+    <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}</small></article>)}</div>}</div>;
 }
 
 function Costs({detail}: {detail: ResourceDetail}) {
@@ -44,29 +44,39 @@ function Costs({detail}: {detail: ResourceDetail}) {
 }
 
 function Dependencies({detail}: {detail: ResourceDetail}) {
-  return <div className="drawer-section"><h3>Observed typed relationships</h3><p>Only returned, authorized graph nodes are shown. Missing edges do not establish that dependencies are absent.</p>
-    {!detail.observation?.dependency_refs?.length ? <Notice>No typed dependency evidence is available. Verify topology, locks, backup and failover independently.</Notice> : <ul>{detail.observation.dependency_refs.map((edge, index) => <li key={index}><strong>{sentence(edge.relationship)} · {edge.verification_state}</strong><p>{edge.from_resource_id} → {edge.to_resource_id}</p><small>Observed: {edge.observed_at ? dateTime(edge.observed_at) : 'Unknown'}</small></li>)}</ul>}
+  return <div className="drawer-section"><h3>Dependencies</h3><p className="inline-help">Only authorized relationships returned by the collector appear here. A missing edge doesn’t prove there’s no dependency.</p>
+    {!detail.observation?.dependency_refs?.length ? <Notice>No dependency evidence is available. Verify topology, locks, backup and failover before you change this resource.</Notice> : <div className="drawer-card-list">{detail.observation.dependency_refs.map((edge, index) => <article key={index} className="drawer-card"><header><h4>{sentence(edge.relationship)}</h4><span className="assessment-state unknown">{sentence(edge.verification_state)}</span></header><p><code>{edge.from_resource_id}</code> → <code>{edge.to_resource_id}</code></p><small>Observed {edge.observed_at ? dateTime(edge.observed_at) : 'at an unknown time'}</small></article>)}</div>}
     {!!detail.assessment.protected_reasons.length && <Notice>Protection signals: {detail.assessment.protected_reasons.map(sentence).join(', ')}. These prevent destructive changes.</Notice>}</div>;
 }
 
 const formatDay = (value: string) => new Date(value + 'T00:00:00').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+const pillarState = (status: string) => status === 'risk' ? 'Risk observed' : status === 'observed' ? 'Evidence observed' : 'Evidence incomplete';
 
 function Overview({detail}: {detail: ResourceDetail}) {
   const a = detail.assessment;
+  const [pillar, setPillar] = useState('');
   return <>
-    <div className="drawer-section"><Link className="button secondary" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}>Draft a safe tag or snapshot plan</Link><h3>Resource identity</h3><dl className="detail-metadata">
-      <div><dt>Provider</dt><dd><ProviderBadge provider={a.provider}/></dd></div><div><dt>Resource type</dt><dd>{a.resource_type || 'Not supplied'}</dd></div>
-      <div><dt>Group / namespace</dt><dd>{a.resource_group || 'Not supplied'}</dd></div><div><dt>Account / scope</dt><dd><code>{a.scope_id}</code></dd></div>
+    {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}. AI can’t suggest decommissioning this resource.</Notice>}
+    {a.observation.status !== 'recent' && <Notice tone="warning">This observation is older than {a.observation.max_age_hours} hours or its time can’t be verified. Run a new scan before you plan a change.</Notice>}
+    <div className="drawer-section"><h3>Five-pillar assessment</h3><p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks have observed evidence. Each check keeps its most severe status across this resource’s findings.</p>
+      <EvidenceRadar pillars={a.pillars} onInspect={id => setPillar(id)}/>
+      <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={pillar ? pillar === p.pillar : p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{pillarState(p.status)}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{sentence(c.code)}</h4><p>{c.explanation}</p>{!!c.evidence_fields.length && <small className="inline-help">Evidence: {c.evidence_fields.join(', ')}</small>}</div></article>)}</div></details>)}</div></div>
+    <div className="drawer-section"><h3>Resource identity</h3><dl className="detail-metadata">
+      <div><dt>Resource type</dt><dd>{a.resource_type || 'Not supplied'}</dd></div><div><dt>Service category</dt><dd>{sentence(a.service_category || 'other')}</dd></div>
+      <div><dt>Group or namespace</dt><dd>{a.resource_group || 'Not supplied'}</dd></div><div><dt>Account or scope</dt><dd><code>{a.scope_id}</code></dd></div>
       <div className="full-width"><dt>Resource ID</dt><dd><code>{a.resource_id}</code></dd></div></dl></div>
-    <div className="drawer-section"><h3>Findings on this resource</h3><ul className="assessment-guardrails">{detail.findings.map(f => <li key={f.rule_id}>{ruleLabel(f.rule_id)}<p className="inline-help">{f.details}</p></li>)}</ul></div>
-    <div className="drawer-section"><h3>Merged five-pillar assessment</h3><p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks have observed evidence. Each check keeps its most severe status across findings. Known retail estimate: {money(a.retail_estimate_usd)}.</p>
-      {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}. AI can't suggest decommissioning this resource.</Notice>}
-      {a.observation.status !== 'recent' && <Notice tone="warning">This observation is older than {a.observation.max_age_hours} hours or its time can't be verified. Run a new scan before planning a change.</Notice>}
-      <EvidenceRadar pillars={a.pillars} onInspect={() => undefined}/>
-      <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{p.status === 'risk' ? 'Risk observed' : p.status === 'observed' ? 'Evidence observed' : 'Evidence incomplete'}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{label(c.code)}</h4><p>{c.explanation}</p></div></article>)}</div></details>)}</div></div>
-    <div className="drawer-section"><h3>Required guardrails</h3><ul className="assessment-guardrails">{a.guardrails.map(code => <li key={code}>{label(code)}</li>)}</ul></div>
+    <div className="drawer-section"><h3>Required guardrails</h3><ul className="assessment-guardrails">{a.guardrails.map(code => <li key={code}>{sentence(code)}</li>)}</ul></div>
     <p className="inline-help" title={a.evidence_digest}>Policy {a.policy_version} · Evidence fingerprint {a.evidence_digest.slice(0, 16)}</p>
   </>;
+}
+
+function Findings({detail}: {detail: ResourceDetail}) {
+  if (!detail.findings.length) return <p className="inline-empty">No findings are attached to this resource in the selected scan.</p>;
+  return <div className="drawer-section"><h3>Findings on this resource</h3><p className="inline-help">Each finding is reviewed separately. Open one to see its provenance, protection signals and AI advisory.</p>
+    <div className="finding-review-list">{detail.findings.map((f, index) => <details key={findingKey(f)} className="finding-review" open={index === 0}>
+      <summary><span><strong>{ruleLabel(f.rule_id)}</strong><small>{f.details}</small></span><span className="finding-review-cost">{f.estimated_monthly_waste_usd == null ? 'Price unknown' : `${money(f.estimated_monthly_waste_usd)}/mo`}</span></summary>
+      <ArchitecturalAssessment finding={f} embedded/>
+    </details>)}</div></div>;
 }
 
 function Assessment({detail}: {detail: ResourceDetail}) {
@@ -182,25 +192,47 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
       .catch(cause => {if (!request.signal.aborted) {setDetail(null); setError((cause as Error).message);}});
     return () => request.abort();
   }, [scanId, resourceKey, token, version]);
+  const [tab, setTab] = useState('overview');
+  useEffect(() => {setTab('overview');}, [resourceKey]);
   const changed = () => {setVersion(v => v + 1); onChange();};
   const current = detail && detail.assessment.resource_key === resourceKey ? detail : null;
+  const a = current?.assessment;
+  const tabs = current ? [
+    {id: 'overview', label: 'Overview', icon: LayoutDashboard},
+    {id: 'findings', label: `Findings (${current.findings.length})`, icon: ListChecks},
+    {id: 'evidence', label: 'Evidence', icon: Activity},
+    {id: 'costs', label: 'Costs', icon: CircleDollarSign},
+    {id: 'ai', label: 'AI', icon: BrainCircuit},
+    {id: 'decision', label: 'Decision', icon: CheckCircle2},
+    {id: 'history', label: 'History', icon: History},
+    {id: 'code', label: 'Code', icon: FileCode2},
+  ] : [];
   return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>
-    {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current ? <Loading label="Loading resource details…"/> : <>
-      <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={current.assessment.provider}/><span className={`state-badge ${current.assessment.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{current.assessment.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><AIStatusBadge ai={current.ai}/></div><h2>{current.assessment.resource_name || current.assessment.resource_id}</h2><p>{current.assessment.finding_count} finding{current.assessment.finding_count === 1 ? '' : 's'} · {sentence(current.assessment.review_priority)} · <PillarDots pillars={Object.fromEntries(current.assessment.pillars.map(p => [p.pillar, p.status]))}/></p></div>
-      <div className="drawer-tab-content drawer-unified">
-        <Overview detail={current}/>
-        {current.findings.map(f => <div key={findingKey(f)} className="drawer-section"><h3>{ruleLabel(f.rule_id)} · 360° assessment</h3><ArchitecturalAssessment finding={f} embedded/></div>)}
-        <Evidence detail={current}/>
-        <Telemetry detail={current}/>
-        <Rules detail={current}/>
-        <Costs detail={current}/>
-        <Dependencies detail={current}/>
-        <div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/><Questions detail={current} onChange={changed}/></div>
-        <HistoryTab detail={current}/>
-        <DecisionTab detail={current} onChange={changed}/>
-        <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>
+    {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current || !a ? <Loading label="Loading resource details…"/> : <>
+      <div className="finding-drawer-header resource-drawer-header">
+        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
+        <h2>{a.resource_name || a.resource_id}</h2>
+        <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
+        <dl className="drawer-facts">
+          <div><dt>30-day billed</dt><dd>{current.costs?.billed_cost_usd == null ? 'Unknown' : money(current.costs.billed_cost_usd)}</dd></div>
+          <div><dt>Retail estimate</dt><dd>{a.retail_estimate_usd == null ? 'Unknown' : money(a.retail_estimate_usd)}</dd></div>
+          <div><dt>Evidence coverage</dt><dd>{a.evidence_coverage.total ? `${Math.round(100 * a.evidence_coverage.observed / a.evidence_coverage.total)}%` : '—'}<small> {a.evidence_coverage.observed}/{a.evidence_coverage.total}</small></dd></div>
+          <div><dt>Observed</dt><dd>{a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}</dd></div>
+        </dl>
+        <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
       </div>
-      <div className="drawer-footer"><ShieldCheck size={15}/>AI status: {aiStatusLabels[current.ai.status]}. Advice is unverified and never changes cloud resources.</div>
+      <PageTabs id="resource-drawer" label="Resource details sections" className="drawer-tabs" tabs={tabs} value={tab} onChange={setTab}/>
+      <div className="drawer-tab-content" role="tabpanel" id={`resource-drawer-${tab}`} aria-labelledby={`resource-drawer-${tab}-tab`} tabIndex={0}>
+        {tab === 'overview' && <Overview detail={current}/>}
+        {tab === 'findings' && <Findings detail={current}/>}
+        {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
+        {tab === 'costs' && <Costs detail={current}/>}
+        {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
+        {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}
+        {tab === 'history' && <HistoryTab detail={current}/>}
+        {tab === 'code' && <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>}
+      </div>
+      <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
     </>}
   </Dialog>;
 }

@@ -3,6 +3,8 @@
 import {useCallback, useEffect, useState} from 'react';
 import {BrainCircuit, Save, ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
+import {dateTime} from '../../lib/finops';
+import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading, Notice, SectionTitle} from '../ui/shared';
 
@@ -77,7 +79,7 @@ export function AIFoundryConfigurationEditor() {
     {error && <Notice tone="error">{error}<button type="button" className="text-button" onClick={() => void load()}>Refresh AI settings</button></Notice>}
     {!view || !draft ? !error && <Loading label="Loading AI policy and bindings…"/> : <>
       {!view.editable && <Notice>{view.directory_mode === 'cutover' ? 'AI configuration is locked while the platform directory owns workspace configuration.' : 'An unrestricted workspace administrator can edit these settings.'}</Notice>}
-      {!view.platform_policy.policy.enabled && <Notice tone="warning">The platform AI kill switch is off. No new inference can start.</Notice>}
+      {!view.platform_policy.policy.enabled && <Notice tone="warning">Platform AI is turned off. No new inference can start.</Notice>}
       {!view.plan_allowed && <Notice tone="warning">AI advisory is not included in this workspace plan. Contact your account manager to enable it.</Notice>}
       <div className="identity-grid">{(['azure', 'aws', 'gcp'] as Provider[]).map(provider => {
         const selected = draft.providers[provider], result = results[provider];
@@ -91,13 +93,13 @@ export function AIFoundryConfigurationEditor() {
           {candidate && <><dl className="settings-key-values">{Object.entries(candidate.fields).filter(([key, value]) => labels[key] && value !== null).map(([key, value]) => <div key={key}><dt>{labels[key]}</dt><dd><code>{String(value)}</code></dd></div>)}</dl><p className="inline-help">{candidate.privacy_attestation}</p></>}
           {canAdmin && <button type="button" className="button secondary small" disabled={!!busy || dirty || !view.ai_foundry.providers[provider].target_id}
             onClick={() => void test(provider)}>{busy === provider ? 'Checking metadata…' : `Test ${names[provider]} connection`}</button>}
-          {result && <div role="status"><strong>{result.status === 'inconclusive' ? 'Readiness incomplete · inference permission unverified' : result.status} · {result.latency_ms} ms</strong>
-            <p>{result.remediation_hint}</p><ul>{result.stages.map(stage => <li key={stage.check}>{stage.check.replaceAll('_', ' ')}: {stage.status.replaceAll('_', ' ')}{stage.reason ? ` · ${stage.reason}` : ''}</li>)}</ul></div>}
+          {result && <div role="status"><strong>{result.status === 'inconclusive' ? 'Connection check incomplete. Inference permission isn’t verified.' : sentence(result.status)} · {result.latency_ms} ms</strong>
+            <p>{result.remediation_hint}</p><ul>{result.stages.map(stage => <li key={stage.check}>{sentence(stage.check)}: {sentence(stage.status)}{stage.reason ? ` · ${stage.reason}` : ''}</li>)}</ul></div>}
         </article>;
       })}</div>
       <fieldset className="settings-fieldset" disabled={!editable}><legend><ShieldCheck size={16}/>Routing, budget and consent</legend>
         <label className="checkbox-row"><input type="checkbox" checked={draft.policy.advisory_enabled} onChange={event => policy('advisory_enabled', event.target.checked)}/>Enable opt-in AI advisory</label>
-        <label className="field-label">Source-provider routing<select value={draft.policy.routing_mode} onChange={event => policy('routing_mode', event.target.value)}><option value="same_cloud_only">Same cloud only</option><option value="workspace_default_provider" disabled>Workspace default provider — requires verified human step-up</option></select></label>
+        <label className="field-label">Source-provider routing<select value={draft.policy.routing_mode} onChange={event => policy('routing_mode', event.target.value)}><option value="same_cloud_only">Same cloud only</option><option value="workspace_default_provider" disabled>Workspace default provider (requires extra sign-in verification)</option></select></label>
         <p className="inline-help">A missing matching provider blocks the request. Kubernetes inference is blocked until its hosting cloud is authoritatively verified.</p>
         <div className="settings-row">{([
           ['max_input_tokens_per_request', 'Input-token allowance', 256, view.platform_policy.policy.max_input_tokens_per_request],
@@ -108,14 +110,14 @@ export function AIFoundryConfigurationEditor() {
           value={draft.policy[key] ?? ''} placeholder={key === 'monthly_token_limit' ? `Platform cap: ${max}` : undefined}
           onChange={event => policy(key, key === 'monthly_token_limit' && event.target.value === '' ? null : Number(event.target.value))}/><small>Platform ceiling: {max.toLocaleString()}</small></label>)}</div>
       </fieldset>
-      {view.usage && <div className="drawer-section"><h3>Measured usage</h3><p>{view.usage.attempts_last_30d.toLocaleString()} attempts in 30 days · {view.usage.known_input_tokens.toLocaleString()} known input tokens · {view.usage.known_output_tokens.toLocaleString()} known output tokens · {view.usage.unmetered_attempts} unmetered attempts.</p>
+      {view.usage && <div className="drawer-section"><h3>Measured usage</h3><p>{view.usage.attempts_last_30d.toLocaleString()} attempts in 30 days · {view.usage.known_input_tokens.toLocaleString()} known input tokens · {view.usage.known_output_tokens.toLocaleString()} known output tokens · {view.usage.unmetered_attempts.toLocaleString()} unmetered attempts.</p>
         <label className="field-label">{view.usage.monthly_period}: tokens used or reserved<progress max={draft.policy.monthly_token_limit || view.platform_policy.policy.monthly_token_ceiling} value={view.usage.monthly_tokens_used_or_reserved}/></label>
         <p>{view.usage.monthly_tokens_used_or_reserved.toLocaleString()} / {(draft.policy.monthly_token_limit || view.platform_policy.policy.monthly_token_ceiling).toLocaleString()}. Unknown outcomes retain their reservation.</p>
         {!!view.usage.monthly_unbounded_legacy_attempts && <Notice tone="warning">Historical unmetered calls have no reservation. Capped inference is paused until the monthly budget can be verified.</Notice>}</div>}
       {editable && <><label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/>I acknowledge the selected provider, model and region, possible charges, and unverified advisory processing.</label>
         <button type="button" className="button primary" disabled={!!busy || !dirty || (draft.policy.advisory_enabled && !ack)} onClick={() => void save()}><Save size={15}/>{busy === 'save' ? 'Saving…' : 'Save AI configuration'}</button></>}
       <p className="inline-help">Policy revision {view.platform_policy.version}. {view.message}</p>
-      {!!view.diagnostics.length && <details><summary>Recent connection checks ({view.diagnostics.length})</summary><ul>{view.diagnostics.map(item => <li key={item.id}>{names[item.provider]} · {new Date(item.created_at).toLocaleString()} · {item.result.status} · {item.result.latency_ms} ms</li>)}</ul></details>}
+      {!!view.diagnostics.length && <details><summary>Recent connection checks ({view.diagnostics.length})</summary><ul>{view.diagnostics.map(item => <li key={item.id}>{names[item.provider]} · {dateTime(item.created_at)} · {sentence(item.result.status)} · {item.result.latency_ms} ms</li>)}</ul></details>}
     </>}
   </section>;
 }

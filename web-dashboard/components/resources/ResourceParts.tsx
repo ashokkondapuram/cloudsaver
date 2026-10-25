@@ -24,8 +24,8 @@ export function Actions({actions}: {actions: Action[]}) {
   return <ol className="recommended-actions">{actions.map((a, i) => <li key={i}>
     <div className="action-heading"><strong>{a.title}</strong><span className="action-kind">{sentence(a.kind)}</span></div>
     <p>{a.rationale}</p>
-    <small><span className="capitalize">{a.pillar}</span> · Effort {a.effort} · Change risk {a.change_risk} · Confidence {a.confidence}</small>
-    {!!a.evidence_codes.length && <small>Evidence: {a.evidence_codes.map(label).join(', ')}</small>}
+    <small><span className="capitalize">{a.pillar}</span> · Effort {sentence(a.effort)} · Change risk {sentence(a.change_risk)} · Confidence {sentence(a.confidence)}</small>
+    {!!a.evidence_codes.length && <small>Evidence: {a.evidence_codes.map(sentence).join(', ')}</small>}
     {!!a.prerequisites.length && <small>Before you start: {a.prerequisites.join(' · ')}</small>}
   </li>)}</ol>;
 }

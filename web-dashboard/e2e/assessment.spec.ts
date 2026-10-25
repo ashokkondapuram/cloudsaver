@@ -71,12 +71,9 @@ test('late AI response cannot appear in another finding after the drawer closes'
   await expect(page.getByRole('checkbox',{name:/I acknowledge external processing/})).not.toBeChecked();
 });
 
-test('review priorities open saved findings and stale evidence exposes provenance',async({page})=>{
+test('stale evidence exposes provenance in the resource drawer',async({page})=>{
   const {mutations}=await mockWorkspace(page,{ai:true,protected:true});
-  await navigate(page,'Cost allocation');
-  const panel=page.locator('.service-analysis');
-  await expect(panel.getByRole('heading',{name:'Review priorities',exact:true})).toBeVisible();
-  await panel.getByRole('button',{name:'archive-data-01 · high',exact:true}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('heading',{name:'Assessment provenance',exact:true})).toBeVisible();
   await expect(drawer.getByText(/Policy 2026-10-23.1/)).toBeVisible();
