@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "fd5f09f8137abe4d3e78b9f1390af8b38954b3bbe2a5ba170b24db63826a7bd3",
+  "inventory_sha256": "653631142c7ad03538734b4542a61cb99e02a96eba7065581566594ca99eacb2",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -426,8 +426,8 @@
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "acda2c632492ba2ed49bb1300093462a0c159b7529653adac0e88108f67567b2",
-      "bytes": 4578
+      "sha256": "7024ecd83ac50f3788a1b77b2f9ab1b0e271051f6d4fdd966dee7b25ff534411",
+      "bytes": 5243
     },
     {
       "path": "app/focus.py",
@@ -666,8 +666,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "ef5535068d0c99ec89466588e2ea23ec6447434dc8df3e3738dbc26116604e71",
-      "bytes": 10260
+      "sha256": "143ba16257c9bb39dc1a5d28cadf8a1e399d38b8d59da22c6d122b4fc94231e1",
+      "bytes": 10329
     },
     {
       "path": "app/runtime.py",
@@ -2161,8 +2161,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "fadc6837e864fb029a89137463ead730d75ab65f7d7d2a4cbb3ac88ffbd0d9c8",
-      "bytes": 31739
+      "sha256": "584995224d8ea8585b7b11a4efa3435a614dab8e692b23fa03e075450c873113",
+      "bytes": 32152
     },
     {
       "path": "services/governance_routes.py",
@@ -2498,6 +2498,11 @@
       "path": "tests/test_scanner.py",
       "sha256": "1d7e823aa0552fd6d16f47da48302215fa77acd06497ac6984b77bec82c870e5",
       "bytes": 4511
+    },
+    {
+      "path": "tests/test_scoped_finops_routes.py",
+      "sha256": "ab7f15d5a1d9f1624ee93ffa3ffe16115fb0a839c189d98fb098503fe7c498e7",
+      "bytes": 4269
     },
     {
       "path": "tests/test_service_analysis_api.py",

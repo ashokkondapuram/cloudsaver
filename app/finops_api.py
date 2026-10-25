@@ -84,4 +84,19 @@ def create_router(repository, current_tenant):
         except (FocusError,ValueError) as error:
             raise HTTPException(error.status if isinstance(error,FocusError) else 422,
                                 str(error) if isinstance(error,FocusError) else 'Budget must be a nonnegative decimal string') from None
+
+    @router.get('/unit-economics/preview')
+    def unit_economics_preview(
+        prior_cost: str = Query(..., min_length=1, max_length=32),
+        current_cost: str = Query(..., min_length=1, max_length=32),
+        prior_volume: str = Query(..., min_length=1, max_length=32),
+        current_volume: str = Query(..., min_length=1, max_length=32),
+        tenant=Depends(finance),
+    ):
+        from app.unit_economics import compute_elasticity_ratio
+        try:
+            return compute_elasticity_ratio(prior_cost, current_cost, prior_volume, current_volume)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+
     return router

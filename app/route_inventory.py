@@ -159,6 +159,7 @@ ROUTES = {
     ('GET', '/api/v1/finops/imports'): 'scoped_read',
     ('POST', '/api/v1/finops/imports'): 'scoped_read',
     ('GET', '/api/v1/finops/summary'): 'scoped_read',
+    ('GET', '/api/v1/finops/unit-economics/preview'): 'scoped_read',
     ('GET', '/api/v1/operations/deliveries'): 'scoped_read',
     ('GET', '/api/v1/operations/deliveries/{event_id}/audit'): 'scoped_read',
     ('POST', '/api/v1/operations/deliveries/{event_id}/retry'): 'scoped_read',
