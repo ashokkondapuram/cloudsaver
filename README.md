@@ -5,7 +5,7 @@ v1.7.0 adds workload assessments (application and environment roll-ups of five-p
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
 
-For product positioning, the pre-merge GitOps firewall narrative, and the five category-defining differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md).
+For product positioning, the pre-merge GitOps firewall narrative, and the five category-defining differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md). For the forward-looking v2.0 engineering roadmap, see [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md).
 
 This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
 

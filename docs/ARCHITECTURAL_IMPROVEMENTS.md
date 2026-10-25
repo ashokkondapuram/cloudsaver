@@ -150,6 +150,7 @@ Gateway routes forward to the core scanner service; see `services/gateway.py` an
 
 ## Related documentation
 
+- [V2_0_ARCHITECTURAL_ROADMAP.md](V2_0_ARCHITECTURAL_ROADMAP.md) — forward-looking v2.0 gap analysis and engineering blueprint (not shipped)
 - [NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md](NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md) — extended module reference and phased delivery notes
 - [LEAN_CORE_IMPLEMENTATION.md](LEAN_CORE_IMPLEMENTATION.md) — meter contracts, pricing boundaries, and verification limits
 - [AGENTIC_WORKER.md](AGENTIC_WORKER.md) — isolated agent worker deployment and approval model

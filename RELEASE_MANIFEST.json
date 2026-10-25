@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "aeb81cf56d15e44582dd7de91a07324036ebf41f7467a6800915aa5bbd2631b6",
+  "inventory_sha256": "a9c9152ee2ce76d91db2fb171b432f07caaca6ba5af76a34de83bb39d72ae53a",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "4333a6ec0a6314493f14654de1b7cd0085207ef1c17d701d1dfb5c5c91a72932",
-      "bytes": 25162
+      "sha256": "a0aca8248b6b65e7c6a405d0c42e1bb07ee0aab7040c5520e0dc9391d4424411",
+      "bytes": 25282
     },
     {
       "path": "ROADMAP.md",
@@ -816,8 +816,8 @@
     },
     {
       "path": "docs/ARCHITECTURAL_IMPROVEMENTS.md",
-      "sha256": "6be02afe3694b91c85064eed5a5bb175eec6708d44ef68edcf1833d0de955dd9",
-      "bytes": 10926
+      "sha256": "ed04c478c11a1c3c0e48448459145e24f10a2a6df53bde49300fb5676d64dbaa",
+      "bytes": 11069
     },
     {
       "path": "docs/ASSESSMENT_AI.md",
