@@ -137,7 +137,7 @@ export function ResourcesView() {
     </div>
     {batch && <BatchBanner batch={batch} onCancel={cancel} canAdmin={canAdmin}/>}
     <section className="panel resources-panel" aria-label="Resource analysis">
-      <div className="grid-heading"><div><h2>Resource analysis <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One assessment per resource, merged from all of its findings · observed {dateTime(page.observed_at)}</p></div>
+      <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One assessment per resource, merged from all of its findings · observed {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
           <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>

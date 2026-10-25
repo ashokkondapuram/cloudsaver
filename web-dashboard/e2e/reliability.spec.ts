@@ -31,7 +31,7 @@ async function workspace(page:Page,admin=true){
   await page.goto('/');
   await page.getByLabel('Workspace access key or Entra Bearer token').fill('test-only-browser-fixture');
   await page.getByRole('button',{name:'Connect workspace'}).click();
-  await expect(page.getByRole('heading',{name:'Your cloud, in focus.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   if(await page.getByRole('button',{name:'Open navigation'}).isVisible()){
     await page.getByRole('button',{name:'Open navigation'}).click();
     await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:'Activity & delivery'}).click();

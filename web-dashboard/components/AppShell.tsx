@@ -19,9 +19,9 @@ import {ClaimView} from './ClaimView';
 export const navigation = [
   {href:'/',label:'Overview',icon:LayoutDashboard,group:'DISCOVER & ANALYZE',shortcut:'G D'},
   {href:'/findings',label:'Inventory & findings',icon:Blocks,group:'',shortcut:'G F'},
-  {href:'/resources',label:'Resources & 5-Pillar',icon:BrainCircuit,group:'',shortcut:'G R'},
+  {href:'/resources',label:'Resource analysis',icon:BrainCircuit,group:'',shortcut:'G R'},
   {href:'/workloads',label:'Workload assessments',icon:Layers,group:''},
-  {href:'/services/disks',label:'Service matrices',icon:Database,group:''},
+  {href:'/services/disks',label:'Services',icon:Database,group:''},
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
   {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:'MODEL & ATTRIBUTE'},
   {href:'/allocation',label:'Cost allocation',icon:Wallet,group:''},
@@ -31,7 +31,7 @@ export const navigation = [
   {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:''},
   {href:'/activity',label:'Activity & delivery',icon:Activity,group:''},
   {href:'/resources/report',label:'Executive report',icon:FileCode2,group:'REPORT & ADMINISTER'},
-  {href:'/settings',label:'Settings & governance',icon:Settings2,group:'',shortcut:'G S'},
+  {href:'/settings',label:'Settings',icon:Settings2,group:'',shortcut:'G S'},
 ];
 
 function Brand({compact = false}: {compact?: boolean}) {
@@ -202,7 +202,7 @@ export function AppShell({children}: {children: ReactNode}) {
     </div>
     <FindingDrawer/><ReviewDrawer/><CommandPalette/><ScanDialog/>
     <Dialog open={overlay === 'workspace'} onClose={() => setOverlay(null)} title="Connect another workspace"><div className="dialog-content"><ConnectionForm switching/></div></Dialog>
-    <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28}/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No dead-letter deliveries were reported at the last refresh.' : 'Open Settings & governance to inspect operational state.'}</p></div>}<Link className="button secondary" href="/settings" onClick={() => setOverlay(null)}>Open settings activity<ArrowRight size={16}/></Link></div></Dialog>
+    <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28}/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No dead-letter deliveries were reported at the last refresh.' : 'Open Activity to inspect operational state.'}</p></div>}<Link className="button secondary" href="/activity" onClick={() => setOverlay(null)}>Open activity<ArrowRight size={16}/></Link></div></Dialog>
     <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><nav aria-label="Mobile navigation">{navigation.map(item => <Link key={item.href} href={item.href} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} onClick={() => setMobileOpen(false)}><item.icon size={20}/>{item.label}</Link>)}</nav></Dialog>
     {notice && <div className={`toast toast-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'success' ? <Check size={17}/> : <Bell size={17}/>}</span><p>{notice.text}</p><button className="icon-button" aria-label="Dismiss notification" onClick={clearNotice}><X size={16}/></button></div>}
   </div>;

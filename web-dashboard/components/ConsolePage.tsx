@@ -1,6 +1,7 @@
 'use client';
 
-import {Download, Plus, RefreshCw, ChevronDown} from 'lucide-react';
+import Link from 'next/link';
+import {Download, Layers, Plus, RefreshCw, ChevronDown} from 'lucide-react';
 import {downloadFile, exportFindings} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
 import {Overview} from './Overview';
@@ -11,13 +12,13 @@ import {ResourcesView} from './resources/ResourcesView';
 
 export type View = 'overview'|'findings'|'resources'|'allocation'|'automation'|'activity'|'settings';
 const headings:Record<View,{eyebrow:string;title:string;description:string}>={
-  overview:{eyebrow:'WORKSPACE INTELLIGENCE',title:'Your cloud, in focus.',description:'Understand the signals. Prioritize the right resources. Review with confidence.'},
-  findings:{eyebrow:'INVENTORY & FINDINGS',title:'Every resource. The full picture.',description:'Explore resource signals across your clouds, accounts, and scopes.'},
-  resources:{eyebrow:'RESOURCE ANALYSIS',title:'One assessment per resource.',description:'Review merged five-pillar evidence, AI suggestions and your team’s decisions for each resource.'},
-  allocation:{eyebrow:'COST ALLOCATION',title:'Know where the evidence leads.',description:'Explore cost coverage and resource ownership across your accounts.'},
-  automation:{eyebrow:'AUTOMATION ENGINE',title:'From insight to reviewed code.',description:'Prepare change reviews and check infrastructure plans before they reach production.'},
-  activity:{eyebrow:'WORKSPACE ACTIVITY',title:'A clear record of workspace activity.',description:'Inspect delivery state, saved scans, AI assessments and provider-reported usage.'},
-  settings:{eyebrow:'SETTINGS & INTEGRATIONS',title:'Your workspace, connected.',description:'Review cloud sources, approved integrations, plan limits, and access.'},
+  overview:{eyebrow:'DISCOVER & ANALYZE',title:'Overview',description:'See what’s connected, what was analyzed and what needs your attention.'},
+  findings:{eyebrow:'DISCOVER & ANALYZE',title:'Inventory & findings',description:'Search and filter every resource signal across your clouds, accounts and scopes.'},
+  resources:{eyebrow:'DISCOVER & ANALYZE',title:'Resource analysis',description:'Review one five-pillar assessment per resource, with AI suggestions and your team’s decisions.'},
+  allocation:{eyebrow:'MODEL & ATTRIBUTE',title:'Cost allocation',description:'See billed costs, pricing coverage and ownership evidence by account and scope.'},
+  automation:{eyebrow:'ACT & GOVERN',title:'Automation & GitOps',description:'Prepare reviewed code changes, check plans against guardrails and track execution.'},
+  activity:{eyebrow:'ACT & GOVERN',title:'Activity & delivery',description:'Inspect delivery status, saved scans and AI assessments.'},
+  settings:{eyebrow:'REPORT & ADMINISTER',title:'Settings',description:'Manage cloud scopes, access, analysis rules and your plan.'},
 };
 
 export function ConsolePage({view,provider='',category='',intent='',pricing=''}:{view:View;provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing}) {
@@ -29,8 +30,7 @@ export function ConsolePage({view,provider='',category='',intent='',pricing=''}:
     else exportFindings(scan.findings,'csv',`cloudsaver-${scan.scan_id}`);
     notify(`${format.toUpperCase()} snapshot download prepared.`);
   }
-  return <><div className="page-heading"><div><div className="eyebrow">{heading.eyebrow}</div><h1>{heading.title}</h1><p>{heading.description}</p></div><div className="page-heading-actions">{['overview','findings','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><RefreshCw size={17}/></button><details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15}/><span>Export snapshot</span><ChevronDown size={13}/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>{canAdmin&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17}/>Run new scan</button>}</>}</div></div>
-    {view==='resources'&&<p><a className="button secondary" href="/workloads">Workload assessments</a></p>}
+  return <><div className="page-heading"><div><div className="eyebrow">{heading.eyebrow}</div><h1>{heading.title}</h1><p>{heading.description}</p></div><div className="page-heading-actions">{view==='resources'&&<Link className="button secondary" href="/workloads"><Layers size={15}/>Workload assessments</Link>}{['overview','findings','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><RefreshCw size={17}/></button><details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15}/><span>Export snapshot</span><ChevronDown size={13}/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>{canAdmin&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17}/>Run new scan</button>}</>}</div></div>
     {view==='overview'?<Overview/>:view==='findings'?<FindingsGrid key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} initialProvider={provider} initialCategory={category} initialIntent={intent} initialPricing={pricing}/>:view==='resources'?<ResourcesView/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
   </>;
 }

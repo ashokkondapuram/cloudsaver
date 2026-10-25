@@ -4,6 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import {api} from '../lib/api';
 import {dateTime,money,terraformRules} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
+import {ServiceAnalysis} from './ServiceAnalysis';
 import {Loading,Notice,SectionTitle} from './ui/shared';
 
 type SyncStatus={configured:boolean;automatic_sync_enabled:boolean;last_synced_at:string|null;warning:string;
@@ -29,7 +30,7 @@ type ServiceData={service:string;total:number;warning:string;items:{resource_key
 export function ServiceWorkspace({service}:{service:string}){
   const {token,scan}=useWorkspace();const [data,setData]=useState<ServiceData|null>(null),[error,setError]=useState('');
   useEffect(()=>{const c=new AbortController();setData(null);setError('');api<ServiceData>('/services/'+encodeURIComponent(service)+(scan?'?scan_id='+scan.scan_id:''),token,{signal:c.signal}).then(r=>{if(!c.signal.aborted)setData(r);}).catch(e=>{if(!c.signal.aborted)setError((e as Error).message);});return()=>c.abort();},[service,token,scan?.scan_id]);
-  return <><div className="page-heading"><div><div className="eyebrow">DISCOVER & ANALYZE</div><h1>Service matrices</h1><p>Resource evidence across authorized cloud scopes.</p></div></div><nav className="page-tabs" aria-label="Service families">{families.map(f=><Link key={f} className="button secondary" aria-current={f===service?'page':undefined} href={'/services/'+f}>{f.replaceAll('-',' ')}</Link>)}</nav>
+  return <><div className="page-heading"><div><div className="eyebrow">DISCOVER & ANALYZE</div><h1>Services</h1><p>Service-level review signals and resource evidence across authorized cloud scopes.</p></div></div><ServiceAnalysis/><nav className="page-tabs" aria-label="Service families">{families.map(f=><Link key={f} className="button secondary" aria-current={f===service?'page':undefined} href={'/services/'+f}>{f.replaceAll('-',' ')}</Link>)}</nav>
     {error?<Notice tone="error">{error}</Notice>:!data?<Loading label="Loading service evidence…"/>:<section className="panel"><SectionTitle title={service.replaceAll('-',' ')}>{data.total} observed resources</SectionTitle><p className="inline-help">{data.warning}</p><div className="summary-table-scroll" tabIndex={0} aria-label="Service resource evidence"><table className="summary-table"><thead><tr><th>Resource</th><th>Provider</th><th>Rule signals</th><th>Imported billed USD</th><th>Retail estimate USD</th></tr></thead><tbody>{data.items.map(r=><tr key={r.resource_key}><td><Link href={'/resources?resource='+r.resource_key}>{r.resource_name}</Link></td><td>{r.provider}</td><td>{r.finding_count}</td><td>{money(r.billed_cost_usd)}</td><td>{money(r.retail_estimate_usd)}</td></tr>)}</tbody></table></div></section>}</>;
 }
 

@@ -6,7 +6,7 @@ test('service and optimization destinations expose observed data and honest evid
   await mockWorkspace(page);
   await page.route('**/api/v1/services/disks*',r=>r.fulfill({json:{service:'disks',total:1,warning:'TEST FIXTURE: Saved observations only.',items:[{resource_key:'a'.repeat(64),resource_name:'owned-disk',provider:'azure',resource_type:'Microsoft.Compute/disks',finding_count:1,billed_cost_usd:null,retail_estimate_usd:12}]}}));
   await page.route('**/api/v1/optimization/scans/'+scanId+'/auto-scenarios',r=>r.fulfill({json:{warning:'No synthetic savings are generated.',engines:{topology:{status:'insufficient_evidence',items:[]},commitment:{status:'insufficient_evidence',warning:'Complete hourly billing is required.'}}}}));
-  await navigate(page,'Service matrices');await expect(page.getByRole('heading',{name:'Service matrices'})).toBeVisible();await expect(page.getByRole('link',{name:'owned-disk'})).toBeVisible();
+  await navigate(page,'Services');await expect(page.getByRole('heading',{name:'Services'})).toBeVisible();await expect(page.getByRole('link',{name:'owned-disk'})).toBeVisible();
   await expect(page.getByRole('columnheader',{name:'Imported billed USD'})).toBeVisible();
   await navigate(page,'Optimization evidence');await expect(page.getByText('insufficient evidence',{exact:true})).toHaveCount(2);
   const audit=await new AxeBuilder({page}).include('main').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
@@ -25,7 +25,7 @@ test('configured automatic billing sync refreshes durable history without a manu
 test('execution timeline distinguishes draft reviews from verified parity',async({page})=>{
   await mockWorkspace(page);
   await page.route('**/api/v1/gitops/syncs',r=>r.fulfill({json:{items:[{id:'review',state:'open',updated_at:'2026-10-23T12:00:00Z',payload:{agent_task_id:'task',repository:'example/infra',parity_verified:false,result:{pr_url:'https://github.com/example/infra/pull/7'}}}]}}));
-  await navigate(page,'Activity & delivery');await page.getByRole('tab',{name:'Execution & IaC'}).click();
+  await navigate(page,'Automation & GitOps');await page.getByRole('tab',{name:'Execution history'}).click();
   await expect(page.getByRole('link',{name:'Inspect draft PR'})).toHaveAttribute('href','https://github.com/example/infra/pull/7');
   await expect(page.getByText('Deployment parity and realized savings require separate verification.')).toBeVisible();
 });

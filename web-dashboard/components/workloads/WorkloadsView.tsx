@@ -61,7 +61,7 @@ function Assessment({token,scanId}:{token:string;scanId:string}){
 export function WorkloadsView(){
   const {workspace,token,scan,scans,selectScan,canBill}=useWorkspace();
   const live=!!scan&&scan.status==='completed'&&scan.data_origin!=='legacy_synthetic'&&scan.mode!=='demo';
-  return <section aria-label="Workload assessments"><div className="page-heading"><div><div className="eyebrow">WORKLOAD ASSESSMENTS</div><h1>Five pillars, one application view.</h1><p>Review mapped applications, saved evidence and guided improvement steps. No cloud changes are made here.</p></div></div>
+  return <section aria-label="Workload assessments"><div className="page-heading"><div><div className="eyebrow">DISCOVER & ANALYZE</div><h1>Workload assessments</h1><p>Review mapped applications, saved evidence and guided improvement steps. No cloud changes are made here.</p></div></div>
     {!workspace?<p>Connect a workspace to continue.</p>:!canBill?<><h2>Finance access required</h2><p>BillingAdmin or TenantAdmin access is required, matching existing ownership permissions.</p></>:<>
       <label>Saved observation <select aria-label="Saved observation" value={scan?.scan_id||''} onChange={event=>selectScan(event.target.value)}><option value="" disabled>Select a scan</option>{scans.map(item=><option key={item.scan_id} value={item.scan_id}>{item.timestamp} — {item.scan_id}</option>)}</select></label>
       <p><Link href="/outcomes">Manage application ownership</Link> · <Link href="/resources">Resource evidence</Link> · <Link href="/governance">Existing governance</Link> · <Link href="/automation">Reviewed remediation</Link></p>

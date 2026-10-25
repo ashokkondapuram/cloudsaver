@@ -5,12 +5,11 @@ import {useEffect, useMemo, useState} from 'react';
 import {Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {ArrowDownRight, ArrowRight, ArrowUpRight, Blocks, CheckCircle2, ChevronRight, Cloud, FileCode2, History, ShieldCheck, Sparkles, Target, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
-import {compact, dateTime, money, opportunityTotals, providerColors, providerNames, providerOf, ruleLabel, scopeOf} from '../lib/finops';
+import {compact, dateTime, money, opportunityTotals, providerColors, providerNames, providerOf, scopeOf} from '../lib/finops';
 import type {Finding} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
 import {useResources} from '../lib/resources';
-import {BillingEvidencePanel} from './EnterpriseEvidence';
-import {EmptyState, Loading, Notice, PriorityBadge, ProviderBadge, SectionTitle} from './ui/shared';
+import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 
 export function useScopedFindings() {
   const {scan,scope} = useWorkspace();
@@ -55,7 +54,7 @@ function Distribution({findings}: {findings:Finding[]}) {
 }
 
 export function Overview() {
-  const {scan,workspace,scope,canAdmin,setOverlay,token,canBill,openFinding}=useWorkspace();
+  const {scan,workspace,scope,canAdmin,setOverlay,token}=useWorkspace();
   const {page,error}=useResources(scan?.scan_id,token,!!scan&&scan.status==='completed');
   const findings=useScopedFindings();
   const rows=(page?.items||[]).filter(r=>!scope.length||scope.includes(r.scope_id));
@@ -77,8 +76,6 @@ export function Overview() {
     {baseline&&<Notice>{baseline.warning}</Notice>}
     <div className="analytics-grid"><TrendChart/><Distribution findings={findings}/></div>
     <div className="overview-lower"><section className="panel priority-panel"><SectionTitle title="Your resource review queue" action={<Link className="text-link" href="/resources">View all resources<ArrowRight size={15}/></Link>}>Merged cost, reliability, performance, security and operations evidence</SectionTitle>{priorities.length?<div className="priority-list">{priorities.map(r=><Link className="priority-resource" key={r.resource_key} href={`/resources?resource=${r.resource_key}`}><strong>{r.resource_name}</strong><small>{r.finding_count} rule signals · {r.review_priority.replaceAll('_',' ')}</small><ProviderBadge provider={r.provider}/><span>{money(r.retail_estimate_usd)}</span><ChevronRight size={15}/></Link>)}</div>:<EmptyState icon={ShieldCheck} title={scan?'No resources require review in this view':'Ready for your first scan'}>{scan?'Review evidence gaps and healthy inventory in Resources.':'Discover resources across your authorized cloud scopes.'}{!scan&&canAdmin&&<button className="button primary" onClick={()=>setOverlay('scan')}>Run first scan</button>}</EmptyState>}</section><section className="panel workspace-checklist"><SectionTitle title="Workspace foundations">Keep evidence and execution connected</SectionTitle><p>{workspace?.configured_scope_count??workspace?.subscription_ids.length} authorized cloud scopes.</p><p>{scan?`Snapshot ${dateTime(scan.timestamp)}`:'Capture a resource snapshot to begin.'}</p><Link className="button secondary" href="/settings">Configure scopes and evidence</Link><Link className="button secondary" href="/agents">Review agent tasks</Link></section></div>
-    <section className="panel priority-panel"><SectionTitle title="Your review queue" action={<Link className="text-link" href="/findings">View all findings<ArrowRight size={15}/></Link>}>Individual rule findings; the resource queue above merges overlapping signals.</SectionTitle>{findings.length ? <div className="priority-list">{[...findings].sort((a,b)=>({CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4}[a.severity]??5)-({CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4}[b.severity]??5)).slice(0,6).map(f=><button key={f.resource_id+f.rule_id} onClick={()=>openFinding(f,findings)}><span className={`resource-symbol resource-${providerOf(f)}`}><Blocks size={18}/></span><span className="priority-resource"><strong>{f.resource_name}</strong><small>{ruleLabel(f.rule_id)}</small></span><ProviderBadge provider={providerOf(f)}/><PriorityBadge severity={f.severity}/><span className="priority-cost">{money(f.estimated_monthly_waste_usd)}</span><ChevronRight size={15}/></button>)}</div>:<EmptyState icon={ShieldCheck} title="No findings in this view">Select a completed scan or review your filters.</EmptyState>}</section>
-    {canBill&&<BillingEvidencePanel/>}
   </>;
 }
 

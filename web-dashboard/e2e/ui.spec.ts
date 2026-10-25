@@ -10,7 +10,7 @@ test('overview uses observed data and provides provider drill-down',async({page}
   await expect(page.getByRole('img',{name:'Finding count across 7 comparable snapshots'})).toBeVisible();
   await page.screenshot({path:test.info().outputPath('overview-desktop.png'),fullPage:true});
   await page.locator('.distribution-legend').getByRole('link',{name:/AWS/}).click();
-  await expect(page.getByRole('heading',{name:'Every resource. The full picture.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Inventory & findings',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:/^AWS \d+ findings$/})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(3);
   expect(mutations).toEqual([]);
@@ -82,7 +82,7 @@ test('command palette, navigation shortcuts, and scoped filters retain session',
   await page.locator('.scope-picker>summary').click();
   await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(3);
   await page.keyboard.press('g');await page.keyboard.press('d');
-  await expect(page.getByRole('heading',{name:'Your cloud, in focus.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   await expect(page.getByText('History uses complete scan scopes',{exact:true})).toBeVisible();
   const stored=await page.evaluate(()=>JSON.stringify({...localStorage}));
   expect(stored).not.toContain('test-only-browser-credential');

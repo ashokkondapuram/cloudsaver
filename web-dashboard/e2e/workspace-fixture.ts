@@ -93,14 +93,14 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
   await page.goto('/');
   await page.getByLabel('Workspace access key or Entra Bearer token').fill('test-only-browser-credential');
   await page.getByRole('button',{name:'Connect workspace',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Your cloud, in focus.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   return {mutations,findings:current.findings};
 }
 
 export async function navigate(page:Page,label:string){
   const settings:Record<string,string>={'Analysis rules':'Analysis rules','AI data governance':'AI & data governance','People & access':'Access & API keys'};
-  const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Resource analysis':'Resources & 5-Pillar','Settings & integrations':'Settings & governance','Automation':'Automation & GitOps'};
-  const target=settings[label]?'Settings & governance':aliases[label]||label;
+  const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Settings & integrations':'Settings','Automation':'Automation & GitOps'};
+  const target=settings[label]?'Settings':aliases[label]||label;
   if(await page.getByRole('button',{name:'Open navigation'}).isVisible()){
     await page.getByRole('button',{name:'Open navigation'}).click();
     await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:target,exact:true}).click();

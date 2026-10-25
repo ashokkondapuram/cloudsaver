@@ -16,7 +16,7 @@ async function setup(page:Page,options:{viewer?:boolean;denied?:boolean;unmapped
     await route.fulfill({json:{scan_id:scanId,observed_at:scanTime,total:1,items:[resource]}});
   });
   await page.goto('/workloads');
-  await expect(page.getByRole('heading',{name:'Five pillars, one application view.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Workload assessments',exact:true})).toBeVisible();
   return calls;
 }
 

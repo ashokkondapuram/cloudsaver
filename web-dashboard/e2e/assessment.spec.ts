@@ -35,7 +35,7 @@ test('five-pillar assessment preserves protection and gates explicit AI processi
 
 test('service analysis labels partial pricing and protected counts without invoking AI',async({page})=>{
   const {mutations}=await mockWorkspace(page,{protected:true});
-  await navigate(page,'Cost allocation');
+  await navigate(page,'Services');
   const panel=page.locator('.service-analysis');
   await expect(panel.getByRole('heading',{name:'Service architecture analysis'})).toBeVisible();
   await expect(panel.getByRole('columnheader',{name:'Protected',exact:true})).toBeVisible();
