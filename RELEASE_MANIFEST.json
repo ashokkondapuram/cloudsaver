@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "1113f846af0a19374a6b98a6ce91b1d64f6f3a3e2b0a3398e3cd6cf209b425ea",
+  "inventory_sha256": "aeb81cf56d15e44582dd7de91a07324036ebf41f7467a6800915aa5bbd2631b6",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "efe784af6cb087d2d5273355844ed5ab9f0d6f95bfa6721c90a592d9750df6da",
-      "bytes": 24977
+      "sha256": "4333a6ec0a6314493f14654de1b7cd0085207ef1c17d701d1dfb5c5c91a72932",
+      "bytes": 25162
     },
     {
       "path": "ROADMAP.md",
@@ -813,6 +813,11 @@
       "path": "docs/AI_DATA_GOVERNANCE.md",
       "sha256": "273952bcad0dee2979df59f47ed76dc0bd4c9ad5d3e45e10674df857e672dd8c",
       "bytes": 14661
+    },
+    {
+      "path": "docs/ARCHITECTURAL_IMPROVEMENTS.md",
+      "sha256": "6be02afe3694b91c85064eed5a5bb175eec6708d44ef68edcf1833d0de955dd9",
+      "bytes": 10926
     },
     {
       "path": "docs/ASSESSMENT_AI.md",
@@ -2666,8 +2671,8 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "6e5caec1ca5ac432a8e6135560e1132e46908db16ae762a07cef515b5042dd69",
-      "bytes": 24396
+      "sha256": "c7178716626ee50d38ad013435e919694b7a2503c94acd0b35ccd8ae9daa8fa6",
+      "bytes": 24350
     },
     {
       "path": "web-dashboard/components/ClaimView.tsx",
@@ -2676,8 +2681,8 @@
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
-      "sha256": "2824dfaa41ec0f0b3c31d7aafc281783a9b3d460c70b640bfbbaa595fab6a99a",
-      "bytes": 4047
+      "sha256": "00a46b4d9f6e1e762858c0f475d576cc9583800f1cc414a1a33104055d4ab094",
+      "bytes": 3964
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
@@ -2691,8 +2696,8 @@
     },
     {
       "path": "web-dashboard/components/Overview.tsx",
-      "sha256": "4b4819aff605f1b2687f414e161c75c8d5d205888259a724e7252de1c104a9ae",
-      "bytes": 13065
+      "sha256": "10c6e7e6787495d2ff21d2de01332e250eeada48f32cd821d71e3befee82fbe3",
+      "bytes": 11813
     },
     {
       "path": "web-dashboard/components/ReliabilityPanel.tsx",
@@ -2711,8 +2716,8 @@
     },
     {
       "path": "web-dashboard/components/V150Views.tsx",
-      "sha256": "d7b79eb8b8e5c4c0487ff2524685838ac4fd13a509340d7775bad380a517dcff",
-      "bytes": 13903
+      "sha256": "ad0301c8f47849bed38d5069b55e2ad5bfee272089a9cec9a41aafc60ba5946e",
+      "bytes": 13997
     },
     {
       "path": "web-dashboard/components/WorkspaceProvider.tsx",
@@ -2721,8 +2726,8 @@
     },
     {
       "path": "web-dashboard/components/WorkspaceViews.tsx",
-      "sha256": "a188895cc41f628f5abbca9ed47b9124e9f005ddb6c985fd71d347aa2f9b934a",
-      "bytes": 24538
+      "sha256": "69feb67e016d36bb7594e2c9c36260b2b6172596637d1aea59617d2083353467",
+      "bytes": 22774
     },
     {
       "path": "web-dashboard/components/agents/AgentWorkspace.tsx",
@@ -2761,8 +2766,8 @@
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
-      "sha256": "a7bcdb356a4ee8d5b052a58aa8f59c9efb95d7676812cb83b80cf27896b16d6f",
-      "bytes": 42939
+      "sha256": "4f978e329bde30c3b8484515e5cdc3e7aabfe740f0ab5076c448af22fbcfc656",
+      "bytes": 43126
     },
     {
       "path": "web-dashboard/components/governance/governance.css",
@@ -2786,8 +2791,8 @@
     },
     {
       "path": "web-dashboard/components/outcomes/OutcomesWorkspace.tsx",
-      "sha256": "088d25f33ea0755db505040b660717592c756ba82e6bb9ea65ec57f8a7e8d186",
-      "bytes": 32765
+      "sha256": "8101c1b616e7f5a1fb153f7065d6ac8ee0b219549a7cbd5fe44052e9d4ffbcc4",
+      "bytes": 32764
     },
     {
       "path": "web-dashboard/components/outcomes/outcomes.css",
@@ -2811,8 +2816,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourcesView.tsx",
-      "sha256": "fa722165ea733bda6c53d9382f8b8ef1225fe54b9f69aee40c373ba583733017",
-      "bytes": 20869
+      "sha256": "349ff19093ea1efbb5cad523a1616ce0d47b2863713b62d6eec4ca3cf00cce9c",
+      "bytes": 20861
     },
     {
       "path": "web-dashboard/components/rules/CustomerRuleSettings.tsx",
@@ -2840,6 +2845,11 @@
       "bytes": 18362
     },
     {
+      "path": "web-dashboard/components/ui/PageTabs.tsx",
+      "sha256": "e55462f484bee942a3ee86a63d5626cd15d84aff115ec21f57682da40b85eb43",
+      "bytes": 1180
+    },
+    {
       "path": "web-dashboard/components/ui/button.tsx",
       "sha256": "2f1d50fe8cbc1f1f87e03e3a95756505ff3275578774f72f5523d1f91198235b",
       "bytes": 349
@@ -2856,8 +2866,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
-      "sha256": "4b4f6d976f390955ea7eae46204c48d4f7127f826057e5727632b9c214dc1864",
-      "bytes": 6990
+      "sha256": "bf8c35e1c0fe57189a23f608060bcf6cc4233816b585fa767fd6e7635453349d",
+      "bytes": 6973
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -2866,8 +2876,8 @@
     },
     {
       "path": "web-dashboard/e2e/assessment.spec.ts",
-      "sha256": "6395f54c3ce1a267fccd4dbe9b02ef2f2a3679e4b255a69c29309222f4a27541",
-      "bytes": 6875
+      "sha256": "ebaaeffc0acf77b3e094a4e3dfdf5df8c68971385f7f6740562406f8463e44d0",
+      "bytes": 6868
     },
     {
       "path": "web-dashboard/e2e/console-experience.spec.ts",
@@ -2911,8 +2921,8 @@
     },
     {
       "path": "web-dashboard/e2e/lean.spec.ts",
-      "sha256": "30d267390a96a4ea1a544ce4ac15fa03e28eecdec758256173ad62d35fc54ce9",
-      "bytes": 7092
+      "sha256": "1370f3ffdd1d882ea288dbd497e7d0ba2f801217f07593945ab93667293a90b0",
+      "bytes": 7076
     },
     {
       "path": "web-dashboard/e2e/opportunity-totals.spec.ts",
@@ -2926,8 +2936,8 @@
     },
     {
       "path": "web-dashboard/e2e/reliability.spec.ts",
-      "sha256": "da800661d264acf53ef1842ab47ec43c62c6504292e16f72cbb35a52ee3b3df5",
-      "bytes": 5778
+      "sha256": "54f35cd96ba2d85fce9d6966d2110e84062b4b503f2c94aa6d6547afa0cfecd8",
+      "bytes": 5776
     },
     {
       "path": "web-dashboard/e2e/rules-services.spec.ts",
@@ -2936,8 +2946,8 @@
     },
     {
       "path": "web-dashboard/e2e/ui.spec.ts",
-      "sha256": "da27c8435d1d908dfd2c712c1d78829aba9efb12c40a345f8fe20ea2622ccd3d",
-      "bytes": 11092
+      "sha256": "3bba28ecb33d8dcc74de068c5064920418acee759e21f275998c88fa5ac31e9b",
+      "bytes": 11088
     },
     {
       "path": "web-dashboard/e2e/v140.spec.ts",
@@ -2946,18 +2956,18 @@
     },
     {
       "path": "web-dashboard/e2e/v150.spec.ts",
-      "sha256": "6a48ce151bd0024e8f5bc34029cdb2e7b9d72dae89b4d20a4ac871e1a68a142f",
-      "bytes": 5033
+      "sha256": "508966b62196107a0a60f4a99d20cc0a0bc371d80963c0a94c24ca692620266f",
+      "bytes": 5019
     },
     {
       "path": "web-dashboard/e2e/workloads.spec.ts",
-      "sha256": "e0be5f4cb701349bf907cbe4f0aa856d9aa5315deca6285517928e780c9779bf",
-      "bytes": 4821
+      "sha256": "522083e817f5ce6d93b53a52e5a99d39d6fe074f7f3819ea912ab14c24452fa6",
+      "bytes": 4817
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "3f7e3196757c5e3a196b7a5c1b7d3bf863266f273e797cd5cadade9406e01ed2",
-      "bytes": 15135
+      "sha256": "2e147773aa42dd1c3e988b1b606c2400e2edcbb4daa8a08326ffd703a6349b2d",
+      "bytes": 15064
     },
     {
       "path": "web-dashboard/lib/api.ts",
@@ -2966,8 +2976,8 @@
     },
     {
       "path": "web-dashboard/lib/finops.ts",
-      "sha256": "a6d414c8e2f8a91118ccaba4a9d048bb6c63091d78ac0f746c97a80fca2b20ad",
-      "bytes": 5612
+      "sha256": "da5fdfaf2f62354671a6375fc97e4afe05e70a453f3e41c888710a77f4647039",
+      "bytes": 5701
     },
     {
       "path": "web-dashboard/lib/plan.ts",
