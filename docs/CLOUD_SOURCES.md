@@ -76,11 +76,14 @@ docs/MANAGED_IDENTITY_ROLES.md.
   (build with CLOUDSAVER_INSTALL_AZURE_CLI=true), the AWS default chain such as an
   SSO profile followed by the same AssumeRole, and gcloud application default
   credentials followed by impersonation. See compose.override.example.yaml.
-  For Azure on Windows/Docker Desktop, the normal Compose file already provides
-  a Linux named-volume cache shared only by the scanner and scan worker. Set the
-  two developer/CLI environment flags, rebuild and follow the
-  [container CLI sign-in instructions](../README.md#azure-scan-fails-azure-cli-not-found-on-path).
-  No override file is required. Host Windows CLI sign-in is not sufficient.
+  For Azure, the normal Compose file shares a cache between scanner, scan worker
+  and billing sync worker only. Set `CLOUDSAVER_AZURE_CONFIG_DIR` to your absolute
+  host `.azure` directory to reuse its login; Linux cache permissions also need
+  `CLOUDSAVER_AZURE_CACHE_USER` set to the non-root owner's UID:GID. Blank preserves
+  the Docker-owned cache with its separate login. Windows-encrypted credentials
+  may require a Linux/WSL or container login. Set both developer/CLI flags,
+  rebuild and follow the [Azure sign-in instructions](../README.md#azure-scan-fails-azure-cli-not-found-on-path).
+  No Azure override file is required.
 
 ## Permissions
 

@@ -85,3 +85,17 @@ def test_governance_verifier_secrets_never_reach_agents_or_public_ports():
     for name,body in found.items():
         if name not in ('scanner-service','governance-monitor'):assert 'CLOUDSAVER_GOVERNANCE_KEY_PRIMARY' not in body
     assert all('CLOUDSAVER_GOVERNANCE_KEY_PRIMARY' in found[name] for name in ('scanner-service','governance-monitor'))
+
+
+def test_host_azure_cache_is_shared_only_by_read_side_services():
+    found = services()
+    readers = {'scanner-service', 'scan-worker', 'billing-sync-worker'}
+    assert '${CLOUDSAVER_AZURE_CONFIG_DIR:-azure-developer-cache}:/home/appuser/.azure' in found['scanner-service']
+    for name, body in found.items():
+        if name in readers:
+            assert 'AZURE_CONFIG_DIR: /home/appuser/.azure' in body
+            assert 'user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}' in body
+            assert 'volumes: *azure_cache' in body or 'volumes: &azure_cache' in body
+        else:
+            assert 'azure_cache' not in body
+            assert 'AZURE_CONFIG_DIR' not in body

@@ -123,6 +123,48 @@ CLOUDSAVER_CLOUD_IDENTITY=developer
 CLOUDSAVER_INSTALL_AZURE_CLI=true
 ```
 
+#### Reuse your host's existing `~/.azure` login
+
+To fix `Please run 'az login'` when you are already signed in on the host, set
+`CLOUDSAVER_AZURE_CONFIG_DIR` in the root `.env` to the **absolute host directory**
+containing that login, for example:
+
+```dotenv
+# Linux / WSL example; replace your-user with your actual home directory.
+CLOUDSAVER_AZURE_CONFIG_DIR=/home/your-user/.azure
+```
+
+Use `C:/Users/your-user/.azure` for Docker Desktop on Windows. Use the actual
+directory named by your host's `AZURE_CONFIG_DIR` if you customized it. Do not use
+a literal `$HOME` or `~` in this setting. Check that the directory exists and that
+`az account show` succeeds on the host before starting Docker. Keep tokens private.
+
+On native Linux/WSL, the container must also be able to read and refresh the host
+cache. Run `id -u` and `id -g`, then set `CLOUDSAVER_AZURE_CACHE_USER` to those
+non-root IDs in `.env` (for example `1000:1000`). Do not make the cache globally
+readable or run the scanner as root to bypass permissions. Leave this setting
+blank when using the Docker-owned cache. Native Windows encrypted MSAL caches
+are not portable to Linux containers; if the cache cannot be decrypted, use a
+Linux/WSL `az login` cache or leave `CLOUDSAVER_AZURE_CONFIG_DIR` blank and use the
+container sign-in below. CloudSaver does not decrypt or export Windows credentials.
+
+Rebuild and recreate the services; no override file is needed:
+
+```powershell
+docker compose up --build -d scanner-service billing-sync-worker
+# If scheduled scans are enabled, recreate their worker too:
+docker compose --profile scheduled up --build -d scan-worker
+docker compose exec scanner-service az account show --query "{Subscription:id,Tenant:tenantId}" --output table
+```
+
+Retry the scan after that check succeeds. The same login is shared by scanner,
+scheduled scan worker and Azure billing sync only. The bind mount is writable
+because Azure CLI refreshes tokens; sign-out in a container also affects that
+host cache. The workspace must still reference the real owning Entra tenant and
+authorized subscriptions. Managed-identity mode never falls back to this login.
+
+#### Separate container sign-in
+
 These are the only Azure developer setup flags required. The standard `compose.yaml` already provides a persistent CLI cache shared by the scanner and scan worker, writable by their non-root user. No override file, host Python or host Azure CLI is required. From the repository root, rebuild and start using ordinary Compose commands:
 
 ```powershell
@@ -145,7 +187,7 @@ If you use queued scans, also start or update the Celery scan worker so it uses 
 docker compose up -d scan-worker
 ```
 
-The cache is mounted only in the scanner and scan worker. The agent execution worker, platform and other services do not receive it. Existing optional host-cache overrides can replace these mounts; review a custom `compose.override.yaml` if it still binds a Windows Azure CLI directory. A previously copied `compose.azure-local.yaml` is no longer needed; omit its extra `-f` argument. Its cache volume name matches the standard stack, so an existing container sign-in is retained.
+The cache is mounted only in the scanner, scan worker and billing sync worker. The agent execution worker and platform do not receive it. Existing optional host-cache overrides can replace these mounts; review a custom `compose.override.yaml` if it still binds a different Azure CLI directory. A previously copied `compose.azure-local.yaml` is no longer needed; omit its extra `-f` argument. Leaving `CLOUDSAVER_AZURE_CONFIG_DIR` blank retains the existing named volume and its container sign-in.
 
 The volume contains developer credentials and survives container recreation. To sign out, use `docker compose exec scanner-service az logout`; both scanner and scan worker share that sign-in cache. Use developer authentication only for development. On Azure, configure an attached managed identity and the reviewed direct/federated access bindings described in [managed identity roles](docs/MANAGED_IDENTITY_ROLES.md). Managed-identity mode does not use this CLI cache. Setting `managed_identity` alone does not provide an identity on Docker Desktop.
 

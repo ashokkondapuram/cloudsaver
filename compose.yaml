@@ -122,6 +122,8 @@ services:
       retries: 5
   scanner-service:
     <<: *service
+    # Override only for a Linux host cache owned by another non-root UID:GID.
+    user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}
     networks: [default, platform-link]
     command: [uvicorn, app.main:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
     environment:
@@ -143,10 +145,10 @@ services:
       CLOUDSAVER_GOVERNANCE_KEY_PRIMARY: ${CLOUDSAVER_GOVERNANCE_KEY_PRIMARY:-}
       CLOUDSAVER_EVIDENCE_KEY_OUTCOMES: ${CLOUDSAVER_EVIDENCE_KEY_OUTCOMES:-}
       CLOUDSAVER_PLAN_POLICY: ${CLOUDSAVER_PLAN_POLICY:-}
-    # The normal Compose stack supports developer sign-in without an override.
-    # Managed-identity authentication does not read this local CLI cache.
+    # An absolute host path reuses local az login; blank retains container login.
+    # Writable: Azure CLI refreshes tokens. Never share this with execution agents.
     volumes: &azure_cache
-      - azure-developer-cache:/home/appuser/.azure
+      - ${CLOUDSAVER_AZURE_CONFIG_DIR:-azure-developer-cache}:/home/appuser/.azure
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -236,6 +238,7 @@ services:
       migrate: {condition: service_completed_successfully}
   billing-sync-worker:
     <<: *service
+    user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}
     command: [python, -m, workers.billing_sync]
     stop_grace_period: 300s
     environment:
@@ -246,6 +249,7 @@ services:
       migrate: {condition: service_completed_successfully}
   scan-worker:
     <<: *service
+    user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}
     profiles: [scheduled]
     command: [celery, -A, workers.tasks:celery_app, worker, --loglevel=WARNING, --concurrency=1]
     environment:

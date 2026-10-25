@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "98e3e10ad1554f75f47068838cddd76ab9cdad5d7cab36818c9a167ff7ae730e",
+  "inventory_sha256": "1113f846af0a19374a6b98a6ce91b1d64f6f3a3e2b0a3398e3cd6cf209b425ea",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -16,8 +16,8 @@
     },
     {
       "path": ".env.example",
-      "sha256": "532e10996eb2108482d97073670176871b5da7153427161900a73c95bfcec032",
-      "bytes": 13750
+      "sha256": "545c46a9fae06780ad6ca08de49b3c4138a6bcb1d5dec5817d062dc09199daae",
+      "bytes": 14204
     },
     {
       "path": ".gitattributes",
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "5960e948d78fe65b3ab1acf79f174de02cb6316bc6e1cb5dc51dba77d0821056",
-      "bytes": 22786
+      "sha256": "efe784af6cb087d2d5273355844ed5ab9f0d6f95bfa6721c90a592d9750df6da",
+      "bytes": 24977
     },
     {
       "path": "ROADMAP.md",
@@ -751,13 +751,13 @@
     },
     {
       "path": "compose.override.example.yaml",
-      "sha256": "1ccfc07c21451f272462bdfbc790d673efad3db070b49498797083fd17e784fe",
-      "bytes": 1172
+      "sha256": "5dd56ff7d63a038a833a51e44c31c2929ebd68f5c0978ce48e08dab9c1ecfcdf",
+      "bytes": 1215
     },
     {
       "path": "compose.yaml",
-      "sha256": "a90717a980f5b1075e44781e64ba1c7d99b549e51f1405a073f1ad758ce677e3",
-      "bytes": 13828
+      "sha256": "920ac100229eb1c397eb7454f8d0a718259f5232b34619ab045540c35f4a5d63",
+      "bytes": 14113
     },
     {
       "path": "database/.dockerignore",
@@ -826,8 +826,8 @@
     },
     {
       "path": "docs/CLOUD_SOURCES.md",
-      "sha256": "454e95c25047c57c2dd605aeebce1f201a7016ccb32bccb4b146d582bd21ad7e",
-      "bytes": 8797
+      "sha256": "0574df338a01e7238600eea0edd95d05b086eb4690b4d12431979c699dab0d45",
+      "bytes": 9036
     },
     {
       "path": "docs/CODE_AND_FEATURE_IMPROVEMENTS_README.md",
@@ -846,8 +846,8 @@
     },
     {
       "path": "docs/ENVIRONMENT.md",
-      "sha256": "ed16029ee6dc71fa1766f7821bb87073c33484c7bab9d2dbf19915077d21063e",
-      "bytes": 20085
+      "sha256": "654986ede6505c5e77690b16133821172982548c95d78dbdb5ce8d986835122b",
+      "bytes": 20381
     },
     {
       "path": "docs/FEATURE_IMPROVEMENTS.md",
@@ -2101,8 +2101,8 @@
     },
     {
       "path": "scripts/setup_compose.py",
-      "sha256": "3be3060c4d37a096cbe459e379ef7545170aed8d4f6793053acd4138a0430ec5",
-      "bytes": 8987
+      "sha256": "c4183e044724df4af191c7455ee2fe6530d9c1490086b7367856167475f0e627",
+      "bytes": 8967
     },
     {
       "path": "scripts/smoke_stack.py",
@@ -2280,6 +2280,11 @@
       "bytes": 5046
     },
     {
+      "path": "tests/test_azure_developer_cache.py",
+      "sha256": "53806acf87f994a1d0f1d3dab9ca65d9f9d9c31f73965fd2101e1840e32590b3",
+      "bytes": 2542
+    },
+    {
       "path": "tests/test_billing_jobs.py",
       "sha256": "66407de23a4cd6850395a2457323f5ebfd5577dd664ae9358f9f5f1d58d6346f",
       "bytes": 5248
@@ -2301,8 +2306,8 @@
     },
     {
       "path": "tests/test_compose.py",
-      "sha256": "a18026923ff1abf928295b5d0d525683e330ac8ddc184817f7c840794f65ee68",
-      "bytes": 3950
+      "sha256": "a0df1ae546a7683333e572a71dc9e20508db0fe7a2fef39c45fb7402959f03f9",
+      "bytes": 4636
     },
     {
       "path": "tests/test_data_governance.py",

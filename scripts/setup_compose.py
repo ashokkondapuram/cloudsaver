@@ -156,7 +156,7 @@ def create():
         'CLOUDSAVER_SCHEDULED_SCANS=false',
         'CLOUDSAVER_AUTOMATED_ALERTS=false',
         'CLOUDSAVER_ENVIRONMENT=development',
-        '# managed_identity on Azure; developer = local CLI/SSO sign-in (see compose.override.example.yaml).',
+        '# managed_identity on Azure; developer = local CLI/SSO sign-in (see README.md).',
         'CLOUDSAVER_CLOUD_IDENTITY=developer',
         'CLOUDSAVER_INSTALL_AZURE_CLI=false',
         'AZURE_MANAGED_IDENTITY_CLIENT_ID=',

@@ -21,3 +21,4 @@ x-developer-identity: &developer-identity
 services:
   scanner-service: *developer-identity
   scan-worker: *developer-identity
+  billing-sync-worker: *developer-identity
