@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "d41dcc0c25d0fad30b5669e001fe83b3b9338ff7379a8c399bca013c9b0911aa",
+  "inventory_sha256": "49f0ac776786c287bc2eef59d63d9d61c5260df368957554345010efd5d1e656",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -235,6 +235,11 @@
       "bytes": 2839
     },
     {
+      "path": "app/ai_workload_optimizer.py",
+      "sha256": "aeac4b488c7d6edaf4cf69f08755416d3ce17bdd60ee68b1aa44071e0822cd56",
+      "bytes": 930
+    },
+    {
       "path": "app/analysis_rules.py",
       "sha256": "07bf3633de1874290baa31c21cb2d2b00d6973683ef418689dfa19b941ab1a59",
       "bytes": 11504
@@ -263,6 +268,11 @@
       "path": "app/auth.py",
       "sha256": "c2fb1389e65df3db102a621a7d5ec5b89c4218cb16a80731a3f589c8682127fe",
       "bytes": 16064
+    },
+    {
+      "path": "app/autopilot_commitments.py",
+      "sha256": "16cec3b7b415f8f62f87b1a9d072304c3d0ce4fb75f3846f911b292a571a4620",
+      "bytes": 660
     },
     {
       "path": "app/aws_rules.py",
@@ -386,8 +396,8 @@
     },
     {
       "path": "app/data_scope.py",
-      "sha256": "dc620095fac623e2cd5c1fd6f6c1595e68fbbabda0c720ae86a177c3b84dd425",
-      "bytes": 2903
+      "sha256": "51a76a3bcfa5db8f764a9a5100ae61852c5d1799000dac902601220da94c890f",
+      "bytes": 3101
     },
     {
       "path": "app/delivery_api.py",
@@ -466,8 +476,13 @@
     },
     {
       "path": "app/gitops_api.py",
-      "sha256": "ccaa21d42546dee54e359562c2000bb9aca49889cb11ca8dee431b99efd15c7d",
-      "bytes": 8600
+      "sha256": "0852b29abd9f223d87c72732d6e22838fe56bab650a8c86e8b41da47d7ab50d3",
+      "bytes": 9104
+    },
+    {
+      "path": "app/gitops_ast_mapper.py",
+      "sha256": "666a7dbb61320bdbb884a8c71bebcc5ab895b7ae9441248a466a06c2a9f1ff78",
+      "bytes": 2030
     },
     {
       "path": "app/gitops_store.py",
@@ -476,8 +491,8 @@
     },
     {
       "path": "app/governance_api.py",
-      "sha256": "ce930ddc2b5d1eff3d815918aaa7a867dfef3877f90ea74bb4b57c9ad96bb7ad",
-      "bytes": 8646
+      "sha256": "3ba1a7a8749f6aaa8ecac528920b54d470b00f8157ee536168dc7ed0d3e88fcb",
+      "bytes": 8745
     },
     {
       "path": "app/governance_contracts.py",
@@ -496,8 +511,8 @@
     },
     {
       "path": "app/governance_store.py",
-      "sha256": "f5ac0fc1822a21272ffd5998568b381785c8082bdb1a46ba855e44975a27a3b5",
-      "bytes": 81311
+      "sha256": "0789c01c7fa397f7578776c926438a88312aacb37fe1a330746e430948310fc9",
+      "bytes": 82728
     },
     {
       "path": "app/identity_client.py",
@@ -523,6 +538,11 @@
       "path": "app/k8s_cost_reconciler.py",
       "sha256": "1a0a3ff0fd7e7f1ddaf901d7b28e657da5ce3d69399053c486e58c161dc3d942",
       "bytes": 9325
+    },
+    {
+      "path": "app/k8s_karpenter_sync.py",
+      "sha256": "944d14345c5e563c91d7f023534c727908a1ac3ed89d8a8994f48996c3acdd5f",
+      "bytes": 971
     },
     {
       "path": "app/kubernetes_api.py",
@@ -666,8 +686,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "ef5535068d0c99ec89466588e2ea23ec6447434dc8df3e3738dbc26116604e71",
-      "bytes": 10260
+      "sha256": "730e749206b711a743f015c35ddc61bde191227ec79c661e16a47c4fc181ca47",
+      "bytes": 10341
     },
     {
       "path": "app/runtime.py",
@@ -688,6 +708,11 @@
       "path": "app/scanner.py",
       "sha256": "9fba3bc777b4fdaec305a63093416b8dae53991885f91280f9835b779a41cad0",
       "bytes": 14421
+    },
+    {
+      "path": "app/scanner_ai_gpu.py",
+      "sha256": "1c610d95df2f583ddc3c2dfe635bc8cf83ccda8bf54d365bbafa2c7694ea1e2f",
+      "bytes": 1131
     },
     {
       "path": "app/scanner_aws.py",
@@ -1053,6 +1078,11 @@
       "path": "docs/releases/1.7.0-UPGRADE.md",
       "sha256": "9b62ef302b624140d49ad060a1f59046e9be1d11ee4e314b978f2a8408f86695",
       "bytes": 7877
+    },
+    {
+      "path": "ebpf-flow-exporter/README.md",
+      "sha256": "c8de46bad8c40f39a8c0cfc46e90e366460ae30ad60544b65d996a514b638246",
+      "bytes": 532
     },
     {
       "path": "migrations/env.py",
@@ -2161,8 +2191,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "fadc6837e864fb029a89137463ead730d75ab65f7d7d2a4cbb3ac88ffbd0d9c8",
-      "bytes": 31739
+      "sha256": "80387dcddf261aa824fb5fe78a2ca96a5d2aecccde43a069007898e8d93c94e3",
+      "bytes": 32069
     },
     {
       "path": "services/governance_routes.py",
@@ -2375,6 +2405,11 @@
       "bytes": 13733
     },
     {
+      "path": "tests/test_gitops_ast_mapper.py",
+      "sha256": "349a018e49c98f19df0b85d29ce77502463a0d9689dd9876953554fc6a73a40b",
+      "bytes": 2209
+    },
+    {
       "path": "tests/test_governance_workflows.py",
       "sha256": "45e30a048d08b4aa696c485ba36f9903c28d9c2ae51b8857c31081487b434358",
       "bytes": 43663
@@ -2501,8 +2536,13 @@
     },
     {
       "path": "tests/test_scoped_finops_routes.py",
-      "sha256": "ab7f15d5a1d9f1624ee93ffa3ffe16115fb0a839c189d98fb098503fe7c498e7",
-      "bytes": 4269
+      "sha256": "398790cf5c173a562db594fccd8867a8cc747e1ca3dcb7c3a0f34d7304e5b621",
+      "bytes": 4268
+    },
+    {
+      "path": "tests/test_scoped_governance_outcomes.py",
+      "sha256": "ca1fad51fd594b4233c03499ddf7634bad121663097d39fbb16c69baee65e2af",
+      "bytes": 1939
     },
     {
       "path": "tests/test_service_analysis_api.py",
@@ -2543,6 +2583,11 @@
       "path": "tests/test_v150_workflows.py",
       "sha256": "cb6de6f56db21e039b4751f090af3bde75f649c71f856fe1cfa6c2ceccff0311",
       "bytes": 11369
+    },
+    {
+      "path": "tests/test_v2_advanced_scaffolds.py",
+      "sha256": "2750075a02c1f7363544dac6de69073fe678b72b24a99d568e384d2ec6c5a51e",
+      "bytes": 2109
     },
     {
       "path": "tests/test_worker.py",
