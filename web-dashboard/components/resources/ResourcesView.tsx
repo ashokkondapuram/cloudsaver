@@ -139,6 +139,7 @@ export function ResourcesView() {
     <section className="panel resources-panel" aria-label="Resource analysis">
       <div className="grid-heading"><div><h2>Resource analysis <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One assessment per resource, merged from all of its findings · observed {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
+          <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
           {canAdmin && <button className="button primary" disabled={!!batch && ACTIVE_BATCH.includes(batch.status)} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
         </div></div>
@@ -172,4 +173,28 @@ export function ResourcesView() {
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
     <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} onClose={() => open(null)} onChange={reload}/>
   </>;
+}
+
+export function ResourceReport() {
+  const {scan, token, workspace} = useWorkspace();
+  const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
+  const {page, error} = useResources(scan?.scan_id, token, live);
+  if (!live) return <EmptyState icon={Server} title="A live scan is required">Select a completed live scan to print its resource report.</EmptyState>;
+  if (error) return <Notice tone="error">{error}</Notice>;
+  if (!page) return <Loading label="Preparing your report…"/>;
+  const rows = [...page.items].sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]);
+  return <article className="resource-report">
+    <div className="report-actions"><Link className="button secondary" href="/resources">Back</Link><button className="button primary" onClick={() => window.print()}><Printer size={15}/>Print</button></div>
+    <header><h1>Resource analysis report</h1><p>{workspace?.name} · Scan {scan.scan_id.slice(0, 8)} · Observed {dateTime(page.observed_at)} · Generated {dateTime(new Date().toISOString())}</p>
+      <p>{page.summary.total.toLocaleString()} resources · {(page.summary.ai_status.completed || 0).toLocaleString()} with current AI assessments · {(page.summary.total - (page.summary.decision.none || 0)).toLocaleString()} with decisions</p></header>
+    {rows.map(r => <section key={r.resource_key} className="report-resource">
+      <h2>{r.resource_name || r.resource_id} <small>{providerNames[r.provider] || r.provider} · {sentence(r.review_priority)} · {money(r.retail_estimate_usd)}</small></h2>
+      <p className="report-id">{r.resource_id}</p>
+      <p>Pillars: {Object.entries(r.pillars).map(([p, s]) => `${p} ${s}`).join(' · ')}</p>
+      <p>AI: {aiStatusLabels[r.ai.status]}{r.ai.risk_level ? ` · suggested risk ${r.ai.risk_level}` : ''}{r.ai.summary ? ` — ${r.ai.summary}` : ''}</p>
+      {!!r.ai.actions.length && <ol>{r.ai.actions.map((a, i) => <li key={i}><strong>{a.title}</strong> ({sentence(a.kind)}, effort {a.effort}, change risk {a.change_risk}) — {a.rationale}</li>)}</ol>}
+      {r.decision && <p>Decision: {decisionLabels[r.decision.decision]} · {dateTime(r.decision.created_at)}{r.decision.note ? ` — ${r.decision.note}` : ''}{r.decision.evidence_changed ? ' (evidence changed since)' : ''}</p>}
+    </section>)}
+    <footer>AI text is unverified advice. It doesn’t approve actions or establish dependencies, billed cost or live state. Guardrails in CloudSaver remain required.</footer>
+  </article>;
 }

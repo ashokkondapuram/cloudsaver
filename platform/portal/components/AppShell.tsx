@@ -18,6 +18,7 @@ const navigation = [
   {href: '/plans', label: 'Plans', icon: Layers, group: ''},
   {href: '/activity', label: 'Activity', icon: Activity, group: 'OVERSIGHT'},
   {href: '/security', label: 'Security', icon: ShieldAlert, group: ''},
+  {href: '/knowledge', label: 'Knowledge', icon: BookOpen, group: ''},
   {href: '/settings', label: 'Platform settings', icon: Settings2, group: 'PLATFORM'},
 ];
 

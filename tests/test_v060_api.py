@@ -49,7 +49,7 @@ def test_multi_cloud_restart_scope_and_trends(tmp_path, monkeypatch):
         assert client.get('/api/v1/trends?scan_id='+str(uuid4()), headers=auth).status_code == 404
         export = client.post('/api/v1/scans/'+first['scan_id']+'/remediation-terraform', headers=auth,
                              json={'resource_ids':[first['findings'][0]['resource_id']]})
-        assert export.status_code == 404
+        assert export.status_code == 200 and 'import {' in export.json()['hcl']
     with TestClient(create_app(settings)) as client:
         monkeypatch.setattr('app.multi_cloud.scan_multi_cloud', synthetic_scan)
         assert client.get('/api/v1/scans/'+second['scan_id'], headers=auth).json() == second

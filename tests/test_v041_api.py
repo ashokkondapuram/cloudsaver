@@ -64,7 +64,7 @@ def test_admin_live_scan_unknown_cost_import_review_and_honest_cancel(context):
         assert record['findings'][0]['estimated_monthly_waste_usd'] is None
         result = client.post('/api/v1/scans/'+record['scan_id']+'/remediation-terraform', headers=auth,
                              json={'resource_ids':[finding()['resource_id']]})
-        assert result.status_code == 404
+        assert result.status_code == 200 and 'import {' in result.json()['hcl']
         assert client.post('/api/v1/scans/'+record['scan_id']+'/cancel', headers=auth).status_code == 409
         assert client.post('/api/v1/scans/'+str(uuid4())+'/cancel', headers=auth).status_code == 404
         assert client.get('/api/v1/auth/consent-url', headers=auth).status_code == 501

@@ -5,6 +5,9 @@
 !identity_migrations/
 !identity_migrations/**
 !identity_alembic.ini
+!knowledge_alembic.ini
+!knowledge_migrations/
+!knowledge_migrations/**
 **/__pycache__/**
 **/.env*
 **/*.pem

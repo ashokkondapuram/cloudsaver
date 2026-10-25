@@ -1,4 +1,4 @@
-> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+> Version-specific guide. Consult [the restoration guide](FEATURE_RESTORATION_673C20A.md) for current workflow availability; current evidence and governance controls still apply.
 
 # CloudSaver v0.10.0 console experience
 

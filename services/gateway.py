@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from services.common import internal_url, service, upstream
 from app.jobs_api import ScanSubmission
-from app.schemas import MultiCloudScanRequest
+from app.schemas import MultiCloudScanRequest, RemediationRequest
 
 CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
 WEBHOOK_GONE = 'Billing webhooks are handled by the platform.'
@@ -381,5 +381,62 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     @app.post('/api/v1/settings/access-test')
     async def workspace_access_test(row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'tenant', '/api/v1/settings/access-test', authorization)
+
+    @app.get('/api/v1/gitops/targets')
+    async def gitops_targets(row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner','/api/v1/gitops/targets',authorization)
+
+
+    @app.get('/api/v1/gitops/requests')
+    async def gitops_requests(row=Depends(allowed),authorization:str=Header(),limit:int=Query(50,ge=1,le=100)):
+        return await forward('GET','scanner','/api/v1/gitops/requests',authorization,{'limit':limit})
+
+
+    @app.get('/api/v1/gitops/requests/{request_id}')
+    async def gitops_request(request_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/gitops/requests/{request_id}',authorization)
+
+
+    @app.post('/api/v1/gitops/preview')
+    async def gitops_preview(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post('/api/v1/gitops/preview',request,authorization)
+
+
+    @app.post('/api/v1/gitops/requests',status_code=201)
+    async def gitops_publish(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post('/api/v1/gitops/requests',request,authorization)
+
+
+    @app.post('/api/v1/policies/terraform/evaluate')
+    async def terraform_policy(request:Request,row=Depends(allowed),authorization:str=Header()):
+        return await gitops_post('/api/v1/policies/terraform/evaluate',request,authorization)
+
+
+    @app.get('/api/v1/scans/{scan_id}/analysis')
+    async def analysis(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/analysis', authorization)
+
+
+    @app.post('/api/v1/scans/{scan_id}/analysis/resource')
+    async def resource_analysis(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/analysis/resource', request, authorization)
+
+
+    @app.post('/api/v1/scans/{scan_id}/ai-risk-evaluation')
+    async def ai_review(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await gitops_post(f'/api/v1/scans/{scan_id}/ai-risk-evaluation', request, authorization)
+
+
+    @app.post('/api/v1/scans/{scan_id}/remediation')
+    async def remediation(scan_id: UUID, payload: RemediationRequest, row=Depends(allowed), authorization: str = Header()):
+        return await upstream('POST', targets['scanner'], f'/api/v1/scans/{scan_id}/remediation',
+                              authorization, json=payload.model_dump(), transport=transport)
+
+
+    @app.post('/api/v1/scans/{scan_id}/remediation-terraform')
+    async def remediation_terraform(scan_id: UUID, payload: RemediationRequest, row=Depends(allowed), authorization: str = Header()):
+        return await upstream('POST', targets['scanner'], f'/api/v1/scans/{scan_id}/remediation-terraform',
+                              authorization, json=payload.model_dump(), transport=transport)
+
 
     return app

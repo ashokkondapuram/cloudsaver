@@ -115,6 +115,18 @@ ROUTES = {
     ('GET', '/api/v1/operations/deliveries'): 'full_scope',
     ('GET', '/api/v1/operations/deliveries/{event_id}/audit'): 'full_scope',
     ('POST', '/api/v1/operations/deliveries/{event_id}/retry'): 'full_scope',
+    # Restored original feature contracts.
+    ('GET', '/api/v1/gitops/targets'): 'agnostic',
+    ('POST', '/api/v1/policies/terraform/evaluate'): 'agnostic',
+    ('GET', '/api/v1/scans/{scan_id}/analysis'): 'scoped_read',
+    ('POST', '/api/v1/scans/{scan_id}/remediation'): 'scan_write',
+    ('POST', '/api/v1/scans/{scan_id}/remediation-terraform'): 'scan_write',
+    ('POST', '/api/v1/scans/{scan_id}/analysis/resource'): 'scan_write',
+    ('POST', '/api/v1/scans/{scan_id}/ai-risk-evaluation'): 'scan_write',
+    ('POST', '/api/v1/gitops/preview'): 'scan_write',
+    ('POST', '/api/v1/gitops/requests'): 'scan_write',
+    ('GET', '/api/v1/gitops/requests'): 'full_scope',
+    ('GET', '/api/v1/gitops/requests/{request_id}'): 'full_scope',
 }
 
 

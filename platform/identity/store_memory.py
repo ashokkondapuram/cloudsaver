@@ -480,6 +480,24 @@ class MemoryTx:
                     if r.get('customer_id') == customer_id and r.get('provider') == provider), default=0)
 
 
+    def list_knowledge_publications(self, status=None, limit=50, offset=0):
+        rows = [r for r in self.s['knowledge_publications'].values() if not status or r['status'] == status]
+        return copy.deepcopy(_newest(rows)[offset:offset + limit])
+
+
+    def insert_knowledge_publication(self, row):
+        self.s['knowledge_publications'][row['id']] = copy.deepcopy(row)
+
+
+    def get_knowledge_publication(self, publication_id):
+        row = self.s['knowledge_publications'].get(publication_id)
+        return copy.deepcopy(row) if row else None
+
+
+    def update_knowledge_publication(self, publication_id, expected_version, fields):
+        return _versioned(self.s['knowledge_publications'].get(publication_id), expected_version, fields)
+
+
 class MemoryStore:
     def __init__(self):
         now = utcnow()
@@ -496,7 +514,7 @@ class MemoryStore:
                       'usage': {}, 'failures': {}, 'plans': plans, 'subscriptions': {}, 'payments': {},
                       'provider_events': {}, 'cache_events': [], 'cache_seq': 0,
                       'billing_settings': dict(SEED_SETTINGS, version=1, updated_at=now, updated_by='bootstrap'),
-                      'access_checks': {}, 'plan_change_requests': {}, 'rule_catalog': rules, 'workspace_rules': {},
+                      'access_checks': {}, 'plan_change_requests': {}, 'knowledge_publications': {}, 'rule_catalog': rules, 'workspace_rules': {},
 
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
                                    'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}

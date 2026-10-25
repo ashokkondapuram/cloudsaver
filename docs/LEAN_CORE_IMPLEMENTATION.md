@@ -1,5 +1,7 @@
 # Lean CloudSaver: implementation and upgrade guide
 
+Historical pruning record. The later [feature restoration](FEATURE_RESTORATION_673C20A.md) brings the implemented `673c20a` workflows back while retaining the evidence, scope, governance and deployment fixes described here. Its restored-route and product tables supersede this document's removed-feature list.
+
 Source specifications:
 
 - [README-Lean-Feature-Pruning-Spec.md](https://docs.google.com/document/d/148KG7_r2E12DWqbhz1L6_vHCSamjY8vy_5E2FGtsRtw/edit)

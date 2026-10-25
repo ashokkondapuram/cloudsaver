@@ -121,6 +121,12 @@ services:
       CLOUDSAVER_AI_HOURLY_ATTEMPTS: ${CLOUDSAVER_AI_HOURLY_ATTEMPTS:-10}
       CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_SCANNER:-}
       AZURE_CONFIG_DIR: /home/appuser/.azure
+      # Restored reviewed export/GitOps configuration is scoped to the core API.
+      CLOUDSAVER_GITOPS_TARGETS: ${CLOUDSAVER_GITOPS_TARGETS:-[]}
+      CLOUDSAVER_GITOPS_PUBLISH: ${CLOUDSAVER_GITOPS_PUBLISH:-false}
+      CLOUDSAVER_GITHUB_APP_ID: ${CLOUDSAVER_GITHUB_APP_ID:-}
+      CLOUDSAVER_GITHUB_APP_PRIVATE_KEY: ${CLOUDSAVER_GITHUB_APP_PRIVATE_KEY:-}
+      CLOUDSAVER_PLAN_POLICY: ${CLOUDSAVER_PLAN_POLICY:-}
     # The normal Compose stack supports developer sign-in without an override.
     # Managed-identity authentication does not read this local CLI cache.
     volumes: &azure_cache

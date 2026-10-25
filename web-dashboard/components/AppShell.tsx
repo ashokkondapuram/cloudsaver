@@ -13,14 +13,18 @@ import {ThemeToggle} from './ThemeProvider';
 import {matchesQuery} from '../lib/resource-insights';
 import {Dialog} from './ui/dialog';
 import {Notice, ProviderBadge} from './ui/shared';
-import {resourceKeyOf} from '../lib/resources';
+import {FindingDrawer, ReviewDrawer} from './drawer/FindingDrawer';
 import {ClaimView} from './ClaimView';
 
 export const navigation = [
   {href:'/',label:'Overview',icon:LayoutDashboard,group:'WORKSPACE',shortcut:'G D'},
+  {href:'/findings',label:'Inventory & findings',icon:Blocks,group:'',shortcut:'G F'},
   {href:'/resources',label:'Resources & 5-Pillar',icon:BrainCircuit,group:'',shortcut:'G R'},
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
   {href:'/agents',label:'Agent worker',icon:Sparkles,group:'EXECUTION',shortcut:'G A'},
+  {href:'/allocation',label:'Cost allocation',icon:Wallet,group:'FINANCE'},
+  {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:'GOVERNANCE'},
+  {href:'/activity',label:'Activity & delivery',icon:Activity,group:''},
   {href:'/settings',label:'Settings & governance',icon:Settings2,group:'MANAGE',shortcut:'G S'},
 ];
 
@@ -61,9 +65,9 @@ function CommandPalette() {
   useEffect(() => {if (overlay === 'command') {setQuery(''); setActive(0);}}, [overlay]);
   const commands = useMemo(() => {
     const links = navigation.map(item => ({id: item.href, label: item.label, note: 'Navigate', icon: item.icon, action: () => {setOverlay(null); router.push(item.href);}}));
-    const explorers = [{id:'storage-view',label:'Explore storage findings',note:'Quick view · disks & volumes',icon:Database,action:()=>{setOverlay(null);router.push('/resources?service=storage');}},{id:'protected-view',label:'Inspect protected resources',note:'Quick view · recovery & retention',icon:ShieldCheck,action:()=>{setOverlay(null);router.push('/resources');}},{id:'unpriced-view',label:'Find missing price evidence',note:'Quick view · unknown costs',icon:Wallet,action:()=>{setOverlay(null);router.push('/resources');}}];
+    const explorers = [{id:'storage-view',label:'Explore storage findings',note:'Quick view · disks & volumes',icon:Database,action:()=>{setOverlay(null);router.push('/findings?category=storage');}},{id:'protected-view',label:'Inspect protected resources',note:'Quick view · recovery & retention',icon:ShieldCheck,action:()=>{setOverlay(null);router.push('/findings?intent=protected');}},{id:'unpriced-view',label:'Find missing price evidence',note:'Quick view · unknown costs',icon:Wallet,action:()=>{setOverlay(null);router.push('/findings?pricing=unpriced');}}];
     const actions = canAdmin ? [{id:'new-scan',label:'Run a new scan',note:'Action',icon:Plus,action:()=>setOverlay('scan')}] : [];
-    const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:Blocks,action:()=>{void resourceKeyOf(f).then(key=>{setOverlay(null);router.push('/resources?resource='+key);});}})) : [];
+    const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:Blocks,action:()=>openFinding(f,scan?.findings||[f])})) : [];
     return [...links, ...explorers, ...actions].filter(c => matchesQuery(c.label,query)).concat(resources);
   }, [query, scan, canAdmin, router, setOverlay, openFinding]);
   return <Dialog open={overlay === 'command'} onClose={() => setOverlay(null)} title="Search & commands" className="command-dialog">
@@ -126,12 +130,13 @@ export function AppShell({children}: {children: ReactNode}) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {e.preventDefault(); if (!overlay || overlay === 'command') setOverlay(overlay ? null : 'command'); return;}
       if (overlay || (e.target as HTMLElement).closest('input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.shiftKey && e.key.toLowerCase() === 'r' && canAdmin && selection.length) {e.preventDefault(); openReview(selection); return;}
       const key = e.key.toLowerCase();
-      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
+      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',f:'/findings',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
       else prefix.current = {key,at:Date.now()};
     };
     document.addEventListener('keydown',handler);return () => document.removeEventListener('keydown',handler);
-  }, [workspace,overlay,selection,openReview,setOverlay,router]);
+  }, [workspace,overlay,selection,openReview,setOverlay,router,canAdmin]);
   useEffect(() => {
     if (!token) {setReliability(null); return;}
     const controller = new AbortController();
@@ -152,7 +157,7 @@ export function AppShell({children}: {children: ReactNode}) {
       <main id="main-content" tabIndex={-1} className="page-content"><KeyNotices/>{scan?.data_origin === 'legacy_synthetic' && <Notice tone="warning">Historical synthetic snapshot. Illustrative prices are hidden and code export is unavailable.</Notice>}{!!busy && <div className="workspace-progress" role="status"><Loader2 size={15} className="spin"/>{busy}<span>Keep this workspace open while the request completes.</span></div>}{children}</main>
       <footer className="app-footer"><span><span className="footer-brand">CloudSaver</span>Multi-cloud FinOps</span><span><ShieldCheck size={13}/>Evidence before action</span></footer>
     </div>
-    <CommandPalette/><ScanDialog/>
+    <FindingDrawer/><ReviewDrawer/><CommandPalette/><ScanDialog/>
     <Dialog open={overlay === 'workspace'} onClose={() => setOverlay(null)} title="Connect another workspace"><div className="dialog-content"><ConnectionForm switching/></div></Dialog>
     <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28}/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No dead-letter deliveries were reported at the last refresh.' : 'Open Settings & governance to inspect operational state.'}</p></div>}<Link className="button secondary" href="/settings" onClick={() => setOverlay(null)}>Open settings activity<ArrowRight size={16}/></Link></div></Dialog>
     <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><nav aria-label="Mobile navigation">{navigation.map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? 'page' : undefined} onClick={() => setMobileOpen(false)}><item.icon size={20}/>{item.label}</Link>)}</nav></Dialog>

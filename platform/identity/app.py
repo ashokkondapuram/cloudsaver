@@ -35,8 +35,11 @@ def build_service():
     url = env('IDENTITY_DATABASE_URL')
     if not url:
         raise RuntimeError('Set PLATFORM_IDENTITY_DATABASE_URL')
+    from identity.knowledge.store import PostgresKnowledgeStore
+    knowledge_url = env('KNOWLEDGE_DATABASE_URL')
+    knowledge = PostgresKnowledgeStore(knowledge_url, url) if knowledge_url else None
     return IdentityService(PostgresStore(url), Peppers.from_env(), Throttle(RedisBackend()), RedisEvents(),
-                           UsageRecorder())
+                           UsageRecorder(), knowledge_store=knowledge)
 
 
 def problem(request, status, detail, headers=None):
@@ -531,5 +534,26 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     @app.post('/admin/v1/plan-change-requests/{request_id}/reject')
     def reject_plan_change_request(request_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.reject_plan_change_request(request_id, payload, identity, rid(request))
+
+    @app.get('/admin/v1/knowledge/metrics')
+    def knowledge_metrics(identity=Depends(operator)):
+        return service.knowledge_metrics()
+
+
+    @app.get('/admin/v1/knowledge/publications')
+    def knowledge_publications(status: str | None = Query(None, max_length=16), limit: int = Query(50, ge=1, le=200),
+                               cursor: str | None = Query(None, max_length=20), identity=Depends(operator)):
+        return service.list_knowledge_publications(status, limit, cursor)
+
+
+    @app.post('/admin/v1/knowledge/publications', status_code=201)
+    def create_knowledge_publication(request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.create_knowledge_publication(payload, identity, rid(request))
+
+
+    @app.patch('/admin/v1/knowledge/publications/{publication_id}')
+    def update_knowledge_publication(publication_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        return service.update_knowledge_publication(publication_id, payload, identity, rid(request))
+
 
     return app

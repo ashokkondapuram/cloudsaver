@@ -97,3 +97,7 @@ async def bounded_json(request):
         return load_json(bytes(raw))
     except InvalidJSON:
         raise HTTPException(422,'Invalid or unsupported JSON request') from None
+
+
+class RemediationRequest(BaseModel):
+    resource_ids: list[str] = Field(min_length=1, max_length=50)

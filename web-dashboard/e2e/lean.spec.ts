@@ -11,10 +11,10 @@ async function resources(page:Page){
   await page.route(`**/api/v1/scans/${scanId}/resources/${'a'.repeat(64)}`,route=>route.fulfill({json:{scan_id:scanId,assessment:{...rows[0],policy_version:'current',observation:{status:'recent',observed_at:scanTime,max_age_hours:24},guardrails:['VERIFY_CURRENT_STATE'],pillars:Object.keys(pillars).map(p=>({pillar:p,status:'unknown',checks:[]}))},findings:[],ai_context:{},ai,ai_result:null,decision:null,followups:[],followups_remaining:5,observation:{observed_at:scanTime,collector_version:'test',evidence_schema_version:'2',configuration_snapshot:{},evidence:{metrics:{cpu_percent:{window_start:scanTime,window_end:scanTime,points:[]}},metric_summaries:{cpu_percent:{sufficient:false}}}},rule_evaluations:[],costs:{billed_cost_usd:12.5,effective_cost_usd:15,retail_estimate_usd:7.5,modeled_future_cost_usd:null,opportunity_usd:null,verified_realized_savings_usd:null,explanation:'Imported costs are evidence, not verified savings.'}}}));
 }
 
-test('five-view navigation and keyboard settings tabs replace retired surfaces',async({page})=>{
+test('restored navigation coexists with current resource, Kubernetes, agent and settings workflows',async({page})=>{
   await mockWorkspace(page);const nav=page.getByRole('navigation',{name:'Primary navigation'});
-  await expect(nav.getByRole('link')).toHaveCount(5);
-  for(const name of ['Overview','Resources & 5-Pillar','Kubernetes','Agent worker','Settings & governance'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
+  await expect(nav.getByRole('link')).toHaveCount(9);
+  for(const name of ['Overview','Inventory & findings','Resources & 5-Pillar','Kubernetes','Agent worker','Cost allocation','Automation & GitOps','Activity & delivery','Settings & governance'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
   await navigate(page,'Settings & integrations');const tabs=page.getByRole('tablist',{name:'Workspace settings'});
   await expect(tabs.getByRole('tab')).toHaveCount(4);await tabs.getByRole('tab',{name:'Analysis rules',exact:true}).focus();await page.keyboard.press('End');
   await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toBeFocused();await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toHaveAttribute('aria-selected','true');
@@ -47,8 +47,8 @@ test('mobile resource explorer and consolidated AI settings fit the viewport',as
   const audit=await new AxeBuilder({page}).include('main').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
 });
 
-test('retired BFF paths return 404 before reaching an upstream service',async({request})=>{
-  for(const path of ['gitops/targets','optimization/catalog','services/disks','policies/terraform/evaluate',`scans/${scanId}/remediation`]){
+test('unsupported BFF paths still return 404 before reaching an upstream service',async({request})=>{
+  for(const path of ['optimization/catalog','services/disks']){
     const response=path.includes('evaluate')||path.includes('remediation')?await request.post('/api/v1/'+path,{data:{}}):await request.get('/api/v1/'+path);expect(response.status()).toBe(404);
   }
 });

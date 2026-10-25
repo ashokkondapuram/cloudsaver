@@ -1,4 +1,7 @@
 import hashlib
+import json
+import re
+from pathlib import Path
 
 import httpx
 import pytest
@@ -67,3 +70,14 @@ def test_inventory_has_no_stale_entries(apps):
 def test_removed_billing_routes_are_public_gone_responses():
     assert classify('POST', '/api/v1/billing/webhook') == 'public'
     assert classify('POST', '/api/v1/billing/checkout') == 'public'
+
+
+@pytest.mark.parametrize('name,baseline', [('scanner', 'core'), ('gateway', 'gateway')])
+def test_original_commit_api_contracts_are_restored_without_removing_current_routes(apps, name, baseline):
+    manifest = json.loads((Path(__file__).parent / 'fixtures/restored_673c20a_routes.json').read_text())
+    def normalize(route):
+        method, path = route
+        return method, re.sub(r'\{[^}]+\}', '{}', path)
+    live = {normalize(route) for route in routes(apps[name])}
+    missing = [route for route in manifest[baseline] if normalize(route) not in live]
+    assert missing == [], f'Missing routes from {manifest["source_commit"]}: {missing}'

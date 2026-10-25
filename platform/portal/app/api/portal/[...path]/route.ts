@@ -13,6 +13,10 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 const ROUTES: Array<[RegExp, Method[]]> = [
   [/^session$/, ['GET']],
+  [/^knowledge\/publications$/, ['GET', 'POST']],
+  [new RegExp(`^knowledge/publications/${ID}$`), ['PATCH']],
+  [new RegExp(`^knowledge/publications/${ID}/review$`), ['POST']],
+  [/^knowledge\/metrics$/, ['GET']],
   [/^customers$/, ['GET', 'POST']],
   [new RegExp(`^customers/${ID}$`), ['GET', 'PATCH', 'DELETE']],
   [new RegExp(`^customers/${ID}/(suspend|reactivate|bootstrap-key)$`), ['POST']],

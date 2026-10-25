@@ -1,4 +1,4 @@
-> Historical documentation: superseded where it describes removed finding, optimization, GitOps or knowledge workflows. See [the current lean guide](LEAN_CORE_IMPLEMENTATION.md).
+> GitOps, reviewed remediation exports and plan-policy checks are restored. See [the restoration guide](FEATURE_RESTORATION_673C20A.md) for their relationship to current resource, agent and governance workflows.
 
 # v0.7.0 GitOps and pre-merge guardrails
 

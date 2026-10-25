@@ -1,20 +1,25 @@
-# CloudSaver v1.4.0 — focused resource intelligence
+# CloudSaver v1.4.0 — full FinOps workspace
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
 
-This revision implements the [lean architecture and existing-feature improvements](docs/LEAN_CORE_IMPLEMENTATION.md). It removes duplicate finding/service explorers, manual optimization forms and cases, CLI/Terraform generators, GitOps publishing, and shared knowledge harvesting. Historical database records are retained; the upgrade does not drop customer history.
+This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
 
-## Five customer views
+## Customer views
 
 | View | Purpose |
 | --- | --- |
 | `/` | Deduplicated review opportunities, protection counts, scan trends, billing evidence and an hourly commitment ceiling when complete evidence exists |
+| `/findings` | Provider/category/search filters, virtualized finding inventory, bulk CSV/JSON, evidence and five-pillar drawers, reviewed remediation exports |
 | `/resources` | Inventory and findings merged into one resource assessment; service/provider/pillar filters, billing columns, scan deltas, CSV, AI review, decisions and agent handoff |
+| `/resources/report` | Printable resource assessment report from a completed live observation |
+| `/allocation` | Cost grouping, allocation/tag evidence, normalized billing imports and service analysis |
+| `/automation` | Reviewed remediation, GitOps pull-request preparation and Terraform plan policy checks |
+| `/activity` | Saved scan/AI history, delivery evidence and authorized delivery retry controls |
 | `/kubernetes` | API/Prometheus/OpenCost provenance, allocation slack, backing node billing and carefully gated consolidation models |
 | `/agents` | Exact connector plans, verified human approval, expiring single-use permits and bounded execution evidence |
 | `/settings` | Four tabs: Cloud scopes & billing, Analysis rules, AI & data governance, Access & API keys |
 
-The platform portal remains a separate operator application for customer, workspace, identity, plan and policy administration. Its knowledge-publishing pages and APIs have been removed.
+The platform portal remains a separate operator application for customer, workspace, identity, plan and policy administration. Workspace Resource access and Rules tabs coexist. Its Knowledge page manages independently sourced publications in a separately configured knowledge database; privacy screening and two independent reviews precede publication. Automatic harvesting of client observations and training remain disabled.
 
 ## Architecture
 

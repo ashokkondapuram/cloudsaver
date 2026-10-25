@@ -214,7 +214,8 @@ def test_finance_routes_and_durable_history_through_real_api(evidence):
         assert resources.json()['items']
         history=client.get('/api/v1/ai/assessments',headers=AUTH)
         assert history.status_code==200 and history.json()['items']==[]
-        assert client.post(base+'/ai-risk-evaluation',headers=AUTH,json={}).status_code==404
+        # The restored finding workflow still rejects missing evidence/consent.
+        assert client.post(base+'/ai-risk-evaluation',headers=AUTH,json={}).status_code==422
 
 def test_viewer_cannot_import_or_read_billing_while_history_is_tenant_scoped(evidence,monkeypatch):
     from app.auth import Role,UserClaims

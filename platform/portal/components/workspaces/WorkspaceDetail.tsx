@@ -11,12 +11,14 @@ import {Loading, Notice, PageHeading, StatusBadge} from '../ui/shared';
 import {CloudAccountsTab} from './CloudAccountsTab';
 import {KeysTab} from './KeysTab';
 import {OverviewTab} from './OverviewTab';
+import {ResourceAccessTab} from './ResourceAccessTab';
 import {RulesTab} from './RulesTab';
 import {UsageTab} from './UsageTab';
 
 const TABS = [
   {id: 'overview', label: 'Overview', icon: LayoutGrid},
   {id: 'cloud', label: 'Cloud accounts', icon: Cloud},
+  {id: 'access', label: 'Resource access', icon: Cloud},
   {id: 'rules', label: 'Rules', icon: ListChecks},
   {id: 'keys', label: 'Keys', icon: KeyRound},
   {id: 'usage', label: 'Usage', icon: BarChart3},
@@ -48,6 +50,7 @@ export function WorkspaceDetail({tenantId}: {tenantId: string}) {
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
       {tab === 'overview' && <OverviewTab workspace={workspace} onChange={setData} reload={reload}/>}
       {tab === 'cloud' && <CloudAccountsTab workspace={workspace} onChange={setData} reload={reload}/>}
+      {tab === 'access' && <ResourceAccessTab workspace={workspace} onChange={setData}/>}
       {tab === 'rules' && <RulesTab workspace={workspace}/>}
       {tab === 'keys' && <KeysTab workspace={workspace} reloadWorkspace={reload}/>}
       {tab === 'usage' && <UsageTab workspace={workspace}/>}

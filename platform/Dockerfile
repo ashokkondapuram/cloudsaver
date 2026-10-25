@@ -9,7 +9,8 @@ RUN --mount=type=secret,id=proxy_ca \
     pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home appuser
 COPY --chown=appuser:appuser identity identity
 COPY --chown=appuser:appuser identity_migrations identity_migrations
-COPY --chown=appuser:appuser identity_alembic.ini .
+COPY --chown=appuser:appuser knowledge_migrations knowledge_migrations
+COPY --chown=appuser:appuser identity_alembic.ini knowledge_alembic.ini .
 USER appuser
 EXPOSE 8005
 CMD ["uvicorn", "identity.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8005"]

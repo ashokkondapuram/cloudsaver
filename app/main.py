@@ -14,7 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import Settings
 from app.store import Store, PostgresStore
-from app.schemas import ScanSummary, MultiCloudScanRequest
+from app.schemas import ScanSummary, MultiCloudScanRequest, RemediationRequest
 from app.scanner import ScanError
 
 logger = logging.getLogger('cloudsaver')
@@ -22,7 +22,7 @@ CHECKOUT_GONE = 'Plan changes are handled by your account manager.'
 auth = HTTPBearer(auto_error=False)
 
 
-def create_app(settings=None, scanner=None, identity_validator=None, delivery_targets=None, delivery_repository=None, job_repository=None, ai_gateway=None, identity_client=None):
+def create_app(settings=None, scanner=None, identity_validator=None, delivery_targets=None, delivery_repository=None, job_repository=None, ai_gateway=None, identity_client=None, gitops_config=None, gitops_client=None):
     settings = settings or Settings.load()
     from app.provider_access import ScopedStore
     store = ScopedStore(PostgresStore(settings.database_url) if settings.database_url else Store(settings.database))
@@ -85,6 +85,11 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     api.include_router(settings_router(settings, current_tenant, identity_client=identity_client, scan_store=store))
     from app.kubernetes_api import create_router as kubernetes_router
     api.include_router(kubernetes_router(store, current_tenant, evidence_store=evidence_store))
+    from app.assessment_api import create_router as assessment_router
+    api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
+    from app.gitops_api import create_router as gitops_router
+    api.include_router(gitops_router(settings, store, current_tenant, config=gitops_config, client=gitops_client))
+
     @api.middleware('http')
     async def response_headers(request, call_next):
         response = await call_next(request)
@@ -325,5 +330,36 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     @api.get('/', include_in_schema=False)
     def dashboard():
         return HTMLResponse('<!doctype html><html lang="en"><meta charset="utf-8"><title>CloudSaver Enterprise API</title><h1>CloudSaver Enterprise API v1.4.0</h1><p>The API is running. Start the web-dashboard on port 3000 for the user interface.</p><p><a href="/docs">API reference</a></p></html>')
+
+    @api.post('/api/v1/scans/{scan_id}/remediation')
+    def remediation(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        from app.remediation import generate_script
+        result = store.get(tenant['tenant_id'], scan_id)
+        if result is None:
+            raise HTTPException(404, 'Scan not found')
+        try:
+            script = generate_script(result, payload.resource_ids, tenant['tenant_id'], tenant['subscription_ids'])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        return {'filename': 'cloudsaver-review-remediation.sh', 'script': script}
+
+
+    @api.post('/api/v1/scans/{scan_id}/remediation-terraform')
+    def remediation_terraform(scan_id: str, payload: RemediationRequest, tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        from app.entitlements import enforce_terraform_export
+        enforce_terraform_export(tenant)
+        from app.remediation_terraform import generate_cloud_terraform_hcl
+        result = store.get(tenant['tenant_id'], scan_id)
+        if result is None:
+            raise HTTPException(404, 'Scan not found')
+        try:
+            hcl_scan = dict(result)
+            hcl = generate_cloud_terraform_hcl(hcl_scan, payload.resource_ids, tenant)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        return {'filename': f'cloudsaver-remediation-{scan_id[:8]}.tf', 'hcl': hcl}
+
 
     return api
