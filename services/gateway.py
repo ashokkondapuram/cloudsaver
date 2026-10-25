@@ -380,6 +380,11 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         params={k:v for k,v in request.query_params.items() if k in ('start','end','currency','budget')}
         return await forward('GET','scanner','/api/v1/finops/summary',authorization,params)
 
+    @app.get('/api/v1/finops/unit-economics/preview')
+    async def unit_economics_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
+        params = {k: v for k, v in request.query_params.items() if k in ('prior_cost', 'current_cost', 'prior_volume', 'current_volume')}
+        return await forward('GET', 'scanner', '/api/v1/finops/unit-economics/preview', authorization, params)
+
 
 
 

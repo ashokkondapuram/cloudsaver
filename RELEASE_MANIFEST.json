@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "49f0ac776786c287bc2eef59d63d9d61c5260df368957554345010efd5d1e656",
+  "inventory_sha256": "7e6367c0922aedbc5e1100098d799c260106b6d4bbbadb742b466e2f8e4acb3d",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -330,6 +330,11 @@
       "bytes": 16390
     },
     {
+      "path": "app/collectors/event_stream.py",
+      "sha256": "505629ef131ba96a2cb4fbd0fe6b7857ce5e18b09ef1d54634f7f27fd82c6a3c",
+      "bytes": 2935
+    },
+    {
       "path": "app/collectors/federation.py",
       "sha256": "3d29602f0c361d6c140cab0b75ff8934972d0de049fcd93b8f03dbfa85cc94b0",
       "bytes": 3316
@@ -436,8 +441,8 @@
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "acda2c632492ba2ed49bb1300093462a0c159b7529653adac0e88108f67567b2",
-      "bytes": 4578
+      "sha256": "7024ecd83ac50f3788a1b77b2f9ab1b0e271051f6d4fdd966dee7b25ff534411",
+      "bytes": 5243
     },
     {
       "path": "app/focus.py",
@@ -686,8 +691,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "730e749206b711a743f015c35ddc61bde191227ec79c661e16a47c4fc181ca47",
-      "bytes": 10341
+      "sha256": "2996f40c9df6f198eee20d94a9cc5735075163d35ec9c6dcc1eb5302023d62ce",
+      "bytes": 10410
     },
     {
       "path": "app/runtime.py",
@@ -763,6 +768,11 @@
       "path": "app/trends.py",
       "sha256": "4b8187159d7fcf6374c953868740cac59dd8f935a57004ea6d5a1c000eba7d5b",
       "bytes": 3040
+    },
+    {
+      "path": "app/unit_economics.py",
+      "sha256": "f23f65295daddef51dbe8ed084c2a8d8f759e9ef526a71cf00a337007b6be623",
+      "bytes": 1363
     },
     {
       "path": "app/v150_analysis.py",
@@ -2191,8 +2201,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "80387dcddf261aa824fb5fe78a2ca96a5d2aecccde43a069007898e8d93c94e3",
-      "bytes": 32069
+      "sha256": "de0d303cbd2d6e9d70992e168640c33562f48741c150d67253a23b2ab519c33b",
+      "bytes": 32482
     },
     {
       "path": "services/governance_routes.py",
@@ -2385,6 +2395,11 @@
       "bytes": 8037
     },
     {
+      "path": "tests/test_event_stream.py",
+      "sha256": "da3a22e9a6f778e3f8d620e8d94f2519735b4220da0d570d84ab556ff28c65dc",
+      "bytes": 849
+    },
+    {
       "path": "tests/test_expanded_rules.py",
       "sha256": "a0eabd0b6589cbec1079ad1344e7441e0fbcd42c437e9b3f287295e8ed6f0b7c",
       "bytes": 4214
@@ -2563,6 +2578,11 @@
       "path": "tests/test_setup_compose.py",
       "sha256": "8a48913e8f04a2bf0f4e3400d9dd9716c818f3438a42553c8b5de437f25cfefe",
       "bytes": 6558
+    },
+    {
+      "path": "tests/test_unit_economics.py",
+      "sha256": "0bcb361963c9c71480802d14f420e2656c9d8b1a84492a3f5e4ae45aec1a7e58",
+      "bytes": 653
     },
     {
       "path": "tests/test_v041_api.py",
