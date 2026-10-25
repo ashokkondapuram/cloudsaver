@@ -19,7 +19,7 @@ def inventory():
         cfg=Config(str(ROOT/config))
         if name=='core':cfg.set_main_option('script_location',str(ROOT/'migrations'))
         heads[name]=ScriptDirectory.from_config(cfg).get_current_head()
-    return dict(version='1.6.0',inventory_sha256=digest,migration_heads=heads,exclusions=['RELEASE_MANIFEST.json (self-reference)'],files=files)
+    return dict(version='1.7.0',inventory_sha256=digest,migration_heads=heads,exclusions=['RELEASE_MANIFEST.json (self-reference)'],files=files)
 
 
 def main():

@@ -117,3 +117,24 @@ def test_outcome_gateway_rejects_duplicate_json_without_forwarding(tmp_path):
     client=TestClient(gateway(configuration(tmp_path),Limiter(),httpx.MockTransport(lambda _:pytest.fail('No ambiguous evidence may be forwarded'))))
     response=client.post('/api/v1/outcomes/evidence/receipts',headers={'Authorization':'Bearer '+KEY,'Content-Type':'application/json'},content='{"tenant_id":"one","tenant_id":"two"}')
     assert response.status_code==422
+
+
+@pytest.mark.parametrize(('method','path'),[
+    ('GET','/capabilities'),('GET','/access'),('PUT','/access'),('GET','/directory'),('GET','/controls'),('POST','/controls'),('POST','/assessments'),('GET','/summary'),('GET','/findings'),('GET',f'/findings/{SID}'),('POST',f'/findings/{SID}/actions'),('GET',f'/findings/{SID}/export'),('GET','/risks'),('POST','/risks'),('POST',f'/risks/{SID}/actions'),('GET','/exceptions'),('POST','/exceptions'),('POST',f'/exceptions/{SID}/actions'),('POST','/evidence/receipts'),('POST','/monitor')
+])
+def test_governance_gateway_keeps_fixed_destinations_and_evidence_binding(tmp_path,method,path):
+    import json
+    calls=[];payload={'version':3,'note':'Synthetic HTTP governance transport contract'}
+    def handler(request):
+        calls.append(request)
+        assert request.url.host=='scanner-service' and request.url.path=='/api/v1/governance'+path
+        assert request.headers['authorization']=='Bearer '+KEY and request.headers.get('x-request-id')
+        if method!='GET' and path!='/monitor':assert json.loads(request.content)==payload
+        if path=='/evidence/receipts':assert request.headers['x-evidence-signature']=='a'*64
+        else:assert 'x-evidence-signature' not in request.headers
+        return httpx.Response(200,json={'status':'governance-forwarded'})
+    client=TestClient(gateway(configuration(tmp_path),Limiter(),httpx.MockTransport(handler)))
+    result=client.request(method,'/api/v1/governance'+path,headers={'Authorization':'Bearer '+KEY,'X-Evidence-Signature':'a'*64},**({'json':payload} if method!='GET' else {}))
+    expected=201 if method=='POST' and path in ('/controls','/assessments','/risks','/exceptions','/evidence/receipts') else 200
+    assert result.status_code==expected and result.json()=={'status':'governance-forwarded'} and len(calls)==1
+    if path.endswith('/export'):assert result.headers['content-disposition'].startswith('attachment;') and result.headers['cache-control']=='no-store'

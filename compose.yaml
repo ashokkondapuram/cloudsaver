@@ -49,6 +49,7 @@ x-environment: &environment
   CLOUDSAVER_DATA_ENVIRONMENT_ID: ${CLOUDSAVER_DATA_ENVIRONMENT_ID:-}
   CLOUDSAVER_DATA_AZURE_TENANT_ID: ${CLOUDSAVER_DATA_AZURE_TENANT_ID:-}
   CLOUDSAVER_KUBERNETES_BINDINGS: ${CLOUDSAVER_KUBERNETES_BINDINGS:-[]}
+  CLOUDSAVER_GOVERNANCE_SOURCES: ${CLOUDSAVER_GOVERNANCE_SOURCES:-[]}
   CLOUDSAVER_EVIDENCE_SOURCES: ${CLOUDSAVER_EVIDENCE_SOURCES:-[]}
   CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED: ${CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED:-false}
   CLOUDSAVER_AUTO_BILLING_SYNC: ${CLOUDSAVER_AUTO_BILLING_SYNC:-true}
@@ -58,7 +59,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:1.6.0
+  image: cloudsaver-python:1.7.0
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -138,7 +139,8 @@ services:
       CLOUDSAVER_GITOPS_PUBLISH: ${CLOUDSAVER_GITOPS_PUBLISH:-false}
       CLOUDSAVER_GITHUB_APP_ID: ${CLOUDSAVER_GITHUB_APP_ID:-}
       CLOUDSAVER_GITHUB_APP_PRIVATE_KEY: ${CLOUDSAVER_GITHUB_APP_PRIVATE_KEY:-}
-      # Signing secret is available only to the core verifier, never the browser/agent.
+      # Verifier secrets stay in core / governance monitor, never browser or agent.
+      CLOUDSAVER_GOVERNANCE_KEY_PRIMARY: ${CLOUDSAVER_GOVERNANCE_KEY_PRIMARY:-}
       CLOUDSAVER_EVIDENCE_KEY_OUTCOMES: ${CLOUDSAVER_EVIDENCE_KEY_OUTCOMES:-}
       CLOUDSAVER_PLAN_POLICY: ${CLOUDSAVER_PLAN_POLICY:-}
     # The normal Compose stack supports developer sign-in without an override.
@@ -154,6 +156,15 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+  governance-monitor:
+    <<: *service
+    command: [python, -m, workers.governance_monitor]
+    environment:
+      <<: *environment
+      CLOUDSAVER_GOVERNANCE_KEY_PRIMARY: ${CLOUDSAVER_GOVERNANCE_KEY_PRIMARY:-}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck: {disable: true}
   agent-gateway:
     <<: *service
     networks: [default, platform-link]

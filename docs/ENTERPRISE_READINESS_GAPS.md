@@ -1,6 +1,6 @@
 # Enterprise readiness remediation and launch gates
 
-Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.6.0 upgrade runbook](releases/1.6.0-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
+Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.7.0 upgrade runbook](releases/1.7.0-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
 
 **Release decision remains NO-GO for a general enterprise production launch.** Source remediation does not provide independent penetration testing, cloud IAM approval, invoice reconciliation, HA/load acceptance, recovery measurements, contractual privacy review, repository-administration enforcement or named human sign-offs. No such evidence is manufactured here.
 
@@ -67,3 +67,7 @@ GitHub-hosted execution, required-check enforcement, independent reviews and all
 ## 1.6.0 financial outcomes increment
 
 The [financial outcomes pilot](FINANCIAL_OUTCOMES.md) adds evidence-bound savings cases, direct ownership and delayed billing investigations. Synthetic tests and the reviewed source do not replace provider reconciliation, independent security testing, recovery/load evidence or business sign-offs. Existing G01–G18 launch gates remain; this increment does not turn NO-GO into an enterprise launch approval. New critical financial modules join the aggregate 85% CI coverage gate. Current upgrade graph and artifact inventory are defined by the 1.6.0 runbook and generated manifest.
+
+## 1.7.0 risk and control increment
+
+The [risk and control workflow](RISK_AND_COMPLIANCE.md) adds a narrow Azure account control, separate control/finding/business-risk records, explicit governance delegations, independent human treatment decisions, bounded exceptions, signed source evidence and local continuous reassessment. Technical pass, accepted risk and organizational compliance remain distinct. The new source and synthetic integration/browser evidence do not close independent attestor, IAM, operational, retention or certification gates. Current upgrade graph and source inventory are defined by the 1.7.0 runbook and generated manifest. The three new governance modules join the existing aggregate 85% coverage gate.

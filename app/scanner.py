@@ -133,7 +133,7 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
         for source,target in (('sizeGB','size_gb'),('provisionedIops','provisioned_iops'),('backupRetentionDays','backup_retention_days')):
             if type(row.get(source)) is int and row[source]>=0:evidence[target]=row[source]
         if row.get('encryptionType') in ('EncryptionAtRestWithPlatformKey','EncryptionAtRestWithCustomerKey','EncryptionAtRestWithPlatformAndCustomerKeys'):evidence['encrypted']=True
-        for source,target in (('zoneRedundant','multi_az'),('disableLocalAuth','managed_secrets'),('allowBlobPublicAccess','publicly_accessible')):
+        for source,target in (('allowBlobPublicAccess','allow_blob_public_access'),('zoneRedundant','multi_az'),('disableLocalAuth','managed_secrets'),('allowBlobPublicAccess','publicly_accessible')):
             if type(row.get(source)) is bool:evidence[target]=row[source]
         if row.get('minimumTlsVersion') in ('1.2','1.3','TLS1_2','TLS1_3'):evidence['tls_required']=True
         edges = []

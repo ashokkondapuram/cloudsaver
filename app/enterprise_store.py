@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 from uuid import UUID
+from app.governance_schema import TABLES as GOVERNANCE_TABLES, SQLITE as GOVERNANCE_SQLITE
 
 TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
           'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics',
@@ -11,6 +12,9 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
           'agent_tasks', 'agent_task_events','ai_data_events','ai_data_retention','ai_data_holds',
           'billing_sync_runs','agent_gitops_syncs','billing_sync_jobs','finops_ownership','finops_anomalies',
           'finops_anomaly_events','finops_suppressions','savings_financial_claims')
+
+
+TABLES=TABLES+GOVERNANCE_TABLES
 
 
 class Connection:
@@ -41,7 +45,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0022_financial_outcomes before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0023_risk_governance before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -217,6 +221,9 @@ class EnterpriseStore:
                     SELECT id,tenant_id,'legacy_inference','0000000000000000000000000000000000000000000000000000000000000000',
                     strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'),strftime('%Y-%m-%dT%H:%M:%SZ','now') FROM ai_inference_attempts;
                 ''')
+
+            with self.transaction(str(UUID(int=0)),write=True) as db:
+                db.db.executescript(GOVERNANCE_SQLITE)
 
     @contextmanager
     def transaction(self, tenant_id, *, write=False):

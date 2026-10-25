@@ -34,7 +34,7 @@ def services():
 def test_only_cloudsaver_services_run_here():
     names = set(services())
     assert names == {'migrate', 'api-gateway', 'scanner-service', 'web-dashboard', 'scan-worker', 'delivery-dispatcher', 'scan-scheduler',
-                     'postgres', 'redis', 'agent-gateway', 'agent-worker', 'data-retention-worker', 'billing-sync-worker'}
+                     'postgres', 'redis', 'agent-gateway', 'agent-worker', 'data-retention-worker', 'billing-sync-worker', 'governance-monitor'}
     # Provider bill ingestion belongs to CloudSaver; platform subscription billing remains separate.
     assert not any(word in name for name in names for word in ('identity', 'portal', 'token'))
 
@@ -76,3 +76,12 @@ def test_published_ports_bind_to_loopback_only():
     assert ports, 'expected published ports'
     assert all(p.startswith('127.0.0.1:') for p in ports), ports
     assert 'network_mode' not in TEXT
+
+
+def test_governance_verifier_secrets_never_reach_agents_or_public_ports():
+    found=services()
+    assert 'workers.governance_monitor' in found['governance-monitor']
+    assert 'ports:' not in found['governance-monitor']
+    for name,body in found.items():
+        if name not in ('scanner-service','governance-monitor'):assert 'CLOUDSAVER_GOVERNANCE_KEY_PRIMARY' not in body
+    assert all('CLOUDSAVER_GOVERNANCE_KEY_PRIMARY' in found[name] for name in ('scanner-service','governance-monitor'))

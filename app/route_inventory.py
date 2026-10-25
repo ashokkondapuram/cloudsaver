@@ -12,6 +12,27 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/governance/capabilities'):'full_scope',
+    ('GET','/api/v1/governance/access'):'full_scope',
+    ('PUT','/api/v1/governance/access'):'full_scope',
+    ('GET','/api/v1/governance/directory'):'full_scope',
+    ('GET','/api/v1/governance/controls'):'full_scope',
+    ('POST','/api/v1/governance/controls'):'full_scope',
+    ('POST','/api/v1/governance/assessments'):'full_scope',
+    ('GET','/api/v1/governance/summary'):'full_scope',
+    ('GET','/api/v1/governance/findings'):'full_scope',
+    ('GET','/api/v1/governance/findings/{finding_id}'):'full_scope',
+    ('POST','/api/v1/governance/findings/{finding_id}/actions'):'full_scope',
+    ('GET','/api/v1/governance/findings/{finding_id}/export'):'full_scope',
+    ('GET','/api/v1/governance/risks'):'full_scope',
+    ('POST','/api/v1/governance/risks'):'full_scope',
+    ('POST','/api/v1/governance/risks/{risk_id}/actions'):'full_scope',
+    ('GET','/api/v1/governance/exceptions'):'full_scope',
+    ('POST','/api/v1/governance/exceptions'):'full_scope',
+    ('POST','/api/v1/governance/exceptions/{exception_id}/actions'):'full_scope',
+    ('POST','/api/v1/governance/evidence/receipts'):'full_scope',
+    ('POST','/api/v1/governance/monitor'):'full_scope',
+
     ('GET','/api/v1/outcomes/summary'):'full_scope',
     ('GET','/api/v1/outcomes/cases'):'full_scope',
     ('POST','/api/v1/outcomes/cases'):'full_scope',

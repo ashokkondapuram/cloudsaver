@@ -29,7 +29,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip check
       - name: Unit and disposable PostgreSQL/Redis fault tests
-        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov-report=term-missing --cov-fail-under=85
+        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov=app.governance_store --cov=app.governance_evidence --cov=app.governance_api --cov-report=term-missing --cov-fail-under=85
 
   dashboard:
     runs-on: ubuntu-latest
@@ -199,7 +199,9 @@ jobs:
       - run: npm --prefix web-dashboard ci
       - run: npm --prefix web-dashboard run build
       - name: Real Next proxy, gateway, core and disposable Redis transport contracts
-        run: python scripts/test_real_stack.py
+        run: |
+          python scripts/test_real_stack.py
+          python scripts/test_governance_stack.py
 
   manifest:
     runs-on: ubuntu-latest

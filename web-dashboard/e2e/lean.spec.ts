@@ -13,7 +13,7 @@ async function resources(page:Page){
 
 test('restored navigation coexists with current resource, Kubernetes, agent and settings workflows',async({page})=>{
   await mockWorkspace(page);const nav=page.getByRole('navigation',{name:'Primary navigation'});
-  await expect(nav.getByRole('link')).toHaveCount(13);
+  await expect(nav.getByRole('link')).toHaveCount(14);
   for(const name of ['Overview','Inventory & findings','Resources & 5-Pillar','Kubernetes','Agent worker','Cost allocation','Automation & GitOps','Activity & delivery','Settings & governance'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
   await navigate(page,'Settings & integrations');const tabs=page.getByRole('tablist',{name:'Workspace settings'});
   await expect(tabs.getByRole('tab')).toHaveCount(4);await tabs.getByRole('tab',{name:'Analysis rules',exact:true}).focus();await page.keyboard.press('End');

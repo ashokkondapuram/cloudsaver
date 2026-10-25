@@ -71,7 +71,7 @@ def test_missing_role_recovery_migrations_and_repeat_preserve_data(bootstrap_dat
     subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', 'head'],
                    cwd=ROOT, env=env, check=True, capture_output=True, text=True)
     with psycopg.connect(url) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '0022_financial_outcomes'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0] == '0023_risk_governance'
         assert db.execute('SELECT payload FROM scans WHERE id = %s', (scan,)).fetchone()[0] == payload
 
     # An attempted implicit password rotation is ignored on a subsequent run.
