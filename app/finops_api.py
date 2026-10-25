@@ -54,6 +54,15 @@ def create_router(repository, current_tenant):
         except (ValueError,KeyError,TypeError):
             raise HTTPException(503,'Billing connector configuration is unavailable') from None
 
+    @router.get('/commitments')
+    def commitments(tenant=Depends(finance)):
+        from app import commitment_store
+        from app.collectors.commitments import summarize
+        scopes=commitment_store.latest(repository.store,tenant['tenant_id'])
+        items=[dict(item,scope_id=scope['scope_id']) for scope in scopes for item in scope.get('items') or []]
+        return dict(items=items,summary=summarize(items),
+                    scopes=[{key:scope.get(key) for key in ('provider','scope_id','status','observed_at','coverage','warnings','error_code','period_start','period_end')} for scope in scopes])
+
     @router.post('/imports',status_code=201)
     async def import_evidence(request:Request,tenant=Depends(finance)):
         try:

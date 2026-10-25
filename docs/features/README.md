@@ -18,7 +18,7 @@ Each guide explains one feature end to end: where you find it in the dashboard, 
 | Guide | Dashboard location | What it covers |
 | --- | --- | --- |
 | [Optimization evidence](optimization-evidence.md) | `/optimization` | Optimization and retail evidence models tied to the selected scan |
-| [Cost allocation and billing](cost-allocation-and-billing.md) | `/allocation` | Cost grouping, tag evidence, FOCUS billing imports and billed, effective and retail costs |
+| [Cost allocation and billing](cost-allocation-and-billing.md) | `/allocation` | Cost grouping, tag evidence, FOCUS billing imports, automatic provider cost sync, commitments, and billed, effective and retail costs |
 | [Savings and investigations](savings-and-investigations.md) | `/outcomes` | Savings cases, anomaly investigations and outcome evidence |
 | [Risk and compliance](risk-and-compliance.md) | `/governance` | Governance findings, exceptions, audit packages and human-approved change plans |
 

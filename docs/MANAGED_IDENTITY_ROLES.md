@@ -227,6 +227,21 @@ gcloud projects add-iam-policy-binding <CUSTOMER_PROJECT> \
   --member="serviceAccount:<WORKSPACE_SA>@<CLOUDSAVER_PROJECT>.iam.gserviceaccount.com"
 ```
 
+### Billing and commitment read access
+
+Automatic billing sync uses the same identities. Grant only the reads for the
+sources you bind in `CLOUDSAVER_BILLING_CONNECTORS`. Every call is read-only.
+
+| Provider | Data | Permission |
+| --- | --- | --- |
+| Azure | Actual and amortized cost | `Cost Management Reader` on each subscription |
+| Azure | Reservations | `Reservations Reader` (tenant level) |
+| Azure | Savings plans | `Savings plan Reader` on the billing scope. Without it, sync adds a warning and skips savings plans. |
+| AWS | Account-level cost, reservations, savings plans and coverage | `ce:GetCostAndUsage`, `ce:GetReservationUtilization`, `ce:GetReservationCoverage`, `ce:GetSavingsPlansUtilizationDetails`, `ce:GetSavingsPlansCoverage` |
+| AWS | CUR 2.0 per-resource cost | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `athena:StopQueryExecution` on the workgroup, `glue:GetTable`, `glue:GetDatabase`, `glue:GetPartitions` on the CUR database, and `s3:GetObject`, `s3:ListBucket`, `s3:PutObject` on the CUR and Athena results buckets |
+| Google Cloud | Billing export (standard or detailed) | `roles/bigquery.dataViewer` on the export dataset and `roles/bigquery.jobUser` on the billing project |
+| Google Cloud | Committed use discounts | `compute.commitments.list` (included in `roles/compute.viewer`) on each project |
+
 ## 5. Kubernetes
 
 The managed identity isn't used. Prometheus access stays an operator-bound bearer

@@ -74,12 +74,28 @@ The breakdown runs entirely in the browser from the selected scan's findings (`u
 
    | Provider | Source | Billed cost | Effective cost | Granularity |
    | --- | --- | --- | --- | --- |
-   | Azure | Cost Management `ActualCost` query | `PreTaxCost` | Same as billed (amortization not verified) | Resource |
-   | AWS | Cost Explorer `GetCostAndUsage` | `UnblendedCost` | `AmortizedCost` | Account |
+   | Azure | Cost Management `ActualCost` and `AmortizedCost` queries (up to 10 pages each) | `ActualCost` `PreTaxCost` | `AmortizedCost` `PreTaxCost` | Resource |
+   | AWS (default) | Cost Explorer `GetCostAndUsage` | `UnblendedCost` | `AmortizedCost` | Account |
+   | AWS (CUR 2.0) | Athena query over your CUR 2.0 table, when `athena_*` keys are set | `line_item_unblended_cost` | Savings Plans and Reserved Instance effective-cost fields | Resource |
    | Google Cloud | BigQuery standard billing export | `cost` | `cost` plus credits | Project |
+   | Google Cloud (detailed) | BigQuery detailed billing export, when `export_type` is `detailed` | `cost` | `cost` plus credits | Resource (`resource.global_name`) |
+
+   Each provider read is capped at 20,000 rows. The Athena query binds the account and dates as parameters, waits up to 120 seconds and stops the query on timeout.
 
 4. **Fenced commit.** Provider reads happen outside database locks. Before committing, the worker re-checks its lease, whether you requested cancellation, and whether the connector and workspace are still authorized. A lost lease or a revoked scope commits nothing.
 5. **Correction deltas.** `_import_snapshot` groups provider rows by day, resource and category. It compares them with earlier `auto:` charges and appends only the difference as new charges. Existing charges are never overwritten. Auto-sync imports are always marked `complete: false`. Charge groups that were seen before but are now absent are reported as `unresolved_absent_groups` rather than zeroed.
+
+### Commitments
+
+The same worker job also reads commitments for each scope, using [app/collectors/commitments.py](../../app/collectors/commitments.py). These reads are read-only and best-effort: if one fails, the billed-cost import still completes and the snapshot is stored as `failed` with a fixed error code. Provider error text is never stored.
+
+| Provider | Commitments | Utilization and unused cost | Coverage |
+| --- | --- | --- | --- |
+| Azure | Reservations (`Microsoft.Capacity/reservations`) and savings plans (`Microsoft.BillingBenefits/savingsPlans`) that apply to the subscription | Longest daily utilization window the provider reports | Not available |
+| AWS | Reserved Instances (`GetReservationUtilization`) and Savings Plans (`GetSavingsPlansUtilizationDetails`) for the linked account | Utilization percent, unused commitment, net savings | `GetReservationCoverage` hours and `GetSavingsPlansCoverage` spend |
+| Google Cloud | Compute Engine committed use discounts (`aggregated/commitments`) | Not reported per commitment | Committed use discount credits from the billing export |
+
+Snapshots are append-only rows in `cloud_commitment_snapshots`. The Commitments panel on Cost allocation shows the latest snapshot per scope. Set `CLOUDSAVER_COMMITMENT_SYNC=false` to turn commitment reads off. Commitment purchases, exchanges and renewals are out of scope.
 
 ### Resource-level billing
 
@@ -107,6 +123,7 @@ All paths are served by [app/finops_api.py](../../app/finops_api.py) and proxied
 | GET | `/api/v1/finops/sync-jobs/{job_id}` | Poll a billing job. Returns `Retry-After: 3` while it is active. | `BillingAdmin`. `full_scope`. |
 | POST | `/api/v1/finops/sync-jobs/{job_id}/cancel` | Cancel a queued job, or request cancellation of a running one. | `BillingAdmin`. `full_scope`. |
 | GET | `/api/v1/finops/sync-status` | Connector configuration, recent syncs and the last successful sync. | `BillingAdmin`. `full_scope`. |
+| GET | `/api/v1/finops/commitments` | Latest reservations, savings plans and committed use discounts per scope, with a summary (active, expiring in 90 days, average utilization, unused cost by currency). | `BillingAdmin`. `full_scope`. |
 | GET | `/api/v1/finops/unit-economics/preview` | Cost-to-volume elasticity. Query: `prior_cost`, `current_cost`, `prior_volume`, `current_volume`. | `BillingAdmin`. `scoped_read`. |
 
 ## Data and evidence
@@ -129,7 +146,8 @@ All paths are served by [app/finops_api.py](../../app/finops_api.py) and proxied
 **What is NOT proven**
 
 - Imported billing is not reconciled with the provider (`billing_reconciled: false`, `realized_savings: null`). Completeness is what the operator declares.
-- AWS and Google Cloud automatic sync return account-level and project-level rows only. CloudSaver does not invent per-resource charges.
+- Without a CUR 2.0 Athena table or a detailed BigQuery export, AWS and Google Cloud automatic sync return account-level and project-level rows only. CloudSaver does not invent per-resource charges.
+- Azure reservations and savings plans with a shared scope appear on every bound subscription they can apply to.
 - Forecasts are provisional, and Z-scores are review signals, not diagnosed anomalies.
 - The scope breakdown is not chargeback or showback. Billing-based allocation needs a connected allocation feed, and tags are observed evidence only.
 
@@ -148,7 +166,8 @@ Provider-limited and scope-limited keys see only charges for their authorized pr
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `CLOUDSAVER_AUTO_BILLING_SYNC` | Turns automatic billing sync on or off. Any value other than `true` disables submission and execution. | `true` |
-| `CLOUDSAVER_BILLING_CONNECTORS` | JSON list (up to 200) of operator-owned bindings: `tenant_id`, `provider`, `scope_id`, and, for GCP, `billing_project`, `dataset` and `table`. It contains no cloud secrets. Scopes must already belong to the workspace. | `[]` |
+| `CLOUDSAVER_BILLING_CONNECTORS` | JSON list (up to 200) of operator-owned bindings: `tenant_id`, `provider`, `scope_id`, and, for GCP, `billing_project`, `dataset`, `table` and optional `export_type` (`standard` or `detailed`). For AWS CUR 2.0, set all of `athena_region`, `athena_workgroup`, `athena_database` and `athena_table`. It contains no cloud secrets. Scopes must already belong to the workspace. | `[]` |
+| `CLOUDSAVER_COMMITMENT_SYNC` | Reads reservations, savings plans and committed use discounts during billing sync. Any value other than `true` turns it off. | `true` |
 | `CLOUDSAVER_REGIONAL_PRICE_CATALOG` | Operator-reviewed AWS and GCP retail meters used for retail estimates on findings. | `[]` |
 
 Automatic sync uses the workspace's existing keyless cloud identity, so that identity needs billing-read access. See [Managed identity roles](../MANAGED_IDENTITY_ROLES.md).

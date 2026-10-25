@@ -1,8 +1,8 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "5f0f0bb2172efaacda96f369c5f9e5e3f7df47b6e29fa0ad6c09d563ec676329",
+  "inventory_sha256": "5ef7248d29ae934f14b769849ef7c71495e8638c0182546e308fc1fb32729672",
   "migration_heads": {
-    "core": "0023_risk_governance",
+    "core": "0024_cloud_commitments",
     "identity": "i0013_multicloud_analysis_catalog"
   },
   "exclusions": [
@@ -16,8 +16,8 @@
     },
     {
       "path": ".env.example",
-      "sha256": "545c46a9fae06780ad6ca08de49b3c4138a6bcb1d5dec5817d062dc09199daae",
-      "bytes": 14204
+      "sha256": "48a3099b66e7deda75e5547e3e4d15f205a1f29ab9489d10c2bd90761349b733",
+      "bytes": 14492
     },
     {
       "path": ".gitattributes",
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "af9e578d6bc6b6e443fc79c34eca3a3bb19e52f30bdd51e95a8f3bfd2f746e81",
-      "bytes": 28468
+      "sha256": "da35ca392cb1621bf81edb82b6dfdc4110d39efa94c5cfd2f1e4791a30d8fdc8",
+      "bytes": 30544
     },
     {
       "path": "ROADMAP.md",
@@ -276,8 +276,8 @@
     },
     {
       "path": "app/billing_jobs.py",
-      "sha256": "01ca7ee08b770ba49683f1d2112b1da66be83b4a3bbc0f243acd60acaf88c9d8",
-      "bytes": 9345
+      "sha256": "2de5ed50635791177c07d8fb8bc37381d63a9d8a848d880105a9a533b8155518",
+      "bytes": 10888
     },
     {
       "path": "app/billing_plan.py",
@@ -321,8 +321,13 @@
     },
     {
       "path": "app/collectors/billing_sync.py",
-      "sha256": "b647ae3278adde3d66a143cfec99e532ead2cab5beec02b8d2a6846ec6f8d875",
-      "bytes": 16390
+      "sha256": "ab2f5fe8bd9eb8bbb9e64c786ec5003be88296523648f3856c3d1ef22f7b4031",
+      "bytes": 22161
+    },
+    {
+      "path": "app/collectors/commitments.py",
+      "sha256": "6a304c9e060428101c2817dd23685a7233ba45979fdd86f4682557ffa22e0a85",
+      "bytes": 14969
     },
     {
       "path": "app/collectors/event_stream.py",
@@ -368,6 +373,11 @@
       "path": "app/commitment_arbitrage.py",
       "sha256": "b76b01d808dc965950912e650ad415baae982718027997c9bc4470f6b470664e",
       "bytes": 3236
+    },
+    {
+      "path": "app/commitment_store.py",
+      "sha256": "b1383651c130bb8385a507116c2889c26b69cb81fad2dea3e677ade05144f015",
+      "bytes": 1220
     },
     {
       "path": "app/config.py",
@@ -426,8 +436,8 @@
     },
     {
       "path": "app/enterprise_store.py",
-      "sha256": "e820c1de535cdf6c7b6afd8b6888a6b857c6c63b493912b3944fe97f8842d654",
-      "bytes": 21482
+      "sha256": "b2d6c1559392c2e7003855bce8eb4636ca1b5367dbff02313dcd5c2a7e673f77",
+      "bytes": 21799
     },
     {
       "path": "app/entitlements.py",
@@ -436,8 +446,8 @@
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "7024ecd83ac50f3788a1b77b2f9ab1b0e271051f6d4fdd966dee7b25ff534411",
-      "bytes": 5243
+      "sha256": "be6582d9756b292f01ed5c7a9ad26381fa660f5dd2b7177f3ab356811e7010b3",
+      "bytes": 5858
     },
     {
       "path": "app/focus.py",
@@ -681,8 +691,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "2996f40c9df6f198eee20d94a9cc5735075163d35ec9c6dcc1eb5302023d62ce",
-      "bytes": 10410
+      "sha256": "36a48089b8ec8e0ee586648b1df102c1dce11da68864716bd630920092163cf9",
+      "bytes": 10465
     },
     {
       "path": "app/runtime.py",
@@ -921,8 +931,8 @@
     },
     {
       "path": "docs/MANAGED_IDENTITY_ROLES.md",
-      "sha256": "a27c82a7941e38019c62483bf7f2d5aa9d82c142f4828cb511be7c94c836f92e",
-      "bytes": 9241
+      "sha256": "8e49e3a683dec13d898e62618d8e62aca25dadede83c15eb1110e6293c188d1b",
+      "bytes": 10619
     },
     {
       "path": "docs/NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md",
@@ -1066,8 +1076,8 @@
     },
     {
       "path": "docs/features/README.md",
-      "sha256": "d8f9f04954cf14d998d9773f954c955303a39bdbcd9acbf35779d1ccba8d9abb",
-      "bytes": 3346
+      "sha256": "289309d8738c81e038c74fd92016756ac9867c398948f0035a36f1042454ed40",
+      "bytes": 3390
     },
     {
       "path": "docs/features/activity-and-delivery.md",
@@ -1091,8 +1101,8 @@
     },
     {
       "path": "docs/features/cost-allocation-and-billing.md",
-      "sha256": "162e381d22808694c8406fb333124aa9c5e1385f4ebc2768d60872b0e6f47c7c",
-      "bytes": 18242
+      "sha256": "5ab173bd8a42802bc61fab80106ef349818fd38c83307ebd1363d9957d747fc6",
+      "bytes": 20932
     },
     {
       "path": "docs/features/kubernetes.md",
@@ -1171,8 +1181,8 @@
     },
     {
       "path": "docs/releases/1.7.0-UPGRADE.md",
-      "sha256": "9b62ef302b624140d49ad060a1f59046e9be1d11ee4e314b978f2a8408f86695",
-      "bytes": 7877
+      "sha256": "b211ae836a13bdf1729d116c15f5b27d43b2bb88d1e7e4f34ae6df35eb1abf3f",
+      "bytes": 7876
     },
     {
       "path": "ebpf-flow-exporter/README.md",
@@ -1293,6 +1303,11 @@
       "path": "migrations/versions/0023_risk_governance.py",
       "sha256": "c33334717b1474ff7e567757e16393807cb9446754ad7cde4de6ac56a7ab8340",
       "bytes": 5360
+    },
+    {
+      "path": "migrations/versions/0024_cloud_commitments.py",
+      "sha256": "4a755e8782f0d18c53f032e523dea1be628e0259b25395ce2edfd49a2626390c",
+      "bytes": 1300
     },
     {
       "path": "platform/.dockerignore",
@@ -2286,8 +2301,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "de0d303cbd2d6e9d70992e168640c33562f48741c150d67253a23b2ab519c33b",
-      "bytes": 32482
+      "sha256": "2db9bf0e4b00f5b4fdc78c5265e8816fc784c989cf297ff76cafd4c968d278e1",
+      "bytes": 32700
     },
     {
       "path": "services/governance_routes.py",
@@ -2343,6 +2358,11 @@
       "path": "specs/drafts/2026-10-22-tenant-settings-managed-identity.md",
       "sha256": "6f7e336edfff4d8c1ba3e63b87f983272ea65f89fcb4c9590a5c9648a9300deb",
       "bytes": 8114
+    },
+    {
+      "path": "specs/drafts/2026-10-25-provider-cost-and-commitment-extraction.md",
+      "sha256": "ecfd3ac7b69e4dafc4aaf5a994848a4d86031727c2b96599d7910b1104ee1a1f",
+      "bytes": 6265
     },
     {
       "path": "test_platform.py",
@@ -2440,6 +2460,11 @@
       "bytes": 11293
     },
     {
+      "path": "tests/test_commitments.py",
+      "sha256": "e01deb5c4a6afc30ba946cbff93404ae820873cc4628bcb9f0ee490e922452b3",
+      "bytes": 10858
+    },
+    {
       "path": "tests/test_compose.py",
       "sha256": "a0df1ae546a7683333e572a71dc9e20508db0fe7a2fef39c45fb7402959f03f9",
       "bytes": 4636
@@ -2451,8 +2476,8 @@
     },
     {
       "path": "tests/test_database_bootstrap.py",
-      "sha256": "77f27b2bae46c7c9e12c5765829b1e0962c2fd21a14d1110966019b88305f929",
-      "bytes": 4900
+      "sha256": "eaf85cc0134ecd9d568650eacaa5eb7d495772573d9d2031341ddfa52509233a",
+      "bytes": 4902
     },
     {
       "path": "tests/test_delivery.py",
@@ -2586,8 +2611,8 @@
     },
     {
       "path": "tests/test_postgres.py",
-      "sha256": "9a1e6bede98aea26b7f26158de405c444ec698e7e79ffa409ef492e3a21ceec0",
-      "bytes": 80522
+      "sha256": "ec0d3a343c55a5c816d4d8299ea32543ca9b861aa4f75487cc747f2cd87aa1e6",
+      "bytes": 80526
     },
     {
       "path": "tests/test_pricing.py",
@@ -2741,8 +2766,8 @@
     },
     {
       "path": "web-dashboard/app/api/[...path]/route.ts",
-      "sha256": "b3f1db7c7f3bff8b959ceb6b65930b7194a0009012715498bb4e2f713c4c97dc",
-      "bytes": 5473
+      "sha256": "aaed87d13d041fc3bc4d9db541b9a1ad7f38d877871a3b1d01baa258970700aa",
+      "bytes": 5497
     },
     {
       "path": "web-dashboard/app/automation/page.tsx",
@@ -2846,8 +2871,8 @@
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
-      "sha256": "8f00374f7946e4f48226032fabd235983fb75d8fd43fa789f1dc910a5ed06609",
-      "bytes": 18571
+      "sha256": "9dbb96533f2b4fb93588c75e60e3c2611a80eb6d975cde6cc03aeebb2efdac96",
+      "bytes": 24568
     },
     {
       "path": "web-dashboard/components/GitOpsPanel.tsx",
@@ -2886,8 +2911,8 @@
     },
     {
       "path": "web-dashboard/components/WorkspaceViews.tsx",
-      "sha256": "5b55f02294b1eb4b181b228dde975d64fe423c75ed34cf3a151f3ca1e939e915",
-      "bytes": 22917
+      "sha256": "8913c89e0453bd5f3bb89253fef9462e997b74dc0283454ea63f52c4557a78a2",
+      "bytes": 22953
     },
     {
       "path": "web-dashboard/components/agents/AgentWorkspace.tsx",
@@ -3126,8 +3151,8 @@
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "d4546977afa09e014b16d3b9bb9f68dc9d658357407b8306fffa0b3cad5a24e2",
-      "bytes": 18519
+      "sha256": "1d84c66a2cf1eb3f06d76110c249c7301364147ccdbbdd4967099359fb7d769e",
+      "bytes": 18703
     },
     {
       "path": "web-dashboard/lib/api.ts",

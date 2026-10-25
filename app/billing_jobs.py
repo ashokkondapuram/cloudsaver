@@ -64,9 +64,13 @@ class BillingJobs:
             db.execute("UPDATE billing_sync_jobs SET state='running',lease_token=%s,lease_until=%s,updated_at=%s WHERE tenant_id=%s AND id=%s",(token,(now+timedelta(minutes=10)).isoformat(),now.isoformat(),tenant_id,row[0]))
             return dict(id=str(row[0]),token=token,payload=decode(row[1]))
 
-    def execute_scope(self,tenant,claim,*,readers=None,refresh=None):
-        """Read outside DB locks, then fence commits. Replay after a crash is a read plus exact delta deduplication."""
-        from app.collectors.billing_sync import READERS,bindings,_import_snapshot
+    def execute_scope(self,tenant,claim,*,readers=None,refresh=None,commitment_readers=None):
+        """Read outside DB locks, then fence commits. Replay after a crash is a read plus exact delta deduplication.
+
+        Injected billing readers without commitment readers skip commitment collection."""
+        from app.collectors.billing_sync import MAX_ROWS,READERS,bindings,_import_snapshot
+        from app.collectors import commitments as commitment_reader
+        from app import commitment_store
         from app.focus import FocusRepository
         from datetime import date
         import re,os
@@ -75,20 +79,34 @@ class BillingJobs:
             if binding not in bindings(tenant) or os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true')!='true' or (tenant.get('plan') or {}).get('access_suspended'):
                 raise ValueError('Billing grant was revoked')
             rows,grain,warnings=(readers or READERS)[binding['provider']](binding,tenant,date.fromisoformat(p['period_start']),date.fromisoformat(p['period_end']))
-            if len(rows)>5000:raise ValueError('Bounded result limit exceeded')
+            if len(rows)>MAX_ROWS:raise ValueError('Bounded result limit exceeded')
             result=dict(provider=binding['provider'],scope_id=binding['scope_id'],status='completed',granularity=grain,warnings=warnings,coverage_verified=False)
         except Exception:
             rows=None;result=dict(provider=binding['provider'],scope_id=binding['scope_id'],status='failed',error_code='BILLING_SOURCE_UNAVAILABLE_OR_INVALID',correlation_id=claim['id'])
+        snapshot=None
+        selected=commitment_readers if commitment_readers is not None else (None if readers else commitment_reader.READERS)
+        if selected and binding['provider'] in selected and os.getenv('CLOUDSAVER_COMMITMENT_SYNC','true')=='true':
+            try:
+                items,coverage,notes=selected[binding['provider']](binding,tenant,date.fromisoformat(p['period_start']),date.fromisoformat(p['period_end']))
+                snapshot=('completed',dict(items=items,coverage=coverage or {},warnings=notes,summary=commitment_reader.summarize(items),
+                                           period_start=p['period_start'],period_end=p['period_end']))
+            except Exception:
+                # Provider exceptions can include credentials, resource IDs and response bodies.
+                snapshot=('failed',dict(items=[],coverage={},warnings=[],error_code='COMMITMENT_SOURCE_UNAVAILABLE_OR_INVALID',
+                                        period_start=p['period_start'],period_end=p['period_end']))
+            result['commitments']=dict(status=snapshot[0],count=len(snapshot[1]['items']))
         with self.store.transaction(tid,write=True) as db:
             suffix=' FOR UPDATE' if db.postgres else ''
             current=db.execute('SELECT state,lease_token,lease_until FROM billing_sync_jobs WHERE tenant_id=%s AND id=%s'+suffix,(tid,claim['id'])).fetchone()
             if not current or str(current[1])!=claim['token'] or datetime.fromisoformat(str(current[2]).replace('Z','+00:00'))<=datetime.now(timezone.utc):raise WorkflowConflict('Billing lease was lost; no charge commit is permitted')
             if current[0]=='cancel_requested':
                 db.execute("UPDATE billing_sync_jobs SET state='cancelled',updated_at=%s WHERE tenant_id=%s AND id=%s",(datetime.now(timezone.utc).isoformat(),tid,claim['id']));return
-            if rows is not None:
+            if rows is not None or snapshot is not None:
                 live=refresh() if refresh else tenant
                 if not live or not live.get('active',True) or binding not in bindings(live) or (live.get('plan') or {}).get('access_suspended'):
-                    rows=None;result.update(status='failed',error_code='BILLING_SCOPE_REVOKED',correlation_id=claim['id'])
+                    rows=None;snapshot=None;result.update(status='failed',error_code='BILLING_SCOPE_REVOKED',correlation_id=claim['id'])
+            if snapshot is not None:
+                commitment_store.record(db,tid,binding['provider'],binding['scope_id'],claim['id'],*snapshot)
             if rows is not None:
                 db.execute('SAVEPOINT billing_import')
                 try:

@@ -179,6 +179,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def billing_sync_status(row=Depends(allowed),authorization: str=Header()):
         return await forward('GET','scanner','/api/v1/finops/sync-status',authorization)
 
+    @app.get('/api/v1/finops/commitments')
+    async def billing_commitments(row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner','/api/v1/finops/commitments',authorization)
+
     @app.post('/api/v1/gitops/sync-agent')
     @app.post('/api/v1/gitops/preview-and-evaluate')
     async def linked_gitops(request: Request,row=Depends(allowed),authorization: str=Header()):

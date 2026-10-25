@@ -58,6 +58,7 @@ ROUTES = {
     ('GET','/api/v1/gitops/syncs'):'full_scope',
     ('POST','/api/v1/finops/sync'):'full_scope',
     ('GET','/api/v1/finops/sync-status'):'full_scope',
+    ('GET','/api/v1/finops/commitments'):'full_scope',
     ('POST','/api/v1/gitops/sync-agent'):'scan_write',
     ('POST','/api/v1/gitops/preview-and-evaluate'):'scan_write',
     ('GET', '/api/v1/ai/assessments'): 'scoped_read',

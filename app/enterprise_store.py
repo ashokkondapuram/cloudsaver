@@ -11,7 +11,7 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
           'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions',
           'agent_tasks', 'agent_task_events','ai_data_events','ai_data_retention','ai_data_holds',
           'billing_sync_runs','agent_gitops_syncs','billing_sync_jobs','finops_ownership','finops_anomalies',
-          'finops_anomaly_events','finops_suppressions','savings_financial_claims')
+          'finops_anomaly_events','finops_suppressions','savings_financial_claims','cloud_commitment_snapshots')
 
 
 TABLES=TABLES+GOVERNANCE_TABLES
@@ -45,7 +45,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0023_risk_governance before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0024_cloud_commitments before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -88,6 +88,9 @@ class EnterpriseStore:
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,request_key TEXT NOT NULL,state TEXT NOT NULL,
                     payload TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
                     lease_token TEXT,lease_until TEXT,UNIQUE(tenant_id,request_key));
+                CREATE TABLE IF NOT EXISTS cloud_commitment_snapshots (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,provider TEXT NOT NULL,scope_id TEXT NOT NULL,
+                    job_id TEXT,status TEXT NOT NULL,payload TEXT NOT NULL,observed_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS billing_sync_runs (
                     id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,binding_key TEXT NOT NULL,state TEXT NOT NULL,
                     payload TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,lease_until TEXT NOT NULL);

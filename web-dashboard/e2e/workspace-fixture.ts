@@ -81,6 +81,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     else if(path==='/api/v1/ai/targets')response={enabled:!!options.ai,hourly_attempt_limit:10,targets:options.ai?[{target_id:'approved-review',provider:'azure',model:'operator-model'}]:[]};
     else if(path==='/api/v1/finops/sync-status')response={configured:false,automatic_sync_enabled:false,last_synced_at:null,recent_syncs:[],warning:'TEST FIXTURE: Billing connector is unconfigured.'};
     else if(path==='/api/v1/finops/imports')response={items:[]};
+    else if(path==='/api/v1/finops/commitments')response={items:[],scopes:[],summary:{active:0,total:0,expiring_90_days:0,average_utilization_percent:null,unused_commitment_cost:{}}};
     else if(path==='/api/v1/finops/summary')response={currency:new URL(request.url()).searchParams.get('currency')||'USD',records:0,billed_cost:null,effective_cost:null,list_cost:null,effective_savings_rate_pct:null,excluded_overlapping_records:0,warning:'TEST FIXTURE: Imported billing evidence is not provider-reconciled.',daily:[],forecast:null,anomaly:null,providers:[]};
     else if(path==='/api/v1/ai/assessments')response={items:[],next_cursor:null,durable:true};
     else if(path==='/api/v1/ai/usage')response={groups:[],durable:true};

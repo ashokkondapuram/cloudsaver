@@ -67,6 +67,36 @@ export function BillingEvidencePanel(){
   </section>;
 }
 
+type Commitment={provider:string;scope_id:string;commitment_id:string|null;kind:string|null;name:string|null;sku:string|null;region:string|null;term:string|null;quantity:string|null;status:string|null;start:string|null;end:string|null;utilization_percent:string|null;utilization_window_days:number|null;commitment_amount:string|null;commitment_grain:string|null;unused_amount:string|null;net_savings:string|null;currency:string|null};
+type CommitmentScope={provider:string;scope_id:string;status:string;observed_at:string;coverage:Record<string,string|null>|null;warnings:string[]|null;error_code:string|null};
+type Commitments={items:Commitment[];scopes:CommitmentScope[];summary:{active:number;total:number;expiring_90_days:number;average_utilization_percent:string|null;unused_commitment_cost:Record<string,string>}};
+const kindLabels:Record<string,string>={reservation:'Reservation',savings_plan:'Savings plan',committed_use_discount:'Committed use discount'};
+const optionalDay=(value:string|null)=>value?day(value.slice(0,10)):'Unknown';
+const percent=(value:string|null)=>value==null?'Unknown':`${Number(value).toLocaleString('en-US',{maximumFractionDigits:1})}%`;
+const coverageLabels:Record<string,string>={reservation_hours_percent:'Reservation coverage (hours)',savings_plan_spend_percent:'Savings plan coverage (spend)'};
+const coverageLabel=(key:string,value:string|null)=>{const credit=/^committed_use_discount_credits_([a-z]{3})$/.exec(key);if(credit)return `Committed use discount credits: ${amount(value,credit[1].toUpperCase())}`;return `${coverageLabels[key]||sentence(key)}: ${key.endsWith('_percent')?percent(value):value}`;};
+export function CommitmentsPanel(){
+  const {token,canBill}=useWorkspace();
+  const [data,setData]=useState<{identity:string;value:Commitments}|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+  useEffect(()=>{
+    const request=new AbortController();setData(null);setError('');
+    if(canBill&&token)api<Commitments>('/finops/commitments',token,{signal:request.signal}).then(value=>{if(!request.signal.aborted)setData({identity:token,value});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
+    return()=>request.abort();
+  },[token,canBill,revision]);
+  if(!canBill)return null;
+  const visible=data?.identity===token?data.value:null;
+  const unused=visible?Object.entries(visible.summary.unused_commitment_cost):[];
+  return <section className="panel commitments-panel"><SectionTitle title="Commitments" eyebrow="RESERVATIONS · SAVINGS PLANS · COMMITTED USE" action={<button className="button secondary" onClick={()=>setRevision(v=>v+1)}>Refresh</button>}>Provider-reported commitments, utilization and unused cost from your last billing sync</SectionTitle>
+    {error&&<Notice tone="error">{error}</Notice>}
+    {!visible&&!error?<Loading label="Loading commitments…"/>:visible&&<>
+      <div className="allocation-metrics"><article className="metric-card"><div className="metric-label">Active commitments</div><strong>{num(visible.summary.active)}</strong><p className="metric-footnote">{num(visible.summary.total)} reported in total</p></article><article className="metric-card"><div className="metric-label">Average utilization</div><strong>{percent(visible.summary.average_utilization_percent)}</strong><p className="metric-footnote">Across active commitments that report utilization</p></article><article className="metric-card"><div className="metric-label">Unused commitment cost</div><strong className="enterprise-amount">{unused.length?unused.map(([currency,value])=>amount(value,currency)).join(' · '):'Unknown'}</strong><p className="metric-footnote">{num(visible.summary.expiring_90_days)} expiring in the next 90 days</p></article></div>
+      {visible.scopes.filter(scope=>scope.status!=='completed'||scope.warnings?.length).map(scope=><Notice key={scope.provider+scope.scope_id} tone="warning">{scope.status==='completed'?`${scope.scope_id}: ${scope.warnings?.join(' ')}`:`We couldn't read commitments for ${scope.scope_id}. Check that the billing identity has the reader permissions listed in the setup guide.`}</Notice>)}
+      {visible.items.length?<div className="summary-table-scroll" tabIndex={0} aria-label="Cloud commitments"><table className="summary-table"><caption className="sr-only">Provider-reported commitments</caption><thead><tr><th>Provider</th><th>Commitment</th><th>Type</th><th>Term</th><th>Utilization</th><th>Commitment amount</th><th>Unused cost</th><th>Ends</th></tr></thead><tbody>{visible.items.map((item,i)=><tr key={(item.commitment_id||'')+i}><td><ProviderBadge provider={item.provider}/></td><td>{item.name||item.commitment_id||'Unnamed'}{item.sku&&<span className="metric-footnote"> · {item.sku}</span>}{item.region&&<span className="metric-footnote"> · {item.region}</span>}</td><td>{kindLabels[item.kind||'']||sentence(item.kind||'Unknown')}</td><td>{item.term||'Unknown'}</td><td>{percent(item.utilization_percent)}</td><td>{amount(item.commitment_amount,item.currency||'USD')}{item.commitment_grain&&<span className="metric-footnote"> / {item.commitment_grain.toLowerCase()}</span>}</td><td>{amount(item.unused_amount,item.currency||'USD')}</td><td>{optionalDay(item.end)}</td></tr>)}</tbody></table></div>:<EmptyState icon={Wallet} title="No commitments found">Commitments appear after a billing sync reads reservations, savings plans and committed use discounts from your connected providers.</EmptyState>}
+      {visible.scopes.length>0&&<details className="raw-evidence"><summary>Commitment sync status ({visible.scopes.length} scopes)</summary><ul className="assessment-guardrails">{visible.scopes.map(scope=><li key={scope.provider+scope.scope_id}>{scope.provider} · {scope.scope_id} · {sentence(scope.status)} · {dateTime(scope.observed_at)}{scope.coverage&&Object.entries(scope.coverage).filter(([,v])=>v!=null).map(([k,v])=>` · ${coverageLabel(k,v)}`).join('')}</li>)}</ul></details>}
+    </>}
+  </section>;
+}
+
 type Attempt={id:string;scan_id:string;status:string;input_tokens:number|null;output_tokens:number|null;created_at:string;metadata:{provider:string;model:string;target_id:string;evidence_digest?:string;policy_version?:string}};
 type Detail=Attempt&{events:{action:string;created_at:string}[];response:{warning:string;guardrails:string[];advice:{summary:string;risk_level:string;review_questions:string[]}}|null};
 type Usage={groups:{provider:string;model:string;cost_center?:string;application_id?:string;attempts:number;completed:number;incomplete_outcomes:number;input_tokens:number|null;output_tokens:number|null;unmetered_completions:number}[]};

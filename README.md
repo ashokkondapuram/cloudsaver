@@ -2,6 +2,8 @@
 
 v1.7.0 adds workload assessments (application and environment roll-ups of five-pillar evidence), alongside keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md). Existing restored workflows and deployment fixes remain available.
 
+**Latest:** automatic billing sync now reads amortized and per-resource costs from each provider's cost management APIs, plus reservations, savings plans and committed use discounts. Azure imports actual and amortized cost per resource. AWS can read per-resource costs from a CUR 2.0 table through Athena. Google Cloud can read the detailed billing export. Commitment inventory, utilization, coverage, unused cost and upcoming expiry appear in the new Commitments panel on Cost allocation. Every provider call is read-only. See [Cost allocation and billing](docs/features/cost-allocation-and-billing.md).
+
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
 
@@ -43,7 +45,7 @@ Every feature has its own detailed guide covering the dashboard workflow, backen
 | `/services/[service]` | Service-specific analysis matrices (for example disks, compute, databases) |
 | `/kubernetes` | API/Prometheus/OpenCost provenance, allocation slack, backing node billing and carefully gated consolidation models |
 | `/optimization` | Optimization and retail evidence models tied to the selected scan |
-| `/allocation` | Cost grouping, allocation/tag evidence, normalized billing imports and service analysis |
+| `/allocation` | Cost grouping, allocation/tag evidence, normalized billing imports, provider commitments (reservations, savings plans, committed use discounts) and service analysis |
 | `/outcomes` | Savings cases, investigations and outcome evidence |
 | `/governance` | Risk and compliance workflows with human-approved change plans |
 | `/agents` | Exact connector plans, verified human approval, expiring single-use permits and bounded execution evidence |
@@ -282,6 +284,8 @@ docker compose --env-file .\platform\.env -f .\platform\compose.yaml logs --no-c
 
 For an existing installation, apply platform revision `i0013_multicloud_analysis_catalog` and core revision `0019_multicloud_governance_and_pillars` using their schema-owner migration jobs. Rebuild the stack and remove the obsolete tenant/analytics/notification containers with `docker compose up -d --remove-orphans` after checking this deployment's orphan list. This does not remove database volumes. The core service now owns the directory projector; only one core replica should run it.
 
+The current core migration head is `0024_cloud_commitments`, which adds the `cloud_commitment_snapshots` table with forced row-level security. Core services refuse to start until the `migrate` job has applied it.
+
 ```bash
 docker compose build
 docker compose run --rm migrate
@@ -307,6 +311,16 @@ CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES=25
 Live enrichment is opt-in and bounded. Rules require validated history and fresh observations; missing samples are never zero-filled. No-event audit history does not prove continuous idleness. Rightsizing checks include SLO burn, latency sensitivity, throttling and recovery constraints.
 
 FOCUS imports preserve billed, effective and list costs, currency, source identity and charge periods. Resource joins use the exact authorized resource, provider and account. The resource columns show the preceding 30 complete UTC days as of the saved scan, in USD. Other currencies stay in their own finance summaries. Imported billing is not provider reconciliation or verified savings.
+
+Automatic billing sync (`CLOUDSAVER_BILLING_CONNECTORS`) uses each workspace's keyless cloud identity:
+
+| Provider | Costs | Commitments |
+| --- | --- | --- |
+| Azure | Cost Management `ActualCost` (billed) and `AmortizedCost` (effective), per resource | Reservations and savings plans that apply to the subscription, with utilization |
+| AWS | Cost Explorer per account, or CUR 2.0 through Athena per resource when the `athena_*` keys are set | Reserved Instance and Savings Plans utilization, unused commitment, net savings and coverage |
+| Google Cloud | BigQuery standard export per project, or the detailed export per resource when `export_type` is `detailed` | Compute Engine committed use discounts and their billing-export credits |
+
+Commitment reads are best-effort: a failure never blocks the billed-cost import, and provider error text is never stored. Snapshots are append-only in `cloud_commitment_snapshots` and served by `GET /api/v1/finops/commitments` (`BillingAdmin`). Set `CLOUDSAVER_COMMITMENT_SYNC=false` to turn them off. Required cloud permissions are listed in [Managed identity roles](docs/MANAGED_IDENTITY_ROLES.md#billing-and-commitment-read-access).
 
 Azure retail attribution accepts exact regional consumption meters and explicit component quantities for disks, VM compute/storage, compatible target SKUs and gateway fixed/capacity charges. Snapshot storage is deducted from unattached-disk estimates. AWS/GCP regional meters must have an exact provider/region/product/unit identity and a current operator review in `CLOUDSAVER_REGIONAL_PRICE_CATALOG`. No universal or stale rate is silently installed. See the [meter contract and calculation examples](docs/LEAN_CORE_IMPLEMENTATION.md).
 
