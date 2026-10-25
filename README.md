@@ -109,34 +109,31 @@ CLOUDSAVER_CLOUD_IDENTITY=developer
 CLOUDSAVER_INSTALL_AZURE_CLI=true
 ```
 
-From the repository root in PowerShell, copy the Azure-only local override once. If you already customized that file, keep it and review its settings instead of overwriting it. This setup uses a dedicated named volume for the container's CLI cache; it does not require host Python, Azure CLI or a Windows token-cache mount.
+These are the only Azure developer setup flags required. The standard `compose.yaml` already provides a persistent CLI cache shared by the scanner and scan worker, writable by their non-root user. No override file, host Python or host Azure CLI is required. From the repository root, rebuild and start using ordinary Compose commands:
 
 ```powershell
-Copy-Item .\compose.azure-local.example.yaml .\compose.azure-local.yaml
-$c = @('--env-file', '.\.env', '-f', '.\compose.yaml', '-f', '.\compose.azure-local.yaml')
-
-docker compose @c config --quiet
 # A container restart alone cannot install Azure CLI; rebuild the Python image.
-docker compose @c build scanner-service
-docker compose @c up -d --force-recreate scanner-service
-docker compose @c exec scanner-service az version
+docker compose up --build -d
+```
 
-# Replace the placeholder with the Microsoft Entra tenant that owns your subscriptions.
-docker compose @c exec scanner-service az login --use-device-code --tenant "YOUR_ENTRA_TENANT_ID"
-docker compose @c exec scanner-service az account list --query "[].{Subscription:id,Tenant:tenantId,Name:name}" --output table
+The flags do not supply Azure credentials. If this cache has never been signed in, complete a one-time sign-in inside the scanner, replacing the placeholder with the Microsoft Entra tenant that owns your subscriptions:
+
+```powershell
+docker compose exec scanner-service az login --use-device-code --tenant "YOUR_ENTRA_TENANT_ID"
+docker compose exec scanner-service az account list --query "[].{Subscription:id,Tenant:tenantId,Name:name}" --output table
 ```
 
 Run each command only after the previous one succeeds. Complete the device-code sign-in in your browser; the scanner's user needs at least Reader access to the subscriptions selected for its workspace. Keep the browser/device sign-in code private. Then retry the scan in CloudSaver. Each additional Entra tenant must be signed in separately, and workspace tenant IDs must match the real owning Entra tenants.
 
-If you use queued scans, also recreate the Celery scan worker with the same override so it uses the rebuilt image and shared CLI cache:
+If you use queued scans, also start or update the Celery scan worker so it uses the rebuilt image and shared CLI cache:
 
 ```powershell
-docker compose @c up -d --force-recreate scan-worker
+docker compose up -d scan-worker
 ```
 
-Include both Compose files in subsequent local scanner/worker commands. The override deliberately excludes the agent execution worker, platform and other cloud providers. Existing custom overrides are not automatically loaded when these explicit `-f` arguments are used; include any other reviewed overrides explicitly if needed.
+The cache is mounted only in the scanner and scan worker. The agent execution worker, platform and other services do not receive it. Existing optional host-cache overrides can replace these mounts; review a custom `compose.override.yaml` if it still binds a Windows Azure CLI directory. A previously copied `compose.azure-local.yaml` is no longer needed; omit its extra `-f` argument. Its cache volume name matches the standard stack, so an existing container sign-in is retained.
 
-The volume contains developer credentials and survives container recreation. To sign out, use `docker compose @c exec scanner-service az logout`; both scanner and scan worker share that sign-in cache. Use this setup only for development. On Azure, configure an attached managed identity and the reviewed direct/federated access bindings described in [managed identity roles](docs/MANAGED_IDENTITY_ROLES.md), without the local cache override. Setting `managed_identity` alone does not provide an identity on Docker Desktop.
+The volume contains developer credentials and survives container recreation. To sign out, use `docker compose exec scanner-service az logout`; both scanner and scan worker share that sign-in cache. Use developer authentication only for development. On Azure, configure an attached managed identity and the reviewed direct/federated access bindings described in [managed identity roles](docs/MANAGED_IDENTITY_ROLES.md). Managed-identity mode does not use this CLI cache. Setting `managed_identity` alone does not provide an identity on Docker Desktop.
 
 ### Migration fails: role "cloudsaver_app" does not exist
 
