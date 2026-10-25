@@ -1,0 +1,13 @@
+export const PILLARS: readonly string[];
+export const MAX_RESOURCES: number;
+export type AssessmentInput={resource_key:string;provider:string;scope_id:string;resource_id:string;resource_name:string;resource_type:string;rule_ids:string[];pillars:Record<string,string>;risk_check_codes?:string[];protected_reasons?:string[];evidence_gap_codes?:string[]};
+export type OwnershipInput={provider:string;scope_id:string;resource_id:string;application:string;environment:string;version:number;owner?:string;team?:string};
+export type PreviewAction={id:string;title:string;prerequisites:string[];steps:string[];verification:string[];recovery:string;executable:false;approval_granted:false;target_sku:null};
+export type Preview={status:'review_only'|'unsupported_template';actions:PreviewAction[];automatic_execution:false;protected_reasons:string[]};
+export type Member={identity:string;resource_key:string;provider:string;scope_id:string;resource_id:string;resource_name:string;resource_type:string;owner:string;team:string;pillars:Record<string,string>;evidence_gap_codes:string[];preview:Preview};
+export type Workload={id:string;application:string;environment:string;members:Member[];pillars:{pillar:string;counts:{risk:number;unknown:number;observed:number}}[];automatic_execution:false;verified_savings:null;dependency_coverage:'unknown'};
+export type Projection={workloads:Workload[];unassigned:number;ambiguous:number;total:number;membership_basis:string;automatic_execution:false};
+export function resourceIdentity(item:{provider:string;scope_id:string;resource_id:string}):string;
+export function remediationPreview(item:AssessmentInput):Preview;
+export function groupWorkloads(resources:AssessmentInput[],mappings:OwnershipInput[]):Projection;
+export function loadWorkloadInputs(request:(path:string,options:{signal?:AbortSignal})=>Promise<unknown>,scanId:string,signal?:AbortSignal):Promise<{projection:Projection;observed_at:string|null}>;
