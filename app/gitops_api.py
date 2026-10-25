@@ -2,7 +2,7 @@
 import os
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.concurrency import run_in_threadpool
 
@@ -153,6 +153,16 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
             return repository.get(tenant['tenant_id'],id)
         except ReviewConflict as exc:
             raise HTTPException(409,str(exc)) from None
+
+    @router.get('/api/v1/gitops/resource-mapping')
+    def resource_mapping(resource_id: str = Query(..., min_length=1, max_length=2048), tenant=Depends(current_tenant)):
+        from app.gitops_ast_mapper import GitOpsAstMapper
+        try:
+            return GitOpsAstMapper().lookup(resource_id)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+        except KeyError:
+            raise HTTPException(404, 'No index entry for resource_id') from None
 
     @router.post('/api/v1/gitops/requests',status_code=201)
     async def publish(request:Request,tenant=Depends(current_tenant)):

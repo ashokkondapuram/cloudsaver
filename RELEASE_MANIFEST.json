@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "fd5f09f8137abe4d3e78b9f1390af8b38954b3bbe2a5ba170b24db63826a7bd3",
+  "inventory_sha256": "199af8a41b68367d4890935523d251033a3e856ca7d036c49f246fd5023e1120",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -466,8 +466,8 @@
     },
     {
       "path": "app/gitops_api.py",
-      "sha256": "ccaa21d42546dee54e359562c2000bb9aca49889cb11ca8dee431b99efd15c7d",
-      "bytes": 8600
+      "sha256": "0852b29abd9f223d87c72732d6e22838fe56bab650a8c86e8b41da47d7ab50d3",
+      "bytes": 9104
     },
     {
       "path": "app/gitops_store.py",
@@ -666,8 +666,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "ef5535068d0c99ec89466588e2ea23ec6447434dc8df3e3738dbc26116604e71",
-      "bytes": 10260
+      "sha256": "71c2a4267380c96dd5f6a0e859d7108047365e2c201f0d7a0124cd3f8425e29e",
+      "bytes": 10323
     },
     {
       "path": "app/runtime.py",
@@ -2161,8 +2161,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "fadc6837e864fb029a89137463ead730d75ab65f7d7d2a4cbb3ac88ffbd0d9c8",
-      "bytes": 31739
+      "sha256": "80387dcddf261aa824fb5fe78a2ca96a5d2aecccde43a069007898e8d93c94e3",
+      "bytes": 32069
     },
     {
       "path": "services/governance_routes.py",
@@ -2498,6 +2498,11 @@
       "path": "tests/test_scanner.py",
       "sha256": "1d7e823aa0552fd6d16f47da48302215fa77acd06497ac6984b77bec82c870e5",
       "bytes": 4511
+    },
+    {
+      "path": "tests/test_scoped_finops_routes.py",
+      "sha256": "ab7f15d5a1d9f1624ee93ffa3ffe16115fb0a839c189d98fb098503fe7c498e7",
+      "bytes": 4269
     },
     {
       "path": "tests/test_service_analysis_api.py",

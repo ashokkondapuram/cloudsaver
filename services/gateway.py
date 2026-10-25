@@ -515,6 +515,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def gitops_request(request_id:UUID,row=Depends(allowed),authorization:str=Header()):
         return await forward('GET','scanner',f'/api/v1/gitops/requests/{request_id}',authorization)
 
+    @app.get('/api/v1/gitops/resource-mapping')
+    async def gitops_resource_mapping(resource_id: str = Query(..., min_length=1, max_length=2048), row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/gitops/resource-mapping', authorization, {'resource_id': resource_id})
+
 
     @app.post('/api/v1/gitops/preview')
     async def gitops_preview(request:Request,row=Depends(allowed),authorization:str=Header()):
