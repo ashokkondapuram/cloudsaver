@@ -41,23 +41,26 @@ class DirectoryProjector:
 
     def run_once(self):
         """Apply every pending change; returns the number applied."""
-        applied = 0
-        while True:
-            cursor = self.registry.projection_cursor()
-            response = self.client.get('/internal/v1/directory/changes', params={'after': cursor, 'limit': 500})
-            if response.status_code == 410:
-                self.resync()
-                return applied
-            if response.status_code != 200:
-                raise RuntimeError('Directory change feed unavailable')
-            items = response.json()['items']
-            for change in items:
-                self.apply(change)
-                self.registry.set_projection_cursor(change['seq'])
-                applied += 1
-            if len(items) < 500:
-                self.last_success = self.clock()
-                return applied
+        with self.registry.projection_transaction() as acquired:
+            if not acquired:return 0
+            applied = 0
+            while True:
+                cursor = self.registry.projection_cursor()
+                response = self.client.get('/internal/v1/directory/changes', params={'after': cursor, 'limit': 500})
+                if response.status_code == 410:
+                    self.resync()
+                    return applied
+                if response.status_code != 200:
+                    raise RuntimeError('Directory change feed unavailable')
+                items = response.json()['items']
+                for change in items:
+                    self.apply(change)
+                    self.registry.set_projection_cursor(change['seq'])
+                    applied += 1
+                if len(items) < 500:
+                    self.registry.set_projection_cursor(self.registry.projection_cursor())
+                    self.last_success = self.clock()
+                    return applied
 
     def lag_seconds(self):
         return None if self.last_success is None else max(0.0, self.clock() - self.last_success)

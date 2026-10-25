@@ -47,7 +47,8 @@ class JobBusy(RuntimeError):
 
 @celery_app.task(name='workers.tasks.sync_authorized_cloud_billing')
 def sync_authorized_cloud_billing():
-    from app.collectors.billing_sync import bindings,sync_workspace_billing
+    from app.collectors.billing_sync import bindings
+    from app.billing_jobs import BillingJobs
     from app.enterprise_store import EnterpriseStore
     from app.focus import FocusRepository
     settings=Settings.load()
@@ -56,7 +57,7 @@ def sync_authorized_cloud_billing():
         if (tenant.get('plan') or {}).get('access_suspended') is True:continue
         try:
             if bindings(tenant):
-                run=sync_workspace_billing(tenant,FocusRepository(EnterpriseStore(settings)),currency=None)
+                run=BillingJobs(EnterpriseStore(settings)).submit(tenant,'schedule:'+datetime.now(timezone.utc).strftime('%Y-%m-%dT%H'),currency=None)
                 result.append(dict(tenant_id=tenant['tenant_id'],status=run['status'],run_id=run['id']))
         except Exception:
             result.append(dict(tenant_id=tenant['tenant_id'],status='unavailable'))

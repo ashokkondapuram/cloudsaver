@@ -134,7 +134,7 @@ def utc(value):
 class FocusRepository:
     def __init__(self,store): self.store=store
 
-    def import_records(self,tenant,payload):
+    def import_records(self,tenant,payload,*,_db=None):
         validate_scope(payload,tenant)
         raw=payload.model_dump(mode='json')
         for row in raw['records']:
@@ -144,7 +144,8 @@ class FocusRepository:
         fingerprint=digest(raw);tenant_id=tenant['tenant_id']
         batch_id=str(uuid4());now=datetime.now(timezone.utc).isoformat()
         actor=digest(dict(tenant=tenant_id,user=tenant.get('user_id','workspace_key')))
-        with self.store.transaction(tenant_id,write=True) as db:
+        from contextlib import nullcontext
+        with (nullcontext(_db) if _db is not None else self.store.transaction(tenant_id,write=True)) as db:
             prior=db.execute('SELECT id,fingerprint,records,inserted FROM focus_imports WHERE tenant_id=%s AND source_id=%s',(tenant_id,payload.source_id)).fetchone()
             if prior:
                 if prior[1]!=fingerprint: raise FocusError('Source ID already belongs to different billing data',409)

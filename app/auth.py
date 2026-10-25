@@ -242,10 +242,12 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         access.set(None)
         if not credentials or credentials.scheme.lower() != 'bearer':
             raise HTTPException(401, 'Authentication required', headers={'WWW-Authenticate': 'Bearer'})
+        from app.config import require_directory_freshness
+        try:await run_in_threadpool(require_directory_freshness,settings)
+        except Exception:raise HTTPException(503,'Workspace directory is not fresh enough to authorize access',headers={'Retry-After':'5'}) from None
         token = credentials.credentials
-        if mode == 'entra':
-            return await run_in_threadpool(entra, token)
-        result = await run_in_threadpool(workspace, token, client_ip.get(), request_id.get())
+        result = (await run_in_threadpool(entra, token) if mode=='entra' else
+                  await run_in_threadpool(workspace, token, client_ip.get(), request_id.get()))
         if (result.get('plan') or {}).get('access_suspended') is True:
             if not (request.url.path.startswith('/api/v1/customer/') or request.url.path.startswith('/api/v1/billing/')
                     or request.url.path == '/api/v1/me'):

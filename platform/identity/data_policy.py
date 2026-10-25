@@ -42,11 +42,15 @@ def validate_data_governance(value):
             match('endpoint_url',r'https://[a-z0-9][a-z0-9-]{1,62}\.(?:openai\.azure\.com|cognitiveservices\.azure\.com|services\.ai\.azure\.com)/?')
             match('deployment_name',r'[A-Za-z0-9._-]{1,160}')
         elif provider=='aws':
-            match('aws_account_id',r'[0-9]{12}');match('aws_region',r'[a-z]{2}-[a-z0-9-]{2,24}-[0-9]')
+            match('aws_account_id',r'[0-9]{12}')
+            match('aws_region',r'[a-z]{2}-[a-z0-9-]{2,24}-[0-9]')
             match('aws_role_arn',r'arn:aws:iam::'+row['aws_account_id']+r':role/[A-Za-z0-9+=,.@_/-]{1,512}')
-            match('model_id',r'[A-Za-z0-9._:/-]{1,512}');match('guardrail_id',r'[a-z0-9]{8,64}');match('guardrail_version',r'[1-9][0-9]{0,7}')
+            match('model_id',r'[A-Za-z0-9._:/-]{1,512}')
+            match('guardrail_id',r'[a-z0-9]{8,64}')
+            match('guardrail_version',r'[1-9][0-9]{0,7}')
         else:
-            match('gcp_project_id',r'[a-z][a-z0-9-]{4,28}[a-z0-9]');match('gcp_location',r'[a-z]+-[a-z]+[0-9]')
+            match('gcp_project_id',r'[a-z][a-z0-9-]{4,28}[a-z0-9]')
+            match('gcp_location',r'[a-z]+-[a-z]+[0-9]')
             match('gcp_service_account',r'[a-z0-9-]{6,30}@'+re.escape(row['gcp_project_id'])+r'\.iam\.gserviceaccount\.com')
             match('model_id',r'gemini-[a-z0-9.-]+')
             if row['vpc_sc_enforced'] is not True:raise ValueError('Record a reviewed VPC-SC enforcement attestation.')

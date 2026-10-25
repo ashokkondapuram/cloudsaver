@@ -110,7 +110,7 @@ def install(app, settings, *, redis_required=False, targets=()):
             raise ValueError('CORS origins must be exact HTTPS origins or local HTTP origins')
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
-                           allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type', 'X-Request-ID'],
+                           allow_methods=['GET', 'POST', 'PUT', 'PATCH'], allow_headers=['Authorization', 'Content-Type', 'X-Request-ID'],
                            expose_headers=['X-Request-ID', 'Retry-After', 'Location'])
 
     @app.exception_handler(StarletteHTTPException)
@@ -175,6 +175,11 @@ def install(app, settings, *, redis_required=False, targets=()):
                 if result.status_code != 200:
                     raise RuntimeError('Dependency unavailable')
         checks[name] = check
+    if os.getenv('CLOUDSAVER_ENVIRONMENT')=='production':
+        async def directory_probe():
+            from app.config import require_directory_freshness
+            await run_in_threadpool(require_directory_freshness,settings)
+        checks['directory_projection']=directory_probe
     app.state.readiness_checks = checks
 
     @app.get('/readyz', include_in_schema=False)

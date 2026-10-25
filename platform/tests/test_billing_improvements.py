@@ -78,3 +78,9 @@ def test_billing_lapse_updates_projection_once_and_keeps_commercial_plan(monkeyp
         assert tx.get_workspace(TID)['plan_tier'] == 'STARTER'
         assert tx.get_subscription(sub['id'])['plan_code'] == 'GROWTH'
     assert any(e['event'] == 'entitlements_changed' for e in service.store.state['cache_events'])
+
+
+def test_customer_billing_list_uses_default_plan_without_a_subscription():
+    service=build();customer=workspace(service)
+    result=service.list_billing_customers()
+    assert any(row['customer_id']==customer['id'] for row in result['items'])

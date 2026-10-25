@@ -41,6 +41,37 @@ def key_verifier():
     return value
 
 
+def validate_production(database_url):
+    """Production is an enforceable profile, never an alias for development."""
+    environment=os.getenv('CLOUDSAVER_ENVIRONMENT','development')
+    if environment not in ('development','test','staging','production'):
+        raise ValueError('Unsupported CLOUDSAVER_ENVIRONMENT')
+    if environment!='production':return
+    if not database_url or not database_url.startswith(('postgresql://','postgresql+psycopg://')):
+        raise ValueError('Production requires PostgreSQL; SQLite is development-only')
+    if os.getenv('CLOUDSAVER_CLOUD_IDENTITY','managed_identity')!='managed_identity':
+        raise ValueError('Production prohibits developer cloud credentials')
+    if os.getenv('CLOUDSAVER_AGENT_AZURE_IDENTITY','managed_identity') not in ('managed_identity','workload_identity'):
+        raise ValueError('Production prohibits developer agent credentials')
+    if os.getenv('CLOUDSAVER_INSTALL_AZURE_CLI','false').lower()=='true':
+        raise ValueError('Production images must not enable developer Azure CLI access')
+    if key_verifier()!='identity' or directory_mode()!='cutover' or os.getenv('CLOUDSAVER_TENANT_REGISTRY')!='database':
+        raise ValueError('Production requires identity verification and authoritative database directory cutover')
+    mode=os.getenv('CLOUDSAVER_AUTH_MODE','workspace')
+    if mode not in ('workspace','entra'):raise ValueError('Unsupported production authentication mode')
+    if mode=='entra' and (os.getenv('CLOUDSAVER_ENTRA_ACCESS_POLICY')!='tenant_roles' or not os.getenv('CLOUDSAVER_ENTRA_AUDIENCE')):
+        raise ValueError('Production Entra mode requires an audience and explicit tenant_roles workspace access policy')
+
+
+def require_directory_freshness(settings):
+    if os.getenv('CLOUDSAVER_ENVIRONMENT')!='production':return
+    registry=settings.registry
+    lag=registry.projection_lag_seconds() if registry is not None else None
+    maximum=int(os.getenv('CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS','30'))
+    if not 5<=maximum<=300:raise ValueError('Directory freshness bound must be 5 to 300 seconds')
+    if lag is None or lag>maximum:raise RuntimeError('Authoritative directory projection is stale')
+
+
 @dataclass(frozen=True)
 class Settings:
     mode: str
@@ -48,6 +79,9 @@ class Settings:
     bootstrap_tenants: tuple
     database_url: str | None = None
     registry: object = field(default=None, compare=False, repr=False)
+
+    def __post_init__(self):
+        validate_production(self.database_url)
 
     @property
     def tenants(self):
@@ -62,6 +96,7 @@ class Settings:
         if mode != 'azure':
             raise ValueError('CLOUDSAVER_MODE must be azure')
         database_url = os.getenv('CLOUDSAVER_DATABASE_URL') or None
+        validate_production(database_url)
         use_registry = os.getenv('CLOUDSAVER_TENANT_REGISTRY', 'env') == 'database'
         if use_registry and not database_url:
             raise ValueError('CLOUDSAVER_TENANT_REGISTRY=database requires CLOUDSAVER_DATABASE_URL')

@@ -18,3 +18,7 @@ cloudsaver-operator-key.txt
 
 compose.override.yaml
 compose.azure-local.yaml
+
+# Local verification artifacts
+.coverage
+coverage.xml

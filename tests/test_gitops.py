@@ -20,7 +20,7 @@ from app.store import Store
 
 TENANT='11111111-1111-4111-8111-111111111111'
 SUB='22222222-2222-4222-8222-222222222222'
-KEY='test-gitops-key-with-at-least-32-characters'
+KEY='test-gitops-key-with-at-least-32-characters'  # gitleaks:allow -- fixed public synthetic test constant
 TARGET=dict(tenant_id=TENANT,target_id='infra',repository='example/infra',repository_id=123,base_branch='main',installation_id=456)
 
 

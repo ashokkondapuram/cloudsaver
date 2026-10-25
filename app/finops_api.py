@@ -1,7 +1,8 @@
 """Explicit normalized billing ingestion; tenant-owned, finance-authorized access."""
 from datetime import date, datetime, timezone
 import json
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from uuid import UUID
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 from app.auth import Role, require_workspace_role
@@ -16,16 +17,35 @@ def create_router(repository, current_tenant):
         require_workspace_role(tenant,Role.BILLING_ADMIN)
         return tenant
 
-    @router.post('/sync')
-    async def sync(currency: str = Query('USD',pattern=r'^[A-Z]{3}$'),tenant=Depends(finance)):
-        from app.collectors.billing_sync import sync_workspace_billing
+    @router.post('/sync',status_code=202)
+    async def sync(request:Request,response:Response,currency:str=Query('USD',pattern=r'^[A-Z]{3}$'),tenant=Depends(finance)):
+        from app.billing_jobs import BillingJobs
         from app.v150_store import WorkflowConflict
+        raw=await bounded_json(request)
         try:
-            return await run_in_threadpool(sync_workspace_billing,tenant,repository,currency=currency)
-        except FocusError as error:
-            raise HTTPException(error.status,str(error)) from None
-        except WorkflowConflict as error:
-            raise HTTPException(409,str(error)) from None
+            if not isinstance(raw,dict) or set(raw)!={'idempotency_key'}:raise ValueError()
+            key=str(UUID(raw['idempotency_key']))
+        except (ValueError,TypeError,KeyError):raise HTTPException(422,'Provide a UUID idempotency_key') from None
+        try:result=await run_in_threadpool(BillingJobs(repository.store).submit,tenant,key,currency)
+        except FocusError as error:raise HTTPException(error.status,str(error)) from None
+        except WorkflowConflict as error:raise HTTPException(409,str(error)) from None
+        response.headers['Location']=result['poll_url'];response.headers['Retry-After']='3'
+        return result
+
+    @router.get('/sync-jobs/{job_id}')
+    def sync_job(job_id:UUID,response:Response,tenant=Depends(finance)):
+        from app.billing_jobs import BillingJobs
+        result=BillingJobs(repository.store).get(tenant['tenant_id'],str(job_id))
+        if result is None:raise HTTPException(404,'Billing job not found')
+        if result['status'] in ('queued','running','cancel_requested'):response.headers['Retry-After']='3'
+        return result
+
+    @router.post('/sync-jobs/{job_id}/cancel')
+    def cancel_sync(job_id:UUID,tenant=Depends(finance)):
+        from app.billing_jobs import BillingJobs
+        result=BillingJobs(repository.store).cancel(tenant['tenant_id'],str(job_id))
+        if result is None:raise HTTPException(404,'Billing job not found')
+        return result
 
     @router.get('/sync-status')
     def billing_sync_status(tenant=Depends(finance)):
@@ -60,15 +80,6 @@ def create_router(repository, current_tenant):
             if budget is not None:
                 budget=money(budget)
                 if budget.startswith('-'): raise ValueError('Budget cannot be negative')
-            # Initial hydration is opt-in through an operator-owned connector;
-            # failed/recent runs are not retried on every page load.
-            from app.collectors.billing_sync import bindings,sync_status,sync_workspace_billing
-            from app.v150_store import WorkflowConflict
-            if not repository.imports(tenant,1) and bindings(tenant):
-                status=sync_status(tenant,repository)
-                if status['automatic_sync_enabled'] and not status['recent_syncs']:
-                    try:sync_workspace_billing(tenant,repository,currency=currency)
-                    except (FocusError,WorkflowConflict):pass
             return repository.summary(tenant,start,end,currency,budget)
         except (FocusError,ValueError) as error:
             raise HTTPException(error.status if isinstance(error,FocusError) else 422,

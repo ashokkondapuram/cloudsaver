@@ -41,7 +41,7 @@ def test_checkout_returns_gone_with_or_without_a_key(settings, app):
     client = TestClient(built)
     for headers in ({}, {'Authorization': 'Bearer ' + KEY}):
         response = client.post('/api/v1/billing/checkout', headers=headers,
-                               json={'target_tier': 'GROWTH', 'idempotency_key': 'test-key-12345678'})
+                               json={'target_tier': 'GROWTH', 'idempotency_key': 'test-key-12345678'})  # gitleaks:allow -- fixed public synthetic test constant
         assert response.status_code == 410 and response.json()['detail'] == CHECKOUT
 
 

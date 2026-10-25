@@ -1,15 +1,28 @@
 {
-  "version": "1.0.0",
+  "version": "1.5.1",
+  "inventory_sha256": "9be59e0a6fd266dcf9684988154e583b3f1b32091c8f1e6970387c1d4bc1fea8",
+  "migration_heads": {
+    "core": "0021_billing_jobs",
+    "identity": "i0013_multicloud_analysis_catalog"
+  },
+  "exclusions": [
+    "RELEASE_MANIFEST.json (self-reference)"
+  ],
   "files": [
     {
       "path": ".dockerignore",
-      "sha256": "ee310ec57770e85cd915d03f8d4d64c8c7fd23ff2130dce1a197587de1a4dc2d",
-      "bytes": 64
+      "sha256": "f5c3c37c00c155c709f5067c89fce8e253faa1a39480e60509a92e4d9d8a62af",
+      "bytes": 169
     },
     {
       "path": ".env.example",
-      "sha256": "a4cd3b12f2935764c67a6e840fd91bf8fc684b7d80ff674273e9d44a1c49d6f4",
-      "bytes": 4347
+      "sha256": "88bd61927d8a98ad6dc2872b7908c2e4935f491af84a6c79d61fdd1c7a54237f",
+      "bytes": 13112
+    },
+    {
+      "path": ".gitattributes",
+      "sha256": "24ca0b16da10782cf67a8239fa80fc106855fe2b67d98fb48740289e0fee24d1",
+      "bytes": 122
     },
     {
       "path": ".github/actions/finops/action.yml",
@@ -18,23 +31,28 @@
     },
     {
       "path": ".github/dependabot.yml",
-      "sha256": "ed29fdb73920be7c3b8548f207b6fca4af78b0378dcca8ded94dc68d0bc8af77",
-      "bytes": 383
+      "sha256": "e3b087493cee21687745b0eb584021b01fc68b5bfdfe5317488c034081edaacd",
+      "bytes": 757
     },
     {
       "path": ".github/workflows/verify.yml",
-      "sha256": "6423a33932fedf1a83e62ae7647d49fcedf77a17a1fb61226ea4ecbe493293ae",
-      "bytes": 2203
+      "sha256": "62219b5f1304f24c9389684750c89011cae9c81f87c74d4b1247163f07cc3b4d",
+      "bytes": 8442
     },
     {
       "path": ".gitignore",
-      "sha256": "544a238d7c7fc52d62e8cd5daef3f2a378d37cb16468b615d29d2a0881a0bac9",
-      "bytes": 110
+      "sha256": "61bca818bd828343394d1a6f7eb8101fa1d97c6b69b2d5c025732822f07f7188",
+      "bytes": 312
+    },
+    {
+      "path": ".nvmrc",
+      "sha256": "d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
+      "bytes": 8
     },
     {
       "path": "CHANGELOG.md",
-      "sha256": "423e2d4426cff3399957fb0baf57c1a800b291c862ead6819e5e7dc78c8444d2",
-      "bytes": 4219
+      "sha256": "192307d0c27165085d33fe1f3da9cdd2dfb55181ae51fb34a67a31af62d202c5",
+      "bytes": 5912
     },
     {
       "path": "Dockerfile",
@@ -43,8 +61,8 @@
     },
     {
       "path": "Dockerfile.services",
-      "sha256": "5989becaf8a5583dbc23d299de827975fba9de5c14a118fc69ca2af242e6f28d",
-      "bytes": 1130
+      "sha256": "932bad267aa78ca87bdd1be5c2bd9cfb48bd3f20e27ec36189f4bb4463445ae5",
+      "bytes": 1213
     },
     {
       "path": "Dockerfile.services.dockerignore",
@@ -58,18 +76,18 @@
     },
     {
       "path": "Makefile",
-      "sha256": "e7483ecda07f0234cffad2a2d5456d6ab9d612dc531bdaa06c6d8dc767c60162",
-      "bytes": 359
+      "sha256": "127cdd845809679f355894a7384262292efdaa483853a8731af574e050e1110b",
+      "bytes": 706
     },
     {
       "path": "README.md",
-      "sha256": "3c6c2fe67d78fdf4a19b6511d1828ffdc00b452ce9f0660e5b8b3ee0f3b5dbf1",
-      "bytes": 18263
+      "sha256": "15693f4b5dd7b3a0bcda087dd085609ee559cf2ba3363d321ee28028ed8651dd",
+      "bytes": 21449
     },
     {
       "path": "ROADMAP.md",
-      "sha256": "c81f8a65a1bad7fb8625ddecca2b0586ff1fc75e22f2fc65818f2ca9ffe2c275",
-      "bytes": 7657
+      "sha256": "d25fc2aca04fa00a10391a72ccbc38efd9cc6cf715287df1cf6bdb92e4cbb28d",
+      "bytes": 8137
     },
     {
       "path": "SOURCE_CONTEXT.md",
@@ -87,139 +105,469 @@
       "bytes": 6975
     },
     {
+      "path": "agent-worker/.dockerignore",
+      "sha256": "e3e542009891b21e1a069a2ca8b2df0ddaf4002718b0d40ee22575e465024191",
+      "bytes": 58
+    },
+    {
+      "path": "agent-worker/Dockerfile",
+      "sha256": "f8d5ee74d86f15dc9a51eab7836dea6c50749d4a4894bc5a7e25bb3fbfe804f7",
+      "bytes": 473
+    },
+    {
+      "path": "agent-worker/package-lock.json",
+      "sha256": "bd84931a8f97acfbb0cad4d0175cee85699793b57f96e57eaedc390f5e00dc1a",
+      "bytes": 47757
+    },
+    {
+      "path": "agent-worker/package.json",
+      "sha256": "035dffbe5398d72e7be3c1f61d11528c6efda78e43e6aea9971b852a13de117f",
+      "bytes": 699
+    },
+    {
+      "path": "agent-worker/src/connectors.ts",
+      "sha256": "ae56ce08d876ea91570df4d2de795eef2df3a10b38d325245529ff8e2a6dc7cb",
+      "bytes": 9777
+    },
+    {
+      "path": "agent-worker/src/contracts.ts",
+      "sha256": "c4ece52022dcff2bf9b6c1426d8150c47d7ba928a77d925787bf4a4ddb087fab",
+      "bytes": 10021
+    },
+    {
+      "path": "agent-worker/src/http.ts",
+      "sha256": "dae9acd19182cb5745450e5ffe97cc817670b5d37a4ff86c9608dc0a7e24048b",
+      "bytes": 898
+    },
+    {
+      "path": "agent-worker/src/main.ts",
+      "sha256": "8ca2a77f38b5c0076f405536491cd381c495ef34ab6ecd08ee94bd1a8f77b59f",
+      "bytes": 3510
+    },
+    {
+      "path": "agent-worker/src/multicloud.ts",
+      "sha256": "c96cd954267a41822692a1fff06f01b790b150fe1a4b51ef20285ec3a383968d",
+      "bytes": 14046
+    },
+    {
+      "path": "agent-worker/src/runtime.ts",
+      "sha256": "332bf64312f657fbcff3578a655ced3a428c632f4f2f8c65b3fed2da7b988ca0",
+      "bytes": 2263
+    },
+    {
+      "path": "agent-worker/tests/azure-identity.test.ts",
+      "sha256": "7f491239318544ca098d4bc822bebf43d2aa96bd2d62d9979ed0e8d9e4e251ff",
+      "bytes": 3379
+    },
+    {
+      "path": "agent-worker/tests/multicloud.test.ts",
+      "sha256": "2d922a737e9b813be7f1fa2461c60e7a2236d50024e8db0b7a8a695322063e78",
+      "bytes": 11531
+    },
+    {
+      "path": "agent-worker/tests/runtime.test.ts",
+      "sha256": "9b117fc420985739ac1a6bd3fc82ac5749e911b9c59feb3784ebe3b0299b9ee3",
+      "bytes": 10231
+    },
+    {
+      "path": "agent-worker/tsconfig.json",
+      "sha256": "0ea044b497de909e1fc59be690c66e4fbac27b56b960cef3f8e1f4c412644347",
+      "bytes": 300
+    },
+    {
       "path": "alembic.ini",
       "sha256": "936131c7519cf6cc9c0b293ad625521aa01f2886e3d1f59912fe23dc15ede369",
       "bytes": 194
     },
     {
       "path": "app/__init__.py",
-      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
-      "bytes": 1
+      "sha256": "ce2fcb6944ff3ac0a102db0f5db39e4694240a8852b0ec9e5df6af40f3341a81",
+      "bytes": 22
+    },
+    {
+      "path": "app/access_probe.py",
+      "sha256": "ad927acce2b5ab3b21545c53911f80af42fce829df5ecf662e6513a1f5e44a97",
+      "bytes": 5521
+    },
+    {
+      "path": "app/access_worker.py",
+      "sha256": "ec407f9c94ddb80c7e4324cc165b9dcb5f235ff9ff89f3783dc85e3c0c038632",
+      "bytes": 1508
+    },
+    {
+      "path": "app/agent_contract.py",
+      "sha256": "b78e724b49001347ebcbfc12dabebf44d2eeabb7baa641008f515436e2a9de41",
+      "bytes": 16200
+    },
+    {
+      "path": "app/agent_gitops_sync.py",
+      "sha256": "c6d34fbd527f4fa70440bac14b25d967cd6e32044eb5c7556e9b3fb84306f1be",
+      "bytes": 8856
+    },
+    {
+      "path": "app/agent_planner.py",
+      "sha256": "00eb975b300aea75bc3143b8e69bd4e47bb48c39716a6cca6aedd7fb5f0c93db",
+      "bytes": 3658
+    },
+    {
+      "path": "app/agent_store.py",
+      "sha256": "3efa6e63eaf0e18f69b27bf5d3310d8a06e9a60b1f50bd017f49d997c847ff42",
+      "bytes": 18717
     },
     {
       "path": "app/ai_advisory.py",
-      "sha256": "ef0b7b7f21bbe83811e226ff3650d274c0dfcb9e7714058e5d7b88e2529b4a59",
-      "bytes": 19800
+      "sha256": "9dd4fbc490e37b690ba3b743cfbac68067f4c538b29b2c76e41c15d50cdfb94c",
+      "bytes": 37863
+    },
+    {
+      "path": "app/ai_capacity.py",
+      "sha256": "1526bdb9e0577239aa1dc6a46272bd88b006025951616f7da8c6fce91ebd16c3",
+      "bytes": 1518
+    },
+    {
+      "path": "app/ai_platform_policy.py",
+      "sha256": "b4943d7ac2716de84f73f0f654adead674480bb7bc2416a980f6382f662ad1d5",
+      "bytes": 2839
+    },
+    {
+      "path": "app/analysis_rules.py",
+      "sha256": "07bf3633de1874290baa31c21cb2d2b00d6973683ef418689dfa19b941ab1a59",
+      "bytes": 11504
+    },
+    {
+      "path": "app/analytics.py",
+      "sha256": "1552dee39fd56e45964918101ed2cd1cc38588b2b66fbb52753ea2d44b96851e",
+      "bytes": 938
     },
     {
       "path": "app/assessment.py",
-      "sha256": "c5d575cebe2a915d0a4bbcec895dbf0515e351064b1238ed5c6696790093fa03",
-      "bytes": 14094
+      "sha256": "9c8db3c2d2fad907f333e9b7ad5f14f67f644e8381ad8e79acaade90896eade3",
+      "bytes": 22325
     },
     {
       "path": "app/assessment_api.py",
-      "sha256": "97749ffb45e6dec857f23a4247390bcb149e0e9b2fb6f66d03d9a8cee520182c",
-      "bytes": 6078
+      "sha256": "d1002b84dce6bc3c3225822e80a48af09a6ba19af04928e21617b613ac4dfa21",
+      "bytes": 4819
     },
     {
       "path": "app/assessment_policy.py",
-      "sha256": "3ead84a042b387a4a5ce4ee438177d4a0b14bd4d443f262cbcfe024b849c72e7",
-      "bytes": 5967
+      "sha256": "d48d55ced184795353451fd68b42146361390f69bbd2fbc594d10dcc7ab6ab4c",
+      "bytes": 6320
     },
     {
       "path": "app/auth.py",
-      "sha256": "4571acf3af57273c1531574a6c8ad4c81beef3e6f6e94e7422010f77144cb207",
-      "bytes": 9923
+      "sha256": "c2fb1389e65df3db102a621a7d5ec5b89c4218cb16a80731a3f589c8682127fe",
+      "bytes": 16064
+    },
+    {
+      "path": "app/aws_rules.py",
+      "sha256": "51d7f8ba428b2f5185f862af93571381a0dd36b09cbe783423575903082ff9d6",
+      "bytes": 340
+    },
+    {
+      "path": "app/billing_jobs.py",
+      "sha256": "01ca7ee08b770ba49683f1d2112b1da66be83b4a3bbc0f243acd60acaf88c9d8",
+      "bytes": 9345
+    },
+    {
+      "path": "app/billing_plan.py",
+      "sha256": "489f10bfc31cee7362dc0558c540be1a2ddd7ab6d715f81e3201b8eba2c9ae61",
+      "bytes": 3400
+    },
+    {
+      "path": "app/causal_topology_simulator.py",
+      "sha256": "234ca23da51420b328cb5ffabfd93e6a57e0af940b627b760da5707581c41898",
+      "bytes": 16484
     },
     {
       "path": "app/cloud_http.py",
-      "sha256": "58203f6d6d14bf1ec555f292d8198f0a820c4e13ea29ebdc8f85cbe3ef55ff70",
-      "bytes": 2394
+      "sha256": "024e50cb7c241507de42343cdddf6c2757df9aa541b544e116a11adf57007a8b",
+      "bytes": 3805
     },
     {
       "path": "app/cloud_identity.py",
-      "sha256": "f2bddba3b6b42a69f17e5140cefad3f1432f32a616f5927190d73b7bb352bc72",
-      "bytes": 10030
+      "sha256": "3b7f888e082ae0e0039cb7cdec51f56b8cd77823f09de0821284335d69fac59a",
+      "bytes": 12289
     },
     {
       "path": "app/cloud_scope.py",
-      "sha256": "ce3f8f4dbcf26c2c0794172f5d848d0d078a046c229f5daf3e5b510294c98334",
-      "bytes": 7250
+      "sha256": "a0e8ca130bcccb1a1bea59cfa61276b413ccb63b6fd7b27a191c9b6ee93ad863",
+      "bytes": 8765
+    },
+    {
+      "path": "app/collectors/__init__.py",
+      "sha256": "8ce8b30e5e6e4b8ce31a1c579e522f4be9492bbf975ccec39c78c2e92b236f9e",
+      "bytes": 86
+    },
+    {
+      "path": "app/collectors/aws_live.py",
+      "sha256": "5d86247c25734867a4a7d4c0fb5efd895dbd86dadbb167ad9adc7288036a3b43",
+      "bytes": 13246
+    },
+    {
+      "path": "app/collectors/azure_live.py",
+      "sha256": "b338f0418e26dbb45eac60225c7a8bb26fb3a801e09dda3020daf6c8ac370314",
+      "bytes": 9877
+    },
+    {
+      "path": "app/collectors/billing_sync.py",
+      "sha256": "b647ae3278adde3d66a143cfec99e532ead2cab5beec02b8d2a6846ec6f8d875",
+      "bytes": 16390
+    },
+    {
+      "path": "app/collectors/federation.py",
+      "sha256": "3d29602f0c361d6c140cab0b75ff8934972d0de049fcd93b8f03dbfa85cc94b0",
+      "bytes": 3316
+    },
+    {
+      "path": "app/collectors/gcp_live.py",
+      "sha256": "4fdadbd30e5ab266e32c6b8d5b0548380fe6da10f94d9cf109e76028a7b3b77f",
+      "bytes": 9663
+    },
+    {
+      "path": "app/collectors/kubernetes.py",
+      "sha256": "0c31bb105dd492d67079c36655e5a3246afc014697d25f1019f203f875e43750",
+      "bytes": 12248
+    },
+    {
+      "path": "app/collectors/live_common.py",
+      "sha256": "bece5b5d05978023b342a9bd47ede788ca506ffc7fc9c85d7669b54b1da91df1",
+      "bytes": 2773
+    },
+    {
+      "path": "app/collectors/prometheus_auth.py",
+      "sha256": "7c679bfd3c9e9cee9494e9b98f4de9bfbdf58e36ab3767ec6fe020cd3a9daab0",
+      "bytes": 2456
+    },
+    {
+      "path": "app/collectors/provenance.py",
+      "sha256": "bb92a1a812439dbb5150323405d0b93edaa02e7d541d81e0be8c0431d7babcfd",
+      "bytes": 3703
+    },
+    {
+      "path": "app/collectors/reconciliation.py",
+      "sha256": "693f8a3628c01cfd4e1fd21fbbbad26f9da329eb0b2f17ce3f436d46d77bc314",
+      "bytes": 2248
+    },
+    {
+      "path": "app/commitment_arbitrage.py",
+      "sha256": "b76b01d808dc965950912e650ad415baae982718027997c9bc4470f6b470664e",
+      "bytes": 3236
     },
     {
       "path": "app/config.py",
-      "sha256": "26345af702beb9ecc53f2770be458c7cab92d61ad62642dcd15d1fe81568f4ab",
-      "bytes": 2635
+      "sha256": "ad9b9a51d567dd6b321f56edf529d6f271f06b45c9a078b0012a5719fd1f345e",
+      "bytes": 5912
+    },
+    {
+      "path": "app/data_governance.py",
+      "sha256": "7b2a91a5d80940aaeb9bfc6e1e9139ca3268e2edc254d81a42a9fee870825235",
+      "bytes": 14437
+    },
+    {
+      "path": "app/data_governance_api.py",
+      "sha256": "1d5bc6aaa71a4a74cffdd6d953ed736dfb8e2e7f53984eecfc8bb882af603ba3",
+      "bytes": 3066
+    },
+    {
+      "path": "app/data_policy.py",
+      "sha256": "17c53272a5700cb6982dd4ef15e1bf1126ca3bc08ec4921599b74592d2d005a1",
+      "bytes": 5627
+    },
+    {
+      "path": "app/data_retention.py",
+      "sha256": "d12bf43c52fd7c58ae5a4b802ff8c6cf9b20c644de51dbaa0e04c23b36c27268",
+      "bytes": 12921
+    },
+    {
+      "path": "app/data_scope.py",
+      "sha256": "d72418d3870fc3e45e88992778de7738718f6b2b2e83d228bb8c81dbc6511e59",
+      "bytes": 981
     },
     {
       "path": "app/delivery_api.py",
-      "sha256": "d59723839de53a5285926439ff79dc7a46a9ff474915e0e4daab2d49facac40e",
-      "bytes": 5144
+      "sha256": "3e45f19ecb69589d6c29e617a7e75793f6cf347cacf348c8bc5c53e1fe7c1ab3",
+      "bytes": 5143
     },
     {
       "path": "app/delivery_config.py",
-      "sha256": "fcfa35d772b08c0e1a5db11cb9adf4fe7f67031f1a2b018f91e0fe6b6cfde8a4",
-      "bytes": 3195
+      "sha256": "e69302dc507fbd9e6dffbf601a85fd67979df082887fff3cdd648717126eef8f",
+      "bytes": 3808
+    },
+    {
+      "path": "app/dependencies.py",
+      "sha256": "ba6aef465857e7c8d44184f22aa0f7b81838e1dbdb0e212c6574165e7b1f1a8c",
+      "bytes": 5535
+    },
+    {
+      "path": "app/directory_projector.py",
+      "sha256": "bec15909d7157a3fa3e18f55fa682946b3c766434aaa0431088c39329abd8150",
+      "bytes": 3757
+    },
+    {
+      "path": "app/effective_rules.py",
+      "sha256": "af4e03179839f44cea8192351505225e0930369485b474c3d73605a8f52c673d",
+      "bytes": 1343
     },
     {
       "path": "app/enterprise_store.py",
-      "sha256": "d1aaed7d50476a536727d13d5c6f82183d9e78a19021575864e3fd6b818da986",
-      "bytes": 4971
+      "sha256": "2d38f1bdcdc13f8e955b7ee40bbe6826c9d97abde6cf5dd230bab5c9a9fc9eba",
+      "bytes": 18067
     },
     {
       "path": "app/entitlements.py",
-      "sha256": "e266e79b0d2f372baa256ec3497e7a5f6b65138531655b02fddcbb2760639e80",
-      "bytes": 6883
+      "sha256": "c1b417afdd22233c9ede0681c4395a61989be8f3ceee476516b6895f3adb6b81",
+      "bytes": 13228
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "d693a1c90a370f656252439c4d333c48b184e5a12bd9f580d2d42885cd156394",
-      "bytes": 2450
+      "sha256": "acda2c632492ba2ed49bb1300093462a0c159b7529653adac0e88108f67567b2",
+      "bytes": 4578
     },
     {
       "path": "app/focus.py",
-      "sha256": "6aa66b56ffa81c7b12c4c49d31d5d4c7341fe079b3e496a985df96afa7de2055",
-      "bytes": 16892
+      "sha256": "7285135354c690c810251c5e3eaffba5ec66c66e8a3fd5865e846777df9d1f10",
+      "bytes": 22069
+    },
+    {
+      "path": "app/foundry.py",
+      "sha256": "13bcfeb06e91a172eef712de1719c1c3b4321e0ca07ca249fcbc7f033e805b3a",
+      "bytes": 12255
+    },
+    {
+      "path": "app/foundry_api.py",
+      "sha256": "1a5f2eccf9253f5f54dd0d3043248a83aa07a48b3c375ad58477728f46c7d57e",
+      "bytes": 1528
+    },
+    {
+      "path": "app/foundry_config.py",
+      "sha256": "fdff889ad3db405712a35f04318a40d254d3538b810457c1142e2d2b8dd691e4",
+      "bytes": 4303
+    },
+    {
+      "path": "app/foundry_diagnostics.py",
+      "sha256": "993ddb9616b82d07b9a28689877325d47009b5963ba42ac51faea681cde37ef7",
+      "bytes": 7997
+    },
+    {
+      "path": "app/gcp_rules.py",
+      "sha256": "11bc2bcb0f4b1b065c2a852cdec00f34995b9e763459b98ccd67611cf926e716",
+      "bytes": 340
     },
     {
       "path": "app/gitops.py",
-      "sha256": "4cdfb9c4749cf1fd3ea5ebf54a18efddcfa2355a97a2d95336da329c6fb75776",
-      "bytes": 14915
+      "sha256": "61198023aea83e62e6a313e6d6549c9d92880611f568d2bf3c1f721a58c83d52",
+      "bytes": 14937
     },
     {
       "path": "app/gitops_api.py",
-      "sha256": "a863a0ef59aa02c0b10ef191fb6ceaa8bca3f428437daab41c3425e6d727d5d6",
-      "bytes": 6101
+      "sha256": "4df202ae25160f393437fb97f469fbcc96cceca2709f707d062f02c5e9e84f78",
+      "bytes": 8367
     },
     {
       "path": "app/gitops_store.py",
-      "sha256": "e3f3321a8f516327b93219ad06248c3ec1d65f121441c99341ad1d2ee5286454",
-      "bytes": 6702
+      "sha256": "ebece36f6d12699fb6a6d6b9809453c4df415f2192fb7b4c4690ec50ac115c19",
+      "bytes": 6749
+    },
+    {
+      "path": "app/identity_client.py",
+      "sha256": "d1b791ed572bf47211e85c97b736dc52bfc6419368adf21a84d723ea8ea1a51a",
+      "bytes": 8662
     },
     {
       "path": "app/inference_ledger.py",
-      "sha256": "98af77699bc9b57cfc629ebe3cb34a73179916e31e883985ccb86343def263bd",
-      "bytes": 9490
+      "sha256": "a88a30127ff5b6bff649d7364c826113af52dac201cddab9d613c713ac8e0abf",
+      "bytes": 14949
+    },
+    {
+      "path": "app/inventory.py",
+      "sha256": "3ac4259be05bade2d0f43020757cda978c20a457d8241814df7157ff0bc09d65",
+      "bytes": 2721
     },
     {
       "path": "app/jobs_api.py",
-      "sha256": "46ea4ade12193127132329bf7b16229cc6b22371a95c459a888df23455b71300",
-      "bytes": 2996
+      "sha256": "84975ef5074da36ada58408c25f8086d823aa72e96076c85322e92d8de0dd334",
+      "bytes": 3779
+    },
+    {
+      "path": "app/k8s_cost_reconciler.py",
+      "sha256": "1a0a3ff0fd7e7f1ddaf901d7b28e657da5ce3d69399053c486e58c161dc3d942",
+      "bytes": 9325
+    },
+    {
+      "path": "app/kubernetes_api.py",
+      "sha256": "22966f513f5279789ea37772384a7f7b0713f530ae3db70ed880038024bc6c47",
+      "bytes": 11288
+    },
+    {
+      "path": "app/kubernetes_rules.py",
+      "sha256": "448f7b3b3b03bc4a8d0212769de936616f12bf7326e1b838426ac7efb4218d2f",
+      "bytes": 13863
+    },
+    {
+      "path": "app/kubernetes_topology.py",
+      "sha256": "b6b62cc71846e274e4ff6d4b31bee8eec09084f316955d2fb14edf4715c2cd72",
+      "bytes": 14696
     },
     {
       "path": "app/main.py",
-      "sha256": "6845bc35a1048ad48b6ad33e62aa939d37a01e08be71723c92ed9b973dd30b1a",
-      "bytes": 15368
+      "sha256": "02aa4b4c8bc469c107641a531cc7b8de84bc6375a8e2abbda031e4bffa7b0416",
+      "bytes": 19947
     },
     {
       "path": "app/multi_cloud.py",
-      "sha256": "b9235cce1d5d98432a821c38760b94a737e97d65375ea1be8e2d00a626d4d3a2",
-      "bytes": 3676
+      "sha256": "bb1b18495469536ccb2b0dd94d7fd20765ff9eaa842686f08a66160b0cdfe2b5",
+      "bytes": 4469
+    },
+    {
+      "path": "app/multicloud_rules.py",
+      "sha256": "9fe3bd79ae9c8324d638956976ac310025181623c226906d7c2c3eb526fc077b",
+      "bytes": 11152
+    },
+    {
+      "path": "app/multicloud_scope.py",
+      "sha256": "89fa812f215bfae3ddc351ba6da54564e337cf7cde83543aa1d05cf10ead2df9",
+      "bytes": 3813
+    },
+    {
+      "path": "app/nextgen_engines.py",
+      "sha256": "412dd126e0d98b31913b9ed671fa05a2e88f6c9d62b8dab27b1ef21ae8d9c9d9",
+      "bytes": 7452
+    },
+    {
+      "path": "app/onboarding_api.py",
+      "sha256": "8894f2678b468f905a4df0b54a5dd856c570e922420ae7cc652a79babf069ae3",
+      "bytes": 11200
     },
     {
       "path": "app/operations.py",
-      "sha256": "26c6810eff8da32cd1b1029cfdf53955c02e29a4e53fdc966a535cd51867f48d",
-      "bytes": 2697
+      "sha256": "cc941006ade3024c77e51b8db38f5e73d9c60500b37e76888313925468f20b04",
+      "bytes": 2829
+    },
+    {
+      "path": "app/pillar_checks.py",
+      "sha256": "98bb45c5c675f2f959f7b0827a42991b3770577b2a69982292bfa82fd964959b",
+      "bytes": 7548
     },
     {
       "path": "app/plan_policy.py",
-      "sha256": "da5e16db0a91bc600906759bbb549087fbd8d1fac713eff6efdad0523efeb55a",
-      "bytes": 13478
+      "sha256": "723153eb5b7fbed935b0f0f02913cc8e40be306ba1bad011ae78f0eb2ffdbf57",
+      "bytes": 13584
     },
     {
       "path": "app/pricing.py",
-      "sha256": "7069ee392996dc807a832784f6655846da5007118e9478244023586eb07c249c",
-      "bytes": 5626
+      "sha256": "63d056a3519b3102209deac2733852af8d416308d82511d2ba0a2efedc5a14e3",
+      "bytes": 17467
+    },
+    {
+      "path": "app/principals.py",
+      "sha256": "272c1a4b00809d6229156812cd5fbbba4cf68422daf1b24acf1f6cb121e93cd2",
+      "bytes": 684
+    },
+    {
+      "path": "app/provider_access.py",
+      "sha256": "f59699c04c16346b3f3e3b7a46a21c7aafc578cfdf588fddfc38cdd36fd72277",
+      "bytes": 8770
     },
     {
       "path": "app/remediation.py",
@@ -232,69 +580,129 @@
       "bytes": 8817
     },
     {
+      "path": "app/resource_access.py",
+      "sha256": "18b0787e6f081e54846448d5331e766780280c66f442868f59a0eb2f3eae0960",
+      "bytes": 2827
+    },
+    {
+      "path": "app/resource_api.py",
+      "sha256": "61eb866bf198032ade5d5d419f28c5594496da0491a4c53466a5d2e186c4e38c",
+      "bytes": 20105
+    },
+    {
+      "path": "app/resource_assessment.py",
+      "sha256": "6b36edaf22f1ba0e180e7e0bc0f8e9cf2f2092ddf99f37f2016dd09d4da439df",
+      "bytes": 16996
+    },
+    {
+      "path": "app/resource_batches.py",
+      "sha256": "933e036160f9b257421a0ca259dc9c276401c7daa617a0eb2c5af529d0429e7e",
+      "bytes": 3415
+    },
+    {
+      "path": "app/resource_catalog.py",
+      "sha256": "9107bcd33efd08f188d1294f5cdf48bf6b501aa29d864eb4b141cffaa5a23978",
+      "bytes": 6706
+    },
+    {
+      "path": "app/resource_store.py",
+      "sha256": "ba99f752cbebc839f9a222f8b66a0727ccd4427e66fbd1878208119013af2364",
+      "bytes": 15350
+    },
+    {
+      "path": "app/route_inventory.py",
+      "sha256": "9ddcb2661945c193decadac130e20c7dd6ab62b700abd051cb6516dce805b717",
+      "bytes": 8125
+    },
+    {
       "path": "app/runtime.py",
-      "sha256": "a375bacd6b0d2ac24019a11c61ecf0c90d85ea35fcc98ae81663ebfb8f535c0a",
-      "bytes": 5054
+      "sha256": "8494c954480ad125ee4aa62f0c6b2cc21090b9d750cdc01ded9abb76fc4ca0e1",
+      "bytes": 8343
+    },
+    {
+      "path": "app/scan_scope_manifest.py",
+      "sha256": "3d8e403d8aa14e5c81b33765c3a77c20547459d54450c3d98df8e52ad8e1ce31",
+      "bytes": 2019
+    },
+    {
+      "path": "app/scan_selection.py",
+      "sha256": "b1df9b80e23fcb42526424a3d4072c503f5a8d05f0bf82a4e51477534327fc75",
+      "bytes": 3001
     },
     {
       "path": "app/scanner.py",
-      "sha256": "7e492e0fe2cc3dfb323c6ca42352fa94856e77a23023ff56698c85387f23e8fd",
-      "bytes": 8685
+      "sha256": "83cbf9e58bce1466754625f5b1b6afbe62f54c7e08b80ef74d095a683a748c59",
+      "bytes": 14233
     },
     {
       "path": "app/scanner_aws.py",
-      "sha256": "e0c407975938d20df09ba1870a705da8c698f5a5d40df8e93c9991815dbcfd60",
-      "bytes": 5865
+      "sha256": "d1092ae5a66c87d2b672338e6032cc00f5ff02b1d8198d7c111349755adfc097",
+      "bytes": 7010
     },
     {
       "path": "app/scanner_gcp.py",
-      "sha256": "e1a33ffd2db78385deca232437976b1968065ab52ada6bb135527e69db380ed0",
-      "bytes": 10090
+      "sha256": "cab7f7aa4d5cdaae63bd21fef2a6c1a9bb03b374479a83484324036a0f3a2bdb",
+      "bytes": 11709
     },
     {
       "path": "app/scanner_kubernetes.py",
-      "sha256": "ca56ea44f52dd1c74af647e8d0f8da06c0811cd4bbef34f4c084225c47e5cd4d",
-      "bytes": 5863
+      "sha256": "b575fcbf6c1d4e68f685a5d7d27e5a1f49e3a98678cb45e7d661168fcba556fd",
+      "bytes": 6836
     },
     {
       "path": "app/schemas.py",
-      "sha256": "6ef1e12b9985363c62242495d524e39567e576e75f2aa7a9e42a9cfdd155f8c0",
-      "bytes": 2205
+      "sha256": "6864f1e77f70f01dfafc1724eb7a113662ecf3773abb61e2843654ac360c00fd",
+      "bytes": 4201
     },
     {
       "path": "app/settings_api.py",
-      "sha256": "4c4af6bce32bb65c461f6407fd829bcebeba824e0064e12d5b79ec41048759da",
-      "bytes": 10380
+      "sha256": "ea8a779197fedec0a3180808b7c2f54b8ba6d119b0ca09f4a4e03263e3b5fdde",
+      "bytes": 17362
     },
     {
       "path": "app/store.py",
-      "sha256": "27fe4403459c74039ef4ba409fd05eb9786421c9191e6be6afa5caced6b8ede5",
-      "bytes": 10161
+      "sha256": "78d19d11100a812bf8d8e32ad038f81eb6c55146afaaad7e37c8816b76cacde9",
+      "bytes": 11195
+    },
+    {
+      "path": "app/telemetry_contract.py",
+      "sha256": "926b239181c66b208e3a77eff4dc3c8754cc7f59f40422c9e0139df14e1bafea",
+      "bytes": 4087
     },
     {
       "path": "app/tenant_config.py",
-      "sha256": "635341e333a52b90fbe7f388ae69370d8a2df1f7c003cd069097bc330747b03a",
-      "bytes": 4410
+      "sha256": "277d2b825a31881a0aee04fbd385ffeac8a902f8e6a952448018c5cfd0d0c681",
+      "bytes": 5290
     },
     {
       "path": "app/tenant_registry.py",
-      "sha256": "1f494a685ecc27c8878c48345fe5bc59fc58792d777811282db2e4530d53d95f",
-      "bytes": 15278
+      "sha256": "3d61ec86a8e2976712c7bb408f0cb34b7b65e45fd6cd166117b1082cabb572a7",
+      "bytes": 28288
     },
     {
       "path": "app/trends.py",
-      "sha256": "e116d83e9b20e65fe1fbfd0a56869b3272eb46f211690b4403d087c86196e460",
-      "bytes": 3044
+      "sha256": "4b8187159d7fcf6374c953868740cac59dd8f935a57004ea6d5a1c000eba7d5b",
+      "bytes": 3040
+    },
+    {
+      "path": "app/v150_analysis.py",
+      "sha256": "dab812fd2bcc2cc24c5434910147e90dd2e88c75491bb3483d53c1f23572be47",
+      "bytes": 4348
+    },
+    {
+      "path": "app/v150_store.py",
+      "sha256": "ae91540672feb8809d8a570bc190707c5a3b328105a5feb1235fe934563046aa",
+      "bytes": 2553
     },
     {
       "path": "compose.override.example.yaml",
-      "sha256": "5845985c2e6d382cf8c197863b853a0793eea250b96606ecf17fc5ab87aa6aa1",
-      "bytes": 950
+      "sha256": "1ccfc07c21451f272462bdfbc790d673efad3db070b49498797083fd17e784fe",
+      "bytes": 1172
     },
     {
       "path": "compose.yaml",
-      "sha256": "c9e843f90cb40ac7dbf8a53d4da601b0e2b04e8fa10f9829390dad12336b3392",
-      "bytes": 8596
+      "sha256": "50fd9328b4cfc70cb7b4ca08e3b7a263d5a52da16e7ba6aa4466b549dc47b449",
+      "bytes": 13195
     },
     {
       "path": "database/.dockerignore",
@@ -312,9 +720,9 @@
       "bytes": 295
     },
     {
-      "path": "database/billing_store.py",
-      "sha256": "019b6efdeb50b3c37f3a91a5aaf751d609b0170ac0b1ad30cf374d27539d9978",
-      "bytes": 9074
+      "path": "database/bootstrap.py",
+      "sha256": "e398a4a3ad87ab35b519f9efe804660fe0215c09b7ee619c007ba9b5ab1f1db3",
+      "bytes": 2203
     },
     {
       "path": "database/connection.py",
@@ -333,8 +741,8 @@
     },
     {
       "path": "database/models.py",
-      "sha256": "ce15ee0443a363f2e1231ece05a4567541f0dfce82e812c4a66a5d1f6b5a8a18",
-      "bytes": 21103
+      "sha256": "95c6f432f46f000d3f66d0cfd888d107b5a5a15b4b2298f711355b411cbea6d6",
+      "bytes": 21091
     },
     {
       "path": "database/outbox.py",
@@ -342,14 +750,34 @@
       "bytes": 3009
     },
     {
+      "path": "docs/AGENTIC_WORKER.md",
+      "sha256": "a61889950e995b4c862ccd135e7378908a8546018524902c7bfde4a47cb6d011",
+      "bytes": 17247
+    },
+    {
+      "path": "docs/AI_DATA_GOVERNANCE.md",
+      "sha256": "273952bcad0dee2979df59f47ed76dc0bd4c9ad5d3e45e10674df857e672dd8c",
+      "bytes": 14661
+    },
+    {
       "path": "docs/ASSESSMENT_AI.md",
       "sha256": "074642c798405d7bbf2580271cb45e13bd723090703ceff8497958f56c663a0a",
       "bytes": 17670
     },
     {
+      "path": "docs/CLIENT_MANAGED_USERS_AND_KEYS.md",
+      "sha256": "360b5fae499d3d30ed495f78bc2e834f9ab09bdf8437929f5d6ef3aa81fad82d",
+      "bytes": 23786
+    },
+    {
       "path": "docs/CLOUD_SOURCES.md",
-      "sha256": "b57a1a8311ea03bcb385ad5aed8e572b72467910a9507199f9239b1fc292e354",
-      "bytes": 8198
+      "sha256": "454e95c25047c57c2dd605aeebce1f201a7016ccb32bccb4b146d582bd21ad7e",
+      "bytes": 8797
+    },
+    {
+      "path": "docs/CODE_AND_FEATURE_IMPROVEMENTS_README.md",
+      "sha256": "2c69aa92eec1f84443ba72bfc0b3899cc07d8f388970a59a4cb714ff7fbf235d",
+      "bytes": 31304
     },
     {
       "path": "docs/DELIVERY.md",
@@ -357,14 +785,64 @@
       "bytes": 9751
     },
     {
+      "path": "docs/ENTERPRISE_READINESS_GAPS.md",
+      "sha256": "d96607e9d8c0acb79ce18248bfeaf20670820bf293ab0fff2babce5c9a67c7fb",
+      "bytes": 14017
+    },
+    {
+      "path": "docs/ENVIRONMENT.md",
+      "sha256": "ed16029ee6dc71fa1766f7821bb87073c33484c7bab9d2dbf19915077d21063e",
+      "bytes": 20085
+    },
+    {
+      "path": "docs/FEATURE_IMPROVEMENTS.md",
+      "sha256": "b9021bbd4e53d3f8274cb29563aa8d63d14cdfffba08fec42477a6065d27b17c",
+      "bytes": 3958
+    },
+    {
+      "path": "docs/FEATURE_RESTORATION_673C20A.md",
+      "sha256": "f1540cd0f4126148543b679e1d81cc3962e90a7fce137122a4a28ab1c0a808a9",
+      "bytes": 8343
+    },
+    {
       "path": "docs/GITOPS.md",
-      "sha256": "7a6b837d08533aba5315bdc036c5428d3616a1157aceea70b2c39258bc5e88bb",
-      "bytes": 7110
+      "sha256": "21c45579f08f9bbb7e6b87a48436886d6837ca18fafa9252d4244d255c1a0a19",
+      "bytes": 7323
+    },
+    {
+      "path": "docs/IMPLEMENTATION_STATUS.md",
+      "sha256": "ba78acd7a2e8055bd25648f7b324553134d000f1a50467d05e6c5304c8b7e6d7",
+      "bytes": 13331
+    },
+    {
+      "path": "docs/KUBERNETES_AND_MULTI_SOURCE_ANALYSIS_IMPROVEMENTS_README.md",
+      "sha256": "b5c76c76b213070ec188fe61dbbe2ba1e564275ee17cc49f8c785248657aceb1",
+      "bytes": 32695
+    },
+    {
+      "path": "docs/KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md",
+      "sha256": "c017390cf391cd0d0ef07acd160910acf66ec3680b2a9c069d69e613860855d2",
+      "bytes": 16851
+    },
+    {
+      "path": "docs/LEAN_CORE_IMPLEMENTATION.md",
+      "sha256": "724fac170e89f9fe217b1f2693240b3a02effbc1fe4fedb807b0e7b2eca7b386",
+      "bytes": 14529
     },
     {
       "path": "docs/MANAGED_IDENTITY_ROLES.md",
-      "sha256": "d16944b22a3c45dc305b4903f9b6c4c070f1f010053543d931cf7e466ad6dabf",
-      "bytes": 9225
+      "sha256": "a27c82a7941e38019c62483bf7f2d5aa9d82c142f4828cb511be7c94c836f92e",
+      "bytes": 9241
+    },
+    {
+      "path": "docs/NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md",
+      "sha256": "97c08c59eef9b039abbcb89d23564d581ba1df43fda68bf0e6eeafc655bdb24d",
+      "bytes": 17374
+    },
+    {
+      "path": "docs/NEXT_GEN_IMPLEMENTATION.md",
+      "sha256": "034702e152845098cb57c40dca58d4b5cebfdefd8be4b5e3db748714eff3b577",
+      "bytes": 21242
     },
     {
       "path": "docs/OPERATIONS.md",
@@ -372,9 +850,29 @@
       "bytes": 8137
     },
     {
+      "path": "docs/PLATFORM_BILLING.md",
+      "sha256": "392026003d85fb421262fbee80bd4a2dd24f54a5a94852b872db64fa8bbf05b3",
+      "bytes": 14120
+    },
+    {
       "path": "docs/PRODUCTION_HARDENING.md",
-      "sha256": "fe61838acf934023152189bb5f1aab98463b6aaeab20874ba6a0988fffcbcf0c",
-      "bytes": 6413
+      "sha256": "039aa0dda2a20ab0f62f6be8bc241c862b4900c3077deb8e4046aa43c01fc934",
+      "bytes": 6591
+    },
+    {
+      "path": "docs/RESOURCE_ANALYSIS_AND_AI_FOUNDRY_SETTINGS_README.md",
+      "sha256": "d402eb3056bfbc2f19411070523e6ca6f1dace7c736952fadce863ea74a4d7de",
+      "bytes": 35738
+    },
+    {
+      "path": "docs/RESOURCE_ANALYSIS_AND_PORTAL_ROADMAP.md",
+      "sha256": "79f2fd30bfd97a195d05f692f7c143b3a80f900dc63d91125fefe2f60064809f",
+      "bytes": 21529
+    },
+    {
+      "path": "docs/RESOURCE_ANALYSIS_FOUNDRY_IMPLEMENTATION.md",
+      "sha256": "41759bcc994f1cd0ec4f77e11b26c429f501b79176237eb065292cb541208171",
+      "bytes": 14160
     },
     {
       "path": "docs/TEST_REPORT_v0.1.0.md",
@@ -413,8 +911,18 @@
     },
     {
       "path": "docs/UI_UX.md",
-      "sha256": "445cafd5f8cc8546881129ddc284c40587303a7fcaf7039e760f5a557a73aad6",
-      "bytes": 7423
+      "sha256": "354d00ed019eedf544849415a26ef312ef6628f0839527dfd1bfd4a1acd6b38c",
+      "bytes": 7603
+    },
+    {
+      "path": "docs/V1_4_IMPLEMENTATION.md",
+      "sha256": "12a671c9f10002867466933d111db40bc62a1638187bb46820021d0ce4d860b1",
+      "bytes": 22608
+    },
+    {
+      "path": "docs/V1_5_0_IMPLEMENTATION.md",
+      "sha256": "8a5936a14c287bf5b8b760dca614d572302040036fe89637d83ac8dde249687f",
+      "bytes": 10144
     },
     {
       "path": "docs/V1_MASTER_GUIDE.md",
@@ -452,9 +960,14 @@
       "bytes": 3712
     },
     {
+      "path": "docs/releases/1.5.1-UPGRADE.md",
+      "sha256": "c8a6f394761043a0a8f90f6b028179cd9edca833291374f5979d41b25939ee27",
+      "bytes": 11698
+    },
+    {
       "path": "migrations/env.py",
-      "sha256": "0247ef824a9a21421c2f9f19420c594cacbce6f5f28f800c67d52fca1e822b5f",
-      "bytes": 1472
+      "sha256": "6e3f24d7a34258822e48ea7e2c29b3f6fe6049c8b19cc98cf2a3c55f8fa209f0",
+      "bytes": 1688
     },
     {
       "path": "migrations/versions/0001_domain.py",
@@ -507,19 +1020,954 @@
       "bytes": 5191
     },
     {
-      "path": "pytest.ini",
+      "path": "migrations/versions/0010_resource_assessment.py",
+      "sha256": "d7c985cd6c59f9c7079be6e66538b1ddee4d80072d5f696584807d60f117a7a9",
+      "bytes": 4211
+    },
+    {
+      "path": "migrations/versions/0011_registry_projection.py",
+      "sha256": "e8a18819534b1ee1a1a732b888b7246131528bdeb5c018f6bb4139248b780015",
+      "bytes": 3378
+    },
+    {
+      "path": "migrations/versions/0013_billing_projection.py",
+      "sha256": "fcffd2f7565acdbb868177df16fcbbb75ebf17830031b8bad565db25bfda4fed",
+      "bytes": 4145
+    },
+    {
+      "path": "migrations/versions/0015_ai_foundry_diagnostics.py",
+      "sha256": "657eed44495b8e80bf7566dc84e96d90ae7b52417c43f9fa59ef0acf493c37a0",
+      "bytes": 1416
+    },
+    {
+      "path": "migrations/versions/0016_nextgen_savings.py",
+      "sha256": "607185c0c1b1c9059be3fab4764a065a72209c13a9098bd83a2edd0d99643d19",
+      "bytes": 3767
+    },
+    {
+      "path": "migrations/versions/0017_agent_execution.py",
+      "sha256": "21c30729eb2ff876e54aec64e1d234628156cf5e67107179d18276708316ef99",
+      "bytes": 2441
+    },
+    {
+      "path": "migrations/versions/0018_ai_data_governance.py",
+      "sha256": "d44aeb9fa3b22ebbfe604b24b8e00ce1c565ca6b9f8cc67aeb59ded467f3650a",
+      "bytes": 8143
+    },
+    {
+      "path": "migrations/versions/0019_multicloud_governance_and_pillars.py",
+      "sha256": "7f6435a05541d934a18e5d80f260913de2be1695aefebd0193ad75a08c0701ab",
+      "bytes": 5522
+    },
+    {
+      "path": "migrations/versions/0020_billing_and_agent_gitops.py",
+      "sha256": "b789d108d3ee8ca1a23c93a97bc961b60861e8b0d5286f1b1584b3bcb39261fc",
+      "bytes": 1315
+    },
+    {
+      "path": "migrations/versions/0021_billing_jobs.py",
+      "sha256": "29bc589ab08ece7fdaab389064b8b65f2f59cd5129f95b5e3d67094e58ada1c7",
+      "bytes": 1240
+    },
+    {
+      "path": "platform/.dockerignore",
+      "sha256": "375dbb81c821a2f61ff112bac5aafec446a46e51248a63d91818892849c1b3b5",
+      "bytes": 229
+    },
+    {
+      "path": "platform/.env.example",
+      "sha256": "51bce05b437d0d72b626aab46413dfe0ac549a06180527f35c79dfdae38e91e0",
+      "bytes": 6705
+    },
+    {
+      "path": "platform/Dockerfile",
+      "sha256": "6166a9297b48bd2d97fb9645897af58138dde877f3d34b0da53f34313b123a91",
+      "bytes": 821
+    },
+    {
+      "path": "platform/compose.yaml",
+      "sha256": "8d11def8711155656aa03ae54d55ec50a1cbab37a63157c52ee57047b7a5c08d",
+      "bytes": 6745
+    },
+    {
+      "path": "platform/contracts/admin-billing-v1.md",
+      "sha256": "07f4bee3517210fef08d4e4ddab7e5bc6439da128416d1d40306c1442c747870",
+      "bytes": 7463
+    },
+    {
+      "path": "platform/contracts/fixtures/ai-policy-v1.json",
+      "sha256": "235323818add66fcf3ab754549cdb816d7916886af7664a114fb7fe143e3096d",
+      "bytes": 826
+    },
+    {
+      "path": "platform/contracts/fixtures/ai-policy-v2.json",
+      "sha256": "17a85bc42e1836431a4197afd0513484b1b417fe36d884bbc4ae0d28d2678849",
+      "bytes": 785
+    },
+    {
+      "path": "platform/contracts/fixtures/directory_changes.json",
+      "sha256": "caa7953669cf13f2a50a3933034496cacb2b0fc91512f49f5c78323258e621d9",
+      "bytes": 1817
+    },
+    {
+      "path": "platform/contracts/fixtures/directory_snapshot.json",
+      "sha256": "e3a514f83aa63dbadbe87de92588031e4412f90417eda3a5564e67eb67cd3f62",
+      "bytes": 1315
+    },
+    {
+      "path": "platform/contracts/fixtures/events.json",
+      "sha256": "46e8d58caf13f3ce24a73da4b2707273a59d83ecb47a254b3152ffb116c54f87",
+      "bytes": 276
+    },
+    {
+      "path": "platform/contracts/fixtures/events_gone.json",
+      "sha256": "d91ac39fc1345c1c3bd31f9a8a2892170345f6fda5ecea891afc335cafb1d3e4",
+      "bytes": 183
+    },
+    {
+      "path": "platform/contracts/fixtures/kubernetes-rule-ids-v1.json",
+      "sha256": "d4e1e72f10a86d0b279d92938fc8687475c1f5dd5fac4f1723f5fe10d00e8dc8",
+      "bytes": 316
+    },
+    {
+      "path": "platform/contracts/fixtures/kubernetes-rule-ids-v2.json",
+      "sha256": "bd2536ce7ebd0d0e5ede8adaba888c0eda60e61eabb1738fd207ed267256a863",
+      "bytes": 409
+    },
+    {
+      "path": "platform/contracts/fixtures/verify_invalid.json",
+      "sha256": "2cd464cc78bfbcef0b77393305c36204fba78d8ea66f8a56910bfa9e5900b9b1",
+      "bytes": 38
+    },
+    {
+      "path": "platform/contracts/fixtures/verify_valid.json",
+      "sha256": "1fe9eb056eb3cdbb1171ed90f2e6690ac996d1cae3cd53bd970749d7ce812853",
+      "bytes": 1296
+    },
+    {
+      "path": "platform/contracts/identity-v1.md",
+      "sha256": "d86d04f33856518c5f744de378fbd02ac3ee8e3357c245787d0e591cd6059e95",
+      "bytes": 8343
+    },
+    {
+      "path": "platform/egress/Dockerfile",
+      "sha256": "0e26343247e5794deea18c166a3308d39f9ee6920ad5d75c738b96fca315950b",
+      "bytes": 129
+    },
+    {
+      "path": "platform/egress/proxy.py",
+      "sha256": "3f43d9d2aba3089e624ff1b520f4dbd74b240b55b689c84a6fac8af12b33105f",
+      "bytes": 3489
+    },
+    {
+      "path": "platform/identity/__init__.py",
+      "sha256": "8c5192f12fc8523537bc87fa01737dd1ebc9e6ec3fea2d84beebcc5b7b502446",
+      "bytes": 79
+    },
+    {
+      "path": "platform/identity/ai_policy.py",
+      "sha256": "e138af9db577bb9b6403bf8f91a69268d328c39e8cc7d3b368babccc872694c6",
+      "bytes": 3732
+    },
+    {
+      "path": "platform/identity/analysis/admin.py",
+      "sha256": "94d544c9a5f473f2456d93a45f463b84624d3fd524f6ae6777f3964fecccb826",
+      "bytes": 5653
+    },
+    {
+      "path": "platform/identity/analysis/contracts.py",
+      "sha256": "135ab02ea62bc8adec4bba868a5f6dddaf78a859a37435f24cd1ffc3c8560bdd",
+      "bytes": 1939
+    },
+    {
+      "path": "platform/identity/analysis/kubernetes.py",
+      "sha256": "a1bb5bb1b647859326404d9480535f2488102e88627475c70394e20ebcd031e2",
+      "bytes": 1454
+    },
+    {
+      "path": "platform/identity/analysis/multicloud.py",
+      "sha256": "9107bcd33efd08f188d1294f5cdf48bf6b501aa29d864eb4b141cffaa5a23978",
+      "bytes": 6706
+    },
+    {
+      "path": "platform/identity/analysis/seed.py",
+      "sha256": "30aeb6041d6ea6936b81d86561622e1b7ebe5afc8454e7f15b15a5967480cd31",
+      "bytes": 2223
+    },
+    {
+      "path": "platform/identity/app.py",
+      "sha256": "a33e908f27adb0ad2112d41605994cb9c8d2f891b4800718e6a212439239f825",
+      "bytes": 29736
+    },
+    {
+      "path": "platform/identity/auth.py",
+      "sha256": "16b318a5778145fd7b3ccc7b34f330bf39eca3a0a226c417251c7b3193dbdaea",
+      "bytes": 6485
+    },
+    {
+      "path": "platform/identity/billing/__init__.py",
+      "sha256": "1c32360d376a599ef853ec3ffd46dad8609ca00b7cc51009db52cd9c6a429fec",
+      "bytes": 106
+    },
+    {
+      "path": "platform/identity/billing/admin.py",
+      "sha256": "f70eff4315aac14aafb98b955f0dc46ffca9f2dbdc6588394b89da3940795d5d",
+      "bytes": 31789
+    },
+    {
+      "path": "platform/identity/billing/catalog.py",
+      "sha256": "4538f02a89dbfad9c2d6286840d908544e0fcbc0c08fec9f5780ffb61b94dfc7",
+      "bytes": 6188
+    },
+    {
+      "path": "platform/identity/billing/domain.py",
+      "sha256": "881189f94484ac9bfd23d313063e289408ee8be7821256307ab3d3250967a5d4",
+      "bytes": 5267
+    },
+    {
+      "path": "platform/identity/billing/evaluator.py",
+      "sha256": "207101b05137c1d4a974c52686be4f4846c61078e58210ed7999a08603aec061",
+      "bytes": 1026
+    },
+    {
+      "path": "platform/identity/billing/importer.py",
+      "sha256": "26dffd42b97eac5bf97803a6aa7562c07b3fbfcf8bca4e206786a2efc44f5473",
+      "bytes": 10394
+    },
+    {
+      "path": "platform/identity/billing/projection.py",
+      "sha256": "f92535bc45bb3914237e212fcfa9ec4f0d7dacc0f3f88491a4448878f070e712",
+      "bytes": 2387
+    },
+    {
+      "path": "platform/identity/billing/providers.py",
+      "sha256": "6e0db43ded3273c06bb15ab8d8c42daabc9ec2f47c9cbbe015ce6f748b437348",
+      "bytes": 11686
+    },
+    {
+      "path": "platform/identity/billing/stripe_webhook.py",
+      "sha256": "c437678abb1f8db8f347ccad46fd054fb9a06377abc338a096622d70e1ce42c7",
+      "bytes": 7596
+    },
+    {
+      "path": "platform/identity/client.py",
+      "sha256": "8327eca1622885ce423cf74b0b3d9133ed60d4b53d8a4e575c034ea574df5107",
+      "bytes": 7293
+    },
+    {
+      "path": "platform/identity/config.py",
+      "sha256": "ca0f774a211e30488e8a017fc487b31d11b96ff773cc4a26cb717a616e5737f8",
+      "bytes": 1464
+    },
+    {
+      "path": "platform/identity/customer/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "platform/identity/customer/admin.py",
+      "sha256": "f24773adcd95c2fff897509c227b84eda26e672de3e77df07591b4ae29e23da3",
+      "bytes": 35821
+    },
+    {
+      "path": "platform/identity/data_policy.py",
+      "sha256": "17c53272a5700cb6982dd4ef15e1bf1126ca3bc08ec4921599b74592d2d005a1",
+      "bytes": 5627
+    },
+    {
+      "path": "platform/identity/db.py",
+      "sha256": "ebd2092318bf7d26da6132663e2f4374e0206c4cbde8b02b1613ac1401862353",
+      "bytes": 1908
+    },
+    {
+      "path": "platform/identity/domain.py",
+      "sha256": "788adbb4ac557d0d444deca267efa9c801033b992d290746b963f30d7c650f55",
+      "bytes": 7047
+    },
+    {
+      "path": "platform/identity/events.py",
+      "sha256": "7930f4701656eee8c6627c20effa3289ec7fef40966c1a0cd00e78cdd7007b34",
+      "bytes": 1079
+    },
+    {
+      "path": "platform/identity/importer.py",
+      "sha256": "bbdc33545506428b3674285bb0eda9645d9566ff1b6394b018e5e00ede97e7e5",
+      "bytes": 6740
+    },
+    {
+      "path": "platform/identity/keys.py",
+      "sha256": "287662c455c9c764d7895a8b05a6f4d7a3c327db6f2e1368f604d2cdd47ced97",
+      "bytes": 4777
+    },
+    {
+      "path": "platform/identity/knowledge/admin.py",
+      "sha256": "551dac8af497bc4fff53390cdea726bd63acf220508db1cd3099d41b413ad26d",
+      "bytes": 11478
+    },
+    {
+      "path": "platform/identity/knowledge/privacy.py",
+      "sha256": "3c4261499e84a6917f91f674789693225a7a99b2007700811c2e4ee9d8f4af97",
+      "bytes": 1544
+    },
+    {
+      "path": "platform/identity/knowledge/store.py",
+      "sha256": "a4723df6fe4d126ec20648ae15a10d5863d0fd108b4d97ca97bd375f37d36662",
+      "bytes": 3662
+    },
+    {
+      "path": "platform/identity/redaction.py",
+      "sha256": "91a3913d0884f30a9e4d45157a33db1afc6e281cd34e148182be9d6a2f5a929c",
+      "bytes": 1017
+    },
+    {
+      "path": "platform/identity/resource_access.py",
+      "sha256": "054a569519d8faea121ebc23e8095be4d1fed18824e678bc2b74d35c379d064e",
+      "bytes": 4341
+    },
+    {
+      "path": "platform/identity/service.py",
+      "sha256": "973b7af31486a3fccfce93108dc06cf79ca8cea3539f3a62b7032be264917c5a",
+      "bytes": 66719
+    },
+    {
+      "path": "platform/identity/store_memory.py",
+      "sha256": "bf01f46397f8c4af257a4c51a1a719fec59e76c7f74f7664abaa1b3416a57e07",
+      "bytes": 25044
+    },
+    {
+      "path": "platform/identity/store_postgres.py",
+      "sha256": "8591711352293e44a6f678576cd4a0aab31f5cb1e90abee2a484701b5633d020",
+      "bytes": 32963
+    },
+    {
+      "path": "platform/identity/throttle.py",
+      "sha256": "5ae57791044858269df063dd851a102f6286ffbfdad7d90445648ebe0aec3592",
+      "bytes": 3158
+    },
+    {
+      "path": "platform/identity/usage.py",
+      "sha256": "fe7532201f7562be0f4fbb1906595f462d38fbe7fba154faf90e7b427389bb6b",
+      "bytes": 2973
+    },
+    {
+      "path": "platform/identity/validation.py",
+      "sha256": "b0517e25d96de906a1ce5f49ed8268702d8e33a8baae2bbdd19bc8d2c859e6e5",
+      "bytes": 4531
+    },
+    {
+      "path": "platform/identity_alembic.ini",
+      "sha256": "e90ada3b22c4a31abfea9db5d28a23b5c1dc707482df08ad6d8b4f63c226e8ee",
+      "bytes": 217
+    },
+    {
+      "path": "platform/identity_migrations/env.py",
+      "sha256": "7c7bdef4cd39563d3c68b9d49c947c6f1e5ace34a2d5ca523b44b648b3270631",
+      "bytes": 1293
+    },
+    {
+      "path": "platform/identity_migrations/script.py.mako",
+      "sha256": "911c14b53bdba4e1e2df5e7106fdfda56a5249f7a15aedd35403a326324f507c",
+      "bytes": 217
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0001_directory_identity.py",
+      "sha256": "d1d712571918896d9bdb2a3247194925e3bbc48a273e432d617d5bd35e95088f",
+      "bytes": 14241
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0002_billing.py",
+      "sha256": "23bc32626a43efc44aec2f84c4ec9eed5bf520ba769bf68076af33559b6c1526",
+      "bytes": 7520
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0003_resource_access.py",
+      "sha256": "e265dd9bf0d1d1e4c35edcd3def3143701ebb8780a6e558c08f242de1f9f30f0",
+      "bytes": 3109
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0004_plan_change_requests.py",
+      "sha256": "ed68ad527ef782bac4f05e5a452b9fdf90d00aa6d3827f2dd1935a89387c5684",
+      "bytes": 1892
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0005_plan_change_pending_unique.py",
+      "sha256": "a8705c9e02c7ab492628458ab7922f5a2a765f24ad7e1139a62f7c01658f2d36",
+      "bytes": 578
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0006_analysis_knowledge.py",
+      "sha256": "19f3b6842b5ad6fcffbad2ab5a9a4f16b1ebe391451ff5797eb3d20ad87a9baa",
+      "bytes": 4646
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0007_client_access.py",
+      "sha256": "e69bd07be7e2b5de74c921987cc4adbf850ed3e6eafabb812d8be5912cdbfd02",
+      "bytes": 5611
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0008_cache_events_sequence.py",
+      "sha256": "c38280fb6d47c76397be421a74ec9fcc72a1e87f69298f505620403c4bd602e8",
+      "bytes": 457
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0009_entitlements_changed.py",
+      "sha256": "ca8ce4a41f634f8701a2ead2167316ee0beebf825cdbe2d1a22e993e014d577e",
+      "bytes": 1031
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0010_analysis_policy.py",
+      "sha256": "ebc245280dfc6b00796a923526662b3ea34214e1105cfd6fd56d03fd0c9beba2",
+      "bytes": 1473
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0011_ai_foundry_policy.py",
+      "sha256": "3a89a71fea34674cce6678b2eb00d76291431915b9b59595c2c31a234d6f6211",
+      "bytes": 1910
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0012_kubernetes_rules.py",
+      "sha256": "3b2231743e4bb5874e37a715be4f835092e946a051591cea95caf0b7e6b59207",
+      "bytes": 1094
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0013_multicloud_analysis_catalog.py",
+      "sha256": "6190578551aaed27c60c294ba9aad3c3342181588433e4ef9d0aa8a9110a40b1",
+      "bytes": 1247
+    },
+    {
+      "path": "platform/knowledge_alembic.ini",
+      "sha256": "d7e51120d5fe857bf18dfe23c4b4eb86019dca55506958dce817267673bef71f",
+      "bytes": 86
+    },
+    {
+      "path": "platform/knowledge_migrations/env.py",
+      "sha256": "4ac314544e44d9432986594543793709fb959026fda87d0c50599c9e1c8bae30",
+      "bytes": 950
+    },
+    {
+      "path": "platform/knowledge_migrations/versions/k0001_publications.py",
+      "sha256": "f50a9c1e8422dd4ec60f0b0f77bc5bcdf7bfeb653470b33e79dc3f18dc879c72",
+      "bytes": 1888
+    },
+    {
+      "path": "platform/platform-db/Dockerfile",
+      "sha256": "996e8178b7923b3c932207bd383d6363f9f96dda46148c661a7231478d4e9142",
+      "bytes": 164
+    },
+    {
+      "path": "platform/platform-db/bootstrap.sql",
+      "sha256": "cab87f5a8043998dfc2eed486620cfe1ed0121ee871f4f1cfac8f659fc48aced",
+      "bytes": 2364
+    },
+    {
+      "path": "platform/platform-db/init.sh",
+      "sha256": "d87529cfb075074c6aba176a71f0ad3088a2c57fe1593b8a80eeaa7d672a19b6",
+      "bytes": 1181
+    },
+    {
+      "path": "platform/portal/.dockerignore",
+      "sha256": "9f025833283bfbeee3c58ab5d3665440646addbc3b938f154c44ed29cd6572c7",
+      "bytes": 65
+    },
+    {
+      "path": "platform/portal/.gitignore",
+      "sha256": "b390dd937fdeaae63a595f3f44b39c684b1539bd303804457efdc87cade0c232",
+      "bytes": 41
+    },
+    {
+      "path": "platform/portal/Dockerfile",
+      "sha256": "1aba8622a427502c6f88fd6b6f0b306ebda30224e74df4efd8f2b4a2ce6ff5ca",
+      "bytes": 613
+    },
+    {
+      "path": "platform/portal/app/activity/page.tsx",
+      "sha256": "ca8db4296df22c9fdaf713f454d87e0834a77c41885c7330edbcd4776065eb17",
+      "bytes": 214
+    },
+    {
+      "path": "platform/portal/app/api/auth/callback/route.ts",
+      "sha256": "80aa5878cdb2fcebbf4f74d411c2d9566ccf56ebd9ae07ca954c4aebdbcda47a",
+      "bytes": 3808
+    },
+    {
+      "path": "platform/portal/app/api/auth/login/route.ts",
+      "sha256": "8f10b25e8098343d36b76478409edc23d5e00f95e611aad20d9e366761629a26",
+      "bytes": 1194
+    },
+    {
+      "path": "platform/portal/app/api/auth/logout/route.ts",
+      "sha256": "52e6de8e4cf4a41bf1d51006e50ca6125662ca60cc6764bf48b3ad32ee47d124",
+      "bytes": 485
+    },
+    {
+      "path": "platform/portal/app/api/auth/operator-key/route.ts",
+      "sha256": "abd65c88f93a8a60802860155ca91fab7053f9df0c3403826cbb6afdc3e8fab0",
+      "bytes": 2891
+    },
+    {
+      "path": "platform/portal/app/api/auth/session/route.ts",
+      "sha256": "4edc095dbd18cd70fac4192bf871b9851f8211044078a74716090962ef1a2827",
+      "bytes": 601
+    },
+    {
+      "path": "platform/portal/app/api/healthz/route.ts",
+      "sha256": "fda60dae9874be45bef9435c4e9ba411e2dee0fed26f48f21df4b46b2a25a90d",
+      "bytes": 179
+    },
+    {
+      "path": "platform/portal/app/api/portal/[...path]/route.ts",
+      "sha256": "5fda64e2558ed40cb72bb418ac6d9adce9a65e6bd687a3f9dfa22ed252b3ab4d",
+      "bytes": 5748
+    },
+    {
+      "path": "platform/portal/app/api/webhooks/stripe/route.ts",
+      "sha256": "ba67f21af555aec4c5243ef5943ae9d9da6ef8f5204df1406801eab571e1c8fe",
+      "bytes": 3250
+    },
+    {
+      "path": "platform/portal/app/billing/page.tsx",
+      "sha256": "4a2683720069c27ceac8bda7db5eacb18d12a2436f6a805e97f5832e8bb64cdc",
+      "bytes": 208
+    },
+    {
+      "path": "platform/portal/app/customers/[id]/page.tsx",
+      "sha256": "874dcc2b90d7f1e39765d5435ec07bb14512b94f486486315f9d33bbb53c1b75",
+      "bytes": 308
+    },
+    {
+      "path": "platform/portal/app/customers/page.tsx",
+      "sha256": "8c01dd288dd0774677d8f0a521071af2adad0a0087044873246d9a587ba286f3",
+      "bytes": 217
+    },
+    {
+      "path": "platform/portal/app/globals.css",
+      "sha256": "b1feafdc4ba8a950a6aca13b49c06fecc3c51b5402edbf6052eaae42eb592d97",
+      "bytes": 28276
+    },
+    {
+      "path": "platform/portal/app/knowledge/page.tsx",
+      "sha256": "673a88b34edc67c86be370224b39260219548733736af444099d5eaeacc3a247",
+      "bytes": 220
+    },
+    {
+      "path": "platform/portal/app/layout.tsx",
+      "sha256": "0c7ec717baa6b021891b29767c5baaf43240e028845f768c75ac3e110c39d38f",
+      "bytes": 949
+    },
+    {
+      "path": "platform/portal/app/page.tsx",
+      "sha256": "90b60c0c7ee0d50fe4bb7129112e933df9ac0c25d8164faeeac7892de5979d73",
+      "bytes": 104
+    },
+    {
+      "path": "platform/portal/app/plans/page.tsx",
+      "sha256": "c57883def53f2ee0946424f5d60927acd7cd55a58546d6b7b5d44f5747d04006",
+      "bytes": 193
+    },
+    {
+      "path": "platform/portal/app/security/page.tsx",
+      "sha256": "b9ef463062b5dd0c456d58905f5c04d49dd75576217d3d02cffdb85a000299b2",
+      "bytes": 214
+    },
+    {
+      "path": "platform/portal/app/settings/page.tsx",
+      "sha256": "a25d958e4245946394d1139ce3ff7a1dac7e336ba6f2e687797b7ca2323db0ee",
+      "bytes": 247
+    },
+    {
+      "path": "platform/portal/app/sign-in/page.tsx",
+      "sha256": "7f3e2323e882cf320bb849df80eb433dad4e302b4d923a8e38c0b0e9c50bc5d5",
+      "bytes": 568
+    },
+    {
+      "path": "platform/portal/app/workspaces/[tenantId]/page.tsx",
+      "sha256": "a911cdfa104feb836123c64214532b3f9270b210f939fdcf7efdaff94ea71ce2",
+      "bytes": 338
+    },
+    {
+      "path": "platform/portal/app/workspaces/page.tsx",
+      "sha256": "29d2faaea258192772854d4c23f8d992d9a544aa07feec19258b5a17a23267e0",
+      "bytes": 223
+    },
+    {
+      "path": "platform/portal/components/AppShell.tsx",
+      "sha256": "40fb3e174aebc6fd04e438d3cfa9e53ba0e10a4a1fc217b9a73546524809e2d1",
+      "bytes": 4513
+    },
+    {
+      "path": "platform/portal/components/SessionProvider.tsx",
+      "sha256": "a999214a9b49b76b8e477f29ef1c6be65bc1c4a2db360e3d1d03c48ae1edc795",
+      "bytes": 1787
+    },
+    {
+      "path": "platform/portal/components/SignIn.tsx",
+      "sha256": "847580afc67b8bdef471c1da374eb9b36cd338626bb2e30c20eeacc65ac51a3a",
+      "bytes": 3896
+    },
+    {
+      "path": "platform/portal/components/StepUpPrompt.tsx",
+      "sha256": "e1e9280270bf67b0e60fe0c35c1f5a4a31fb5f34632b75b5ba8859bbb21eb38d",
+      "bytes": 2164
+    },
+    {
+      "path": "platform/portal/components/ThemeProvider.tsx",
+      "sha256": "ea39a18f882e01042853b828099add8b089c7a47139d0eb2b759c366a26a6174",
+      "bytes": 1357
+    },
+    {
+      "path": "platform/portal/components/activity/ActivityView.tsx",
+      "sha256": "e5b6a5622c9fed18dd880bd4b1a74c753882765f36c7a789ecbfa9033e4ffb3f",
+      "bytes": 1492
+    },
+    {
+      "path": "platform/portal/components/activity/AuditList.tsx",
+      "sha256": "26a2dab56b2cdcb7a3188cad77955e701a2c80a5ccd862ae2885e95b4f3ccedb",
+      "bytes": 3572
+    },
+    {
+      "path": "platform/portal/components/billing/BillingList.tsx",
+      "sha256": "c1425466994a1e7bbea69dc46f33a32e7449bb53bb292d64608d1b87e6765408",
+      "bytes": 5181
+    },
+    {
+      "path": "platform/portal/components/billing/EntitlementFields.tsx",
+      "sha256": "4bf978205b18add4a93f17935a2c08adb289a7eea29d71786e03828f3aeed192",
+      "bytes": 7166
+    },
+    {
+      "path": "platform/portal/components/billing/PlanChangeQueue.tsx",
+      "sha256": "079ac446203eb4501163bff5ea109123fd18a567792e2d988c097c290b116915",
+      "bytes": 3352
+    },
+    {
+      "path": "platform/portal/components/billing/common.tsx",
+      "sha256": "a512f1641410f0dd692f9ece5dcd09d9a7a8df7c991b7a3a197ebbfe93765a10",
+      "bytes": 1051
+    },
+    {
+      "path": "platform/portal/components/customers/BillingDialogs.tsx",
+      "sha256": "aba0f35c3a8d40e03c314cba837238e6517b97c89abf1a438d9820cf2f9cab1e",
+      "bytes": 30368
+    },
+    {
+      "path": "platform/portal/components/customers/BillingTab.tsx",
+      "sha256": "d005f84ddded2c7fb696664e907b28a091fb3c48d115a8c44379fb860024802a",
+      "bytes": 13827
+    },
+    {
+      "path": "platform/portal/components/customers/BootstrapKeyDialog.tsx",
+      "sha256": "fa247a51f31d1f10a5626c238911e6179cd278e993f1c038ff3a22e117f47708",
+      "bytes": 3911
+    },
+    {
+      "path": "platform/portal/components/customers/CustomerDetail.tsx",
+      "sha256": "789e0614afd85e0f5875e89d54c35f9b1af278e7a2d399cdec5b0b587d176911",
+      "bytes": 8419
+    },
+    {
+      "path": "platform/portal/components/customers/CustomerDialogs.tsx",
+      "sha256": "aac49387591a42ffce9d5b086144da9feeaa2dc05e87aefb0d586d0ffa55ddd8",
+      "bytes": 7048
+    },
+    {
+      "path": "platform/portal/components/customers/CustomerList.tsx",
+      "sha256": "d3cedc219937e57a58c517b7438160de15af4488a180566f89905d5ce57a0c33",
+      "bytes": 5099
+    },
+    {
+      "path": "platform/portal/components/knowledge/KnowledgeView.tsx",
+      "sha256": "c48fb00729eb34a173e71762c2d8a4cc1483a0ee89f418a77f73b2678ced5373",
+      "bytes": 9754
+    },
+    {
+      "path": "platform/portal/components/plans/PlanDialogs.tsx",
+      "sha256": "250b8f84352f4193870f2e3fb6fc01cab43defb6f4f82b9d8d5bb9697aa0056b",
+      "bytes": 8142
+    },
+    {
+      "path": "platform/portal/components/plans/PlanList.tsx",
+      "sha256": "f343042a8654a793b257778b2a0626e790f2c4a246bcddc317a7b9cad0e7dd97",
+      "bytes": 5107
+    },
+    {
+      "path": "platform/portal/components/security/SecurityView.tsx",
+      "sha256": "99b2a1e9816189ecad17c055fd424a6a71b3074de13b51865377018da3783d95",
+      "bytes": 4006
+    },
+    {
+      "path": "platform/portal/components/settings/AIPolicySection.tsx",
+      "sha256": "84a42ad476fe5e0b072c2aa20c08fa4d3fa855f06c0209687f1b5b0680d5cade",
+      "bytes": 5510
+    },
+    {
+      "path": "platform/portal/components/settings/BillingSettingsSection.tsx",
+      "sha256": "59947686a4d2b28c9f0ed16e7209dd07317c1b1e7124c09efe95867a504a8ae4",
+      "bytes": 9743
+    },
+    {
+      "path": "platform/portal/components/settings/DataGovernancePolicyEditor.tsx",
+      "sha256": "c827ba31be9d970d1b571611da9deb4d261dc88b1d2fad72d094b6473327ca18",
+      "bytes": 6621
+    },
+    {
+      "path": "platform/portal/components/settings/PlatformSettingsView.tsx",
+      "sha256": "51bae9a7441c46df6318a3ccacfed37fb838ec680b9febaceb5a583d1b84f856",
+      "bytes": 3541
+    },
+    {
+      "path": "platform/portal/components/settings/ResourceAccessSection.tsx",
+      "sha256": "e71ec3b6c038b6383c0ba693f665b6f106a321eee85df6c77aee6d102f91de78",
+      "bytes": 5450
+    },
+    {
+      "path": "platform/portal/components/ui/Dialog.tsx",
+      "sha256": "cd98c8f2cecbdd577998e0ffd2a439c7125a42b95cf58314ed18b7856bba353c",
+      "bytes": 1640
+    },
+    {
+      "path": "platform/portal/components/ui/shared.tsx",
+      "sha256": "9b76a1d931882b2bed963e5fb85c2ea4f4e9c9fa2c1e515c82ca81bc8aa66426",
+      "bytes": 3742
+    },
+    {
+      "path": "platform/portal/components/workspaces/CloudAccountsTab.tsx",
+      "sha256": "64ce51f4676c165957dd0b482eb0223816b14d2e16d38c22bea0966bbe7fc2c8",
+      "bytes": 8290
+    },
+    {
+      "path": "platform/portal/components/workspaces/CreateWorkspaceDialog.tsx",
+      "sha256": "e3ad8ec0af667b5a26af14f41d5fc2b8cefd767896697f4175e3f64fb1d7a58e",
+      "bytes": 4243
+    },
+    {
+      "path": "platform/portal/components/workspaces/KeyDialogs.tsx",
+      "sha256": "be54d3d810ccdec6aa59fdcc6574e11b4d0efc12d79f9d0cbd9bc310ea4363f4",
+      "bytes": 13179
+    },
+    {
+      "path": "platform/portal/components/workspaces/KeyFields.tsx",
+      "sha256": "83bf89e059e738d51641912ea9335e15b678822cece45ca571d6179e12e1e4df",
+      "bytes": 6274
+    },
+    {
+      "path": "platform/portal/components/workspaces/KeysTab.tsx",
+      "sha256": "62c9dedf354126a7ec907d26aaad9ee34cba5a40775d5cf761b1321923a00089",
+      "bytes": 6420
+    },
+    {
+      "path": "platform/portal/components/workspaces/OverviewTab.tsx",
+      "sha256": "629c6b8f6b1773a9914f59c7df52048349e4cbd23d5c90b22d4fdecab7dcdf79",
+      "bytes": 10171
+    },
+    {
+      "path": "platform/portal/components/workspaces/ResourceAccessTab.tsx",
+      "sha256": "c271a0f5342bb1787054a4dd850e526b6ee2d73b6e4adc651735ee5e34f29eb2",
+      "bytes": 4873
+    },
+    {
+      "path": "platform/portal/components/workspaces/RulesTab.tsx",
+      "sha256": "56ce0f41fade6b161f6c37344d4e6003c0db71899343d09ef6d4f0c5e433c23d",
+      "bytes": 2807
+    },
+    {
+      "path": "platform/portal/components/workspaces/UsageTab.tsx",
+      "sha256": "bd3e0c8fbc39c9711eaaf90d7a41c321104c043b32579d232cdff49b72d67d2b",
+      "bytes": 6114
+    },
+    {
+      "path": "platform/portal/components/workspaces/WorkspaceDetail.tsx",
+      "sha256": "dd0a6034f6b3860a216319f8c59684d4c612b689494e9425d13e155092d56d82",
+      "bytes": 3721
+    },
+    {
+      "path": "platform/portal/components/workspaces/WorkspaceList.tsx",
+      "sha256": "16a1dac8cafd4fdf955bcf48e8e797e954403d5c2e5abf0ed1d304cd66a63f8b",
+      "bytes": 3734
+    },
+    {
+      "path": "platform/portal/components/workspaces/WorkspaceTable.tsx",
+      "sha256": "6ec9ea6ed3c4c1587a720442c0bb713f8d6465f818c3dc65900bd45b7dc5a929",
+      "bytes": 1988
+    },
+    {
+      "path": "platform/portal/instrumentation.ts",
+      "sha256": "769aac5ea187aa2bf67dc8958546e27e34bbb2f2ef064a25243be8e5eaccfeb8",
+      "bytes": 181
+    },
+    {
+      "path": "platform/portal/lib/api.ts",
+      "sha256": "4f0e68e2d5011c0c8633b5558581dc041d23d2ba180db64f6042c73b6da263cb",
+      "bytes": 2436
+    },
+    {
+      "path": "platform/portal/lib/format.ts",
+      "sha256": "941d0ecddf7619d27caa617a0d9848620fbfdd4497daa700f595537480998eb6",
+      "bytes": 7148
+    },
+    {
+      "path": "platform/portal/lib/labels.ts",
+      "sha256": "839933e3824aa4bd047b637fefe20ab995df58e81d64eb266e506fb800a154e5",
+      "bytes": 10980
+    },
+    {
+      "path": "platform/portal/lib/server/config.ts",
+      "sha256": "4a2ccbd6eb9294a3ef2bc795834033eb8514addaadbc5b1ddd2e6ad7de58dc8d",
+      "bytes": 1850
+    },
+    {
+      "path": "platform/portal/lib/server/entra.ts",
+      "sha256": "0ca69f350de1dcd3ebd13f770c505c810c5823b1561def0a80bf34bff67a3500",
+      "bytes": 4406
+    },
+    {
+      "path": "platform/portal/lib/server/http.ts",
+      "sha256": "e2546bdbfeafd4ee4ba3c33bb71be72c76f3a420803371ae7a0e7f1193a28bc6",
+      "bytes": 1873
+    },
+    {
+      "path": "platform/portal/lib/server/identity.ts",
+      "sha256": "e1b7c722348c1b1a936612f60080bd9b09010e4c1b4d354c80574c08d19127fb",
+      "bytes": 2136
+    },
+    {
+      "path": "platform/portal/lib/server/session.ts",
+      "sha256": "9a1fdcce3107a01feed2686cd0e8f18ac522b390ad396328c898880c685b26a4",
+      "bytes": 3080
+    },
+    {
+      "path": "platform/portal/lib/server/startup.ts",
+      "sha256": "4b71c415b7b6e44379bf24fb0e501f5e216fb2a9482bb721c27e554124b6d92c",
+      "bytes": 820
+    },
+    {
+      "path": "platform/portal/lib/types.ts",
+      "sha256": "27bcfd156388d9e885bfe95aec4ef81e5f6ca21196996ae57fe556b45919dafa",
+      "bytes": 9419
+    },
+    {
+      "path": "platform/portal/lib/useLoad.ts",
+      "sha256": "7ac7a5f54220833b12e79656263bd2f9a0510ac329be56f49c2d6e30d82faa59",
+      "bytes": 943
+    },
+    {
+      "path": "platform/portal/next-env.d.ts",
+      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
+      "bytes": 288
+    },
+    {
+      "path": "platform/portal/next.config.ts",
+      "sha256": "6e65d4ec8c8ec0a61d3e6dd5f0202cb834d766b58d579e3fd83267083e1c2711",
+      "bytes": 647
+    },
+    {
+      "path": "platform/portal/package-lock.json",
+      "sha256": "60939945de5587a8670e7de95a4beca09eb9f860e32359369b7b3dbcda2f33cb",
+      "bytes": 50437
+    },
+    {
+      "path": "platform/portal/package.json",
+      "sha256": "35357be6c7d9eb5818d28ee6d7ebf4b0f6005853d072fca082c0919e3a2b077c",
+      "bytes": 765
+    },
+    {
+      "path": "platform/portal/proxy.ts",
+      "sha256": "43452a2971c303260625af7002071fbcf841056332eb7e3e91607b391e891bb6",
+      "bytes": 1462
+    },
+    {
+      "path": "platform/portal/tests/finance.test.mjs",
+      "sha256": "ac05e30dc70f114e41b5bd90be593c3208aacc1fd9e7433196cda4869099f100",
+      "bytes": 1263
+    },
+    {
+      "path": "platform/portal/tsconfig.json",
+      "sha256": "6bf102b8ecab1f3d366d415e0ea89bb95b2f90036570e40703a2175cd62f10b7",
+      "bytes": 639
+    },
+    {
+      "path": "platform/pytest.ini",
       "sha256": "ce71fbe671c2f7f7d7805d5b121443ae6fe8370be1c4dba13497688b309d8bf3",
       "bytes": 129
     },
     {
-      "path": "requirements-dev.txt",
+      "path": "platform/requirements-dev.txt",
       "sha256": "1438527233ce7beb1cdf4a046b8b5d38f140bd77217ef4df17d5592989d3ec15",
       "bytes": 34
     },
     {
+      "path": "platform/requirements.txt",
+      "sha256": "806a96a8b676ba115255cdfdcb8d4b0847c443531bbf71b3972f9ab1cfe9bc7d",
+      "bytes": 226
+    },
+    {
+      "path": "platform/scripts/setup_platform.py",
+      "sha256": "6d5b002b08cc82d8a2775c9509fe9a71980cfd120b34f60119347faec6b86aec",
+      "bytes": 6637
+    },
+    {
+      "path": "platform/tests/test_ai_policy.py",
+      "sha256": "8bd35541843b0242f25848b7e480c3c63f4ef16d13c9b11040c9c7d0093f21a5",
+      "bytes": 1611
+    },
+    {
+      "path": "platform/tests/test_audit_coverage.py",
+      "sha256": "f90cb4f23d092a4a50d086f31ba1581bbab08c7c27185a35bddf61bbe02bbc86",
+      "bytes": 1111
+    },
+    {
+      "path": "platform/tests/test_billing_improvements.py",
+      "sha256": "9ed47ea13628e8c8c04fad370082b555af1ea9d9cf500cf20291f63a81a928e3",
+      "bytes": 4082
+    },
+    {
+      "path": "platform/tests/test_billing_stripe.py",
+      "sha256": "3982c2926d8b16689b45322dabdebcb267dc8c59cd6b35396c1b1518c4714ce6",
+      "bytes": 6905
+    },
+    {
+      "path": "platform/tests/test_feature_restoration.py",
+      "sha256": "186fd6593b5c670b8caeee002594427a7793e1536901ab6869e2098450125129",
+      "bytes": 6545
+    },
+    {
+      "path": "platform/tests/test_identity.py",
+      "sha256": "6975a3229d55c7523495110891ca65dc18fe129d97b713686064136e704f03bd",
+      "bytes": 33840
+    },
+    {
+      "path": "platform/tests/test_identity_postgres.py",
+      "sha256": "9190b49ae88cd38fd9b9a01c386069ddbf199251dfd943d201309edacd170808",
+      "bytes": 10108
+    },
+    {
+      "path": "platform/tests/test_kubernetes_catalog.py",
+      "sha256": "fae85818a8053b3bac11ac4696df59e7c3deeff68b0a1ef370cb414aeceb4023",
+      "bytes": 551
+    },
+    {
+      "path": "platform/tests/test_readme_improvements.py",
+      "sha256": "363b2201630bf8365358d5aa8dd7ebbbac382b3d911fc1f00eb163f714fa2df9",
+      "bytes": 4346
+    },
+    {
+      "path": "pytest.ini",
+      "sha256": "8213001cf71fc43dbf10f880d536a501a0ba94c2f008e3dfa2941702cd1e4832",
+      "bytes": 186
+    },
+    {
+      "path": "requirements-dev.txt",
+      "sha256": "0ae6d33ebec8b1e0362e1c329a89fd7d7f147f983619c432a379e399493eafa4",
+      "bytes": 69
+    },
+    {
+      "path": "requirements-security.txt",
+      "sha256": "55324f204bd0608e19bce833134a13da15401bfe76267da24f1fe05a199e3bbd",
+      "bytes": 45
+    },
+    {
       "path": "requirements.txt",
-      "sha256": "dc14e63067879eed36f99cf2d1b15f0ce41c5c8d6987f0e6884ecdee8522f95d",
-      "bytes": 325
+      "sha256": "16faf5fef118c48e75f987d943e8a33a3b4aeac2b4719337f09464d25c633949",
+      "bytes": 310
     },
     {
       "path": "scripts/check_terraform_plan.py",
@@ -527,14 +1975,14 @@
       "bytes": 1529
     },
     {
-      "path": "scripts/issue_operator_key.py",
-      "sha256": "38f08f9a8e93639e20e3e22107cc9360b7aa26b600c557cd545d408951f05102",
-      "bytes": 931
+      "path": "scripts/export_billing.py",
+      "sha256": "4075e178b02df006b60211318e842879a7eab505003ef4851a361ff589b58922",
+      "bytes": 4295
     },
     {
       "path": "scripts/provision_tenants.py",
-      "sha256": "2f220f78329b4b0819b08258d7d5c617c943fe317062626c5d325db5684ac566",
-      "bytes": 4816
+      "sha256": "cc584d6afb89d74310385a97bc100f83f44a3b3665f9831cace0113d7d87285f",
+      "bytes": 3965
     },
     {
       "path": "scripts/purge_workspace_scans.py",
@@ -543,8 +1991,13 @@
     },
     {
       "path": "scripts/release.py",
-      "sha256": "2ab74fd186f45c6c8c3a77c10c3748acc03f56c244c47965590e69c72cbb66a2",
-      "bytes": 1660
+      "sha256": "40190884f9f09f1cb2181362e634770b481697f25a06927113c04e79979f2b84",
+      "bytes": 1683
+    },
+    {
+      "path": "scripts/release_manifest.py",
+      "sha256": "af0e16501fcdb873c2b25ef4dd9386a0a326c29df08c80610ad09c735fdbe7b0",
+      "bytes": 1849
     },
     {
       "path": "scripts/scan.py",
@@ -552,14 +2005,19 @@
       "bytes": 1605
     },
     {
+      "path": "scripts/scan_secrets.py",
+      "sha256": "2ce4977d15408e1018c1c9891293b5ab6209c2ae896a20f4ab60c890708e18e7",
+      "bytes": 2009
+    },
+    {
       "path": "scripts/setup_compose.py",
-      "sha256": "859e02c058f1227d5ff9c389c527ea4c1efae427fd2f895689627726e870ac5b",
-      "bytes": 2707
+      "sha256": "3be3060c4d37a096cbe459e379ef7545170aed8d4f6793053acd4138a0430ec5",
+      "bytes": 8987
     },
     {
       "path": "scripts/smoke_stack.py",
-      "sha256": "6bb31e74c6f72716de0ab7603b2b27bfe925100e569a202023a258cfa5a4c775",
-      "bytes": 4846
+      "sha256": "6434536c5bd041008536767197c74bdcc68d6a378db048b5a65cc8393e76f3a4",
+      "bytes": 4799
     },
     {
       "path": "scripts/test_postgres.py",
@@ -567,29 +2025,39 @@
       "bytes": 3545
     },
     {
+      "path": "scripts/test_postgres_network.sh",
+      "sha256": "b22c83ea7d882df2f4f96db3075793c25da9335c742eeb912c4b2ad9285f7540",
+      "bytes": 2812
+    },
+    {
+      "path": "scripts/test_real_stack.py",
+      "sha256": "975620cd89c97a6e0c7fa93e5377ac900800ab3919d5704755ca98e949c651ca",
+      "bytes": 5852
+    },
+    {
       "path": "services/__init__.py",
       "sha256": "b7bc7b57e4bac9f7d7d745ecef15797e88a96f7eb140cb9d0f0b7268ca4a24f0",
       "bytes": 38
     },
     {
-      "path": "services/analytics.py",
-      "sha256": "b724d27a174e13e50bed005a8ef04e4b34aeb1ece9b88bd1b80c5dcc25f8d88d",
-      "bytes": 1352
+      "path": "services/agent_gateway.py",
+      "sha256": "7646e1799ec30e309c6aad03c200ac2a8d52c0cb65f76327a9dbff7b103182d6",
+      "bytes": 13804
     },
     {
-      "path": "services/billing.py",
-      "sha256": "e3f60bb1d8b4f43ad9c18be2095881e51b2885edff6ebde0967726f79b9c574e",
-      "bytes": 5284
+      "path": "services/analytics.py",
+      "sha256": "d6e819249ab8bde12d3e4c5e86d28deb8d49c9c3d458c0923b96d16579286a61",
+      "bytes": 1487
     },
     {
       "path": "services/common.py",
-      "sha256": "e74dcd39e0970f97bc131f179f27ea3c8b80b3b3236d413cae9e53dd49595019",
-      "bytes": 3527
+      "sha256": "e0db75204fdb174f7fdde14f60f095e53b9c0a312bdbf303778958e8c29eb097",
+      "bytes": 3783
     },
     {
       "path": "services/gateway.py",
-      "sha256": "6266ce04e966a653a97823214a490fda5697727fd89f50fb5b8ecc0f2cb6d532",
-      "bytes": 16928
+      "sha256": "6cceae08db3e275dce5f8470c5c17a0c48359499339b4f2e21f6225927b4eb4e",
+      "bytes": 26423
     },
     {
       "path": "services/notification.py",
@@ -603,8 +2071,8 @@
     },
     {
       "path": "services/tenant.py",
-      "sha256": "cd128c89d1a5f809f80b0721a43111e2fa254ba98b96ecdceed7041e1e125856",
-      "bytes": 597
+      "sha256": "13fd32c11d74a0202386ae44683a1ab9c950996e60b1bc0b5921a79b99ac25b9",
+      "bytes": 1351
     },
     {
       "path": "specs/approved/2026-10-22-tenant-settings-managed-identity.md",
@@ -612,9 +2080,34 @@
       "bytes": 9166
     },
     {
+      "path": "specs/approved/2026-10-23-platform-separation-billing.md",
+      "sha256": "e2fe1a7ae65b62a8447d1fa2bc9a7bb7e28da5b80421e34e168ba8cf041bd386",
+      "bytes": 54836
+    },
+    {
+      "path": "specs/approved/2026-10-23-platform-token-portal.md",
+      "sha256": "3d101cd2254a9ca642b152e4f1a8e020f2378f679334901bca7df8e24806eb06",
+      "bytes": 60382
+    },
+    {
+      "path": "specs/approved/2026-10-23-resource-access-identity-settings.md",
+      "sha256": "e23220041f917d27629bacac8b4d4756e940106fb3dc9775865bbbff96f7a25a",
+      "bytes": 18202
+    },
+    {
+      "path": "specs/approved/2026-10-23-resource-ai-assessment.md",
+      "sha256": "1c28c950354e1fbf98b787705768565cfcf7de0f0521c91e42c0f10859958d3f",
+      "bytes": 15530
+    },
+    {
       "path": "specs/drafts/2026-10-22-remove-demo-production-features.md",
       "sha256": "e81a6e846256b4b276b076063b453ede7c85bf141d28b355ec00521a48424553",
       "bytes": 1720
+    },
+    {
+      "path": "specs/drafts/2026-10-22-tenant-settings-managed-identity.md",
+      "sha256": "6f7e336edfff4d8c1ba3e63b87f983272ea65f89fcb4c9590a5c9648a9300deb",
+      "bytes": 8114
     },
     {
       "path": "test_platform.py",
@@ -622,9 +2115,19 @@
       "bytes": 901
     },
     {
+      "path": "tests/fixtures/restored_673c20a_routes.json",
+      "sha256": "fe2f80e4b1b6ad1eae988b944cd414ede168cf45daaa28ad435f5c1ad2540bb0",
+      "bytes": 14545
+    },
+    {
       "path": "tests/fixtures/synthetic_findings.py",
       "sha256": "963d08929873658b174428b429e1c6bdbdb7a1af721a344c0de2800eb7a33d1c",
       "bytes": 5136
+    },
+    {
+      "path": "tests/identity_fake.py",
+      "sha256": "df82593bac06d89048a7155d5c53a9925d6cad6ee3d4d3f97ea491f6ea60d08c",
+      "bytes": 4800
     },
     {
       "path": "tests/support.py",
@@ -632,19 +2135,29 @@
       "bytes": 704
     },
     {
+      "path": "tests/test_access_probe.py",
+      "sha256": "654dfc679a9135a8e16a0f6586734958435849e239b214fd9e47c123b7e1b3f6",
+      "bytes": 1192
+    },
+    {
+      "path": "tests/test_agent_execution.py",
+      "sha256": "c7b9780a25bf7b44f608fa95d6110b4a2ca1846585493f012c0583b60e02394c",
+      "bytes": 16853
+    },
+    {
       "path": "tests/test_ai_advisory.py",
-      "sha256": "f554f619becc7c2cd8f06c4e591976ffead3bc05d42aab843ac27bf3429ec66a",
-      "bytes": 13576
+      "sha256": "d10e18558436934508a7e651ef78a22a184ff64f900d82f186ee1fc788cfcb5f",
+      "bytes": 14364
     },
     {
       "path": "tests/test_api.py",
-      "sha256": "e62d1ef76510596a35ff639ba58595ae4c55d076d8495e0c859bafa36498ffb3",
-      "bytes": 6823
+      "sha256": "107e0419feb9e83b5f84fc88e44d5927bc7d255da391b1b4b6b49b02e6148988",
+      "bytes": 5065
     },
     {
       "path": "tests/test_assessment.py",
-      "sha256": "e99d742ceaf959a9432c198fb676495d2afc1a4ea4c0d9734e06340149ef0db2",
-      "bytes": 9720
+      "sha256": "5a50e81d9456f012ec478dd0896bc4f05f97b86a1eb94d9eb0bf9847d1c16914",
+      "bytes": 9109
     },
     {
       "path": "tests/test_assessment_api.py",
@@ -658,23 +2171,43 @@
     },
     {
       "path": "tests/test_aws_ingestion.py",
-      "sha256": "3abfe1579ed637648fc76ac53040c7236444ce840b3574fccf72122501ff6059",
-      "bytes": 4998
+      "sha256": "c37335b5b2edfd04a49f4604af563b2c5183aebf24da4d54b553f5306746882c",
+      "bytes": 5046
     },
     {
-      "path": "tests/test_billing.py",
-      "sha256": "0c0b082158e1f925e18b7c8c7bf7fb58ec7c34aef16d03c1b2bf8bda761aca19",
-      "bytes": 11400
+      "path": "tests/test_billing_jobs.py",
+      "sha256": "66407de23a4cd6850395a2457323f5ebfd5577dd664ae9358f9f5f1d58d6346f",
+      "bytes": 5248
+    },
+    {
+      "path": "tests/test_billing_removed.py",
+      "sha256": "f5c1f5b93389750c15ba0337b2295c2fe09a827197dcbc01e631fa76e447a936",
+      "bytes": 3483
     },
     {
       "path": "tests/test_cloud_identity.py",
-      "sha256": "6124a940d881f0a72303263310e269f9c6cfb1b6b966359c49d9b834b52c9e18",
-      "bytes": 4664
+      "sha256": "a41c58ecf2a79b267b8b54a31176a3b161d5af5e3c10b9f586f470945d5d6064",
+      "bytes": 4673
     },
     {
       "path": "tests/test_cloud_ingestion.py",
-      "sha256": "d40f16d2624dc76838974db3db9216e388e24905a45a41d00c13225214249ee5",
-      "bytes": 11282
+      "sha256": "0f51c90e816b58aeb046a7597c8e3dc797c5f806cd0b39f583e8e85babd128e4",
+      "bytes": 11293
+    },
+    {
+      "path": "tests/test_compose.py",
+      "sha256": "110287432f0e6e6fc649578eb09c3b40af20c9d7f7a315215f4e9a75b8798cd0",
+      "bytes": 3429
+    },
+    {
+      "path": "tests/test_data_governance.py",
+      "sha256": "91fe0a23358a35c683ae9921dd5f120ff130cf5cb9a5309b9c1e4edb05a48f68",
+      "bytes": 13494
+    },
+    {
+      "path": "tests/test_database_bootstrap.py",
+      "sha256": "dac050ccc615654d2d2b7cd02b8e71e7238dac5399a2c13de7723971c2352e7e",
+      "bytes": 4897
     },
     {
       "path": "tests/test_delivery.py",
@@ -682,19 +2215,89 @@
       "bytes": 7538
     },
     {
+      "path": "tests/test_effective_rules.py",
+      "sha256": "9d7507ddfe342c6d8b45c01f4cf4733a482296cc3fb1fb615554170aa80f5b2a",
+      "bytes": 1783
+    },
+    {
       "path": "tests/test_enterprise.py",
-      "sha256": "ecd1e70a66068a47d49b442de920a054346708577307df9e375aa853a983a677",
-      "bytes": 18380
+      "sha256": "ceb21b3c01df790ca3d5688f9d9ac1e95a7468fc2f5c857da73e130148bca138",
+      "bytes": 17784
+    },
+    {
+      "path": "tests/test_enterprise_readiness.py",
+      "sha256": "41dc55169512bda7ee1c852f11fa9379e36a25e793997e10f1820b975781ff64",
+      "bytes": 6268
     },
     {
       "path": "tests/test_entitlements.py",
-      "sha256": "d4fb6e51d737611e9b877fcdd89955a70cf88e31f341a19aeecf7cfc760d2456",
-      "bytes": 3449
+      "sha256": "b2331ca8045031b07a7681af40126d4ae63071b377685aa7c723e5f47c7b5e03",
+      "bytes": 8037
+    },
+    {
+      "path": "tests/test_expanded_rules.py",
+      "sha256": "a0eabd0b6589cbec1079ad1344e7441e0fbcd42c437e9b3f287295e8ed6f0b7c",
+      "bytes": 4214
+    },
+    {
+      "path": "tests/test_export_billing.py",
+      "sha256": "853881d8fcb585478447f6ac0429880e94697a4bfca2583fce5388cf7f2b7c02",
+      "bytes": 3196
+    },
+    {
+      "path": "tests/test_foundry_governance.py",
+      "sha256": "29752431b820dbf9a76324dd83749239e8c2450b1ea8992cfe36b50651eb06aa",
+      "bytes": 14318
     },
     {
       "path": "tests/test_gitops.py",
-      "sha256": "6e895d68a526b50cb60183b1b9e69286429f24c84d1052f976dd34af0666041e",
-      "bytes": 13675
+      "sha256": "e0ae8dbf625703f310f0a923718667928e0568ea24c25b5f344ae86b19a2a16e",
+      "bytes": 13733
+    },
+    {
+      "path": "tests/test_high_impact_improvements.py",
+      "sha256": "3785f793ba99e5d2b06bf55f85011431e9d4fd73388d27d886c1cbc00078ebfa",
+      "bytes": 7914
+    },
+    {
+      "path": "tests/test_identity_api.py",
+      "sha256": "ce14eac6e89649705711075678487a0f1c175690269d4ca037ce0872d4de0801",
+      "bytes": 19645
+    },
+    {
+      "path": "tests/test_identity_client.py",
+      "sha256": "3b31e8fed702224f8661586721c46d7da128983587b7fdb3063d72d23d5049e1",
+      "bytes": 6859
+    },
+    {
+      "path": "tests/test_identity_egress.py",
+      "sha256": "9ff8f162fee44573dcc103284d0dc5012f005149b9108776e7da861bf5c46268",
+      "bytes": 1084
+    },
+    {
+      "path": "tests/test_inventory_scope_security.py",
+      "sha256": "48d3933263a5d484e66afeb820f06261ad0fb297af523041cf2b91ef71f55b7f",
+      "bytes": 2239
+    },
+    {
+      "path": "tests/test_kubernetes_federation.py",
+      "sha256": "e6e28ae2de8257fbbcba28f7b54df0c47325745952c100ff5fe265a416765472",
+      "bytes": 24178
+    },
+    {
+      "path": "tests/test_lean_core.py",
+      "sha256": "c26cdaa4e999b59d2c30f63dc89b5b1622e182bf16d1a10be3862c8d04dba6a0",
+      "bytes": 12714
+    },
+    {
+      "path": "tests/test_onboarding_api.py",
+      "sha256": "16c5604b8918969325e50b0b2fc2a343d788b106f1e0050a25b082feee246ce2",
+      "bytes": 3248
+    },
+    {
+      "path": "tests/test_opportunity_groups.py",
+      "sha256": "23d848287f557b0fec842a6229d80fd1519a32d86eb5580cf0b30ed188310b11",
+      "bytes": 1086
     },
     {
       "path": "tests/test_outbox_lease.py",
@@ -707,9 +2310,19 @@
       "bytes": 6861
     },
     {
+      "path": "tests/test_platform_boundary.py",
+      "sha256": "787d13aa6278de3d6236e1a498811a61d8ae3c3d0b293ef61d078c2ea63353c9",
+      "bytes": 2332
+    },
+    {
+      "path": "tests/test_platform_database_bootstrap.py",
+      "sha256": "6d9eac1f3ae9b7f67c2f909a285f270d188fdc0941363b82f5edb1d15a43085e",
+      "bytes": 7620
+    },
+    {
       "path": "tests/test_postgres.py",
-      "sha256": "ff6a283ad42a8dbd32a36d9986e5fd7f9dd0236eba90b89f3a48769e263933d1",
-      "bytes": 52794
+      "sha256": "fb2916088fd53bc05c7cec49cc910f7d4a6b1a495e76e70a0f55452b0bca9731",
+      "bytes": 80516
     },
     {
       "path": "tests/test_pricing.py",
@@ -732,6 +2345,21 @@
       "bytes": 2044
     },
     {
+      "path": "tests/test_resource_assessment.py",
+      "sha256": "4279b6dbf0131cecae4ce8fdebd2f7d55ebb0af686dd996ab85d8438320f2d8b",
+      "bytes": 20294
+    },
+    {
+      "path": "tests/test_resource_evidence_contracts.py",
+      "sha256": "0e5db1c17d295bf5b7d3fab3f973b3e8f5e9d8048f572dcfacb5bb014b727da6",
+      "bytes": 6156
+    },
+    {
+      "path": "tests/test_route_inventory.py",
+      "sha256": "a53b98a9022260d83a063f436e309321a50836b1848b3a3ca320fc19ba49c1cb",
+      "bytes": 3316
+    },
+    {
       "path": "tests/test_runtime.py",
       "sha256": "9854ddc9ac5e7027df6d04346a5df562be5c910bfcd73a717dd35958c5005fb6",
       "bytes": 4491
@@ -742,24 +2370,44 @@
       "bytes": 4511
     },
     {
+      "path": "tests/test_service_analysis_api.py",
+      "sha256": "2618f90100ed055b8ee223a4ba5cfa277637f8211c5c59bf9591d4189bcecf64",
+      "bytes": 2427
+    },
+    {
       "path": "tests/test_services.py",
-      "sha256": "eadf9d51e0a016912c54e7025149d273f862d36713fa110e7c08b0ff24caa755",
-      "bytes": 7427
+      "sha256": "45c0ddf65f38dbe214b262ad324c640846c1dc831c14b7f3f0465960d5578926",
+      "bytes": 3702
     },
     {
       "path": "tests/test_settings_api.py",
-      "sha256": "84cc10d53333fbf8b5ac3505a87dd01bd625579792f2b1617ad853e9e8ff75de",
-      "bytes": 7460
+      "sha256": "a4bb76162d98499bed172129c36286b68aa91132ee48cf754d459c9a8c2e6070",
+      "bytes": 8397
+    },
+    {
+      "path": "tests/test_setup_compose.py",
+      "sha256": "8a48913e8f04a2bf0f4e3400d9dd9716c818f3438a42553c8b5de437f25cfefe",
+      "bytes": 6558
     },
     {
       "path": "tests/test_v041_api.py",
-      "sha256": "d3ceb564ade19b6b77ed0e08418ac6141d9809732aee4d4e7d14f77113334aa2",
-      "bytes": 8109
+      "sha256": "fd7798b2f97add3ede3762bf6f16998b500870072f94552dddc5eda14452a1ed",
+      "bytes": 6976
     },
     {
       "path": "tests/test_v060_api.py",
-      "sha256": "9a028aeb6b059e0dcde55657657c7ee6598db5dc5d4d9f147f286feb7995ef8a",
-      "bytes": 7596
+      "sha256": "eb837e038ab1cda2f2f165d65818383bb4aa8efe77e730dd58b20b97f8336e00",
+      "bytes": 6269
+    },
+    {
+      "path": "tests/test_v140.py",
+      "sha256": "c68812c1af717e476144b15bd4ba0360e335dfbee304b68c2ac5f58a7333a830",
+      "bytes": 12785
+    },
+    {
+      "path": "tests/test_v150_workflows.py",
+      "sha256": "cb6de6f56db21e039b4751f090af3bde75f649c71f856fe1cfa6c2ceccff0311",
+      "bytes": 11369
     },
     {
       "path": "tests/test_worker.py",
@@ -783,8 +2431,8 @@
     },
     {
       "path": "web-dashboard/Dockerfile",
-      "sha256": "8f9578db746a888ce85fd2c5c3105641bdcfd1ec424c38394018f0ba684ab123",
-      "bytes": 654
+      "sha256": "c008012682f318f6a387c1c4ce8dc3a59a4452e52c21be677aedeff041727ed6",
+      "bytes": 777
     },
     {
       "path": "web-dashboard/README.md",
@@ -797,9 +2445,9 @@
       "bytes": 129
     },
     {
-      "path": "web-dashboard/app/admin/page.tsx",
-      "sha256": "b75ba7fdd44935d5b3ff6c6d595f2f0952c790eba774a3ccf3e40706a25e76c4",
-      "bytes": 131
+      "path": "web-dashboard/app/agents/page.tsx",
+      "sha256": "7469f19421ac86831b13f9c1df5fa245e721b08f9a4d6a3dacad341b68b18bdb",
+      "bytes": 129
     },
     {
       "path": "web-dashboard/app/allocation/page.tsx",
@@ -808,8 +2456,8 @@
     },
     {
       "path": "web-dashboard/app/api/[...path]/route.ts",
-      "sha256": "4d5f4f97a5030b3143bc83cf68ce06ed2ca8fcb91b0670ee8802ceb71c3d0279",
-      "bytes": 2485
+      "sha256": "62177af8fb89e7e9e30397c7b452e4835dfe2d247e4b085bdfe161c2785d0346",
+      "bytes": 4659
     },
     {
       "path": "web-dashboard/app/automation/page.tsx",
@@ -817,9 +2465,19 @@
       "bytes": 131
     },
     {
+      "path": "web-dashboard/app/claim/page.tsx",
+      "sha256": "6d5c132ffb03709dd184f0bf10e9390b295f1ab7f177e09c9bf6590625d0cafb",
+      "bytes": 45
+    },
+    {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "1ce2612cd2291d894eb04b1229d65f6aab06360c125e3765ec9d3da23d15737a",
-      "bytes": 15078
+      "sha256": "3edb8d07a55966dd3de0557391dcd55060d61b5c84b07d4ac5e7519de3e75032",
+      "bytes": 21988
+    },
+    {
+      "path": "web-dashboard/app/docs/[...path]/page.tsx",
+      "sha256": "61d43f8b0aea6feaec0ad9b8bc035c448c3b649e1162398d1216b639d5e39d81",
+      "bytes": 1295
     },
     {
       "path": "web-dashboard/app/findings/page.tsx",
@@ -828,18 +2486,43 @@
     },
     {
       "path": "web-dashboard/app/globals.css",
-      "sha256": "441f39002b07f85d0931e01458c4f4b6483af56607a09a43a8074a60b2c2812b",
-      "bytes": 89430
+      "sha256": "6dd1f44080ca2a973bc3c9ea91f596f01c9702604322830159b5b6cd29388440",
+      "bytes": 91689
+    },
+    {
+      "path": "web-dashboard/app/kubernetes/page.tsx",
+      "sha256": "58d03252dfcb2686c3fe44ca0fb06e2478f8b0c92ba561c5ea82881005bb3c31",
+      "bytes": 202
     },
     {
       "path": "web-dashboard/app/layout.tsx",
-      "sha256": "1b1199b8bd6027d148f68b1115d7aba7906dcbf645ce9dd1ff724fbee1a1f604",
-      "bytes": 828
+      "sha256": "635860755753f5c795928f6f255c5ab112e7fa5687ae5dedb12d7eaf67be6d4d",
+      "bytes": 861
+    },
+    {
+      "path": "web-dashboard/app/optimization/page.tsx",
+      "sha256": "09bba482d0bace4cb8d372512838b1a9503d4739863621e50d251bc093449175",
+      "bytes": 131
     },
     {
       "path": "web-dashboard/app/page.tsx",
       "sha256": "34a0882dad7adcf3a6056efd2df30e7eb08c79549fa18a60f749d48e539a3860",
       "bytes": 126
+    },
+    {
+      "path": "web-dashboard/app/resources/page.tsx",
+      "sha256": "3e130634819e5050ac4480e1835632ca83e621f122384030d6c0f4a233a203bb",
+      "bytes": 187
+    },
+    {
+      "path": "web-dashboard/app/resources/report/page.tsx",
+      "sha256": "92d04c081a1cafac96d10cfe4e990e6742ad2902d80291620f55457de3192200",
+      "bytes": 138
+    },
+    {
+      "path": "web-dashboard/app/services/[service]/page.tsx",
+      "sha256": "e3bbbe1a35709c833e71cec331cb68ddfaffd51f50aee868276472f8f5a0bae7",
+      "bytes": 220
     },
     {
       "path": "web-dashboard/app/settings/page.tsx",
@@ -848,38 +2531,43 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "21ef21d608774874f3527ba01f1e06c3a9fd39cd71700b82f98ff037fe192a8b",
-      "bytes": 20079
+      "sha256": "b097201005c2a123173f26b59d1c3fb08a286e15457220fc6e672370cffdc092",
+      "bytes": 22808
+    },
+    {
+      "path": "web-dashboard/components/ClaimView.tsx",
+      "sha256": "d81ef0d150ece971d2bda99ee7640535844ddff82b14b31d93b59cd0fd1d2c9a",
+      "bytes": 3695
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
-      "sha256": "e827c2cf5e5664a26dd4fd9575461abd6b541248ee677062e63c0481fc7062ec",
-      "bytes": 3642
+      "sha256": "78195d7ef683d1a3859e63713377299d22afc1cf39ad4eafcc45797961379837",
+      "bytes": 3939
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
-      "sha256": "c7cf7dcd5fc3006ffb26d1add99e00c68d51e219f7b492720404897f843a188f",
-      "bytes": 17725
+      "sha256": "1c4aa66eb88578337438eb86ca2aadcca9803be4274c95eeef0737fb8e14c944",
+      "bytes": 17958
     },
     {
       "path": "web-dashboard/components/GitOpsPanel.tsx",
-      "sha256": "8b1d2c15353628b84299be23a785f104866a72cc7c8f709401d2f93ec0c1a49f",
-      "bytes": 13460
+      "sha256": "808e4d151fa693df04abae9091a9a9d2c784d349b6e7970a39852221470446a0",
+      "bytes": 13763
     },
     {
       "path": "web-dashboard/components/Overview.tsx",
-      "sha256": "875ecf47f87f8ee15ceef0724041dfc03cff8dce9c64f9edd8bce9e9c9af5735",
-      "bytes": 12421
+      "sha256": "4b4819aff605f1b2687f414e161c75c8d5d205888259a724e7252de1c104a9ae",
+      "bytes": 13065
     },
     {
       "path": "web-dashboard/components/ReliabilityPanel.tsx",
-      "sha256": "02c98c998be4ce3d4b80212d3b970e178806c7b45e622b0245c24be3c9192347",
-      "bytes": 8727
+      "sha256": "6ecfe0a10793c92f8c004aba3bc5b41c0ac4cca6dc5dcc0c45610d7893797e4b",
+      "bytes": 8734
     },
     {
       "path": "web-dashboard/components/ServiceAnalysis.tsx",
-      "sha256": "290785b727247f578dc4f7ebdd10630d643dc4a4c99f7700c2154d55505e6acc",
-      "bytes": 14887
+      "sha256": "48f7437cbf68ff0cbadbec4ffea5bb7d8f2eb6bc1d6162cf7ec52875808e69b7",
+      "bytes": 15642
     },
     {
       "path": "web-dashboard/components/ThemeProvider.tsx",
@@ -887,29 +2575,39 @@
       "bytes": 1213
     },
     {
+      "path": "web-dashboard/components/V150Views.tsx",
+      "sha256": "d7b79eb8b8e5c4c0487ff2524685838ac4fd13a509340d7775bad380a517dcff",
+      "bytes": 13903
+    },
+    {
       "path": "web-dashboard/components/WorkspaceProvider.tsx",
-      "sha256": "b4cd8a89f56ffe8993efa7da8e7b79e3d8fe598e8319ed726f332dd0a0e4abb9",
-      "bytes": 9333
+      "sha256": "481334c63e2ece5728f7a479afb0045814f47b42d532b721e4e99b2ce7a398c1",
+      "bytes": 10588
     },
     {
       "path": "web-dashboard/components/WorkspaceViews.tsx",
-      "sha256": "e3ad4cef120a0e7d3f0a330a5edddd6d3b863cd08fcca72bca06abfdef401840",
-      "bytes": 19674
+      "sha256": "a188895cc41f628f5abbca9ed47b9124e9f005ddb6c985fd71d347aa2f9b934a",
+      "bytes": 24538
     },
     {
-      "path": "web-dashboard/components/admin/OperatorConsole.tsx",
-      "sha256": "745b4d5119ffd6b69f10af0d06b49f5c9cdbe445dcc309227738762409257e5f",
-      "bytes": 15278
+      "path": "web-dashboard/components/agents/AgentWorkspace.tsx",
+      "sha256": "8d7b9d18b091f76f3a66a52afb21567a7559ee91bf7f3065c62e5976042762a5",
+      "bytes": 15420
+    },
+    {
+      "path": "web-dashboard/components/agents/agents.css",
+      "sha256": "fe62c56ae4baeadd442bfacf91de1b60d4344aa0c7dc5588188b82853c70953d",
+      "bytes": 2524
     },
     {
       "path": "web-dashboard/components/datagrid/ExplorerSummary.tsx",
-      "sha256": "00b09440946f3d4961011ffbb2b88053a27e14d3da7abf21014fd8f8c4c60abd",
-      "bytes": 1903
+      "sha256": "fa2e5e51210af374294cdad086bae10e65036d0e06c9c16d0d24f33d38b6eafc",
+      "bytes": 1890
     },
     {
       "path": "web-dashboard/components/datagrid/FindingsGrid.tsx",
-      "sha256": "d07cd96bcc1366c56923b8442a5e3fba90953e17e28489928bf3fc076c8b50b3",
-      "bytes": 22458
+      "sha256": "3747c44b198733451035a875012762d559a0e27e5b9b8b3c06ac1b8128550922",
+      "bytes": 25706
     },
     {
       "path": "web-dashboard/components/drawer/EvidenceRadar.tsx",
@@ -918,8 +2616,8 @@
     },
     {
       "path": "web-dashboard/components/drawer/FindingDrawer.tsx",
-      "sha256": "f3d922a9748ad4cc67d9a5603f25b50c78b621a7ce6cec35fa970bb6b1240fca",
-      "bytes": 16658
+      "sha256": "286dd6cb56fd44254f98435eaf6e8e5c6c644be4688f1d522e9bad9fca334507",
+      "bytes": 16769
     },
     {
       "path": "web-dashboard/components/drawer/TelemetryEvidence.tsx",
@@ -927,9 +2625,59 @@
       "bytes": 2843
     },
     {
+      "path": "web-dashboard/components/kubernetes/KubernetesWorkspace.tsx",
+      "sha256": "d6384568667722843fd79a8808e72a59538c043feeeede2a531101128e22ca45",
+      "bytes": 16882
+    },
+    {
+      "path": "web-dashboard/components/kubernetes/kubernetes.css",
+      "sha256": "5cb466defd2e9ad5e3f188ca3c39b645d03b30d06ad0acfc645853ea9502ca40",
+      "bytes": 2016
+    },
+    {
+      "path": "web-dashboard/components/resources/AIProcessingDisclosure.tsx",
+      "sha256": "fca98d05594cf23cefbe7ad8d108c502a33d80295a5c35781a7901c346af5a23",
+      "bytes": 1472
+    },
+    {
+      "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
+      "sha256": "378c31de9d23e62d89d56f1bc26cafbbd4c3e7e63b304eaacdbda864c38cf2ff",
+      "bytes": 23535
+    },
+    {
+      "path": "web-dashboard/components/resources/ResourceParts.tsx",
+      "sha256": "5ba0d90b464e03a7ca29d87c00ccf9ca58b9a4a7231e5c2021a99015ec08fc66",
+      "bytes": 2192
+    },
+    {
+      "path": "web-dashboard/components/resources/ResourcesView.tsx",
+      "sha256": "fa722165ea733bda6c53d9382f8b8ef1225fe54b9f69aee40c373ba583733017",
+      "bytes": 20869
+    },
+    {
+      "path": "web-dashboard/components/rules/CustomerRuleSettings.tsx",
+      "sha256": "43e6fe348b14e52e8f70000bef8d284781e9a55d4da816ee09533d490455a157",
+      "bytes": 6685
+    },
+    {
+      "path": "web-dashboard/components/settings/AIFoundryConfigurationEditor.tsx",
+      "sha256": "dde031c4fd5ed0987ef52748969d9fb8ce95bb9a2a23688ae8a725771806dbc5",
+      "bytes": 12754
+    },
+    {
+      "path": "web-dashboard/components/settings/AccessSettings.tsx",
+      "sha256": "b8becd1d2fee7a0449965e4b67da394dda3b847d69c28221bdf4e17502ee223d",
+      "bytes": 25757
+    },
+    {
+      "path": "web-dashboard/components/settings/DataGovernanceWorkspace.tsx",
+      "sha256": "2aecab887bea7adede0d1e7e9fff13964fe23559ff362a8fbbdf86fb780a6a06",
+      "bytes": 11817
+    },
+    {
       "path": "web-dashboard/components/settings/WorkspaceSettings.tsx",
-      "sha256": "1456cabc69cfc98747f2acc903ce8f64a174e5b09d4e83e6caaff612298e4798",
-      "bytes": 14629
+      "sha256": "87eee6ff41ddfa565018fd92828755ebc34a97e0102255689e8cf1c1fe987a77",
+      "bytes": 18362
     },
     {
       "path": "web-dashboard/components/ui/button.tsx",
@@ -947,6 +2695,11 @@
       "bytes": 1763
     },
     {
+      "path": "web-dashboard/e2e/agents.spec.ts",
+      "sha256": "a03d5d977ba9f2acba386dfef207cf91f5e8b38b5b2cf47a9ee1cc27dcee473e",
+      "bytes": 6982
+    },
+    {
       "path": "web-dashboard/e2e/assessment.spec.ts",
       "sha256": "6395f54c3ce1a267fccd4dbe9b02ef2f2a3679e4b255a69c29309222f4a27541",
       "bytes": 6875
@@ -957,29 +2710,74 @@
       "bytes": 8097
     },
     {
+      "path": "web-dashboard/e2e/data-governance.spec.ts",
+      "sha256": "c0d657d4216770a7ff5f780482864e86bbcd6ad600f58fecd9e449744febec36",
+      "bytes": 5013
+    },
+    {
       "path": "web-dashboard/e2e/enterprise-fixture.ts",
-      "sha256": "fa8fed414a91549e50cfa4468eab4684a5e1ce430178cdb7800424528bbb7cf1",
-      "bytes": 3785
+      "sha256": "900928f05c109e067af1bca64b1eb908c29453e0e8733c146e1449bbd989a76f",
+      "bytes": 3988
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
-      "sha256": "af04c16c207f6ac04979c23c2c137531dc22bac0ab7955205913ea3a0e2c80ee",
-      "bytes": 5950
+      "sha256": "b36618c764e145cccd85739a637fb7444887c77fbc6ada24cfb973f5af70db50",
+      "bytes": 5040
+    },
+    {
+      "path": "web-dashboard/e2e/foundry-fixture.ts",
+      "sha256": "3051da7a1833c2aa377ad9ed1544da7fd23eb75c513a13203f01bd9b253bbd3c",
+      "bytes": 2058
+    },
+    {
+      "path": "web-dashboard/e2e/foundry.spec.ts",
+      "sha256": "c99d9dcf8c4b73c6fec231b7b095ab47b34b59e3e9733071668dca517ccc73ef",
+      "bytes": 7009
+    },
+    {
+      "path": "web-dashboard/e2e/kubernetes.spec.ts",
+      "sha256": "deef00142e3b540a6d76f61a7e7a3ff0607d64cc7089cf54c81c1510a77d3031",
+      "bytes": 5879
+    },
+    {
+      "path": "web-dashboard/e2e/lean.spec.ts",
+      "sha256": "21008c0a06e4be0d31da731824d83b113797d21ce951fd4826835b4282084845",
+      "bytes": 7092
+    },
+    {
+      "path": "web-dashboard/e2e/opportunity-totals.spec.ts",
+      "sha256": "ead28b7b311795badb11e3fbb056197689391f17f915dd4dd93972a52b20b39e",
+      "bytes": 1076
     },
     {
       "path": "web-dashboard/e2e/reliability.spec.ts",
-      "sha256": "a623433e58f96c92b19bba11ca59bdcfd4394d756d73aa66b5b47c48e88f8624",
-      "bytes": 5228
+      "sha256": "da800661d264acf53ef1842ab47ec43c62c6504292e16f72cbb35a52ee3b3df5",
+      "bytes": 5778
+    },
+    {
+      "path": "web-dashboard/e2e/rules-services.spec.ts",
+      "sha256": "cbf306f9fac37900b3dc4143951e0ad51409880263c3e4c3093abd256da0e7b9",
+      "bytes": 2411
     },
     {
       "path": "web-dashboard/e2e/ui.spec.ts",
-      "sha256": "bfc99c3e11f61fd139641bce8d03917a1566943823b82162aa6c370fae6783cb",
-      "bytes": 11000
+      "sha256": "da27c8435d1d908dfd2c712c1d78829aba9efb12c40a345f8fe20ea2622ccd3d",
+      "bytes": 11092
+    },
+    {
+      "path": "web-dashboard/e2e/v140.spec.ts",
+      "sha256": "0be264b29d3cac8501d36a79ffe90e1b5bc25e293b85086eb319b43133f0177a",
+      "bytes": 1852
+    },
+    {
+      "path": "web-dashboard/e2e/v150.spec.ts",
+      "sha256": "6a48ce151bd0024e8f5bc34029cdb2e7b9d72dae89b4d20a4ac871e1a68a142f",
+      "bytes": 5033
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "7b27a4f285727a33b2f41e12a2a31b2e643fe4ed19367b2f7693d7a2902b24e1",
-      "bytes": 12864
+      "sha256": "3f7e3196757c5e3a196b7a5c1b7d3bf863266f273e797cd5cadade9406e01ed2",
+      "bytes": 15135
     },
     {
       "path": "web-dashboard/lib/api.ts",
@@ -988,8 +2786,18 @@
     },
     {
       "path": "web-dashboard/lib/finops.ts",
-      "sha256": "7aa7220a313608fb03010cb3ff1b2245aa25f47323e8e786c95ae1c10a9f9b5b",
-      "bytes": 4227
+      "sha256": "a6d414c8e2f8a91118ccaba4a9d048bb6c63091d78ac0f746c97a80fca2b20ad",
+      "bytes": 5612
+    },
+    {
+      "path": "web-dashboard/lib/plan.ts",
+      "sha256": "2c2c8cdd02815cfa9e2aadc2682d45c0b024c095b742021bba1c69197181010e",
+      "bytes": 1765
+    },
+    {
+      "path": "web-dashboard/lib/repo-docs.ts",
+      "sha256": "b794a640ad5c22eaf9b8dba8aeddda79b5dbde585485873ba272a5dd79884494",
+      "bytes": 1364
     },
     {
       "path": "web-dashboard/lib/resource-insights.ts",
@@ -997,9 +2805,14 @@
       "bytes": 3261
     },
     {
+      "path": "web-dashboard/lib/resources.ts",
+      "sha256": "48caa4b9e4b77cc918c4a3d23d822730e07eaf7d35f94f82aa2fdd8f3fea6913",
+      "bytes": 8951
+    },
+    {
       "path": "web-dashboard/lib/types.ts",
-      "sha256": "89b765bd6614425562c26c7425cfa2dbbe239d5dd32987e168b19cc417c54088",
-      "bytes": 3912
+      "sha256": "b697154a8c5481b3799c778aeaf06700100fba4ee48ef3333796133c2c884c82",
+      "bytes": 6592
     },
     {
       "path": "web-dashboard/next-env.d.ts",
@@ -1008,18 +2821,18 @@
     },
     {
       "path": "web-dashboard/next.config.ts",
-      "sha256": "2b8b80e902cbbc4b09d64f4845182f266b2f5c59c009cc280a25217a76ca50bc",
-      "bytes": 130
+      "sha256": "18075fa228932d99ec0ee2a34d11412bf45c0345cf0016d53b2703e901629e6c",
+      "bytes": 552
     },
     {
       "path": "web-dashboard/package-lock.json",
-      "sha256": "0a00e05056dfd8c37f3b277271646e6b41e23ca10e826ada6aacb2859f87c607",
-      "bytes": 78394
+      "sha256": "a07423ee8c892944fc8a33a9558cbff5a2f2d45e4604d0bc3bdee97a549d0eec",
+      "bytes": 139211
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "7d4a50e1c52a8a320ae743c617309743ca303652c55e62c137a68dbf236595d4",
-      "bytes": 995
+      "sha256": "9d91e6877268b3f973cb2e0dbea2fb4ca4e5a50eb21094068289636ee604ead0",
+      "bytes": 1100
     },
     {
       "path": "web-dashboard/playwright.config.ts",
@@ -1032,6 +2845,11 @@
       "bytes": 62
     },
     {
+      "path": "web-dashboard/proxy.ts",
+      "sha256": "db2d7687edbf4145fdac107d8882db2a7827bc2c281d46c350f1422ac07f110d",
+      "bytes": 1001
+    },
+    {
       "path": "web-dashboard/tsconfig.json",
       "sha256": "6bf102b8ecab1f3d366d415e0ea89bb95b2f90036570e40703a2175cd62f10b7",
       "bytes": 639
@@ -1042,9 +2860,19 @@
       "bytes": 84
     },
     {
+      "path": "workers/billing_sync.py",
+      "sha256": "6067178b88fedc602284727a7475e5c5979165e9974ebd817d681d322f7c2b4c",
+      "bytes": 1957
+    },
+    {
+      "path": "workers/data_retention.py",
+      "sha256": "dc7c7023b4b30a2a26c0e2327b7a9a21c5970a8b52739a2744a3f11939c50154",
+      "bytes": 1222
+    },
+    {
       "path": "workers/dispatcher.py",
-      "sha256": "c45990d4f5e29a72b7e0d6945b4404ad9e06bd79a31c50582f06234839f06a4b",
-      "bytes": 7519
+      "sha256": "848a9f2b9449f8205c25e7c8624b8f4f21ff363de68b5dfde16a38fa5298d17a",
+      "bytes": 7663
     },
     {
       "path": "workers/lease.py",
@@ -1053,13 +2881,13 @@
     },
     {
       "path": "workers/storage.py",
-      "sha256": "c6d5c65d3a0b8dd974368cd6cb641c3717afd2a3e4665600cbefe9bf84bc51c1",
-      "bytes": 13122
+      "sha256": "32375bc6b86c7966cf8ef76f0a9b7324d3eb308180e532d480b3973828192fa4",
+      "bytes": 14243
     },
     {
       "path": "workers/tasks.py",
-      "sha256": "6130ae4a67bf92bebaa948f74877c9bdfd84e31c92583e3fcc6a48f8a7aa8ed2",
-      "bytes": 12191
+      "sha256": "e22064a85b5028d369ccf51fd56ebcf5ee0b6d60a6af3d1b20851b5f42789ef0",
+      "bytes": 18987
     }
   ]
 }

@@ -14,10 +14,11 @@ test('service and optimization destinations expose observed data and honest evid
 
 test('configured automatic billing sync refreshes durable history without a manual file',async({page})=>{
   await mockWorkspace(page);let synced=false;let writes=0;
-  await page.route('**/api/v1/finops/sync-status',r=>r.fulfill({json:{configured:true,automatic_sync_enabled:true,last_synced_at:synced?'2026-10-23T12:00:00Z':null,recent_syncs:synced?[{id:'run',state:'completed',updated_at:'2026-10-23T12:00:00Z',payload:{inserted_records:2}}]:[],warning:'TEST FIXTURE: Coverage remains unverified.'}}));
-  await page.route('**/api/v1/finops/sync?*',r=>{writes++;synced=true;return r.fulfill({json:{status:'completed'}});});
+  await page.route('**/api/v1/finops/sync-status',r=>r.fulfill({json:{configured:true,automatic_sync_enabled:true,last_synced_at:synced?'2026-10-23T12:00:00Z':null,recent_syncs:synced?[{id:'run',state:'completed',updated_at:'2026-10-23T12:00:00Z',payload:{inserted_records:2,unresolved_absent_groups:1}}]:[],warning:'TEST FIXTURE: Coverage remains unverified.'}}));
+  await page.route('**/api/v1/finops/sync?*',r=>{writes++;expect(r.request().postDataJSON().idempotency_key).toMatch(/^[a-f0-9-]{36}$/);return r.fulfill({status:202,json:{status:'queued',poll_url:'/api/v1/finops/sync-jobs/77777777-7777-4777-8777-777777777777'}});});
+  await page.route('**/api/v1/finops/sync-jobs/77777777-7777-4777-8777-777777777777',r=>{synced=true;return r.fulfill({json:{status:'completed'}});});
   await navigate(page,'Cost allocation');await page.getByRole('button',{name:'Sync now',exact:true}).click();
-  await expect(page.getByText('Last successful synchronization:',{exact:false})).toBeVisible();expect(writes).toBe(1);
+  await expect(page.getByText('Last successful synchronization:',{exact:false})).toBeVisible();expect(writes).toBe(1);await expect(page.getByText('Billing remains unreconciled:',{exact:false})).toBeVisible();
   await expect(page.getByText('Advanced: Manual FOCUS JSON Override',{exact:true})).toBeVisible();
 });
 
@@ -35,4 +36,14 @@ test('automatic repository preview uses the selected scan without inventing a Te
   await navigate(page,'Automation');await page.getByRole('tab',{name:'Plan guardrails',exact:true}).click();await page.getByRole('button',{name:'Preview & evaluate selected scan'}).click();
   await expect(page.getByText('Review required. Repository CI must supply the real Terraform plan; cost impact remains unknown.')).toBeVisible();
   expect(submitted?.['scan_id']).toBe(scanId);expect(submitted?.['target_id']).toBe('infra');
+});
+
+
+test('served dashboard HTML uses distinct CSP nonces and blocks framing',async({request})=>{
+  const a=await request.get('/'),b=await request.get('/');
+  expect(a.headers()['x-frame-options']).toBe('DENY');
+  const policy=a.headers()['content-security-policy'];
+  expect(policy).toContain("'nonce-");expect(policy).not.toContain("'unsafe-eval'");
+  expect(policy).not.toBe(b.headers()['content-security-policy']);
+  expect(a.headers()['cache-control']).toContain('no-store');
 });

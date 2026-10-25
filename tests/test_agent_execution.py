@@ -266,3 +266,12 @@ def test_planning_is_metered_without_polluting_the_advisory_response_contract(se
     assert ledger.get(s.tenant['tenant_id'],result['assessment_id']) is None
     usage=ledger.usage(s.tenant['tenant_id'])['groups']
     assert usage[0]['attempts']==1 and usage[0]['input_tokens']==100 and usage[0]['output_tokens']==200
+
+
+def test_stale_production_directory_blocks_private_worker_claims(setup,monkeypatch):
+    s=setup
+    # The fixture constructs a development store; switching the runtime policy
+    # demonstrates that internal worker endpoints also refuse missing freshness.
+    monkeypatch.setenv('CLOUDSAVER_ENVIRONMENT','production')
+    r=s.api.post('/internal/v1/agent/claim',headers=s.worker_headers,json={'tenant_id':s.tenant['tenant_id']})
+    assert r.status_code==503 and 'fresh' in r.json()['detail']

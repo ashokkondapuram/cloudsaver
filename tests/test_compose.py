@@ -34,8 +34,9 @@ def services():
 def test_only_cloudsaver_services_run_here():
     names = set(services())
     assert names == {'migrate', 'api-gateway', 'scanner-service', 'web-dashboard', 'scan-worker', 'delivery-dispatcher', 'scan-scheduler',
-                     'postgres', 'redis', 'agent-gateway', 'agent-worker', 'data-retention-worker'}
-    assert not any(word in name for name in names for word in ('identity', 'portal', 'token', 'billing'))
+                     'postgres', 'redis', 'agent-gateway', 'agent-worker', 'data-retention-worker', 'billing-sync-worker'}
+    # Provider bill ingestion belongs to CloudSaver; platform subscription billing remains separate.
+    assert not any(word in name for name in names for word in ('identity', 'portal', 'token'))
 
 
 def test_no_platform_database_redis_or_billing_settings():

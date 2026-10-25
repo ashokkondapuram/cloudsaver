@@ -29,7 +29,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip check
       - name: Unit and disposable PostgreSQL/Redis fault tests
-        run: python scripts/test_postgres.py
+        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov-report=term-missing --cov-fail-under=85
 
   dashboard:
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '22'
+          node-version: '24.22.1'
           cache: npm
           cache-dependency-path: web-dashboard/package-lock.json
       - run: npm ci
@@ -54,6 +54,12 @@ jobs:
         run: npm audit --audit-level=moderate
       - run: npm run typecheck
       - run: npm run build
+      - run: npm sbom --sbom-format=cyclonedx > dashboard-sbom.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dashboard-sbom
+          path: web-dashboard/dashboard-sbom.json
+          if-no-files-found: error
       - run: npx playwright install --with-deps chromium
       - name: Browser workflows with intercepted test-only API fixtures
         shell: bash
@@ -68,3 +74,153 @@ jobs:
           done
           test "$ready" = true
           npm run test:e2e
+
+  platform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: platform
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt -r platform/requirements.txt
+      - run: python -m pip check
+      - name: Collect and execute the independent platform suite
+        run: python scripts/test_postgres.py platform/tests
+
+  agent-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: agent-worker
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: agent-worker/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm sbom --sbom-format=cyclonedx > worker-sbom.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: worker-sbom
+          path: agent-worker/worker-sbom.json
+          if-no-files-found: error
+
+  portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: platform/portal
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: platform/portal/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm sbom --sbom-format=cyclonedx > portal-sbom.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: portal-sbom
+          path: platform/portal/portal-sbom.json
+          if-no-files-found: error
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-security.txt
+      - name: Undefined-name and high severity SAST gates
+        run: |
+          ruff check --select F821,F823 app services workers platform/identity platform/egress database scripts
+          bandit -r app services workers platform/identity platform/egress -lll -iii -q
+      - name: Full resolved Python vulnerability gate and SBOM
+        run: |
+          pip-audit -r requirements.txt -r platform/requirements.txt
+          pip-audit -r requirements.txt -r platform/requirements.txt --format cyclonedx-json -o python-sbom.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-sbom
+          path: python-sbom.json
+          if-no-files-found: error
+      - name: Verify pinned secret scanner and scan release sources
+        run: |
+          curl --fail --location --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz -o /tmp/gitleaks.tar.gz
+          echo 'fa0500f6b7e41d28791ebc680f5dd9899cd42b58629218a5f041efa899151a8e  /tmp/gitleaks.tar.gz' | sha256sum --check
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          python scripts/scan_secrets.py /tmp/gitleaks
+
+  real-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: web-dashboard/package-lock.json
+      - run: python -m pip install -r requirements-dev.txt
+      - run: npm --prefix web-dashboard ci
+      - run: npm --prefix web-dashboard run build
+      - name: Real Next proxy, gateway, core and disposable Redis transport contracts
+        run: python scripts/test_real_stack.py
+
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt -r platform/requirements.txt
+      - run: python scripts/release_manifest.py --check
+
+  required-verification:
+    if: always()
+    needs: [backend, dashboard, platform, agent-worker, portal, security, real-stack, manifest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shipped application and release check must pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: python -c 'import json,os; assert all(job["result"] == "success" for job in json.loads(os.environ["RESULTS"]).values())'

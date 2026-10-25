@@ -1,7 +1,7 @@
 """Portal billing admin API (plans, subscriptions, payments, customer billing overview)."""
 from uuid import uuid4
 
-from identity.billing.catalog import SEED_PLANS, merged, validate_entitlements
+from identity.billing.catalog import SEED_PLANS, SEED_SETTINGS, merged, validate_entitlements
 from identity.billing.domain import (
     BILLING_STATES, ENDED, LAPSED_ACTIONS, PAYMENT_METHODS, PAYMENT_STATUSES, PLAN_CODE, PLAN_STATUSES, PROVIDER_NAMES,
     SUBSCRIPTION_STATUSES, billing_state, choice, currency, day, free_text, https_url, iso_day, optional_day, timestamp, whole,

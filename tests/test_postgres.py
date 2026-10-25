@@ -365,7 +365,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0020_billing_and_agent_gitops',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0021_billing_jobs',)]
 
 
 
@@ -447,7 +447,7 @@ def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_priv
     rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
     assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
     with psycopg.connect(database[0]) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0020_billing_and_agent_gitops'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0021_billing_jobs'
         assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
 
 
@@ -1290,3 +1290,44 @@ def test_v150_workflow_journals_enforce_rls_and_persist_fences(database):
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0]==0
             context(db,b['tenant_id'])
             assert db.execute(sql.SQL('UPDATE {} SET state=%s WHERE id=%s RETURNING id').format(sql.Identifier(table)),('tampered',id)).fetchall()==[]
+
+
+def test_billing_job_recovery_and_financial_import_share_fenced_transaction(database,monkeypatch):
+    from app.billing_jobs import BillingJobs
+    from app.enterprise_store import EnterpriseStore
+    from app.collectors.billing_sync import bindings
+    from decimal import Decimal
+    from datetime import timedelta
+    import json
+    _,url,_=database;a,b=workspace(),workspace()
+    monkeypatch.setenv('CLOUDSAVER_AUTO_BILLING_SYNC','true')
+    monkeypatch.setenv('CLOUDSAVER_BILLING_CONNECTORS',json.dumps([dict(tenant_id=a['tenant_id'],provider='azure',scope_id=a['subscription_ids'][0])]))
+    repo=EnterpriseStore(Settings('azure',':memory:',(a,b),database_url=url));jobs=BillingJobs(repo)
+    job=jobs.submit(a,str(uuid4()));claim=jobs.claim(a['tenant_id'])
+    def reader(binding,tenant,start,end):return [dict(day=start,resource_id=None,currency='USD',category='Usage',billed='10',effective='10')],'account',[]
+    jobs.execute_scope(a,claim,readers={'azure':reader})
+    assert jobs.get(a['tenant_id'],job['id'])['status']=='completed'
+    assert jobs.get(b['tenant_id'],job['id']) is None
+    second=jobs.submit(a,str(uuid4()));jobs.execute_scope(a,jobs.claim(a['tenant_id']),readers={'azure':reader})
+    with repo.transaction(a['tenant_id']) as db:
+        assert Decimal(str(db.execute('SELECT sum(billed_cost) FROM focus_charges WHERE tenant_id=%s',(a['tenant_id'],)).fetchone()[0]))==10
+    with psycopg.connect(url) as db:
+        assert db.execute('SELECT count(*) FROM billing_sync_jobs').fetchone()[0]==0
+        context(db,b['tenant_id'])
+        assert db.execute('UPDATE billing_sync_jobs SET state=%s WHERE id=%s RETURNING id',('tampered',job['id'])).fetchall()==[]
+
+
+def test_directory_projection_two_replicas_fence_cursor_and_rollback(database):
+    from app.tenant_registry import PostgresRegistry
+    a,b=PostgresRegistry(database[1]),PostgresRegistry(database[1]);before=a.projection_cursor()
+    with pytest.raises(RuntimeError,match='synthetic projector loss'):
+        with a.projection_transaction() as acquired:
+            assert acquired
+            a.set_projection_cursor(before+1)
+            with b.projection_transaction() as second:assert second is False
+            raise RuntimeError('synthetic projector loss before atomic commit')
+    assert b.projection_cursor()==before
+    with b.projection_transaction() as acquired:
+        assert acquired;b.set_projection_cursor(before+1)
+    assert a.projection_cursor()==before+1
+    with pytest.raises(ValueError,match='regress'):a.set_projection_cursor(before)

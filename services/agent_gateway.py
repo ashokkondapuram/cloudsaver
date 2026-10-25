@@ -114,6 +114,9 @@ def create_app(settings=None, identity_validator=None, planner=None, repository=
         except (ValueError,TypeError,KeyError): raise HTTPException(503,'Agent worker grants are unavailable.') from None
 
     def workspace(tid, worker):
+        from app.config import require_directory_freshness
+        try:require_directory_freshness(settings)
+        except Exception:raise HTTPException(503,'Workspace directory is not fresh enough to authorize worker access') from None
         if tid not in worker['tenant_ids']: raise HTTPException(403,'Worker is not assigned to this workspace.')
         row = next((t for t in settings.tenants if t['tenant_id']==tid),None)
         if row is None: raise HTTPException(403,'Workspace is unavailable.')

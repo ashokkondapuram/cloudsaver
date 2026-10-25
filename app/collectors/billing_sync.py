@@ -139,7 +139,7 @@ def gcp_rows(binding, tenant, start, end):
 READERS={'azure':azure_rows,'aws':aws_rows,'gcp':gcp_rows}
 
 
-def _import_snapshot(repository, tenant, binding, observations, start, end, currency):
+def _import_snapshot(repository, tenant, binding, observations, start, end, currency, *, authoritative=False, watermark=None, _db=None):
     """Append exact correction deltas; immutable charge rows are never overwritten."""
     grouped={}
     for row in observations:
@@ -151,26 +151,42 @@ def _import_snapshot(repository, tenant, binding, observations, start, end, curr
             value=Decimal(str(row[field]))
             if not value.is_finite() or abs(value)>Decimal('1e15'): raise ValueError('Invalid provider amount')
             totals[i]+=value
-    charges=[]
+    from contextlib import nullcontext
+    if authoritative and (not isinstance(watermark,str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',watermark)):
+        raise ValueError('An authoritative snapshot needs a source-native watermark')
+    requested={}
     for (day,resource,category),actual in grouped.items():
         logical='auto:'+digest([binding['provider'],binding['scope_id'],str(day),resource,category])[:48]
-        with repository.store.transaction(tenant['tenant_id']) as db:
-            prior=db.execute('SELECT charge_id,billed_cost,effective_cost FROM focus_charges WHERE tenant_id=%s '
-                'AND provider=%s AND sub_account=%s AND currency=%s AND charge_id LIKE %s',
-                (tenant['tenant_id'],binding['provider'],binding['scope_id'],currency,logical+':%')).fetchall()
-        previous=[sum((Decimal(str(r[i])) for r in prior),Decimal(0)) for i in (1,2)]
-        amounts=[actual[i]-previous[i] for i in (0,1)]
-        if prior and not any(amounts): continue
-        version=digest([list(map(str,actual)),sorted(str(r[0]) for r in prior)])[:24]
+        requested[logical]=(day,resource,category,actual)
+    with (nullcontext(_db) if _db is not None else repository.store.transaction(tenant['tenant_id'])) as db:
+        old=db.execute('SELECT charge_id,period_start,resource_id,billed_cost,effective_cost FROM focus_charges WHERE tenant_id=%s '
+            'AND provider=%s AND sub_account=%s AND currency=%s AND charge_id LIKE %s AND period_start>=%s AND period_start<%s LIMIT 50001',
+            (tenant['tenant_id'],binding['provider'],binding['scope_id'],currency,'auto:%',str(start),str(end))).fetchall()
+    if len(old)>50000:raise ValueError('Prior snapshot exceeds the reconciliation bound')
+    previous={}
+    for row in old:
+        logical=str(row[0]).rsplit(':',1)[0]
+        item=previous.setdefault(logical,dict(ids=[],amounts=[Decimal(0),Decimal(0)],day=datetime.fromisoformat(str(row[1])).date(),resource=row[2]))
+        item['ids'].append(str(row[0]));item['amounts'][0]+=Decimal(str(row[3]));item['amounts'][1]+=Decimal(str(row[4]))
+    absent={key:value for key,value in previous.items() if key not in requested and any(value['amounts'])}
+    if authoritative:
+        for key,prior in absent.items():requested[key]=(prior['day'],prior['resource'],'Adjustment',[Decimal(0),Decimal(0)])
+    charges=[]
+    for logical,(day,resource,category,actual) in requested.items():
+        prior=previous.get(logical);amounts=[actual[i]-(prior['amounts'][i] if prior else 0) for i in (0,1)]
+        if prior and not any(amounts):continue
+        version=digest([list(map(str,actual)),sorted(prior['ids']) if prior else []])[:24]
         charges.append(Charge(x_ChargeId=logical+':'+version,ProviderName={'azure':'Azure','aws':'AWS','gcp':'Google Cloud'}[binding['provider']],
             BillingAccountId=binding['scope_id'],SubAccountId=binding['scope_id'],BillingCurrency=currency,
             ChargePeriodStart=datetime.combine(day,datetime.min.time(),timezone.utc),
             ChargePeriodEnd=datetime.combine(day+timedelta(days=1),datetime.min.time(),timezone.utc),ResourceId=resource,
             ChargeCategory='Adjustment' if prior else category,BilledCost=str(amounts[0]),EffectiveCost=str(amounts[1])))
-    source='auto-sync:'+digest([binding, str(start),str(end),currency,[c.model_dump(mode='json') for c in charges]])[:64]
-    if not charges: return dict(inserted=0,records=0,cached=True)
-    return repository.import_records(tenant,ImportRequest(source_id=source,provider=binding['provider'],sub_account_id=binding['scope_id'],
-        billing_currency=currency,period_start=start,period_end=end,complete=False,records=charges))
+    source='auto-sync:'+digest([binding,str(start),str(end),currency,[c.model_dump(mode='json') for c in charges]])[:64]
+    result=(repository.import_records(tenant,ImportRequest(source_id=source,provider=binding['provider'],sub_account_id=binding['scope_id'],
+        billing_currency=currency,period_start=start,period_end=end,complete=False,records=charges),_db=_db)
+        if charges else dict(inserted=0,records=0,cached=True))
+    return dict(result,unresolved_absent_groups=0 if authoritative else len(absent),
+                reconciliation_status='source_snapshot_reconciled' if authoritative else 'unverified',source_watermark=watermark)
 
 
 def sync_workspace_billing(tenant, repository, *, currency='USD', readers=None):
@@ -207,6 +223,10 @@ def sync_workspace_billing(tenant, repository, *, currency='USD', readers=None):
 def sync_status(tenant, repository):
     selected=bindings(tenant)
     rows=WorkflowStore(repository.store).rows(tenant['tenant_id'],'billing_sync_runs')
+    with repository.store.transaction(tenant['tenant_id']) as db:
+        jobs=db.execute('SELECT id,state,payload,updated_at FROM billing_sync_jobs WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 25',(tenant['tenant_id'],)).fetchall()
+    from app.enterprise_store import decode
+    rows=[dict(id=str(r[0]),state=r[1],updated_at=str(r[3]),payload=dict(inserted_records=sum(s.get('inserted',0) for s in decode(r[2]).get('scope_results',[])),unresolved_absent_groups=sum(s.get('unresolved_absent_groups',0) for s in decode(r[2]).get('scope_results',[])))) for r in jobs]+rows
     return dict(automatic_sync_enabled=bool(selected) and os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true').lower()=='true',
                 configured=bool(selected),manual_upload_required=False,connectors=[{k:r[k] for k in ('provider','scope_id')} for r in selected],
                 recent_syncs=rows,last_synced_at=next((r['updated_at'] for r in rows if r['state']=='completed'),None),

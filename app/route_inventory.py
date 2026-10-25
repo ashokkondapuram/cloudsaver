@@ -12,6 +12,8 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/api/v1/finops/sync-jobs/{job_id}'):'full_scope',
+    ('POST','/api/v1/finops/sync-jobs/{job_id}/cancel'):'full_scope',
     ('GET','/api/v1/services/{service}'):'scoped_read',
     ('GET','/api/v1/services/{service_name}'):'scoped_read',
     ('GET','/api/v1/optimization/scans/{scan_id}/auto-scenarios'):'scoped_read',

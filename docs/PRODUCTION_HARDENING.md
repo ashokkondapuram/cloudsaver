@@ -1,3 +1,5 @@
+> Historical release guide. Current upgrade authority: [CloudSaver 1.5.1 runbook](releases/1.5.1-UPGRADE.md). Do not use the old migration heads below for a current deployment.
+
 # v0.7.2 backend hardening
 
 Source: [Production Go-Live & Backend Hardening Guide](https://docs.google.com/document/d/1SHfRfpM9nh_cWeQ6-K1FrCqxG2y2IpJSaL-oEdwykMg/edit), read October 22, 2026.

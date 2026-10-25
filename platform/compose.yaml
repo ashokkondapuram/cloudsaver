@@ -72,7 +72,10 @@ services:
     <<: *identity
     command: [uvicorn, identity.app:create_app, --factory, --host, 0.0.0.0, --port, '8005']
     networks: [platform-db, platform-internal, platform-link]
-    environment: *identity-environment
+    environment:
+      <<: *identity-environment
+      HTTPS_PROXY: http://identity-egress:3128
+      HTTP_PROXY: http://identity-egress:3128
     depends_on:
       identity-migrate: {condition: service_completed_successfully}
       platform-redis: {condition: service_healthy}
@@ -81,6 +84,20 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+  # Exact-host CONNECT proxy: identity-service stays on internal networks.
+  identity-egress:
+    build:
+      context: ./egress
+    restart: unless-stopped
+    networks: [platform-internal, identity-egress]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 64m
+    cpus: 0.5
+    environment:
+      PLATFORM_IDENTITY_EGRESS_HOSTS: ${PLATFORM_IDENTITY_EGRESS_HOSTS:-login.microsoftonline.com}
   # Throttling only; it holds no key material and CloudSaver never connects to it.
   platform-redis:
     image: redis:7-alpine
@@ -127,6 +144,8 @@ networks:
   # identity-service, platform-redis and the portal.
   platform-internal:
     internal: true
+  # Only the identity CONNECT proxy has a non-internal identity egress path.
+  identity-egress: {}
   # Egress for Entra sign-in only.
   portal-edge: {}
   # Shared with CloudSaver's key-verifying services. Internal: no egress for anything on it.

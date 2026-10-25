@@ -56,6 +56,12 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         'agent': internal_url('AGENT_GATEWAY_URL', 'http://agent-gateway:8006'),
     }
 
+    async def core_ready():
+        async with __import__('httpx').AsyncClient(timeout=2,transport=transport) as client:
+            response=await client.get(targets['scanner']+'/readyz')
+            if response.status_code!=200:raise RuntimeError('Core service unavailable')
+    app.state.readiness_checks['core']=core_ready
+
     async def allowed(row=Depends(tenant)):
         await limiter.check(row['tenant_id'])
         return row
@@ -82,9 +88,19 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def linked_history(row=Depends(allowed),authorization: str=Header()):
         return await forward('GET','scanner','/api/v1/gitops/syncs',authorization)
 
-    @app.post('/api/v1/finops/sync')
-    async def billing_sync(currency: str='USD',row=Depends(allowed),authorization: str=Header()):
-        return await forward('POST','scanner','/api/v1/finops/sync',authorization,{'currency':currency})
+    @app.post('/api/v1/finops/sync',status_code=202)
+    async def billing_sync(request:Request,currency:str=Query('USD',pattern=r'^[A-Z]{3}$'),row=Depends(allowed),authorization:str=Header()):
+        from app.schemas import bounded_json
+        result=await upstream('POST',targets['scanner'],'/api/v1/finops/sync',authorization,params={'currency':currency},json=await bounded_json(request),transport=transport)
+        return JSONResponse(result,status_code=202,headers={'Location':result['poll_url'],'Retry-After':'3'})
+
+    @app.get('/api/v1/finops/sync-jobs/{job_id}')
+    async def billing_job(job_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('GET','scanner',f'/api/v1/finops/sync-jobs/{job_id}',authorization)
+
+    @app.post('/api/v1/finops/sync-jobs/{job_id}/cancel')
+    async def cancel_billing_job(job_id:UUID,row=Depends(allowed),authorization:str=Header()):
+        return await forward('POST','scanner',f'/api/v1/finops/sync-jobs/{job_id}/cancel',authorization)
 
     @app.get('/api/v1/finops/sync-status')
     async def billing_sync_status(row=Depends(allowed),authorization: str=Header()):
@@ -429,17 +445,17 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
 
     @app.post('/api/v1/gitops/preview')
     async def gitops_preview(request:Request,row=Depends(allowed),authorization:str=Header()):
-        return await gitops_post('/api/v1/gitops/preview',request,authorization)
+        return await post_json('/api/v1/gitops/preview',request,authorization)
 
 
     @app.post('/api/v1/gitops/requests',status_code=201)
     async def gitops_publish(request:Request,row=Depends(allowed),authorization:str=Header()):
-        return await gitops_post('/api/v1/gitops/requests',request,authorization)
+        return await post_json('/api/v1/gitops/requests',request,authorization)
 
 
     @app.post('/api/v1/policies/terraform/evaluate')
     async def terraform_policy(request:Request,row=Depends(allowed),authorization:str=Header()):
-        return await gitops_post('/api/v1/policies/terraform/evaluate',request,authorization)
+        return await post_json('/api/v1/policies/terraform/evaluate',request,authorization)
 
 
     @app.get('/api/v1/scans/{scan_id}/analysis')
@@ -449,12 +465,12 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
 
     @app.post('/api/v1/scans/{scan_id}/analysis/resource')
     async def resource_analysis(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
-        return await gitops_post(f'/api/v1/scans/{scan_id}/analysis/resource', request, authorization)
+        return await post_json(f'/api/v1/scans/{scan_id}/analysis/resource', request, authorization)
 
 
     @app.post('/api/v1/scans/{scan_id}/ai-risk-evaluation')
     async def ai_review(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
-        return await gitops_post(f'/api/v1/scans/{scan_id}/ai-risk-evaluation', request, authorization)
+        return await post_json(f'/api/v1/scans/{scan_id}/ai-risk-evaluation', request, authorization)
 
 
     @app.post('/api/v1/scans/{scan_id}/remediation')

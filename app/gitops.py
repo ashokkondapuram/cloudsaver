@@ -181,7 +181,7 @@ class GitHubApp:
                 for path,content in package['files'].items():
                     _,blob = request('GET',repo+'/contents/'+quote(path,safe='/')+'?ref='+head_sha,token)
                     raw = content.encode()
-                    expected_blob = hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+                    expected_blob = hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw,usedforsecurity=False).hexdigest()
                     if blob.get('type') != 'file' or blob.get('sha') != expected_blob:
                         raise GitOpsFailure('Existing PR review files differ from the preview; manual review is required')
                 return dict(pr_url=expected,pr_number=number,state=item.get('state'),draft=item.get('draft',False))

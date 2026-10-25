@@ -125,7 +125,8 @@ export function parseMoney(text: string, currency: string): number | null {
   const digits = currencyDigits(currency);
   const fraction = match[2] || '';
   if (fraction.length > digits) return null;
-  return Number(match[1]) * 10 ** digits + Number(fraction.padEnd(digits, '0') || '0');
+  const amount=Number(match[1]) * 10 ** digits + Number(fraction.padEnd(digits, '0') || '0');
+  return Number.isSafeInteger(amount)?amount:null;
 }
 
 /** Minor units as an editable major-unit string ("1200.00"). */

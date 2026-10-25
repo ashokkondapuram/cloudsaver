@@ -12,13 +12,6 @@ class WorkflowConflict(ValueError):
 class WorkflowStore:
     def __init__(self, store):
         self.store = store
-        if not store.url:
-            with store.transaction(str(uuid4()), write=True) as db:
-                for table in ('billing_sync_runs', 'agent_gitops_syncs'):
-                    db.execute(f'''CREATE TABLE IF NOT EXISTS {table} (
-                        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, binding_key TEXT NOT NULL,
-                        state TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL, lease_until TEXT NOT NULL)''')
 
     def rows(self, tenant_id, table, limit=25):
         assert table in ('billing_sync_runs', 'agent_gitops_syncs')

@@ -1,3 +1,4 @@
+# Development orchestration only; production acceptance: docs/ENTERPRISE_READINESS_GAPS.md
 name: cloudsaver
 
 x-environment: &environment
@@ -15,6 +16,9 @@ x-environment: &environment
   SCANNER_SERVICE_URL: http://scanner-service:8002
   CLOUDSAVER_AUTH_MODE: ${CLOUDSAVER_AUTH_MODE:-workspace}
   CLOUDSAVER_ENTRA_AUDIENCE: ${CLOUDSAVER_ENTRA_AUDIENCE:-}
+  CLOUDSAVER_ENTRA_ACCESS_POLICY: ${CLOUDSAVER_ENTRA_ACCESS_POLICY:-}
+  CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS: ${CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS:-30}
+  CLOUDSAVER_INSTALL_AZURE_CLI: ${CLOUDSAVER_INSTALL_AZURE_CLI:-false}
   # Seeds for the platform settings row; change them later in the platform portal.
   CLOUDSAVER_SCHEDULED_SCANS: ${CLOUDSAVER_SCHEDULED_SCANS:-false}
   CLOUDSAVER_AUTOMATED_ALERTS: ${CLOUDSAVER_AUTOMATED_ALERTS:-false}
@@ -54,7 +58,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:1.5.0
+  image: cloudsaver-python:1.5.1
   build:
     context: .
     dockerfile: Dockerfile.services
@@ -64,6 +68,12 @@ x-service: &service
   init: true
   read_only: true
   tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  mem_limit: 768m
+  cpus: 1.0
+  stop_grace_period: 45s
   environment: *environment
 
 x-delivery-environment: &delivery-environment
@@ -105,7 +115,7 @@ services:
       redis: {condition: service_healthy}
       scanner-service: {condition: service_healthy}
     healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz')"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -138,7 +148,7 @@ services:
       redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/readyz')"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -159,7 +169,7 @@ services:
     depends_on:
       migrate: {condition: service_completed_successfully}
     healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8006/healthz')"]
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8006/readyz')"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -209,6 +219,16 @@ services:
   data-retention-worker:
     <<: *service
     command: [python, -m, workers.data_retention]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  billing-sync-worker:
+    <<: *service
+    command: [python, -m, workers.billing_sync]
+    stop_grace_period: 300s
+    environment:
+      <<: *worker-environment
+      AZURE_CONFIG_DIR: /home/appuser/.azure
+    volumes: *azure_cache
     depends_on:
       migrate: {condition: service_completed_successfully}
   scan-worker:

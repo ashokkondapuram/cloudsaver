@@ -4,6 +4,8 @@ Reads are served from a per-process cache that expires after
 CLOUDSAVER_REGISTRY_CACHE_SECONDS, so a change made in one service is visible to
 every other service within that window without a restart.
 """
+from contextlib import contextmanager
+from contextvars import ContextVar
 import logging
 import os
 import threading
@@ -14,6 +16,7 @@ from app.tenant_config import CONFIG_KEYS, SCOPE_KEYS, config_of, normalize_tena
 
 logger = logging.getLogger('cloudsaver.registry')
 UNSET = object()
+_projection_connection=ContextVar('projection_connection',default=None)
 TENANT_FIELDS = set(CONFIG_KEYS) | {'name', 'plan_tier', 'active', 'api_key_sha256'}
 DIRECTORY_FIELDS = set(SCOPE_KEYS) | {'identity', 'name', 'plan_tier', 'active', 'api_key_sha256'}
 
@@ -260,11 +263,21 @@ class MemoryRegistry(BaseRegistry):
 
     projection_seq = 0
 
+    @contextmanager
+    def projection_transaction(self):
+        with self._lock:yield True
+
+    def projection_lag_seconds(self):
+        stamp=getattr(self,'projection_updated_at',None)
+        return None if stamp is None else max(0,time.time()-stamp)
+
     def projection_cursor(self):
         return self.projection_seq
 
     def set_projection_cursor(self, seq):
+        if seq<self.projection_seq:raise ValueError('Directory cursor cannot regress')
         self.projection_seq = seq
+        self.projection_updated_at=time.time()
 
     def webhook_targets(self):
         return [dict(tenant_id=tid, channel=self._tenants[tid]['alerts']['channel'], url=url)
@@ -282,9 +295,32 @@ class PostgresRegistry(BaseRegistry):
         super().__init__(bootstrap, ttl)
         self.url = url
 
+    @contextmanager
     def _connect(self):
+        active=_projection_connection.get()
+        if active and active[0] is self:
+            yield active[1];return
         from database.connection import connect
-        return connect(self.url, connect_timeout=5)
+        with connect(self.url,connect_timeout=5) as db:yield db
+
+    @contextmanager
+    def projection_transaction(self):
+        # Cursor and all registry/domain changes commit atomically. A second
+        # projector cannot read or apply the feed until this transaction finishes.
+        try:
+            with self._connect() as db:
+                db.execute("SET LOCAL statement_timeout='10s'")
+                acquired=db.execute("SELECT pg_try_advisory_xact_lock(hashtextextended('cloudsaver:directory-projector',0))").fetchone()[0]
+                if not acquired:yield False;return
+                token=_projection_connection.set((self,db))
+                try:yield True
+                finally:_projection_connection.reset(token)
+        finally:self.invalidate()
+
+    def projection_lag_seconds(self):
+        with self._connect() as db:
+            row=db.execute('SELECT extract(epoch FROM now()-updated_at) FROM directory_projection_cursor WHERE id=1').fetchone()
+        return max(0,float(row[0])) if row else None
 
     @staticmethod
     def _row(row):
@@ -451,8 +487,9 @@ class PostgresRegistry(BaseRegistry):
 
     def set_projection_cursor(self, seq):
         with self._connect() as db:
-            db.execute('INSERT INTO public.directory_projection_cursor (id, seq) VALUES (1, %s) '
-                       'ON CONFLICT (id) DO UPDATE SET seq=EXCLUDED.seq, updated_at=now()', (seq,))
+            updated=db.execute('INSERT INTO public.directory_projection_cursor (id, seq) VALUES (1, %s) '
+                       'ON CONFLICT (id) DO UPDATE SET seq=EXCLUDED.seq, updated_at=now() WHERE directory_projection_cursor.seq<=EXCLUDED.seq RETURNING seq', (seq,)).fetchone()
+            if updated is None:raise ValueError('Directory cursor cannot regress')
 
     def webhook_targets(self):
         with self._connect() as db:
