@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import {usePathname, useRouter} from 'next/navigation';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {ClipboardCheck, AlertCircle, BrainCircuit, Database, Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
+import {ClipboardCheck, AlertCircle, BrainCircuit, Database, Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Layers, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime, providerNames, scopeOf, ruleLabel, shortDate} from '../lib/finops';
 import {billingBanner} from '../lib/plan';
@@ -20,6 +20,7 @@ export const navigation = [
   {href:'/',label:'Overview',icon:LayoutDashboard,group:'DISCOVER & ANALYZE',shortcut:'G D'},
   {href:'/findings',label:'Inventory & findings',icon:Blocks,group:'',shortcut:'G F'},
   {href:'/resources',label:'Resources & 5-Pillar',icon:BrainCircuit,group:'',shortcut:'G R'},
+  {href:'/workloads',label:'Workload assessments',icon:Layers,group:''},
   {href:'/services/disks',label:'Service matrices',icon:Database,group:''},
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
   {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:'MODEL & ATTRIBUTE'},

@@ -1,4 +1,6 @@
-﻿CloudSaver: Advanced Features & Product Roadmap (v0.6.0 – v1.0.0)
+﻿HISTORICAL NOTE (Oct 2024): This roadmap predates the current v1.7.0 product. Many items below are implemented or superseded; use README.md, docs/LEAN_CORE_IMPLEMENTATION.md, and docs/V1_5_0_IMPLEMENTATION.md for the shipped surface.
+
+CloudSaver: Advanced Features & Product Roadmap (v0.6.0 – v1.0.0)
 1. Executive Summary & Strategic Vision
 CloudSaver began as an agentless, read-only Azure waste-detection engine. With the v0.5.0 milestone, it successfully expanded into a multi-cloud FinOps governance platform encompassing AWS waste detection, background scheduling, trend analysis, Terraform 1.5+ declarative imports, and enterprise ITSM dispatching.
 

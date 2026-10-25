@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "93e0310cbe2843448e070dbaf1b1aaa9ca95cea35cf28211054f25ae741f8e49",
+  "inventory_sha256": "1f27a76189500a7a6aa30aad6852ee6a2e5c66fc98b008d1024cfee1642f4db6",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -45,6 +45,11 @@
       "bytes": 324
     },
     {
+      "path": ".node-version",
+      "sha256": "d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
+      "bytes": 8
+    },
+    {
       "path": ".nvmrc",
       "sha256": "d9f318747a126ce2247661af67852b185def7789492eabfad7bba322be087c33",
       "bytes": 8
@@ -81,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "15693f4b5dd7b3a0bcda087dd085609ee559cf2ba3363d321ee28028ed8651dd",
-      "bytes": 21449
+      "sha256": "5960e948d78fe65b3ab1acf79f174de02cb6316bc6e1cb5dc51dba77d0821056",
+      "bytes": 22786
     },
     {
       "path": "ROADMAP.md",
@@ -990,9 +995,14 @@
       "bytes": 13304
     },
     {
+      "path": "docs/WORKLOAD_ASSESSMENTS.md",
+      "sha256": "7cf5dcaa609d38c6eb584d709d615dc980810b5d750b48656cd5166c94412a0e",
+      "bytes": 3617
+    },
+    {
       "path": "docs/drive-advanced-roadmap.txt",
-      "sha256": "ae0d335259a3464050fc8b5e9baa0d4e0bc7147a3cbf65f6e9eddc9952a8665c",
-      "bytes": 8069
+      "sha256": "25a11b7a88016ddb5d707a5f8678a8f740eae953e1bb0a6ed577d74a291b7b32",
+      "bytes": 8304
     },
     {
       "path": "docs/drive-ui-ux-v0.7.1.txt",
@@ -2036,8 +2046,8 @@
     },
     {
       "path": "requirements-dev.txt",
-      "sha256": "0ae6d33ebec8b1e0362e1c329a89fd7d7f147f983619c432a379e399493eafa4",
-      "bytes": 69
+      "sha256": "7b2810aac86c0e498a82c996fa621bf60731d991eb843f7ef07f3c39a7c073ce",
+      "bytes": 98
     },
     {
       "path": "requirements-security.txt",
@@ -2201,8 +2211,8 @@
     },
     {
       "path": "test_platform.py",
-      "sha256": "8f72ccbd1e8eb9bc483f2a980112b2d15b85ee918885d06fc90ca36938575eeb",
-      "bytes": 901
+      "sha256": "fe7dfd4b2b5f64a5497b077a049eb6414354f7d10a08e3203041cedd907c4644",
+      "bytes": 1068
     },
     {
       "path": "tests/fixtures/restored_673c20a_routes.json",
@@ -2645,9 +2655,14 @@
       "bytes": 129
     },
     {
+      "path": "web-dashboard/app/workloads/page.tsx",
+      "sha256": "45d4ac4166e585b935f0b59ea206f919504712fb21c9293a09350702d0d53661",
+      "bytes": 129
+    },
+    {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "c71bae05ce7acc4dc90fd93f1b6eefe941a885ffae8bd00be71485846c8d09b6",
-      "bytes": 22984
+      "sha256": "60b4af2a0c308d1807b76b65e23df2e3062c3835d1fb7bce818d32d64a1f0b9a",
+      "bytes": 23065
     },
     {
       "path": "web-dashboard/components/ClaimView.tsx",
@@ -2656,8 +2671,8 @@
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
-      "sha256": "78195d7ef683d1a3859e63713377299d22afc1cf39ad4eafcc45797961379837",
-      "bytes": 3939
+      "sha256": "2824dfaa41ec0f0b3c31d7aafc281783a9b3d460c70b640bfbbaa595fab6a99a",
+      "bytes": 4047
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
@@ -2835,6 +2850,11 @@
       "bytes": 1763
     },
     {
+      "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
+      "sha256": "4b4f6d976f390955ea7eae46204c48d4f7127f826057e5727632b9c214dc1864",
+      "bytes": 6990
+    },
+    {
       "path": "web-dashboard/e2e/agents.spec.ts",
       "sha256": "a03d5d977ba9f2acba386dfef207cf91f5e8b38b5b2cf47a9ee1cc27dcee473e",
       "bytes": 6982
@@ -2925,6 +2945,11 @@
       "bytes": 5033
     },
     {
+      "path": "web-dashboard/e2e/workloads.spec.ts",
+      "sha256": "e0be5f4cb701349bf907cbe4f0aa856d9aa5315deca6285517928e780c9779bf",
+      "bytes": 4821
+    },
+    {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
       "sha256": "3f7e3196757c5e3a196b7a5c1b7d3bf863266f273e797cd5cadade9406e01ed2",
       "bytes": 15135
@@ -2965,6 +2990,16 @@
       "bytes": 6592
     },
     {
+      "path": "web-dashboard/lib/workloads.d.mts",
+      "sha256": "2410cb773485a2a11716f22e8985dddd16ec4b997676c28a27db9c127630dd8c",
+      "bytes": 1944
+    },
+    {
+      "path": "web-dashboard/lib/workloads.mjs",
+      "sha256": "ab8fd3c0c581ac5eb3f87aa1617ebf85adbfb9dbc754c355de8d9ad42cc58fcc",
+      "bytes": 7537
+    },
+    {
       "path": "web-dashboard/next-env.d.ts",
       "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
       "bytes": 288
@@ -3003,6 +3038,11 @@
       "path": "web-dashboard/tsconfig.json",
       "sha256": "6bf102b8ecab1f3d366d415e0ea89bb95b2f90036570e40703a2175cd62f10b7",
       "bytes": 639
+    },
+    {
+      "path": "web-dashboard/unit/workloads.test.mjs",
+      "sha256": "47df47fde8a06a9f048bf53de16a52edf76b7561039b39d94a827547886a3980",
+      "bytes": 5417
     },
     {
       "path": "workers/__init__.py",

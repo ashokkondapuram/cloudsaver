@@ -1,6 +1,6 @@
-# CloudSaver v1.5.0 — full FinOps workspace
+# CloudSaver v1.7.0 — full FinOps workspace
 
-The v1.5.0 upgrade adds keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. Existing restored workflows and deployment fixes remain available.
+v1.7.0 adds workload assessments (application and environment roll-ups of five-pillar evidence), alongside keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md). Existing restored workflows and deployment fixes remain available.
 
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
@@ -14,12 +14,18 @@ This revision restores the implemented features available at commit `673c20a8069
 | `/` | Deduplicated review opportunities, protection counts, scan trends, billing evidence and an hourly commitment ceiling when complete evidence exists |
 | `/findings` | Provider/category/search filters, virtualized finding inventory, bulk CSV/JSON, evidence and five-pillar drawers, reviewed remediation exports |
 | `/resources` | Inventory and findings merged into one resource assessment; service/provider/pillar filters, billing columns, scan deltas, CSV, AI review, decisions and agent handoff |
+| `/workloads` | Application and environment roll-up of five-pillar resource evidence; ownership mapping and non-executable review steps |
 | `/resources/report` | Printable resource assessment report from a completed live observation |
+| `/services/[service]` | Service-specific analysis matrices (for example disks, compute, databases) |
+| `/kubernetes` | API/Prometheus/OpenCost provenance, allocation slack, backing node billing and carefully gated consolidation models |
+| `/optimization` | Optimization and retail evidence models tied to the selected scan |
 | `/allocation` | Cost grouping, allocation/tag evidence, normalized billing imports and service analysis |
+| `/outcomes` | Savings cases, investigations and outcome evidence |
+| `/governance` | Risk and compliance workflows with human-approved change plans |
+| `/agents` | Exact connector plans, verified human approval, expiring single-use permits and bounded execution evidence |
 | `/automation` | Reviewed remediation, GitOps pull-request preparation and Terraform plan policy checks |
 | `/activity` | Saved scan/AI history, delivery evidence and authorized delivery retry controls |
-| `/kubernetes` | API/Prometheus/OpenCost provenance, allocation slack, backing node billing and carefully gated consolidation models |
-| `/agents` | Exact connector plans, verified human approval, expiring single-use permits and bounded execution evidence |
+| `/claim` | First-time workspace onboarding with a platform-issued key |
 | `/settings` | Four tabs: Cloud scopes & billing, Analysis rules, AI & data governance, Access & API keys |
 
 The platform portal remains a separate operator application for customer, workspace, identity, plan and policy administration. Workspace Resource access and Rules tabs coexist. Its Knowledge page manages independently sourced publications in a separately configured knowledge database; privacy screening and two independent reviews precede publication. Automatic harvesting of client observations and training remain disabled.
@@ -248,17 +254,32 @@ Human TenantAdmin sessions approve worker plans. API keys and service accounts c
 
 Read the [agent deployment guide](docs/AGENTIC_WORKER.md) and [AI data governance guide](docs/AI_DATA_GOVERNANCE.md). Processor declarations record the owner's review; they do not independently prove a cloud provider's internal retention, training behavior or residency.
 
+## Local development prerequisites
+
+- **Python 3.12** with `pip install -r requirements-dev.txt` (includes core and platform dependencies for local pytest).
+- **Node.js 24.22.1 or newer** for `web-dashboard`, `agent-worker`, and `platform/portal`. Run `nvm use` from the repository root (see `.nvmrc`).
+- **Docker** for disposable PostgreSQL/Redis integration tests (`scripts/test_postgres.py`) and the full Compose stack.
+
+Quick unit checks without Docker:
+
+```bash
+make test
+```
+
 ## Verify
 
 ```bash
-# Full backend/platform suite with disposable PostgreSQL and Redis
+python -m pip install -r requirements-dev.txt
+# Full backend/platform suite with disposable PostgreSQL and Redis (requires Docker)
 PYTHONPATH=platform python scripts/test_postgres.py tests platform/tests --tb=short
+nvm use
 npm --prefix agent-worker run typecheck
 npm --prefix agent-worker test
 npm --prefix web-dashboard run build
 npm --prefix platform/portal run build
 # Start the built dashboard, then run browser checks against its URL.
 npm --prefix web-dashboard run test:e2e
+python scripts/release_manifest.py --check
 ```
 
 Verification results and deployment boundaries are recorded in the [lean implementation guide](docs/LEAN_CORE_IMPLEMENTATION.md). Live customer cloud permissions, metrics, reviewed rates and operational acceptance still require environment-specific validation. The documented upstream Azure Identity/MSAL advisory remains under review; the worker does not expose its affected interactive authorization-code flow.
