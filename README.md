@@ -5,7 +5,9 @@ v1.7.0 adds workload assessments (application and environment roll-ups of five-p
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
 
-For product positioning, the pre-merge GitOps firewall narrative, and the five category-defining differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md). For the forward-looking v2.0 engineering roadmap, see [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md).
+For product positioning, the pre-merge GitOps firewall narrative, and the five category-defining differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md). For the forward-looking v2.0 engineering roadmap, see [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md). Recent v2 **scaffolds** (no production wiring yet) include GPU metric validation (`app/scanner_ai_gpu.py`), commitment ladder planning (`app/autopilot_commitments.py`), Karpenter `NodePool` drafts (`app/k8s_karpenter_sync.py`), AI workload tier math (`app/ai_workload_optimizer.py`), event-stream parse stubs (`app/collectors/event_stream.py`), unit-economics preview (`GET /api/v1/finops/unit-economics/preview`), and GitOps AST index lookups (`GET /api/v1/gitops/resource-mapping`).
+
+Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI, GitOps history, governance/outcomes reads, and related list endpoints; results are filtered to the key's providers and scope grants. Tenant-wide administration routes remain `full_scope`.
 
 This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
 
@@ -14,8 +16,7 @@ This revision restores the implemented features available at commit `673c20a8069
 | View | Purpose |
 | --- | --- |
 | `/` | Deduplicated review opportunities, protection counts, scan trends, billing evidence and an hourly commitment ceiling when complete evidence exists |
-| `/resources` | Unified per-resource workspace: inventory filters, merged five-pillar evidence, AI, decisions, and review code in one drawer (`/findings` redirects here) |
-| `/resources` | Inventory and findings merged into one resource assessment; service/provider/pillar filters, billing columns, scan deltas, CSV, AI review, decisions and agent handoff |
+| `/resources` | Unified per-resource workspace: inventory filters, merged five-pillar evidence, billing columns, scan deltas, CSV export, AI review, decisions, review code, and agent handoff (`/findings` redirects here) |
 | `/workloads` | Application and environment roll-up of five-pillar resource evidence; ownership mapping and non-executable review steps |
 | `/resources/report` | Printable resource assessment report from a completed live observation |
 | `/services/[service]` | Service-specific analysis matrices (for example disks, compute, databases) |
@@ -25,7 +26,7 @@ This revision restores the implemented features available at commit `673c20a8069
 | `/outcomes` | Savings cases, investigations and outcome evidence |
 | `/governance` | Risk and compliance workflows with human-approved change plans |
 | `/agents` | Exact connector plans, verified human approval, expiring single-use permits and bounded execution evidence |
-| `/automation` | Reviewed remediation, GitOps pull-request preparation and Terraform plan policy checks |
+| `/automation` | Reviewed remediation, GitOps pull-request preparation, optional `CLOUDSAVER_GITOPS_AST_INDEX` resource→repo mapping API, and Terraform plan policy checks |
 | `/activity` | Saved scan/AI history, delivery evidence and authorized delivery retry controls |
 | `/claim` | First-time workspace onboarding with a platform-issued key |
 | `/settings` | Four tabs: Cloud scopes & billing, Analysis rules, AI & data governance, Access & API keys |
@@ -308,6 +309,8 @@ Quick unit checks without Docker:
 
 ```bash
 make test
+PYTHONPATH=.:platform python3 -m pytest -q tests platform/tests
+cd web-dashboard && npm run typecheck
 ```
 
 ## Verify

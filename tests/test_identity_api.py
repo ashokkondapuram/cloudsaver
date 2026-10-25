@@ -99,7 +99,7 @@ def test_scoped_key_only_sees_its_providers(cutover, secret):
     azure = scanner.post('/api/v1/scans', headers=bearer(secret), json={})
     assert azure.status_code == 403 and azure.json()['detail'] == "This workspace key doesn't include Azure."
     full = scanner.get('/api/v1/ai/usage', headers=bearer(secret))
-    assert full.status_code == 403 and 'all providers' in full.json()['detail']
+    assert full.status_code == 200 and full.json().get('groups') == []
 
 
 def test_plan_without_a_provider_blocks_scans_of_it(cutover, secret, fake):
@@ -297,7 +297,7 @@ def test_scope_limited_key_only_sees_its_scopes(cutover, secret, fake):
     assert data['configured_scope_count'] == 1 and data['subscription_ids'] == [SID]
     scanner = TestClient(scanner_app(settings, scanner=lambda t: []))
     full = scanner.get('/api/v1/ai/usage', headers=bearer(secret))
-    assert full.status_code == 403 and full.json()['detail'] == 'This workspace key is limited to some cloud scopes.'
+    assert full.status_code == 200 and full.json().get('groups') == []
 
 
 def test_gateway_pins_customer_calls_to_the_callers_workspace(cutover, secret, fake):

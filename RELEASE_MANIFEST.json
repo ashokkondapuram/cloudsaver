@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "7e6367c0922aedbc5e1100098d799c260106b6d4bbbadb742b466e2f8e4acb3d",
+  "inventory_sha256": "6b61710b9d9df15e5ecf0cefdf7febfe1b3dd150d0e21c5696125a9207369952",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "a0aca8248b6b65e7c6a405d0c42e1bb07ee0aab7040c5520e0dc9391d4424411",
-      "bytes": 25282
+      "sha256": "c571ea4f19ee78b8a046ae23416718e5a8464ca9636997eb95bba7f4dae2f531",
+      "bytes": 26085
     },
     {
       "path": "ROADMAP.md",
@@ -2436,8 +2436,8 @@
     },
     {
       "path": "tests/test_identity_api.py",
-      "sha256": "ce14eac6e89649705711075678487a0f1c175690269d4ca037ce0872d4de0801",
-      "bytes": 19645
+      "sha256": "b829514c216c83b027aefb81da6ca96352bdb3c5d160c53daa7684878aecab6f",
+      "bytes": 19589
     },
     {
       "path": "tests/test_identity_client.py",
@@ -2681,8 +2681,8 @@
     },
     {
       "path": "web-dashboard/app/findings/page.tsx",
-      "sha256": "f96f29fd2880b388384dab3a67e8e80a115f3e1782eba0edba82a86590e64427",
-      "bytes": 765
+      "sha256": "1d3432432b95c2cc1875db44fd567e1a82beabb32d0a470fbbf98a968541f6fa",
+      "bytes": 1179
     },
     {
       "path": "web-dashboard/app/globals.css",
@@ -2721,8 +2721,8 @@
     },
     {
       "path": "web-dashboard/app/resources/page.tsx",
-      "sha256": "3e130634819e5050ac4480e1835632ca83e621f122384030d6c0f4a233a203bb",
-      "bytes": 187
+      "sha256": "1cafde046135987401cf34367e736098b4a511dc61f0adc939e186d9011b697c",
+      "bytes": 880
     },
     {
       "path": "web-dashboard/app/resources/report/page.tsx",
@@ -2746,8 +2746,8 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "c7178716626ee50d38ad013435e919694b7a2503c94acd0b35ccd8ae9daa8fa6",
-      "bytes": 24350
+      "sha256": "3b8d41fc7409dac6b06e150f63d889b65c22e0f51e9d5e4b5d962f692981fc08",
+      "bytes": 24310
     },
     {
       "path": "web-dashboard/components/ClaimView.tsx",
@@ -2756,8 +2756,8 @@
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
-      "sha256": "00a46b4d9f6e1e762858c0f475d576cc9583800f1cc414a1a33104055d4ab094",
-      "bytes": 3964
+      "sha256": "5e4e6cd2f0946a4004e21ba23b4949bf99f0267efe95bedfce8daf70fad9c70d",
+      "bytes": 4523
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
@@ -2771,8 +2771,8 @@
     },
     {
       "path": "web-dashboard/components/Overview.tsx",
-      "sha256": "10c6e7e6787495d2ff21d2de01332e250eeada48f32cd821d71e3befee82fbe3",
-      "bytes": 11813
+      "sha256": "24d30213f334b80c2b4f22b8f64ad211ea6c8968712ce17376783a14a21ddee0",
+      "bytes": 11814
     },
     {
       "path": "web-dashboard/components/ReliabilityPanel.tsx",
@@ -2781,8 +2781,8 @@
     },
     {
       "path": "web-dashboard/components/ServiceAnalysis.tsx",
-      "sha256": "48f7437cbf68ff0cbadbec4ffea5bb7d8f2eb6bc1d6162cf7ec52875808e69b7",
-      "bytes": 15642
+      "sha256": "7f838ea755819255985060df1a4c134b8311d0071ef8a5a2c3fabde193e7c639",
+      "bytes": 15768
     },
     {
       "path": "web-dashboard/components/ThemeProvider.tsx",
@@ -2821,8 +2821,8 @@
     },
     {
       "path": "web-dashboard/components/datagrid/FindingsGrid.tsx",
-      "sha256": "3747c44b198733451035a875012762d559a0e27e5b9b8b3c06ac1b8128550922",
-      "bytes": 25706
+      "sha256": "b59aa7b2c2399d0bdd2f8ba4fee6d3c07b0a8c879fadc3f8125b042835467453",
+      "bytes": 25996
     },
     {
       "path": "web-dashboard/components/drawer/EvidenceRadar.tsx",
@@ -2881,8 +2881,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
-      "sha256": "378c31de9d23e62d89d56f1bc26cafbbd4c3e7e63b304eaacdbda864c38cf2ff",
-      "bytes": 23535
+      "sha256": "423732702eb2dc921400b088b54ef7ccface15ecb36e2baa1d8421b415c5c685",
+      "bytes": 22889
     },
     {
       "path": "web-dashboard/components/resources/ResourceParts.tsx",
@@ -2891,8 +2891,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourcesView.tsx",
-      "sha256": "349ff19093ea1efbb5cad523a1616ce0d47b2863713b62d6eec4ca3cf00cce9c",
-      "bytes": 20861
+      "sha256": "fe641de60df2f1e93970b6f50630c6824d24474c190eff32dad3f86173e546ec",
+      "bytes": 26882
     },
     {
       "path": "web-dashboard/components/rules/CustomerRuleSettings.tsx",
@@ -2951,13 +2951,13 @@
     },
     {
       "path": "web-dashboard/e2e/assessment.spec.ts",
-      "sha256": "ebaaeffc0acf77b3e094a4e3dfdf5df8c68971385f7f6740562406f8463e44d0",
-      "bytes": 6868
+      "sha256": "55e8914d93c346be8b3974e5fa62f741e0a2a218eb3f01942f6c76c0c3324ade",
+      "bytes": 6355
     },
     {
       "path": "web-dashboard/e2e/console-experience.spec.ts",
-      "sha256": "a322f6132ee84b4dc214965e6f26c0e90ca3b2253fbc35aeada932c028f82172",
-      "bytes": 8097
+      "sha256": "d67af0cd37357fc4df3142eb6ea140048b2ab84a83bc5ad05ffb211884822940",
+      "bytes": 7901
     },
     {
       "path": "web-dashboard/e2e/data-governance.spec.ts",
@@ -2981,8 +2981,8 @@
     },
     {
       "path": "web-dashboard/e2e/foundry.spec.ts",
-      "sha256": "c99d9dcf8c4b73c6fec231b7b095ab47b34b59e3e9733071668dca517ccc73ef",
-      "bytes": 7009
+      "sha256": "0d266d9e35203f231e365b07a70b187e159c025f8925f20a3e6b648960c5e743",
+      "bytes": 7000
     },
     {
       "path": "web-dashboard/e2e/governance.spec.ts",
@@ -2996,8 +2996,8 @@
     },
     {
       "path": "web-dashboard/e2e/lean.spec.ts",
-      "sha256": "1370f3ffdd1d882ea288dbd497e7d0ba2f801217f07593945ab93667293a90b0",
-      "bytes": 7076
+      "sha256": "8c31ea39447902b3a955082c46a602e5aee3ae6c06bf9f37054224ba5dfadad3",
+      "bytes": 7089
     },
     {
       "path": "web-dashboard/e2e/opportunity-totals.spec.ts",
@@ -3021,8 +3021,8 @@
     },
     {
       "path": "web-dashboard/e2e/ui.spec.ts",
-      "sha256": "3bba28ecb33d8dcc74de068c5064920418acee759e21f275998c88fa5ac31e9b",
-      "bytes": 11088
+      "sha256": "6fd9e040a206a56fb5cbee33d8e8cbc71841076c1462e3efc9bcda6b8ecc541b",
+      "bytes": 10931
     },
     {
       "path": "web-dashboard/e2e/v140.spec.ts",
@@ -3041,8 +3041,8 @@
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "2e147773aa42dd1c3e988b1b606c2400e2edcbb4daa8a08326ffd703a6349b2d",
-      "bytes": 15064
+      "sha256": "d4546977afa09e014b16d3b9bb9f68dc9d658357407b8306fffa0b3cad5a24e2",
+      "bytes": 18519
     },
     {
       "path": "web-dashboard/lib/api.ts",
