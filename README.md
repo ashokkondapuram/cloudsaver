@@ -14,7 +14,7 @@ This revision restores the implemented features available at commit `673c20a8069
 | View | Purpose |
 | --- | --- |
 | `/` | Deduplicated review opportunities, protection counts, scan trends, billing evidence and an hourly commitment ceiling when complete evidence exists |
-| `/findings` | Provider/category/search filters, virtualized finding inventory, bulk CSV/JSON, evidence and five-pillar drawers, reviewed remediation exports |
+| `/resources` | Unified per-resource workspace: inventory filters, merged five-pillar evidence, AI, decisions, and review code in one drawer (`/findings` redirects here) |
 | `/resources` | Inventory and findings merged into one resource assessment; service/provider/pillar filters, billing columns, scan deltas, CSV, AI review, decisions and agent handoff |
 | `/workloads` | Application and environment roll-up of five-pillar resource evidence; ownership mapping and non-executable review steps |
 | `/resources/report` | Printable resource assessment report from a completed live observation |

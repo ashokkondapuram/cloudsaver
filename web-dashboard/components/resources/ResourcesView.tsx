@@ -2,7 +2,10 @@
 import Link from 'next/link';
 import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {BrainCircuit, ChevronRight, Download, Loader2, Printer, Search, Server, X} from 'lucide-react';
+import {BrainCircuit, ChevronRight, Download, FileCode2, Filter, Loader2, Printer, Search, Server, ShieldCheck, X} from 'lucide-react';
+import {categories, categoryOf, knownPrice, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
+import {identityOf} from '../../lib/resources';
+import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
 import {ACTIVE_BATCH, aiStatusLabels, decisionLabels, sentence, useActiveBatch, useResources, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
@@ -84,26 +87,54 @@ function BatchBanner({batch, onCancel, canAdmin}: {batch: Batch; onCancel: () =>
   </div>;
 }
 
-export function ResourcesView() {
-  const {scan, token, canAdmin, notify} = useWorkspace();
+function matchesDiscovery(row: ResourceRow, scanFindings: Finding[], category: Category|'', intent: Intent, pricing: Pricing) {
+  const related = scanFindings.filter(f => identityOf(row.provider, row.resource_id) === identityOf(f.cloud_provider || 'azure', f.resource_id));
+  if (!category && !intent && !pricing) return true;
+  if (!related.length) return false;
+  if (category && !related.some(f => categoryOf(f) === category)) return false;
+  if (intent === 'protected' && !related.some(f => protectionSignals(f).length > 0)) return false;
+  if (intent === 'review' && related.some(f => protectionSignals(f).length > 0)) return false;
+  if (pricing === 'known' && !related.some(knownPrice)) return false;
+  if (pricing === 'unknown' && !related.some(f => !knownPrice(f))) return false;
+  return true;
+}
+
+export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing}) {
+  const {scan, token, canAdmin, notify, openReview, setSelection} = useWorkspace();
   const router = useRouter(), params = useSearchParams();
   const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
   const {page, error, reload} = useResources(scan?.scan_id, token, live);
   const {batch, refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
   const [filters, setFilters] = useState<Filters>(empty), [query, setQuery] = useState(''), [selected, setSelected] = useState<Set<string>>(new Set());
+  const [category, setCategory] = useState<Category | ''>(initialCategory), [intent, setIntent] = useState<Intent>(initialIntent), [pricing, setPricing] = useState<Pricing>(initialPricing);
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
   const deferred = useDeferredValue(query);
   const openKey = params.get('resource');
-  useEffect(()=>{setFilters(f=>({...f,provider:params.get('provider')||'',service_category:params.get('service')||''}));},[params]);
+  useEffect(() => {setFilters(f => ({...f, provider: params.get('provider') || initialProvider || ''})); setCategory(initialCategory); setIntent(initialIntent); setPricing(initialPricing);}, [params, initialProvider, initialCategory, initialIntent, initialPricing]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id]);
-  const rows = useMemo(() => (page?.items || []).filter(r => matches(r, filters, deferred)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred]);
+  const findings = scan?.findings || [];
+  const rows = useMemo(() => (page?.items || []).filter(r => matches(r, filters, deferred) && matchesDiscovery(r, findings, category, intent, pricing)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred, findings, category, intent, pricing]);
   const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)), [page, selected]);
+  const reviewFindings = useMemo(() => {
+    if (!scan || !chosen.length) return [];
+    const keys = new Set(chosen.map(r => identityOf(r.provider, r.resource_id)));
+    return scan.findings.filter(f => keys.has(identityOf(f.cloud_provider || 'azure', f.resource_id)));
+  }, [scan, chosen]);
+  useEffect(() => {setSelection(reviewFindings); return () => setSelection([]);}, [reviewFindings, setSelection]);
   const open = useCallback((key: string | null) => {
     const next = new URLSearchParams(params.toString());
     if (key) next.set('resource', key); else next.delete('resource');
+    next.delete('resource_id');
     const search = next.toString();
     router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
   }, [params, router]);
+  useEffect(() => {
+    const resourceId = params.get('resource_id');
+    if (!resourceId || !page?.items.length || openKey) return;
+    const provider = params.get('provider') || '';
+    const match = page.items.find(r => r.resource_id === resourceId && (!provider || r.provider === provider));
+    if (match) open(match.resource_key);
+  }, [params, page?.items, openKey, open]);
   async function exportCsv() {
     if (!scan) return;
     setExporting(true);
@@ -128,6 +159,10 @@ export function ResourcesView() {
   const toggleAll = () => setSelected(previous => {const next = new Set(previous); rows.forEach(r => allVisible ? next.delete(r.resource_key) : next.add(r.resource_key)); return next;});
   const toggle = (key: string) => setSelected(previous => {const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next;});
   const select = (name: keyof Filters, options: [string, string][], aria: string) => <label><span className="sr-only">{aria}</span><select aria-label={aria} value={filters[name]} onChange={e => setFilters(f => ({...f, [name]: e.target.value}))}>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>;
+  const providerCounts = useMemo(() => Object.fromEntries([...new Set(findings.map(f => f.cloud_provider || 'azure'))].map(p => [p, findings.filter(f => (f.cloud_provider || 'azure') === p).length])), [findings]);
+  const categoryCounts = useMemo(() => Object.fromEntries(categories.map(([id]) => [id, findings.filter(f => categoryOf(f) === id).length])), [findings]);
+  const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
+  const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
   return <>
     <p className="inline-help">{summary.resolved_count??'Unknown'} previously flagged resources now have no findings; {summary.no_longer_observed_count??'unknown'} are no longer observed. Absence does not prove deletion or savings.</p><div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
@@ -136,13 +171,19 @@ export function ResourcesView() {
       <article><span>Decisions</span><strong>{(summary.total - (summary.decision.none || 0)).toLocaleString()}</strong><small>{(summary.decision.defer || 0).toLocaleString()} deferred</small></article>
     </div>
     {batch && <BatchBanner batch={batch} onCancel={cancel} canAdmin={canAdmin}/>}
-    <section className="panel resources-panel" aria-label="Resource analysis">
-      <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One assessment per resource, merged from all of its findings · observed {dateTime(page.observed_at)}</p></div>
+    <section className="panel resources-panel" aria-label="Resources">
+      <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One place per resource — findings, pillars, pricing, AI, and decisions · observed {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
           <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
           {canAdmin && <button className="button primary" disabled={!!batch && ACTIVE_BATCH.includes(batch.status)} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
         </div></div>
+      <div className="explorer-facets">
+        <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{findings.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
+        <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={() => setCategory('')}>All categories</button>{categories.filter(([id]) => (categoryCounts[id] || 0) > 0).map(([id, name]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(category === id ? '' : id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
+      </div>
+      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing} onClick={() => {setIntent(''); setPricing('');}}>All evidence</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
+      {!!discoveryChips.length && <div className="active-filters"><Filter size={13}/>{discoveryChips.map(chip => <button key={chip.label} onClick={chip.clear}>{chip.label}<X size={12}/></button>)}<button className="clear-filters" onClick={resetDiscovery}>Clear all</button></div>}
       <div className="grid-filters">
         <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search resource names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
         {select('provider', [['', 'All clouds'], ...[...new Set(page.items.map(r => r.provider))].sort().map(p => [p, providerNames[p] || p] as [string, string])], 'Cloud provider')}
@@ -165,10 +206,11 @@ export function ResourcesView() {
             <td><AIRisk ai={r.ai}/></td><td><AIStatusBadge ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
             <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key);}}><ChevronRight size={16}/></button></td>
           </tr>)}
-          {!rows.length && <tr><td colSpan={13}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery('');}}>Reset filters</button></EmptyState></td></tr>}</tbody>
+          {!rows.length && <tr><td colSpan={13}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
       <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length.toLocaleString()} matching resources</span>{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
+      {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode2 size={16}/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17}/></button></div>}
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
     <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} onClose={() => open(null)} onChange={reload}/>

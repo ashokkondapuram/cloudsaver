@@ -14,7 +14,7 @@ test('latest console defaults to dark and preserves only the chosen appearance p
 });
 
 test('provider/category facets, price gaps and protected intent combine without treating zero as unknown',async({page})=>{
-  await mockWorkspace(page,{protected:true,zeroPrice:true});await navigate(page,'Inventory & findings');
+  await mockWorkspace(page,{protected:true,zeroPrice:true,legacy:true});await navigate(page,'Resources');
   await expect(page.getByRole('region',{name:'Snapshot evidence summary'})).toContainText('1');
   await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Missing prices',exact:true}).click();
   await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(9);
@@ -30,16 +30,14 @@ test('provider/category facets, price gaps and protected intent combine without 
 
 test('drawer comparison follows sorted filtered results and preserves the active assessment tab',async({page})=>{
   await page.setViewportSize({width:1440,height:1100});
-  await mockWorkspace(page,{protected:true});await navigate(page,'Inventory & findings');
+  await mockWorkspace(page,{protected:true,legacy:true});await navigate(page,'Resources');
   await page.getByRole('button',{name:/^Azure \d+ findings$/}).click();
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   const dialog=page.getByRole('dialog',{name:'Finding details',exact:true});
-  await dialog.getByRole('tab',{name:'360° assessment',exact:true}).click();
   await expect(dialog.getByRole('region',{name:'Five-pillar evidence map'})).toBeVisible();
   await dialog.getByRole('button',{name:'Inspect security checks',exact:true}).click();
   await expect(dialog.locator('details[open]').filter({hasText:'Security'}).first()).toBeVisible();
   await dialog.getByRole('button',{name:'Next finding',exact:true}).click();
-  await expect(dialog.getByRole('tab',{name:'360° assessment',exact:true})).toHaveAttribute('aria-selected','true');
   await expect(dialog.getByRole('heading',{name:'Independent review required',exact:true})).toBeVisible();
   await expect(dialog.locator('.finding-navigation')).toContainText('2 / 3');
   await dialog.getByRole('button',{name:'Previous finding',exact:true}).click();
@@ -51,7 +49,7 @@ test('drawer comparison follows sorted filtered results and preserves the active
 });
 
 test('command quick views open real filters; telemetry distinguishes observations from missing series',async({page})=>{
-  await mockWorkspace(page);
+  await mockWorkspace(page,{legacy:true});
   await page.keyboard.press('Control+k');await page.getByRole('combobox',{name:'Search commands and resources'}).fill('storage findings');await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/category=storage/);
   await expect(page.getByRole('group',{name:'Resource categories'}).getByRole('button',{name:/^Storage/})).toHaveAttribute('aria-pressed','true');
@@ -74,20 +72,20 @@ test('dark and light themes retain accessible operational views and readable inv
   const problems:unknown[]=[];
   for(const theme of ['dark','light']){
     if(theme==='light')await page.getByRole('button',{name:'Switch to light theme',exact:true}).click();
-    for(const view of ['Overview','Inventory & findings','Cost allocation','Automation','Activity & delivery','Settings & integrations']){
+    for(const view of ['Overview','Resources','Cost allocation','Automation','Activity & delivery','Settings & integrations']){
       await navigate(page,view);await page.waitForTimeout(150);
       const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
       const serious=result.violations.filter(v=>v.impact==='serious'||v.impact==='critical');
       if(serious.length)problems.push({theme,view,issues:serious.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))});
     }
-    await navigate(page,'Inventory & findings');
+    await navigate(page,'Resources');
     await page.screenshot({path:test.info().outputPath(`${theme}-resource-explorer.png`),fullPage:false});
   }
   expect(problems,JSON.stringify(problems)).toEqual([]);
 });
 
 test('mobile dark explorer and drawer fit the viewport and support keyboard tab endpoints',async({page})=>{
-  await page.setViewportSize({width:390,height:844});await mockWorkspace(page);await navigate(page,'Inventory & findings');
+  await page.setViewportSize({width:390,height:844});await mockWorkspace(page,{legacy:true});await navigate(page,'Resources');
   await page.screenshot({path:test.info().outputPath('dark-resource-explorer-mobile.png'),fullPage:true});
   const size=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth}));expect(size.scroll).toBeLessThanOrEqual(size.width);
   await page.getByRole('button',{name:/^archive-data-01/}).click();
@@ -98,7 +96,7 @@ test('mobile dark explorer and drawer fit the viewport and support keyboard tab 
 
 
 test('a resource click without native button focus still returns to its stable row after review',async({page})=>{
-  await mockWorkspace(page);await navigate(page,'Inventory & findings');
+  await mockWorkspace(page,{legacy:true});await navigate(page,'Resources');
   const resource=page.getByRole('button',{name:/^archive-data-01/});
   // Safari/pointer interactions need not focus a button before dispatching its click.
   await resource.dispatchEvent('click');

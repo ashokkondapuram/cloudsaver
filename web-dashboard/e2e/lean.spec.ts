@@ -13,22 +13,22 @@ async function resources(page:Page){
 
 test('restored navigation coexists with current resource, Kubernetes, agent and settings workflows',async({page})=>{
   await mockWorkspace(page);const nav=page.getByRole('navigation',{name:'Primary navigation'});
-  await expect(nav.getByRole('link')).toHaveCount(14);
-  for(const name of ['Overview','Inventory & findings','Resource analysis','Kubernetes','Agent worker','Cost allocation','Automation & GitOps','Activity & delivery','Settings'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
+  await expect(nav.getByRole('link')).toHaveCount(13);
+  for(const name of ['Overview','Resources','Kubernetes','Agent worker','Cost allocation','Automation & GitOps','Activity & delivery','Settings'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
   await navigate(page,'Settings & integrations');const tabs=page.getByRole('tablist',{name:'Workspace settings'});
   await expect(tabs.getByRole('tab')).toHaveCount(4);await tabs.getByRole('tab',{name:'Analysis rules',exact:true}).focus();await page.keyboard.press('End');
   await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toBeFocused();await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toHaveAttribute('aria-selected','true');
 });
 
 test('unified resources keep imported billing separate from retail estimates and expose scan deltas',async({page})=>{
-  await mockWorkspace(page);await resources(page);await navigate(page,'Resource analysis');
+  await mockWorkspace(page);await resources(page);await navigate(page,'Resources');
   await expect(page.getByRole('columnheader',{name:'30d billed USD'})).toBeVisible();await expect(page.getByRole('columnheader',{name:'30d effective USD'})).toBeVisible();
   await expect(page.getByText('regressed',{exact:true})).toBeVisible();await expect(page.getByText('new',{exact:true})).toBeVisible();
   await page.getByLabel('Cloud provider',{exact:true}).selectOption('azure');await expect(page.getByRole('button',{name:'View analysis for aws-disk'})).toHaveCount(0);
   await page.getByLabel('Pillar status',{exact:true}).selectOption('unknown');await expect(page.getByRole('button',{name:'View analysis for review-disk'})).toBeVisible();
-  await page.getByRole('button',{name:'View analysis for review-disk'}).click();const drawer=page.getByRole('dialog',{name:'Resource analysis',exact:true});
-  await drawer.getByRole('tab',{name:'Cost',exact:true}).click();await expect(drawer.getByText('$12.50',{exact:true})).toBeVisible();await expect(drawer.getByText('$15.00',{exact:true})).toBeVisible();
-  await drawer.getByRole('tab',{name:'30d telemetry'}).click();await expect(drawer.getByText('Insufficient or unverified')).toBeVisible();
+  await page.getByRole('button',{name:'View analysis for review-disk'}).click();const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
+  await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();await expect(drawer.getByText('$12.50',{exact:true})).toBeVisible();await expect(drawer.getByText('$15.00',{exact:true})).toBeVisible();
+  await expect(drawer.getByRole('heading',{name:'Saved utilization telemetry'})).toBeVisible();await expect(drawer.getByText('Insufficient or unverified')).toBeVisible();
   const audit=await new AxeBuilder({page}).include('dialog[open]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
 });
 

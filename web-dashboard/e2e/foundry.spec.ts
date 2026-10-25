@@ -75,9 +75,9 @@ test('resource drawer separates evidence, rules, dependencies and unknown financ
   await page.route('**/api/v1/scans/*/resources**', route => route.fulfill({json: new URL(route.request().url()).pathname.endsWith('/' + key) ? detail : {
     scan_id: scanId, observed_at: scanTime, total: 1, items: [row], summary: {total: 1, ai_status: {not_run: 1}, ai_risk: {}, decision: {none: 1}, review_priority: {evidence_required: 1}}}}));
   await page.route('**/api/v1/ai-batches?*', route => route.fulfill({json: {items: []}}));
-  await navigate(page, 'Resource analysis');
+  await navigate(page, 'Resources');
   await page.getByRole('button', {name: 'View analysis for fixture-disk'}).click();
-  const drawer = page.getByRole('dialog', {name: 'Resource analysis'});
+  const drawer = page.getByRole('dialog', {name: 'Resource details'});
   await expect(drawer.getByRole('tab')).toHaveCount(9);
   await drawer.getByRole('tab', {name: 'Cost', exact: true}).click();
   await expect(drawer.getByText('Unknown', {exact: true})).toHaveCount(6);

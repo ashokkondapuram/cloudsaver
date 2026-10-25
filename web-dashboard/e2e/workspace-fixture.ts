@@ -1,5 +1,31 @@
+import {createHash} from 'node:crypto';
 import {Page,expect} from '@playwright/test';
 import {foundryView} from './foundry-fixture';
+
+function identityOf(provider:string,resourceId:string){return `${provider}|${provider==='azure'?resourceId.toLowerCase():resourceId}`;}
+function resourceKey(provider:string,resourceId:string){return createHash('sha256').update(identityOf(provider,resourceId)).digest('hex');}
+function buildResourceItems(findings:ReturnType<typeof createFindings>){
+  const groups=new Map<string,ReturnType<typeof createFindings>>();
+  for(const f of findings){
+    const provider=f.cloud_provider||'azure';
+    const id=identityOf(provider,f.resource_id);
+    const bucket=groups.get(id)||[];
+    bucket.push(f);
+    groups.set(id,bucket);
+  }
+  return [...groups.values()].map(group=>{
+    const f=group[0];
+    const provider=f.cloud_provider||'azure';
+    const retail=group.reduce<number|null>((best,item)=>item.estimated_monthly_waste_usd==null?best:Math.max(best??0,item.estimated_monthly_waste_usd),null);
+    return {resource_key:resourceKey(provider,f.resource_id),provider,resource_id:f.resource_id,resource_name:f.resource_name,resource_type:f.resource_type,resource_group:f.resource_group,scope_id:f.scope_id||f.subscription_id||'',service_category:'storage',finding_count:group.length,rule_ids:group.map(x=>x.rule_id),review_priority:'high',disposition:'requires_review',protected_reasons:[],risk_level:'unknown',risk_check_codes:[],evidence_gap_codes:[],evidence_coverage:{observed:2,total:10},billed_cost_usd:provider==='azure'?12.5:null,effective_cost_usd:15,retail_estimate_usd:retail,evidence_digest:'b'.repeat(64),pillars:{cost:'unknown',reliability:'unknown',performance:'unknown',security:'unknown',operations:'observed'},ai:{status:'not_run',risk_level:null,summary:null,actions:[],assessment_id:null,created_at:null,reason:null},decision:null};
+  });
+}
+function resourceDetail(scanId:string,findings:ReturnType<typeof createFindings>,key:string){
+  const row=buildResourceItems(findings).find(r=>r.resource_key===key)||buildResourceItems(findings)[0];
+  const related=findings.filter(f=>identityOf(row.provider,f.resource_id)===identityOf(row.provider,row.resource_id));
+  const retail=related[0]?.estimated_monthly_waste_usd??null;
+  return {scan_id:scanId,assessment:{...row,policy_version:'2026-10-23.1',guardrails:['VERIFY_CURRENT_STATE'],observation:{status:'recent',observed_at:scanTime,max_age_hours:24},pillars:Object.entries(row.pillars).map(([pillar,status])=>({pillar,status,checks:[{pillar,code:'RETAIL_ESTIMATE',status:retail?'observed':'unknown',explanation:'TEST FIXTURE',evidence_fields:[]}]}))},findings:related,ai_context:{},ai:row.ai,ai_result:null,decision:null,followups:[],followups_remaining:5,observation:{observed_at:scanTime,collector_version:'test',evidence_schema_version:'2',configuration_snapshot:{},evidence:{metrics:{}}},rule_evaluations:[],costs:{billed_cost_usd:12.5,effective_cost_usd:15,retail_estimate_usd:retail,modeled_future_cost_usd:null,opportunity_usd:retail,verified_realized_savings_usd:null,explanation:'TEST FIXTURE retail evidence'},financial_overlaps:[]};
+}
 
 // Test-only browser data. Production code never imports this file and every API
 // route is intercepted, including mutations, before connecting the test session.
@@ -37,7 +63,11 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
     if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
-    else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources$/.test(path))response={scan_id:path.split('/')[4],observed_at:scanTime,total:0,items:[],summary:{total:0,ai_status:{},ai_risk:{},decision:{},review_priority:{}}};
+    else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources$/.test(path)){
+      const items=buildResourceItems(findings);
+      response={scan_id:path.split('/')[4],observed_at:scanTime,total:items.length,items,summary:{total:items.length,ai_status:{not_run:items.length},ai_risk:{},decision:{none:items.length},review_priority:{high:items.length},resolved_count:0,no_longer_observed_count:0}};
+    }
+    else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources\/[a-f0-9]+$/.test(path))response=resourceDetail(path.split('/')[4],findings,path.split('/')[6]);
     else if(path==='/api/v1/rules/effective')response={version:1,items:[]};
     else if(path==='/api/v1/billing/plans')response={items:[],current_tier:'GROWTH',pending_request:null};
     else if(path==='/api/v1/billing/plan-requests')response={};
@@ -99,7 +129,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
 
 export async function navigate(page:Page,label:string){
   const settings:Record<string,string>={'Analysis rules':'Analysis rules','AI data governance':'AI & data governance','People & access':'Access & API keys'};
-  const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Settings & integrations':'Settings','Automation':'Automation & GitOps'};
+  const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Settings & integrations':'Settings','Automation':'Automation & GitOps','Inventory & findings':'Resources','Resource analysis':'Resources'};
   const target=settings[label]?'Settings':aliases[label]||label;
   if(await page.getByRole('button',{name:'Open navigation'}).isVisible()){
     await page.getByRole('button',{name:'Open navigation'}).click();

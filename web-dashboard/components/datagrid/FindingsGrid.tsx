@@ -33,7 +33,7 @@ function pinnedStyle(column: Column<Finding>): CSSProperties {
   } : {})};
 }
 
-export function FindingsGrid({initialProvider = '',initialCategory='',initialIntent='',initialPricing=''}: {initialProvider?:string;initialCategory?:Category|'';initialIntent?:Intent;initialPricing?:Pricing}) {
+export function FindingsGrid({initialProvider = '',initialCategory='',initialIntent='',initialPricing='',navigateToResource = false}: {initialProvider?:string;initialCategory?:Category|'';initialIntent?:Intent;initialPricing?:Pricing;navigateToResource?:boolean}) {
   const {scan,token,openFinding,scope,setScope,selection,setSelection,openReview,density,setDensity,notify} = useWorkspace();
   const findings = useScopedFindings();
   const router = useRouter();
@@ -45,7 +45,13 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
   const [category,setCategory]=useState<Category|''>(initialCategory),[intent,setIntent]=useState<Intent>(initialIntent),[pricing,setPricing]=useState<Pricing>(initialPricing);
   const deferredQuery=useDeferredValue(query);
   const orderedRef=useRef<()=>Finding[]>(()=>[]);
-  const openContextFinding=useCallback((value:Finding)=>openFinding(value,orderedRef.current()),[openFinding]);
+  const openContextFinding=useCallback((value:Finding)=>{
+    if (navigateToResource) {
+      const resource = resources.get(findingIdentity(value));
+      if (resource) {router.push(`/resources?resource=${resource.resource_key}`); return;}
+    }
+    openFinding(value,orderedRef.current());
+  },[navigateToResource,openFinding,resources,router]);
   const [sorting,setSorting] = useState<SortingState>([{id:'priority',desc:false}]);
   const [rowSelection,setRowSelection] = useState<RowSelectionState>({});
   const [visibility,setVisibility] = useState<VisibilityState>({savings:false,signal:false,scope:false});
@@ -80,7 +86,7 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
     {id:'savings',accessorFn:f => f.cost_attribution?.realizable_savings_usd ?? undefined,sortUndefined:'last',header:'Net savings',size:150,cell:({row}) => <span className={row.original.cost_attribution?.realizable_savings_usd == null ? 'unpriced-cell' : 'money-cell'}>{money(row.original.cost_attribution?.realizable_savings_usd)}</span>},
     {id:'priority',accessorKey:'severity',header:'Priority',size:120,sortingFn:(a,b) => {const rank:Record<string,number>={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};return (rank[a.original.severity] ?? 5) - (rank[b.original.severity] ?? 5);},cell:({row}) => <PriorityBadge severity={row.original.severity}/>},
     {id:'ai_risk',accessorFn:f=>{const level=resources.get(findingIdentity(f))?.ai.risk_level;return level?aiRiskRank[level] ?? 5:undefined;},sortUndefined:'last',header:'AI risk',size:110,cell:({row})=>{const resource=resources.get(findingIdentity(row.original));return resource?<AIRisk ai={resource.ai}/>:<span className="muted">—</span>;}},
-    {id:'ai_status',accessorFn:f=>resources.get(findingIdentity(f))?.ai.status,sortUndefined:'last',header:'AI status',size:130,cell:({row})=>{const resource=resources.get(findingIdentity(row.original));return resource?<button className="link-cell" aria-label={`Open resource analysis for ${row.original.resource_name}`} onClick={e=>{e.stopPropagation();router.push(`/resources?resource=${resource.resource_key}`);}}><AIStatusBadge ai={resource.ai}/></button>:<span className="muted">—</span>;}},
+    {id:'ai_status',accessorFn:f=>resources.get(findingIdentity(f))?.ai.status,sortUndefined:'last',header:'AI status',size:130,cell:({row})=>{const resource=resources.get(findingIdentity(row.original));return resource?<button className="link-cell" aria-label={`Open resource details for ${row.original.resource_name}`} onClick={e=>{e.stopPropagation();router.push(`/resources?resource=${resource.resource_key}`);}}><AIStatusBadge ai={resource.ai}/></button>:<span className="muted">—</span>;}},
     {id:'decision',accessorFn:f=>resources.get(findingIdentity(f))?.decision?.decision,sortUndefined:'last',header:'Decision',size:130,cell:({row})=><DecisionBadge decision={resources.get(findingIdentity(row.original))?.decision ?? null}/>},
     {id:'actions',size:46,enableSorting:false,enableHiding:false,header:() => <span className="sr-only">Open</span>,cell:({row}) => <button className="icon-button" data-focus-return={`action:${findingKey(row.original)}`} aria-label={`View details for ${row.original.resource_name}`} onClick={e => {e.stopPropagation();openContextFinding(row.original);}}><ChevronRight size={16}/></button>},
   ], [openContextFinding,resources,router]);
