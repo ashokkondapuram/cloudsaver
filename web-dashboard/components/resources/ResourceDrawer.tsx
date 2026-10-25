@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
-import {useEffect, useId, useRef, useState} from 'react';
-import {BrainCircuit, CheckCircle2, History, ListChecks, MessageSquareText, ShieldCheck} from 'lucide-react';
+import {useEffect, useRef, useState} from 'react';
+import {BrainCircuit, CheckCircle2, MessageSquareText, ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel} from '../../lib/finops';
 import {aiStatusLabels, decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
@@ -11,6 +11,9 @@ import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, PillarDots} from './ResourceParts';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
+import {CodeReview} from '../drawer/FindingDrawer';
+import {ArchitecturalAssessment} from '../ServiceAnalysis';
+import {findingKey} from '../../lib/finops';
 
 function Evidence({detail}: {detail: ResourceDetail}) {
   const text = JSON.stringify(detail.observation?.configuration_snapshot || {}, null, 2);
@@ -170,9 +173,7 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
 
 export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId: string; resourceKey: string | null; onClose: () => void; onChange: () => void}) {
   const {token} = useWorkspace();
-  const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [tab, setTab] = useState('overview'), [version, setVersion] = useState(0);
-  const id = useId();
-  useEffect(() => {setTab('overview');}, [resourceKey]);
+  const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
   useEffect(() => {
     if (!resourceKey) return;
     const request = new AbortController();
@@ -182,17 +183,22 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
     return () => request.abort();
   }, [scanId, resourceKey, token, version]);
   const changed = () => {setVersion(v => v + 1); onChange();};
-  const tabs = [{id: 'overview', label: 'Overview', icon: ShieldCheck}, {id: 'evidence', label: 'Evidence', icon: ListChecks},
-    {id:'telemetry',label:'30d telemetry',icon:ListChecks}, {id: 'rules', label: 'Rules', icon: ListChecks}, {id: 'cost', label: 'Cost', icon: ListChecks},
-    {id: 'dependencies', label: 'Dependencies', icon: ShieldCheck}, {id: 'ai', label: 'AI Advice', icon: BrainCircuit},
-    {id: 'history', label: 'History', icon: History}, {id: 'decision', label: 'Decisions', icon: ListChecks}];
   const current = detail && detail.assessment.resource_key === resourceKey ? detail : null;
-  return <Dialog open={!!resourceKey} onClose={onClose} title="Resource analysis" drawer>
-    {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current ? <Loading label="Loading resource analysis…"/> : <>
+  return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>
+    {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current ? <Loading label="Loading resource details…"/> : <>
       <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={current.assessment.provider}/><span className={`state-badge ${current.assessment.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{current.assessment.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><AIStatusBadge ai={current.ai}/></div><h2>{current.assessment.resource_name || current.assessment.resource_id}</h2><p>{current.assessment.finding_count} finding{current.assessment.finding_count === 1 ? '' : 's'} · {sentence(current.assessment.review_priority)} · <PillarDots pillars={Object.fromEntries(current.assessment.pillars.map(p => [p.pillar, p.status]))}/></p></div>
-      <div className="drawer-tabs" role="tablist" aria-label="Resource analysis views">{tabs.map(t => <button key={t.id} id={`${id}-${t.id}-tab`} role="tab" aria-selected={tab === t.id} aria-controls={`${id}-${t.id}`} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}><t.icon size={15}/>{t.label}</button>)}</div>
-      <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`}>
-        {tab === 'overview' ? <Overview detail={current}/> : tab === 'evidence' ? <Evidence detail={current}/> : tab==='telemetry'?<Telemetry detail={current}/>:tab === 'rules' ? <Rules detail={current}/> : tab === 'cost' ? <Costs detail={current}/> : tab === 'dependencies' ? <Dependencies detail={current}/> : tab === 'ai' ? <><Assessment detail={current}/><Questions detail={current} onChange={changed}/></> : tab === 'history' ? <HistoryTab detail={current}/> : <DecisionTab detail={current} onChange={changed}/>}
+      <div className="drawer-tab-content drawer-unified">
+        <Overview detail={current}/>
+        {current.findings.map(f => <div key={findingKey(f)} className="drawer-section"><h3>{ruleLabel(f.rule_id)} · 360° assessment</h3><ArchitecturalAssessment finding={f} embedded/></div>)}
+        <Evidence detail={current}/>
+        <Telemetry detail={current}/>
+        <Rules detail={current}/>
+        <Costs detail={current}/>
+        <Dependencies detail={current}/>
+        <div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/><Questions detail={current} onChange={changed}/></div>
+        <HistoryTab detail={current}/>
+        <DecisionTab detail={current} onChange={changed}/>
+        <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>
       </div>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI status: {aiStatusLabels[current.ai.status]}. Advice is unverified and never changes cloud resources.</div>
     </>}

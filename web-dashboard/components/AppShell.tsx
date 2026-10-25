@@ -5,7 +5,7 @@ import {usePathname, useRouter} from 'next/navigation';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {ClipboardCheck, AlertCircle, BrainCircuit, Database, Activity, ArrowDown, ArrowRight, Bell, Blocks, Check, ChevronDown, ChevronsLeft, ChevronsRight, Cloud, Command, ExternalLink, FileCode2, Filter, LayoutDashboard, Layers, Loader2, LockKeyhole, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, Sparkles, Wallet, X} from 'lucide-react';
 import {api} from '../lib/api';
-import {dateTime, providerNames, scopeOf, ruleLabel, shortDate} from '../lib/finops';
+import {dateTime, providerNames, providerOf, scopeOf, ruleLabel, shortDate} from '../lib/finops';
 import {billingBanner} from '../lib/plan';
 import type {Reliability} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
@@ -18,8 +18,7 @@ import {ClaimView} from './ClaimView';
 
 export const navigation = [
   {href:'/',label:'Overview',icon:LayoutDashboard,group:'DISCOVER & ANALYZE',shortcut:'G D'},
-  {href:'/findings',label:'Inventory & findings',icon:Blocks,group:'',shortcut:'G F'},
-  {href:'/resources',label:'Resource analysis',icon:BrainCircuit,group:'',shortcut:'G R'},
+  {href:'/resources',label:'Resources',icon:Blocks,group:'',shortcut:'G R'},
   {href:'/workloads',label:'Workload assessments',icon:Layers,group:''},
   {href:'/services/disks',label:'Services',icon:Database,group:''},
   {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
@@ -100,7 +99,7 @@ function Login() {
 }
 
 function CommandPalette() {
-  const {overlay, setOverlay, scan, openFinding, canAdmin} = useWorkspace();
+  const {overlay, setOverlay, scan, canAdmin} = useWorkspace();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const router = useRouter();
@@ -108,11 +107,11 @@ function CommandPalette() {
   useEffect(() => {if (overlay === 'command') {setQuery(''); setActive(0);}}, [overlay]);
   const commands = useMemo(() => {
     const links = navigation.map(item => ({id: item.href, label: item.label, note: 'Navigate', icon: item.icon, action: () => {setOverlay(null); router.push(item.href);}}));
-    const explorers = [{id:'storage-view',label:'Explore storage findings',note:'Quick view · disks & volumes',icon:Database,action:()=>{setOverlay(null);router.push('/findings?category=storage');}},{id:'protected-view',label:'Inspect protected resources',note:'Quick view · recovery & retention',icon:ShieldCheck,action:()=>{setOverlay(null);router.push('/findings?intent=protected');}},{id:'unpriced-view',label:'Find missing price evidence',note:'Quick view · unknown costs',icon:Wallet,action:()=>{setOverlay(null);router.push('/findings?pricing=unpriced');}}];
+    const explorers = [{id:'storage-view',label:'Explore storage findings',note:'Quick view · disks & volumes',icon:Database,action:()=>{setOverlay(null);router.push('/resources?category=storage');}},{id:'protected-view',label:'Inspect protected resources',note:'Quick view · recovery & retention',icon:ShieldCheck,action:()=>{setOverlay(null);router.push('/resources?intent=protected');}},{id:'unpriced-view',label:'Find missing price evidence',note:'Quick view · unknown costs',icon:Wallet,action:()=>{setOverlay(null);router.push('/resources?pricing=unknown');}}];
     const actions = canAdmin ? [{id:'new-scan',label:'Run a new scan',note:'Action',icon:Plus,action:()=>setOverlay('scan')}] : [];
-    const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:Blocks,action:()=>openFinding(f,scan?.findings||[f])})) : [];
+    const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:Blocks,action:()=>{setOverlay(null);router.push(`/resources?provider=${providerOf(f)}&resource_id=${encodeURIComponent(f.resource_id)}`);}})) : [];
     return [...links, ...explorers, ...actions].filter(c => matchesQuery(c.label,query)).concat(resources);
-  }, [query, scan, canAdmin, router, setOverlay, openFinding]);
+  }, [query, scan, canAdmin, router, setOverlay]);
   return <Dialog open={overlay === 'command'} onClose={() => setOverlay(null)} title="Search & commands" className="command-dialog">
     <div className="command-search"><Search size={20}/><input ref={input} autoFocus placeholder="Search pages, actions, or resources…" aria-label="Search commands and resources" role="combobox" aria-expanded="true" aria-controls="command-results" aria-activedescendant={commands[active] ? `command-${active}` : undefined} value={query} onChange={e => {setQuery(e.target.value); setActive(0);}} onKeyDown={e => {if (e.key === 'ArrowDown') {e.preventDefault(); setActive(i => Math.min(i + 1,commands.length - 1));} else if(e.key === 'ArrowUp') {e.preventDefault(); setActive(i => Math.max(0,i - 1));} else if(e.key === 'Enter') {e.preventDefault(); commands[active]?.action();}}}/><kbd>esc</kbd></div>
     <div className="command-results" id="command-results" role="listbox" aria-label="Commands">{commands.map((command,index) => <button type="button" role="option" aria-selected={index === active} id={`command-${index}`} key={command.id} className={index === active ? 'selected' : ''} onMouseEnter={() => setActive(index)} onClick={command.action}><command.icon size={18}/><span>{command.label}<small>{command.note}</small></span><ArrowRight size={15}/></button>)}{!commands.length && <p className="command-empty">No matching pages or resources.</p>}</div>
@@ -175,7 +174,7 @@ export function AppShell({children}: {children: ReactNode}) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.shiftKey && e.key.toLowerCase() === 'r' && canAdmin && selection.length) {e.preventDefault(); openReview(selection); return;}
       const key = e.key.toLowerCase();
-      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',f:'/findings',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
+      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
       else prefix.current = {key,at:Date.now()};
     };
     document.addEventListener('keydown',handler);return () => document.removeEventListener('keydown',handler);
@@ -191,7 +190,7 @@ export function AppShell({children}: {children: ReactNode}) {
   const active = navigation.find(item => (item.href === pathname || item.href === '/services/disks' && pathname.startsWith('/services/'))) || navigation[0];
   const scopes = [...new Set((scan?.findings || []).map(scopeOf))];
   const failures = reliability?.counts.filter(c => c.status === 'dead_letter').reduce((sum,c) => sum + c.count,0) || 0;
-  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/findings' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.7.0</small></>}</button></div></>;
+  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/resources' && !!scan?.total_items_found && <small aria-hidden="true">{scan.total_items_found}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.7.0</small></>}</button></div></>;
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>

@@ -5,10 +5,9 @@ import {mockWorkspace,navigate,scanId} from './workspace-fixture';
 test('five-pillar assessment preserves protection and gates explicit AI processing',async({page})=>{
   test.setTimeout(60000); // Axe and screenshots run within this workflow on shared CI runners.
   const {mutations}=await mockWorkspace(page,{ai:true,protected:true});
-  await navigate(page,'Inventory & findings');
+  await navigate(page,'Resources');
   await page.getByRole('button',{name:/^archive-data-01/}).click();
-  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
-  await drawer.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('heading',{name:'Protected resource',exact:true})).toBeVisible();
   await expect(drawer.getByText(/Destructive script generation is blocked/)).toBeVisible();
   const submit=drawer.getByRole('button',{name:'Request AI advisory',exact:true});
@@ -47,8 +46,7 @@ test('service analysis labels partial pricing and protected counts without invok
 
 test('viewer and disabled integrations retain the deterministic assessment',async({page})=>{
   const {mutations}=await mockWorkspace(page,{role:'Viewer',ai:true});
-  await navigate(page,'Inventory & findings');await page.getByRole('button',{name:/^archive-data-01/}).click();
-  await page.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
   await expect(page.getByRole('heading',{name:'Independent review required',exact:true})).toBeVisible();
   await expect(page.getByRole('checkbox',{name:/I acknowledge external processing/})).toBeDisabled();
   await expect(page.getByRole('button',{name:'Request AI advisory',exact:true})).toBeDisabled();
@@ -62,13 +60,12 @@ test('late AI response cannot appear in another finding after the drawer closes'
     await gate;
     await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({cached:false,warning:'Late old response',guardrails:[],advice:{summary:'STALE OLD RESOURCE RESPONSE',risk_level:'unknown',pillars:[],review_questions:[]}})}).catch(()=>{});
   });
-  await navigate(page,'Inventory & findings');await page.getByRole('button',{name:/^archive-data-01/}).click();
-  await page.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
   await page.getByRole('checkbox',{name:/I acknowledge external processing/}).check();
   await page.getByRole('button',{name:'Request AI advisory',exact:true}).click();
   await expect(page.getByRole('button',{name:'Requesting advisory…',exact:true})).toBeVisible();
   await page.keyboard.press('Escape');await page.getByRole('button',{name:/^archive-data-05/}).click();
-  await page.getByRole('tab',{name:'360° assessment',exact:true}).click();release();
+  release();
   await expect(page.getByRole('button',{name:'Request AI advisory',exact:true})).toBeVisible();
   await expect(page.getByText('STALE OLD RESOURCE RESPONSE')).toHaveCount(0);
   await expect(page.getByRole('checkbox',{name:/I acknowledge external processing/})).not.toBeChecked();
@@ -80,8 +77,7 @@ test('review priorities open saved findings and stale evidence exposes provenanc
   const panel=page.locator('.service-analysis');
   await expect(panel.getByRole('heading',{name:'Review priorities',exact:true})).toBeVisible();
   await panel.getByRole('button',{name:'archive-data-01 · high',exact:true}).click();
-  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
-  await drawer.getByRole('tab',{name:'360° assessment',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('heading',{name:'Assessment provenance',exact:true})).toBeVisible();
   await expect(drawer.getByText(/Policy 2026-10-23.1/)).toBeVisible();
   await expect(drawer.getByText(/Refresh the scan before planning a change/)).toBeVisible();
@@ -89,5 +85,4 @@ test('review priorities open saved findings and stale evidence exposes provenanc
   await drawer.getByRole('button',{name:'Request AI advisory',exact:true}).click();
   await expect(drawer.getByText(/Provider-reported usage: 300 input tokens/)).toBeVisible();
   expect(mutations.filter(m=>m.path.endsWith('ai-risk-evaluation'))).toHaveLength(1);
-  await page.screenshot({path:test.info().outputPath('assessment-engine-v0110.png'),fullPage:true});
 });

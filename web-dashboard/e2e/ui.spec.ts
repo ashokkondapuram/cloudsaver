@@ -10,14 +10,14 @@ test('overview uses observed data and provides provider drill-down',async({page}
   await expect(page.getByRole('img',{name:'Finding count across 7 comparable snapshots'})).toBeVisible();
   await page.screenshot({path:test.info().outputPath('overview-desktop.png'),fullPage:true});
   await page.locator('.distribution-legend').getByRole('link',{name:/AWS/}).click();
-  await expect(page.getByRole('heading',{name:'Inventory & findings',exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:/^AWS \d+ findings$/})).toHaveAttribute('aria-pressed','true');
-  await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(3);
+  await expect(page.getByRole('heading',{name:'Resources',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/^AWS \d+$/})).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.resource-table tbody tr')).toHaveCount(3);
   expect(mutations).toEqual([]);
 });
 
 test('findings combine filters, density, column visibility, and page selection',async({page})=>{
-  await mockWorkspace(page);await navigate(page,'Inventory & findings');
+  await mockWorkspace(page,{legacy:true});await navigate(page,'Resources');
   await page.getByRole('button',{name:/^Azure \d+ findings$/}).click();
   await page.getByRole('combobox',{name:'Finding priority',exact:true}).selectOption('HIGH');
   await page.getByRole('textbox',{name:'Tag filter',exact:true}).fill('Owner=platform');
@@ -30,7 +30,7 @@ test('findings combine filters, density, column visibility, and page selection',
   await expect(page.getByRole('columnheader',{name:/Net savings/})).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('checkbox',{name:'Select all findings on this page',exact:true}).check();
-  await expect(page.getByRole('region',{name:'Selected findings actions'})).toBeVisible();
+  await expect(page.getByRole('region',{name:/Selected (findings|resources) actions/})).toBeVisible();
   await page.keyboard.press('Shift+R');
   await expect(page.getByRole('dialog',{name:'Review selected resources',exact:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:'1 findings selected'})).toBeVisible();
@@ -40,14 +40,13 @@ test('findings combine filters, density, column visibility, and page selection',
 });
 
 test('detail drawer preserves context and previews actual returned review code',async({page})=>{
-  const {mutations}=await mockWorkspace(page);await navigate(page,'Inventory & findings');
+  const {mutations}=await mockWorkspace(page);await navigate(page,'Resources');
   const resource=page.getByRole('button',{name:/^archive-data-01/});await resource.click();
-  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
+  const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('heading',{name:'Resource identity'})).toBeVisible();
-  await drawer.getByRole('tab',{name:'Cost breakdown',exact:true}).click();
-  await expect(drawer.getByText('$295.20',{exact:true})).toBeVisible();
-  await drawer.getByRole('tab',{name:'Review code',exact:true}).click();
+  await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();
+  await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();
   await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();
   await expect(drawer.getByLabel('Generated code preview')).toContainText('TEST FIXTURE import review');
   expect(mutations).toHaveLength(1);
@@ -60,10 +59,9 @@ test('detail drawer preserves context and previews actual returned review code',
 test('viewer can inspect evidence but cannot generate review artifacts or scan',async({page})=>{
   const {mutations}=await mockWorkspace(page,{role:'Viewer'});
   await expect(page.getByRole('button',{name:'Run new scan',exact:true})).toHaveCount(0);
-  await navigate(page,'Inventory & findings');
+  await navigate(page,'Resources');
   await page.getByRole('button',{name:/^archive-data-01/}).click();
-  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
-  await drawer.getByRole('tab',{name:'Review code',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer.getByRole('button',{name:'Preview Terraform imports',exact:true})).toBeDisabled();
   await expect(drawer.getByRole('button',{name:'Preview Bash script',exact:true})).toBeDisabled();
   expect(mutations).toEqual([]);
@@ -74,13 +72,13 @@ test('command palette, navigation shortcuts, and scoped filters retain session',
   await page.keyboard.press('Control+k');
   const command=page.getByRole('dialog',{name:'Search & commands',exact:true});
   await expect(command).toBeVisible();
-  await page.getByRole('combobox',{name:'Search commands and resources',exact:true}).fill('Inventory');
+  await page.getByRole('combobox',{name:'Search commands and resources',exact:true}).fill('Resources');
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/findings$/);
+  await expect(page).toHaveURL(/\/resources$/);
   await page.locator('.scope-picker>summary').click();
   await page.getByRole('checkbox',{name:'finops-project',exact:true}).check();
   await page.locator('.scope-picker>summary').click();
-  await expect(page.locator('.data-table tbody tr[aria-rowindex]')).toHaveCount(3);
+  await expect(page.locator('.resource-table tbody tr, .data-table tbody tr[aria-rowindex]')).toHaveCount(3);
   await page.keyboard.press('g');await page.keyboard.press('d');
   await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   await expect(page.getByText('History uses complete scan scopes',{exact:true})).toBeVisible();
@@ -127,7 +125,7 @@ test('new scan dialog requires an explicit provider selection and action',async(
 });
 
 test('10,000 findings stay virtualized and selection follows the current page',async({page})=>{
-  await mockWorkspace(page,{count:10000});await navigate(page,'Inventory & findings');
+  await mockWorkspace(page,{count:10000,legacy:true});await navigate(page,'Resources');
   await expect(page.locator('.grid-footer')).toContainText('10,000 matching findings');
   expect(await page.locator('.data-table tbody tr[aria-rowindex]').count()).toBeLessThan(50);
   await page.getByLabel('Scrollable findings table',{exact:true}).focus();await page.keyboard.press('Control+a');
@@ -139,9 +137,9 @@ test('10,000 findings stay virtualized and selection follows the current page',a
 test('mobile navigation, filters, and drawer fit the viewport',async({page})=>{
   await page.setViewportSize({width:390,height:844});await mockWorkspace(page);
   await page.screenshot({path:test.info().outputPath('overview-mobile.png'),fullPage:true});
-  await navigate(page,'Inventory & findings');
+  await navigate(page,'Resources');
   await page.getByRole('button',{name:/^archive-data-01/}).click();
-  const drawer=page.getByRole('dialog',{name:'Finding details',exact:true});
+  const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer).toBeVisible();
   expect(await drawer.evaluate(el=>el.getBoundingClientRect().width)).toBeLessThanOrEqual(390);
   await page.keyboard.press('Escape');
@@ -151,13 +149,13 @@ test('mobile navigation, filters, and drawer fit the viewport',async({page})=>{
 
 test('overview, inventory, drawer, and settings have no serious automated accessibility violations',async({page})=>{
   await mockWorkspace(page);
-  for(const view of ['Overview','Inventory & findings','Settings & integrations']){
+  for(const view of ['Overview','Resources','Settings & integrations']){
     await navigate(page,view);
     await page.waitForTimeout(200);
     const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).analyze();
     expect(result.violations.filter(v=>v.impact==='serious'||v.impact==='critical'),JSON.stringify(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))).toEqual([]);
   }
-  await navigate(page,'Inventory & findings');await page.getByRole('button',{name:/^archive-data-01/}).click();
+  await navigate(page,'Resources');await page.getByRole('button',{name:/^archive-data-01/}).click();
   const result=await new AxeBuilder({page}).analyze();
   expect(result.violations.filter(v=>v.impact==='serious'||v.impact==='critical'),JSON.stringify(result.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})))).toEqual([]);
 });
