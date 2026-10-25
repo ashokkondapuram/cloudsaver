@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "fd5f09f8137abe4d3e78b9f1390af8b38954b3bbe2a5ba170b24db63826a7bd3",
+  "inventory_sha256": "d41dcc0c25d0fad30b5669e001fe83b3b9338ff7379a8c399bca013c9b0911aa",
   "migration_heads": {
     "core": "0023_risk_governance",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -2498,6 +2498,11 @@
       "path": "tests/test_scanner.py",
       "sha256": "1d7e823aa0552fd6d16f47da48302215fa77acd06497ac6984b77bec82c870e5",
       "bytes": 4511
+    },
+    {
+      "path": "tests/test_scoped_finops_routes.py",
+      "sha256": "ab7f15d5a1d9f1624ee93ffa3ffe16115fb0a839c189d98fb098503fe7c498e7",
+      "bytes": 4269
     },
     {
       "path": "tests/test_service_analysis_api.py",
