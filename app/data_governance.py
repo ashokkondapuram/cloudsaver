@@ -31,7 +31,8 @@ FACT_FIELDS={'encrypted','multi_az','publicly_accessible','deletion_protection',
     'provisioned_iops','minimum_request','hosted_app_count','patch_age_days','unattached_days','snapshot_age_hours',
     'window_start','window_end','samples','step_seconds','percentile_method','dimension','unit',
     'stopped_days','cfs_throttling_p95_pct','oom_kill_count_30d','burst_credit_balance_min','surplus_credits_charged',
-    'disk_queue_length_p99','throttle_events','http_429_count','slo_burn_rate','cpu_latency_correlation_r','disruptions_allowed','commitment_lock_conflict'}
+    'disk_queue_length_p99','throttle_events','http_429_count','slo_burn_rate','cpu_latency_correlation_r','disruptions_allowed','commitment_lock_conflict',
+    'latency_sensitive','observed_latency_p95_ms','observed_error_rate_pct'}
 
 
 class DataDenied(ValueError):

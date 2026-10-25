@@ -22,6 +22,7 @@ import {CloudScopesEditor, IdentityOnboardingPanel, ResourceAccessIdentityEditor
 import {AccessSettings} from './settings/AccessSettings';
 import {CustomerRuleSettings} from './rules/CustomerRuleSettings';
 import {DataGovernanceWorkspace} from './settings/DataGovernanceWorkspace';
+import {ObservabilitySettings} from './settings/ObservabilitySettings';
 
 function ScanHistory() {
   const {scans,scan,selectScan,refresh,busy} = useWorkspace();
@@ -114,10 +115,10 @@ function Preferences() {
 
 export function SettingsView() {
   const [tab,setTab]=useState('cloud');
-  useEffect(()=>{const value=new URLSearchParams(window.location.search).get('tab');if(value&&['cloud','rules','ai','access'].includes(value))setTab(value);},[]);
-  const tabs=[{id:'cloud',label:'Cloud scopes and plan',icon:Cloud},{id:'rules',label:'Analysis rules',icon:ShieldCheck},{id:'ai',label:'AI & data governance',icon:BrainCircuit},{id:'access',label:'Access & API keys',icon:KeyRound}];
+  useEffect(()=>{const value=new URLSearchParams(window.location.search).get('tab');if(value&&['cloud','rules','integrations','ai','access'].includes(value))setTab(value);},[]);
+  const tabs=[{id:'cloud',label:'Cloud scopes and plan',icon:Cloud},{id:'rules',label:'Analysis rules',icon:ShieldCheck},{id:'integrations',label:'Integrations',icon:Activity},{id:'ai',label:'AI & data governance',icon:BrainCircuit},{id:'access',label:'Access & API keys',icon:KeyRound}];
   function choose(value:string){setTab(value);const url=new URL(window.location.href);url.searchParams.set('tab',value);window.history.replaceState(null,'',url);}
-  return <><PageTabs id="settings" label="Workspace settings" value={tab} onChange={choose} tabs={tabs}/><div role="tabpanel" tabIndex={0} id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='cloud'?<><CloudAccounts/><ResourceAccessSettings/><ScheduleAlertsEditor/><Plan/><section className="panel"><div className="settings-notice"><Wallet size={17}/><div><p>Cloud billing imports, automatic billing sync and billed-cost reports are on the Cost allocation page. Scan history and delivery status are on the Activity page.</p><p><Link className="text-link" href="/allocation">Open cost allocation<ArrowRight size={14}/></Link> <Link className="text-link" href="/activity">Open activity<ArrowRight size={14}/></Link></p></div></div></section></>:tab==='rules'?<CustomerRuleSettings/>:tab==='ai'?<><AIFoundryConfigurationEditor/><DataGovernanceWorkspace/></>:<><AccessSettings/><Preferences/></>}</div></>;
+  return <><PageTabs id="settings" label="Workspace settings" value={tab} onChange={choose} tabs={tabs}/><div role="tabpanel" tabIndex={0} id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='cloud'?<><CloudAccounts/><ResourceAccessSettings/><ScheduleAlertsEditor/><Plan/><section className="panel"><div className="settings-notice"><Wallet size={17}/><div><p>Cloud billing imports, automatic billing sync and billed-cost reports are on the Cost allocation page. Scan history and delivery status are on the Activity page.</p><p><Link className="text-link" href="/allocation">Open cost allocation<ArrowRight size={14}/></Link> <Link className="text-link" href="/activity">Open activity<ArrowRight size={14}/></Link></p></div></div></section></>:tab==='rules'?<CustomerRuleSettings/>:tab==='integrations'?<ObservabilitySettings/>:tab==='ai'?<><AIFoundryConfigurationEditor/><DataGovernanceWorkspace/></>:<><AccessSettings/><Preferences/></>}</div></>;
 }
 
 export function Allocation() {

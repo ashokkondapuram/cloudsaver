@@ -179,6 +179,43 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def billing_sync_status(row=Depends(allowed),authorization: str=Header()):
         return await forward('GET','scanner','/api/v1/finops/sync-status',authorization)
 
+    @app.get('/api/v1/observability/connectors')
+    async def observability_connectors(row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner','/api/v1/observability/connectors',authorization)
+
+    @app.post('/api/v1/observability/connectors',status_code=201)
+    async def create_observability_connector(request:Request,row=Depends(allowed),authorization: str=Header()):
+        return await post_json('/api/v1/observability/connectors',request,authorization)
+
+    @app.post('/api/v1/observability/connectors/test')
+    async def test_observability_draft(request:Request,row=Depends(allowed),authorization: str=Header()):
+        return await post_json('/api/v1/observability/connectors/test',request,authorization)
+
+    @app.post('/api/v1/observability/connectors/{connector_id}')
+    async def update_observability_connector(connector_id:UUID,request:Request,row=Depends(allowed),authorization: str=Header()):
+        return await post_json(f'/api/v1/observability/connectors/{connector_id}',request,authorization)
+
+    @app.post('/api/v1/observability/connectors/{connector_id}/disable')
+    @app.post('/api/v1/observability/connectors/{connector_id}/enable')
+    @app.post('/api/v1/observability/connectors/{connector_id}/test')
+    async def observability_connector_action(connector_id:UUID,request:Request,row=Depends(allowed),authorization: str=Header()):
+        action=request.url.path.rsplit('/',1)[-1]
+        return await forward('POST','scanner',f'/api/v1/observability/connectors/{connector_id}/{action}',authorization)
+
+    @app.post('/api/v1/observability/sync',status_code=202)
+    async def observability_sync(request:Request,row=Depends(allowed),authorization: str=Header()):
+        from app.schemas import bounded_json
+        result=await upstream('POST',targets['scanner'],'/api/v1/observability/sync',authorization,json=await bounded_json(request),transport=transport)
+        return JSONResponse(result,status_code=202,headers={'Location':result['poll_url'],'Retry-After':'3'})
+
+    @app.get('/api/v1/observability/sync-jobs/{job_id}')
+    async def observability_job(job_id:UUID,row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner',f'/api/v1/observability/sync-jobs/{job_id}',authorization)
+
+    @app.get('/api/v1/observability/summary')
+    async def observability_summary(row=Depends(allowed),authorization: str=Header()):
+        return await forward('GET','scanner','/api/v1/observability/summary',authorization)
+
     @app.get('/api/v1/finops/commitments')
     async def billing_commitments(row=Depends(allowed),authorization: str=Header()):
         return await forward('GET','scanner','/api/v1/finops/commitments',authorization)

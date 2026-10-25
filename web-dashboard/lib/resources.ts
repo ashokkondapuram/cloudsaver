@@ -33,7 +33,15 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
   rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean}[];
   costs?: {billed_cost_usd: number | null;effective_cost_usd?:number|null; retail_estimate_usd: number | null; modeled_future_cost_usd: number | null; opportunity_usd: number | null; verified_realized_savings_usd: number | null; explanation: string};
-  financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[]};
+  financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[];
+  observability?: ObservedSignals | null};
+export type ObservedMetric = {connector: string; query_id: string; metric: string; unit: string; window_start: string | null; window_end: string | null;
+  samples: number; coverage_pct: number; p50: number; p95: number; max: number; avg: number};
+export type ObservedService = {connector: string; service: string; requests_per_second: number | null; error_rate_pct: number | null;
+  latency_p50_ms: number | null; latency_p95_ms: number | null; coverage_pct: number | null; sampled: boolean; traces_sampled?: number;
+  window_start: string | null; window_end: string | null; dependencies: {service: string; calls: number}[]};
+export type ObservedSignals = {metrics: ObservedMetric[]; services: ObservedService[]; latency_reasons: string[];
+  cost_per_1000_requests_usd: number | null; cost_per_1000_requests_reason: string | null};
 export type Batch = {id: string; scan_id: string; target_id: string; status: 'queued' | 'running' | 'waiting_for_budget' | 'completed' | 'cancelled';
   total: number; resume_after: string | null; created_at: string; updated_at: string; counts: Record<string, number>};
 export type HistoryEntry = {scan_id: string; timestamp: string; present: boolean; review_priority?: string; risk_level?: string; rule_ids?: string[];

@@ -176,7 +176,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,
                     followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,
-                    rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps)
+                    rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
+                    observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
+                                        if r.get('evidence', {}).get('observed_signals')), None))
 
     @router.post('/scans/{scan_id}/ai-batches', status_code=202)
     async def create_batch(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):

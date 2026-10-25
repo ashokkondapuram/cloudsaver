@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck} from 'lucide-react';
+import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
 import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
@@ -28,6 +28,25 @@ function Evidence({detail}: {detail: ResourceDetail}) {
 function Telemetry({detail}:{detail:ResourceDetail}) {
   const metrics=detail.observation?.evidence?.metrics||{};const summaries=detail.observation?.evidence?.metric_summaries||{};
   return <section className="drawer-section"><h3>Utilization telemetry</h3><p className="inline-help">Validated 30-day windows need at least 95% coverage and no gap over one hour. Missing observations stay unknown.</p>{!Object.keys(metrics).length?<Notice>No metric history was collected for this resource.</Notice>:<div className="summary-table-scroll" tabIndex={0} aria-label="Saved metric windows"><table className="summary-table"><thead><tr><th>Metric</th><th>Window</th><th>Samples</th><th>Coverage</th><th>P95 / P99</th></tr></thead><tbody>{Object.entries(metrics).map(([name,m])=>{const summary=summaries[name]||m;return <tr key={name}><td>{sentence(name)}</td><td>{m.window_start?shortDate(m.window_start):'Unknown'} – {m.window_end?shortDate(m.window_end):'Unknown'}</td><td>{m.points?.length.toLocaleString()??'Summary only'}</td><td>{summary.sufficient===true&&summary.coverage_ratio!=null?`${(summary.coverage_ratio*100).toFixed(1)}%`:'Unverified'}</td><td>{summary.p95??'—'} / {summary.p99??'—'}</td></tr>;})}</tbody></table></div>}<p className="inline-help">Low utilization alone doesn’t establish a safe target or approval to change capacity.</p></section>;
+}
+
+const decimal = (value: number | null | undefined, digits = 2) => value == null ? 'Unknown' : value.toLocaleString('en-US', {maximumFractionDigits: digits});
+const unitCost = (value: number) => new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4}).format(value);
+
+function Observability({detail}: {detail: ResourceDetail}) {
+  const signals = detail.observability;
+  if (!signals) return <div className="drawer-section"><h3>Observability</h3><Notice>No connector metrics or traces are linked to this resource. Workspace admins can add Prometheus, REST metrics, Tempo or Jaeger connectors in Settings, under Integrations.</Notice><p><Link className="text-link" href="/settings?tab=integrations">Open integrations</Link></p></div>;
+  return <>
+    {signals.latency_reasons.length > 0 && <Notice tone="warning">Latency-sensitive: {signals.latency_reasons.join('; ')}. Review capacity changes against these signals before you approve them.</Notice>}
+    <div className="drawer-section"><h3>Cost per 1,000 requests</h3>
+      <p className="enterprise-amount">{signals.cost_per_1000_requests_usd == null ? 'Unknown' : unitCost(signals.cost_per_1000_requests_usd)}</p>
+      <p className="inline-help">{signals.cost_per_1000_requests_reason || 'Average daily billed cost over the last 30 days, divided by average daily requests from the linked request-rate metric.'}</p></div>
+    <div className="drawer-section"><h3>Linked metrics</h3>{!signals.metrics.length ? <Notice>No metric series are linked to this resource.</Notice> : <div className="summary-table-scroll" tabIndex={0} aria-label="Linked connector metrics"><table className="summary-table"><thead><tr><th>Metric</th><th>Source</th><th>Window</th><th>Coverage</th><th>P50 / P95 / Max</th></tr></thead><tbody>{signals.metrics.map((m, i) => <tr key={`${m.connector}:${m.query_id}:${i}`}><td>{sentence(m.metric === 'custom' ? m.query_id : m.metric)}{m.unit && <small> ({m.unit})</small>}</td><td>{m.connector}</td><td>{m.window_start ? shortDate(m.window_start) : 'Unknown'} – {m.window_end ? shortDate(m.window_end) : 'Unknown'}</td><td>{decimal(m.coverage_pct, 1)}%</td><td>{decimal(m.p50)} / {decimal(m.p95)} / {decimal(m.max)}</td></tr>)}</tbody></table></div>}</div>
+    <div className="drawer-section"><h3>Linked services</h3>{!signals.services.length ? <Notice>No traced services are linked to this resource.</Notice> : <div className="drawer-card-list">{signals.services.map(s => <article key={`${s.connector}:${s.service}`} className="drawer-card"><header><h4>{s.service}</h4><span className="assessment-state unknown">{s.sampled ? `${decimal(s.traces_sampled ?? 0, 0)} sampled traces` : 'Trace metrics'}</span></header>
+      <dl className="settings-key-values"><div><dt>Requests per second</dt><dd>{decimal(s.requests_per_second)}</dd></div><div><dt>Error rate</dt><dd>{s.error_rate_pct == null ? 'Unknown' : `${decimal(s.error_rate_pct)}%`}</dd></div><div><dt>Latency P50 / P95</dt><dd>{decimal(s.latency_p50_ms, 0)} ms / {decimal(s.latency_p95_ms, 0)} ms</dd></div></dl>
+      {s.dependencies.length > 0 && <p className="inline-help">Calls: {s.dependencies.map(d => `${d.service} (${decimal(d.calls, 0)})`).join(', ')}</p>}
+      <small>{s.connector} · {s.window_start ? dateTime(s.window_start) : 'Unknown'} – {s.window_end ? dateTime(s.window_end) : 'Unknown'}</small></article>)}</div>}</div>
+  </>;
 }
 
 function Rules({detail}: {detail: ResourceDetail}) {
@@ -202,6 +221,7 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
     {id: 'findings', label: `Findings (${current.findings.length})`, icon: ListChecks},
     {id: 'evidence', label: 'Evidence', icon: Activity},
     {id: 'costs', label: 'Costs', icon: CircleDollarSign},
+    {id: 'observability', label: current.observability?.latency_reasons.length ? 'Observability (latency-sensitive)' : 'Observability', icon: Gauge},
     {id: 'ai', label: 'AI', icon: BrainCircuit},
     {id: 'decision', label: 'Decision', icon: CheckCircle2},
     {id: 'history', label: 'History', icon: History},
@@ -227,6 +247,7 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
         {tab === 'costs' && <Costs detail={current}/>}
+        {tab === 'observability' && <Observability detail={current}/>}
         {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
         {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}
         {tab === 'history' && <HistoryTab detail={current}/>}

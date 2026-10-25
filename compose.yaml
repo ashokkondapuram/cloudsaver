@@ -54,6 +54,7 @@ x-environment: &environment
   CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED: ${CLOUDSAVER_SAVINGS_RECONCILIATION_ENABLED:-false}
   CLOUDSAVER_AUTO_BILLING_SYNC: ${CLOUDSAVER_AUTO_BILLING_SYNC:-true}
   CLOUDSAVER_BILLING_CONNECTORS: ${CLOUDSAVER_BILLING_CONNECTORS:-[]}
+  CLOUDSAVER_COMMITMENT_SYNC: ${CLOUDSAVER_COMMITMENT_SYNC:-true}
   CLOUDSAVER_TRUSTED_CALLERS: api-gateway
   NO_PROXY: &internal_no_proxy localhost,127.0.0.1,::1,api-gateway,scanner-service,agent-gateway,identity-service,postgres,redis
   no_proxy: *internal_no_proxy
@@ -79,6 +80,14 @@ x-service: &service
 
 x-delivery-environment: &delivery-environment
   CLOUDSAVER_WEBHOOK_PRIMARY: ${CLOUDSAVER_WEBHOOK_PRIMARY:-}
+
+# Connector secrets referenced by name from Settings; only the core API (test probes) and the observability worker receive them.
+x-observability-environment: &observability-environment
+  CLOUDSAVER_OBSERVABILITY_SYNC: ${CLOUDSAVER_OBSERVABILITY_SYNC:-true}
+  CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS: ${CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS:-}
+  CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY: ${CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY:-}
+  CLOUDSAVER_OBSERVABILITY_SECRET_SECONDARY: ${CLOUDSAVER_OBSERVABILITY_SECRET_SECONDARY:-}
+  CLOUDSAVER_OBSERVABILITY_SECRET_TRACES: ${CLOUDSAVER_OBSERVABILITY_SECRET_TRACES:-}
 
 x-worker-environment: &worker-environment
   <<: [*environment, *delivery-environment]
@@ -127,7 +136,7 @@ services:
     networks: [default, platform-link]
     command: [uvicorn, app.main:create_app, --factory, --host, 0.0.0.0, --port, '8002', --workers, '1']
     environment:
-      <<: [*environment, *delivery-environment]
+      <<: [*environment, *delivery-environment, *observability-environment]
       CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY: ${CLOUDSAVER_PROMETHEUS_TOKEN_PRIMARY:-}
       REDIS_URL: redis://redis:6379/1
       CLOUDSAVER_DISTRIBUTED_SCAN_LOCK: 'true'
@@ -245,6 +254,15 @@ services:
       <<: *worker-environment
       AZURE_CONFIG_DIR: /home/appuser/.azure
     volumes: *azure_cache
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  observability-worker:
+    <<: *service
+    profiles: [scheduled]
+    command: [python, -m, workers.observability_sync]
+    stop_grace_period: 60s
+    environment:
+      <<: [*worker-environment, *observability-environment]
     depends_on:
       migrate: {condition: service_completed_successfully}
   scan-worker:

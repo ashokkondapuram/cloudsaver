@@ -242,6 +242,8 @@ class FocusRepository:
             # Findings inherit observed inventory evidence before billing is attached.
             e=dict((inventory.get(key) or {}).get('evidence') or {},**(r.get('evidence') or {}))
             e.update(costs.get(key,{}));r['evidence']=e
+        from app.observability_store import attach_signals
+        attach_signals(self.store,tenant,rows)
         from app.k8s_cost_reconciler import attach_node_costs
         attach_node_costs(result.get('inventory',[]))
         return result

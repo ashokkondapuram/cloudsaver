@@ -39,6 +39,8 @@ def checks(kind,e,add,*,observed_at=None,now=None,protected=()):
     if kind in ('compute','application','database','ai') and (not legacy or 'cpu_latency_correlation_r' in e):
         r=e.get('cpu_latency_correlation_r');valid=type(r) in (int,float) and -1<=r<=1
         result('performance','SLO_LATENCY_CORRELATION',['cpu_latency_correlation_r'],r<=.60 if valid else None,'CPU/latency sensitivity above 0.60 blocks unreviewed capacity reduction.')
+    if kind in ('compute','application','database','ai') and type(e.get('latency_sensitive')) is bool:
+        result('performance','OBSERVED_LATENCY_SENSITIVITY',['latency_sensitive','observed_latency_p95_ms','observed_error_rate_pct'],not e['latency_sensitive'],'Linked traces or latency metrics above connector thresholds block unreviewed capacity reduction.')
     metrics=e.get('metrics') or {};complete=False
     for key in ('cpu_percent','memory_percent','iops','normalized_ru_consumption','ptu_utilization'):
         value=metrics.get(key)

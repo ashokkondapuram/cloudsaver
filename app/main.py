@@ -69,6 +69,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     from app.data_governance_api import create_router as governance_router
     api.include_router(governance_router(evidence_store,current_tenant))
     api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
+    from app.observability_api import create_router as observability_router
+    api.include_router(observability_router(evidence_store,current_tenant))
     from app.v150_analysis import create_router as connected_analysis_router
     api.include_router(connected_analysis_router(store,current_tenant,FocusRepository(evidence_store)))
     from app.ai_advisory import AIGateway
