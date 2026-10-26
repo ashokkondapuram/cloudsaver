@@ -14,6 +14,7 @@ const FIELDS = [
   {key: 'managed_identity_client_id', label: 'Managed identity client ID'},
   {key: 'azure_access', label: 'Azure access method'},
   {key: 'azure_app_client_id', label: 'Azure app client ID'},
+  {key: 'azure_token_audience', label: 'Azure token audience'},
   {key: 'aws_hub_role_arn', label: 'AWS hub role ARN'},
   {key: 'aws_token_audience', label: 'AWS token audience'},
   {key: 'gcp_workload_provider', label: 'GCP workload identity provider'},

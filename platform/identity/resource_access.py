@@ -6,8 +6,8 @@ from uuid import UUID
 from identity.validation import ROLE_ARN_STRICT, WORKLOAD_PROVIDER, matches
 
 RESOURCE_KEYS = (
-    'managed_identity_client_id', 'azure_access', 'azure_app_client_id', 'aws_hub_role_arn',
-    'aws_token_audience', 'gcp_workload_provider', 'gcp_token_audience',
+    'managed_identity_client_id', 'azure_access', 'azure_app_client_id', 'azure_token_audience',
+    'aws_hub_role_arn', 'aws_token_audience', 'gcp_workload_provider', 'gcp_token_audience',
 )
 AUDIENCE = re.compile(r'^(api|https)://[A-Za-z0-9._~:/-]{1,200}$')
 TOKEN_EXCHANGE = 'api://AzureADTokenExchange'
@@ -39,6 +39,7 @@ def env_defaults():
         'azure_access': access,
         'azure_app_client_id': _uuid(os.getenv('CLOUDSAVER_AZURE_APP_CLIENT_ID'), GUID_ERROR)
         if os.getenv('CLOUDSAVER_AZURE_APP_CLIENT_ID') else None,
+        'azure_token_audience': os.getenv('CLOUDSAVER_AZURE_TOKEN_AUDIENCE', TOKEN_EXCHANGE),
         'aws_hub_role_arn': os.getenv('CLOUDSAVER_AWS_HUB_ROLE_ARN') or None,
         'aws_token_audience': os.getenv('CLOUDSAVER_AWS_TOKEN_AUDIENCE', TOKEN_EXCHANGE),
         'gcp_workload_provider': os.getenv('CLOUDSAVER_GCP_WORKLOAD_PROVIDER') or None,
@@ -73,7 +74,7 @@ def normalize_resource_access(value, *, partial=False):
             if not re.fullmatch(ROLE_ARN_STRICT, raw):
                 raise ValueError(ARN_ERROR)
             result[key] = raw
-        elif key in ('aws_token_audience', 'gcp_token_audience'):
+        elif key in ('azure_token_audience', 'aws_token_audience', 'gcp_token_audience'):
             result[key] = _audience(raw)
         elif key == 'gcp_workload_provider':
             if not re.fullmatch(WORKLOAD_PROVIDER, raw):

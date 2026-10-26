@@ -24,6 +24,7 @@ def env_defaults():
         'managed_identity_client_id': _uuid(client_id),
         'azure_access': access,
         'azure_app_client_id': _uuid(os.getenv('CLOUDSAVER_AZURE_APP_CLIENT_ID')),
+        'azure_token_audience': os.getenv('CLOUDSAVER_AZURE_TOKEN_AUDIENCE', TOKEN_EXCHANGE),
         'aws_hub_role_arn': os.getenv('CLOUDSAVER_AWS_HUB_ROLE_ARN') or None,
         'aws_token_audience': os.getenv('CLOUDSAVER_AWS_TOKEN_AUDIENCE', TOKEN_EXCHANGE),
         'gcp_workload_provider': os.getenv('CLOUDSAVER_GCP_WORKLOAD_PROVIDER') or None,

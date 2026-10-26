@@ -89,7 +89,7 @@ def azure_credential(tenant, settings=None):
         app_id = (tenant.get('identity') or {}).get('azure_app_client_id') or cfg.get('azure_app_client_id') or ''
         app_id = _uuid(app_id, 'Set CLOUDSAVER_AZURE_APP_CLIENT_ID or a workspace Azure app client ID.')
         from azure.identity import ClientAssertionCredential
-        audience = cfg.get('aws_token_audience') or TOKEN_EXCHANGE
+        audience = cfg.get('azure_token_audience') or TOKEN_EXCHANGE
         return ClientAssertionCredential(tenant_id=tenant_id, client_id=app_id,
                                          func=lambda: managed_identity_token(audience, cfg, tenant))
     except CredentialError:
@@ -236,6 +236,7 @@ def onboarding(tenant=None, platform=None):
         'azure_access': values.get('azure_access'),
         'azure_app_client_id': values.get('azure_app_client_id'),
         'managed_identity_client_id': values.get('managed_identity_client_id'),
+        'azure_token_audience': values.get('azure_token_audience'),
         'aws_hub_role_arn': values.get('aws_hub_role_arn'),
         'aws_token_audience': values.get('aws_token_audience'),
         'gcp_workload_provider': values.get('gcp_workload_provider'),
