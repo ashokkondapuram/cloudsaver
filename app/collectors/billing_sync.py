@@ -53,15 +53,23 @@ def bindings(tenant):
 
 
 def _post(url, token, body):
+    import time
     with httpx.Client(timeout=httpx.Timeout(25, connect=5), follow_redirects=False) as client:
-        with client.stream('POST', url, headers={'Authorization':'Bearer '+token}, json=body) as response:
-            response.raise_for_status()
-            raw = bytearray()
-            for chunk in response.iter_bytes():
-                raw.extend(chunk)
-                if len(raw) > 4_000_000:
-                    raise ValueError('Billing response exceeds the limit')
-            return json.loads(raw,parse_float=Decimal)
+        for attempt in range(4):
+            with client.stream('POST', url, headers={'Authorization':'Bearer '+token}, json=body) as response:
+                if response.status_code == 429 and attempt < 3:
+                    response.read()
+                    try: wait = min(float(response.headers.get('retry-after', 5)), 60)
+                    except ValueError: wait = 5
+                    time.sleep(wait)
+                    continue
+                response.raise_for_status()
+                raw = bytearray()
+                for chunk in response.iter_bytes():
+                    raw.extend(chunk)
+                    if len(raw) > 4_000_000:
+                        raise ValueError('Billing response exceeds the limit')
+                return json.loads(raw,parse_float=Decimal)
 
 
 def _azure_query(url, token, kind, start, end):
