@@ -140,6 +140,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Portal browser workflows and error recovery
+        run: npm run test:e2e
       - run: npm sbom --sbom-format=cyclonedx > portal-sbom.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

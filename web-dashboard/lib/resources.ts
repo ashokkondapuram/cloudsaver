@@ -1,6 +1,7 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
 import {api} from './api';
+import {loadResourcePages,readBatchPage} from './resource-pages';
 import type {Finding} from './types';
 
 export type PillarStatus = 'observed' | 'risk' | 'unknown';
@@ -71,39 +72,41 @@ export async function resourceKeyOf(finding: Finding) {
 }
 
 export function useResources(scanId: string | undefined, token: string, enabled = true) {
-  const [page, setPage] = useState<ResourcePage | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
+  const [state, setState] = useState<{key:string;page:ResourcePage|null;error:string}>({key:'',page:null,error:''});
+  const [version, setVersion] = useState(0);
+  const key=JSON.stringify([scanId,token,enabled,version]);
   const reload = useCallback(() => setVersion(value => value + 1), []);
   useEffect(() => {
-    if (!scanId || !enabled) {setPage(null); return;}
     const request = new AbortController();
-    setError('');
-    api<ResourcePage>(`/scans/${scanId}/resources?limit=1000`, token, {signal: request.signal})
-      .then(result => {if (!request.signal.aborted) setPage(result);})
-      .catch(cause => {if (!request.signal.aborted) {setPage(null); setError((cause as Error).message);}});
+    setState({key,page:null,error:''});
+    if (scanId && enabled) loadResourcePages((path,options)=>api(path,token,options),scanId,request.signal)
+      .then(page=>{if(!request.signal.aborted)setState({key,page,error:''});})
+      .catch(cause=>{if(!request.signal.aborted)setState({key,page:null,error:cause instanceof Error?cause.message:'Resource evidence could not be loaded.'});});
     return () => request.abort();
-  }, [scanId, token, enabled, version]);
-  return {page, error, reload};
+  }, [scanId,token,enabled,version,key]);
+  return {page:state.key===key?state.page:null,error:state.key===key?state.error:'',reload};
 }
 
 export function useActiveBatch(scanId: string | undefined, token: string, onSettled: () => void) {
-  const [batch, setBatch] = useState<Batch | null>(null), [version, setVersion] = useState(0);
+  const [state, setState] = useState<{key:string;batch:Batch|null;error:string;loading:boolean}>({key:'',batch:null,error:'',loading:true}), [version, setVersion] = useState(0);
+  const key=JSON.stringify([scanId,token,version]);
   const refresh = useCallback(() => setVersion(value => value + 1), []);
   useEffect(() => {
-    if (!scanId) {setBatch(null); return;}
+    if (!scanId) return;
     const request = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let previous: string | null = null;
     const poll = () => api<{items: Batch[]}>(`/ai-batches?scan_id=${scanId}&limit=1`, token, {signal: request.signal}).then(result => {
       if (request.signal.aborted) return;
-      const latest = result.items[0] || null;
-      setBatch(latest);
+      const latest = readBatchPage(result,scanId);
+      setState({key,batch:latest,error:'',loading:false});
       const progress = latest ? JSON.stringify([latest.status, latest.counts]) : null;
       if (previous !== null && progress !== previous) onSettled();
       previous = progress;
       if (latest && ACTIVE_BATCH.includes(latest.status)) timer = setTimeout(poll, latest.status === 'waiting_for_budget' ? 60000 : 5000);
-    }).catch(() => {if (!request.signal.aborted) timer = setTimeout(poll, 30000);});
+    }).catch(() => {if (!request.signal.aborted){setState(current=>({key,batch:current.key===key?current.batch:null,error:'AI assessment status is unavailable. Existing work may still be running; check status before starting another assessment.',loading:false}));timer=setTimeout(poll,30000);}});
     poll();
     return () => {request.abort(); if (timer) clearTimeout(timer);};
   }, [scanId, token, version, onSettled]);
-  return {batch, refresh};
+  return {batch:state.key===key?state.batch:null,error:state.key===key?state.error:'',loading:state.key===key?state.loading:true,refresh};
 }

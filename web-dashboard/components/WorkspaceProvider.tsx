@@ -1,7 +1,8 @@
 'use client';
 
 import {createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode} from 'react';
-import {api} from '../lib/api';
+import {api,watchUnauthorized} from '../lib/api';
+import {validateProfile,validateScan,validateWorkspaceEvidence} from '../lib/session-contract';
 import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
 
@@ -62,6 +63,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const [notice, setNotice] = useState<WorkspaceState['notice']>(null);
   const findingFocusKey=useRef<string|null>(null);
   const session = useRef(0);
+  const activeCredential=useRef('');
   const connecting = useRef<AbortController | null>(null);
 
   useEffect(() => {try {const saved = localStorage.getItem('cloudsaver:ui:density'); if (saved === 'compact' || saved === 'medium' || saved === 'relaxed') updateDensity(saved);} catch {}}, []);
@@ -109,6 +111,8 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
         api<Entitlements>('/billing/entitlements', nextToken, {signal: controller.signal}),
       ]);
       if (session.current !== version) return;
+      validateWorkspaceEvidence(me,history,plan);
+      activeCredential.current=nextToken;
       setToken(nextToken); setWorkspace(me); setEntitlements(plan);
       setScans(history); setSelected(history[0]?.scan_id || '');
       clearContext(); setOverlay(null);
@@ -122,7 +126,13 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     } finally {if (session.current === version) setBusy('');}
   }
 
+  useEffect(()=>{
+    if(!token)return;
+    return watchUnauthorized(token,()=>{if(activeCredential.current!==token)return;disconnect();setError('Your session ended. Connect again to continue.');});
+  },[token]);
+
   function disconnect() {
+    activeCredential.current='';
     session.current++; connecting.current?.abort();
     try {sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);} catch {}
     setToken(''); setWorkspace(null); setEntitlements(null); setScans([]); setSelected('');
@@ -135,6 +145,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     try {
       const result = await api<Scan>('/scans/multi-cloud', token, {body: {providers}});
       if (version !== session.current) return;
+      validateScan(result);
       setScans(previous => [result, ...previous.filter(s => s.scan_id !== result.scan_id)]);
       setSelected(result.scan_id); clearContext(); notify(`Scan completed. ${result.total_items_found.toLocaleString()} findings ready to review.`);
     } catch (cause) {if (version === session.current) {const message = cause instanceof Error ? cause.message : 'Scan could not be completed.'; setError(message); notify(message, 'error');}}
@@ -147,6 +158,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     try {
       const [history, me, plan] = await Promise.all([api<Scan[]>('/scans', token), api<Workspace>('/me', token), api<Entitlements>('/billing/entitlements', token)]);
       if (version !== session.current) return;
+      validateWorkspaceEvidence(me,history,plan);
       setScans(history); setWorkspace(me); setEntitlements(plan);
       setSelected(previous => history.some(s => s.scan_id === previous) ? previous : history[0]?.scan_id || '');
       clearContext(); notify('Workspace is up to date.');
@@ -157,7 +169,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   async function reloadProfile() {
     const version = session.current;
     const [me, plan] = await Promise.all([api<Workspace>('/me', token), api<Entitlements>('/billing/entitlements', token)]);
-    if (version === session.current) {setWorkspace(me); setEntitlements(plan);}
+    if (version === session.current) {validateProfile(me,plan);setWorkspace(me); setEntitlements(plan);}
   }
 
   const openFinding = useCallback((value: Finding, context: Finding[] = []) => {

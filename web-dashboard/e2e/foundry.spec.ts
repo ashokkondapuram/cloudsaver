@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './test';
 import {mockWorkspace, navigate, scanId, subscriptionId, scanTime} from './workspace-fixture';
 import {foundryView} from './foundry-fixture';
 

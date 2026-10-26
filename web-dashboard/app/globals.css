@@ -201,3 +201,5 @@
 .panel>form.drawer-section>h3{margin:20px 24px 0}
 /* Keep action controls inside narrow screens; table scrolling remains local. */
 @media(max-width:600px){.page-heading-actions{width:100%;max-width:100%;min-width:0;flex-wrap:wrap}.page-heading-actions>*{max-width:100%}}
+
+.grid-footer:has(nav[aria-label="Resource pages"]){flex-wrap:wrap;gap:8px}.grid-footer nav[aria-label="Resource pages"]{display:flex;flex-wrap:wrap;gap:8px}

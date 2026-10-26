@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './test';
 import {resourceCsv} from '../lib/resource-csv';
 import type {ResourceRow} from '../lib/resources';
 import {mockWorkspace,navigate} from './workspace-fixture';

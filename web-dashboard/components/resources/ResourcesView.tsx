@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {BrainCircuit, ChevronRight, Download, FileCode2, Filter, Loader2, Printer, Search, Server, ShieldCheck, X} from 'lucide-react';
-import {categories, categoryOf, knownPrice, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
+import {categories, categoryOf, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
 import {identityOf} from '../../lib/resources';
 import {resourceCsv} from '../../lib/resource-csv';
 import type {Finding} from '../../lib/types';
@@ -19,6 +19,7 @@ import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 
 type Filters = {service_category:string;pillar_status:string;provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string};
 const empty: Filters = {service_category:'',pillar_status:'',provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: ''};
+const GRID_PAGE_SIZE=50;
 const priorityRank: Record<string, number> = {critical: 0, high: 1, evidence_required: 2};
 
 function matches(row: ResourceRow, filters: Filters, query: string) {
@@ -88,15 +89,13 @@ function BatchBanner({batch, onCancel, canAdmin}: {batch: Batch; onCancel: () =>
   </div>;
 }
 
-function matchesDiscovery(row: ResourceRow, scanFindings: Finding[], category: Category|'', intent: Intent, pricing: Pricing) {
-  const related = scanFindings.filter(f => identityOf(row.provider, row.resource_id) === identityOf(f.cloud_provider || 'azure', f.resource_id));
+function matchesDiscovery(row:ResourceRow,related: Finding[], category: Category|'', intent: Intent, pricing: Pricing) {
   if (!category && !intent && !pricing) return true;
-  if (!related.length) return false;
-  if (category && !related.some(f => categoryOf(f) === category)) return false;
-  if (intent === 'protected' && !related.some(f => protectionSignals(f).length > 0)) return false;
-  if (intent === 'review' && related.some(f => protectionSignals(f).length > 0)) return false;
-  if (pricing === 'known' && !related.some(knownPrice)) return false;
-  if (pricing === 'unknown' && !related.some(f => !knownPrice(f))) return false;
+  if(category&&categoryOf(row)!==category)return false;
+  if (intent === 'protected' && !row.protected_reasons.length&&!related.some(f => protectionSignals(f).length > 0)) return false;
+  if (intent === 'review' && (row.protected_reasons.length>0||related.some(f => protectionSignals(f).length > 0))) return false;
+  if (pricing === 'known' && row.retail_estimate_usd===null) return false;
+  if (pricing === 'unknown' && row.retail_estimate_usd!==null) return false;
   return true;
 }
 
@@ -105,25 +104,30 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const router = useRouter(), params = useSearchParams();
   const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
   const {page, error, reload} = useResources(scan?.scan_id, token, live);
-  const {batch, refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
+  const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
   const [filters, setFilters] = useState<Filters>(empty), [query, setQuery] = useState(''), [selected, setSelected] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<Category | ''>(initialCategory), [intent, setIntent] = useState<Intent>(initialIntent), [pricing, setPricing] = useState<Pricing>(initialPricing);
+  const [offset,setOffset]=useState(0);
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
   const deferred = useDeferredValue(query);
   const openKey = params.get('resource');
-  useEffect(() => {setFilters(f => ({...f, provider: params.get('provider') || initialProvider || ''})); setCategory(initialCategory); setIntent(initialIntent); setPricing(initialPricing);}, [params, initialProvider, initialCategory, initialIntent, initialPricing]);
-  useEffect(() => {setSelected(new Set());}, [scan?.scan_id]);
+  useEffect(() => {setFilters(f => {const provider=params.get('provider')||initialProvider||'';return f.provider===provider?f:{...f,provider};}); setCategory(initialCategory); setIntent(initialIntent); setPricing(initialPricing);}, [params, initialProvider, initialCategory, initialIntent, initialPricing]);
+  useEffect(() => {setSelected(new Set());}, [scan?.scan_id,token,scope]);
   const findings = scan?.findings || [];
-  const rows = useMemo(() => (page?.items || []).filter(r => (!scope.length || scope.includes(r.scope_id)) && matches(r, filters, deferred) && matchesDiscovery(r, findings, category, intent, pricing)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred, findings, category, intent, pricing, scope]);
-  const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)), [page, selected]);
+  const findingIndex=useMemo(()=>{const index=new Map<string,Finding[]>();for(const finding of findings){const key=identityOf(finding.cloud_provider||'azure',finding.resource_id);const group=index.get(key)||[];group.push(finding);index.set(key,group);}return index;},[findings]);
+  const rows = useMemo(() => (page?.items || []).filter(r => (!scope.length || scope.includes(r.scope_id)) && matches(r, filters, deferred) && matchesDiscovery(r,findingIndex.get(identityOf(r.provider,r.resource_id))||[],category,intent,pricing)).sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]), [page, filters, deferred, findingIndex, category, intent, pricing, scope]);
+  useEffect(()=>{setOffset(0);},[filters,deferred,category,intent,pricing,scope]);
+  const start=Math.min(offset,Math.max(0,Math.ceil(rows.length/GRID_PAGE_SIZE)-1)*GRID_PAGE_SIZE);
+  const displayed=rows.slice(start,start+GRID_PAGE_SIZE);
+  const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)&&(!scope.length||scope.includes(r.scope_id))), [page, selected,scope]);
   const reviewFindings = useMemo(() => {
     if (!scan || !chosen.length) return [];
     const keys = new Set(chosen.map(r => identityOf(r.provider, r.resource_id)));
     return scan.findings.filter(f => keys.has(identityOf(f.cloud_provider || 'azure', f.resource_id)));
   }, [scan, chosen]);
   useEffect(() => {setSelection(reviewFindings); return () => setSelection([]);}, [reviewFindings, setSelection]);
-  const providerCounts = useMemo(() => Object.fromEntries([...new Set(findings.map(f => f.cloud_provider || 'azure'))].map(p => [p, findings.filter(f => (f.cloud_provider || 'azure') === p).length])), [findings]);
-  const categoryCounts = useMemo(() => Object.fromEntries(categories.map(([id]) => [id, findings.filter(f => categoryOf(f) === id).length])), [findings]);
+  const providerCounts=useMemo(()=>{const counts:Record<string,number>={};for(const row of page?.items||[])counts[row.provider]=(counts[row.provider]||0)+1;return counts;},[page]);
+  const categoryCounts=useMemo(()=>{const counts:Record<string,number>={};for(const row of page?.items||[]){const category=categoryOf(row);counts[category]=(counts[category]||0)+1;}return counts;},[page]);
   const open = useCallback((key: string | null) => {
     const next = new URLSearchParams(params.toString());
     if (key) next.set('resource', key); else next.delete('resource');
@@ -143,7 +147,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     setExporting(true);
     try {
       downloadFile(resourceCsv(rows), `cloudsaver-resources-${scan.scan_id}.csv`, 'text/csv;charset=utf-8');
-      notify(`CSV download prepared for ${rows.length.toLocaleString()} visible resources.`);
+      notify(`CSV download prepared for ${rows.length.toLocaleString()} matching resources.`);
     } catch (cause) {notify((cause as Error).message, 'error');} finally {setExporting(false);}
   }
   async function cancel() {
@@ -164,6 +168,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
   return <>
     {page.total > page.items.length && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
+    {batchError&&<div role="status"><Notice tone="warning">{batchError} <button className="text-button" onClick={refreshBatch}>Check assessment status</button></Notice></div>}
     <div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
       <article><span>AI assessed</span><strong>{(summary.ai_status.completed || 0).toLocaleString()}</strong><small>{(summary.ai_status.stale || 0).toLocaleString()} stale · {(summary.ai_status.not_run || 0).toLocaleString()} not run</small></article>
@@ -177,10 +182,10 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
         <div className="grid-display-controls">
           <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
-          {canAdmin && <button className="button primary" disabled={!!batch && ACTIVE_BATCH.includes(batch.status)} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
+          {canAdmin && <button className="button primary" disabled={batchLoading||!!batchError||(!!batch && ACTIVE_BATCH.includes(batch.status))} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
         </div></div>
       <div className="explorer-facets">
-        <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{findings.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
+        <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{page.items.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
         <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={() => setCategory('')}>All categories</button>{categories.filter(([id]) => (categoryCounts[id] || 0) > 0).map(([id, name]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(category === id ? '' : id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
       </div>
       <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing} onClick={() => {setIntent(''); setPricing('');}}>All evidence</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
@@ -198,7 +203,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
       <div className="grid-scroll" tabIndex={0} aria-label="Scrollable resource table">
         <table className="data-table resource-table">
           <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
-          <tbody>{rows.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key)}>
+          <tbody>{displayed.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key)}>
             <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.resource_name}`} checked={selected.has(r.resource_key)} onChange={() => toggle(r.resource_key)}/></td>
             <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]} {r.lifecycle_delta&&<span className="mini-badge">{r.lifecycle_delta}</span>}</small></button></td>
             <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
@@ -210,7 +215,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
           {!rows.length && <tr><td colSpan={13}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
-      <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length.toLocaleString()} matching resources</span>{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
+      <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length?`${start+1}–${Math.min(start+GRID_PAGE_SIZE,rows.length)} of `:''}{rows.length.toLocaleString()} matching resources</span>{rows.length>GRID_PAGE_SIZE&&<nav aria-label="Resource pages"><button className="button secondary small" disabled={!start} onClick={()=>setOffset(Math.max(0,start-GRID_PAGE_SIZE))}>Previous resources</button><button className="button secondary small" disabled={start+GRID_PAGE_SIZE>=rows.length} onClick={()=>setOffset(start+GRID_PAGE_SIZE)}>Next resources</button></nav>}{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
       {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode2 size={16}/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17}/></button></div>}
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>

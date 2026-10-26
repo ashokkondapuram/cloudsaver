@@ -1,4 +1,4 @@
-import {expect,test,Page} from '@playwright/test';
+import {expect,test,Page} from './test';
 import {mockEnterprise} from './enterprise-fixture';
 
 // Browser-only fixtures. Every API call is intercepted; no cloud, DB, broker,

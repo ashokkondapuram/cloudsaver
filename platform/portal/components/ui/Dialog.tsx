@@ -14,6 +14,7 @@ export function Dialog({open, onClose, title, children, wide = false, dismissibl
     if (!open || !element) return;
     const previous = document.activeElement as HTMLElement | null;
     element.showModal();
+    element.querySelector<HTMLElement>('[data-autofocus]')?.focus({preventScroll:true});
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {

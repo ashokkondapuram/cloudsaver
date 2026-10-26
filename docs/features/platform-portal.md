@@ -187,3 +187,7 @@ Names only. Keep secret values in `platform/.env` or a secrets manager and never
 - [Onboarding and access](onboarding-and-access.md)
 - [MANAGED_IDENTITY_ROLES.md](../MANAGED_IDENTITY_ROLES.md)
 - [ENVIRONMENT.md](../ENVIRONMENT.md)
+
+## Local UI reliability verification
+
+The [detail verification report](../DETAIL_RELIABILITY_VERIFICATION.md) records the added customer-directory browser journeys, request-generation guards, explicit uncertain-write messages, list-response checks and keyboard focus recovery. These checks use synthetic browser fixtures; they are not evidence of real operator authentication or complete portal acceptance.

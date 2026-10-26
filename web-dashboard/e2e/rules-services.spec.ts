@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './test';
 import {mockWorkspace, navigate} from './workspace-fixture';
 
 const rule = {id: 'AZURE_DISK_UNATTACHED_RETENTION', name: 'Retained unattached disk review',

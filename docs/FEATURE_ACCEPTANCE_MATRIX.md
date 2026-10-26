@@ -1,6 +1,6 @@
 # Feature completion and acceptance matrix
 
-Status: local hardening and verification; not an assertion of 100% feature or production readiness. See [the verification record](AETHERGUARD_LOCAL_VERIFICATION.md) for exact results and limits.
+Status: local hardening and verification; not an assertion of 100% feature or production readiness. See [the verification record](AETHERGUARD_LOCAL_VERIFICATION.md) for the initial results and limits. [Detailed UI/request reliability verification](DETAIL_RELIABILITY_VERIFICATION.md) records the subsequent local pass.
 
 The requested outcome is that every supported feature works. A unit test, build or passing browser fixture verifies a particular contract; it does not establish live provider permissions, financial truth, recovery, application quality or compliance. The approved environment for this work is local tests only, with no connected cloud sandbox.
 

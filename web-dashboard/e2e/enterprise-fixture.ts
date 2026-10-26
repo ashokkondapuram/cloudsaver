@@ -1,4 +1,4 @@
-import type {Page} from '@playwright/test';
+import type {Page} from './test';
 import {scanId,subscriptionId} from './workspace-fixture';
 export const assessmentId='55555555-5555-4555-8555-555555555555';
 export function billingFile(){return {source_id:'test-export-october',provider:'azure',sub_account_id:subscriptionId,billing_currency:'USD',period_start:'2026-10-01',period_end:'2026-10-22',complete:true,records:Array.from({length:21},(_,i)=>({x_ChargeId:'test-charge-'+i,ProviderName:'Azure',BillingAccountId:'test-billing-account',SubAccountId:subscriptionId,BillingCurrency:'USD',ChargePeriodStart:new Date(Date.UTC(2026,9,i+1)).toISOString(),ChargePeriodEnd:new Date(Date.UTC(2026,9,i+2)).toISOString(),ResourceId:null,ChargeCategory:'Usage',BilledCost:'10.00000000',EffectiveCost:'10.00000000',ListCost:'20.00000000'}))};}

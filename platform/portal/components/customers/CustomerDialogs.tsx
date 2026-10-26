@@ -74,7 +74,7 @@ export function CustomerFormDialog({open, customer, onClose, onSaved}: {
     <form className="dialog-form" onSubmit={submit} noValidate={!!customer}>
       <div className="dialog-content">
         {error && <Notice tone="error">{error}</Notice>}
-        <label className="field">Customer name<input type="text" value={name} onChange={event => setName(event.target.value)} maxLength={120} required autoFocus/></label>
+        <label className="field">Customer name<input type="text" value={name} onChange={event => setName(event.target.value)} maxLength={120} required autoFocus data-autofocus/></label>
         <label className="field">Notes<span className="field-hint">Optional. Only platform operators and auditors can see notes.</span><textarea rows={4} value={notes} onChange={event => setNotes(event.target.value)} maxLength={2000}/></label>
         {customer && <>
           <label className="field">Billing email

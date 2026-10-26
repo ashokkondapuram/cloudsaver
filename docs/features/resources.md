@@ -1,6 +1,6 @@
 # Resources
 
-Resources is the per-resource review workspace. CloudSaver merges every finding and inventory row for a resource in the selected scan into one deterministic five-pillar assessment (cost, reliability, performance, security and operations), then adds imported billing, retail estimates, AI status, reviewer decisions and changes since the previous comparable scan. From here you can filter and search resources, open the **Resource details** drawer, record accept, dismiss or defer decisions, review history, export a CSV, print a report and, as an administrator, start an AI assessment batch. Nothing on this page changes a cloud resource. This page reflects the code as of Oct 25, 2026.
+Resources is the per-resource review workspace. CloudSaver merges every finding and inventory row for a resource in the selected scan into one deterministic five-pillar assessment (cost, reliability, performance, security and operations), then adds imported billing, retail estimates, AI status, reviewer decisions and changes since the previous comparable scan. From here you can filter and search resources, open the **Resource details** drawer, record accept, dismiss or defer decisions, review history, export a CSV, print a report and, as an administrator, start an AI assessment batch. Nothing on this page changes a cloud resource. This page reflects the locally hardened code as of Oct 26, 2026. See [detailed reliability verification](../DETAIL_RELIABILITY_VERIFICATION.md) for measured checks and limits.
 
 ## Where to find it
 
@@ -19,7 +19,7 @@ Resources is the per-resource review workspace. CloudSaver merges every finding 
   - Provider pills, category pills and quick views (**All evidence**, **Protected intent**, **Missing prices**) filter in the browser.
   - Drop-downs filter by cloud provider, service category, pillar status (`observed`, `risk`, `unknown`), review priority (`critical`, `high`, `evidence_required`), AI status (`not_run`, `queued`, `running`, `completed`, `stale`, `failed`), AI risk and decision.
   - Search matches resource names and IDs.
-- **Read the table**: each row shows findings count, priority, pillar dots, 30-day billed USD, 30-day effective USD, retail opportunity, AI risk, AI status, decision and a lifecycle badge (`new`, `persisting` or `regressed`).
+- **Read the table**: supported inventories are read in pages of 1,000 up to 10,000 resources per selected scan; the table displays 50 matching resources per page. Changing search or filters returns to the first table page.  each row shows findings count, priority, pillar dots, 30-day billed USD, 30-day effective USD, retail opportunity, AI risk, AI status, decision and a lifecycle badge (`new`, `persisting` or `regressed`).
 - **Open Resource details**: select a row to open the drawer. Its header shows badges (provider, **Protected intent** or **Review required**, priority, AI status, decision), pillar dots and key facts: **30-day billed**, **Retail estimate**, **Evidence coverage** and **Observed**. Header actions are **Draft a tag or snapshot plan** (opens `/agents?resource=<id>`) and **AI assessment**. The drawer tabs are:
   - **Overview**: five-pillar radar and per-check explanations with evidence fields, resource identity, required guardrails, policy version and evidence fingerprint. Warnings appear for protected resources and observations older than 24 hours.
   - **Findings**: each finding with its per-finding architectural assessment and optional AI risk advisory.
@@ -30,7 +30,7 @@ Resources is the per-resource review workspace. CloudSaver merges every finding 
   - **History**: changes across up to 10 recent scans, AI assessment history and decisions.
   - **Code**: generate review-only Bash or Terraform for the resource's findings, when the plan and finding types allow it.
 - **Record a decision** (`TenantAdmin`): choose **Accept**, **Dismiss** or **Defer**. A note is required for dismiss and defer. A defer date is optional and must be within the next 365 days. When the defer date passes, the resource reopens with decision `none`.
-- **Export CSV**: download `cloudsaver-resources-<scan_id>.csv` for the rows that match the drop-down filters and search.
+- **Export CSV**: download `cloudsaver-resources-<scan_id>.csv` for all loaded rows matching the scope, discovery/quick-view filters, drop-down filters and search, across table pages. Unknown values stay empty and spreadsheet expressions are neutralized.
 - **Print report**: open a print-friendly report of every loaded resource with pillars, AI summary, suggested actions and decisions.
 - **Run AI assessment** (`TenantAdmin`): select resources (or all in the scan), choose an approved target and acknowledge external processing. A progress banner tracks the batch; you can cancel queued items.
 - **Review code** for selected rows: the bulk toolbar opens the review flow (`Shift` + `R`).
@@ -130,3 +130,7 @@ AI-specific configuration is described in [AI assessments](ai-assessments.md).
 - [docs/LEAN_CORE_IMPLEMENTATION.md](../LEAN_CORE_IMPLEMENTATION.md)
 - [docs/FINANCIAL_OUTCOMES.md](../FINANCIAL_OUTCOMES.md)
 - [docs/UI_UX.md](../UI_UX.md)
+
+## Loading and status recovery
+
+Inventory loading is bound to the active credential and selected scan. Incomplete or changing pages show an evidence error instead of a partial complete-looking report. During initial AI batch status loading, or when its counters/status cannot be verified, new assessment submission is disabled. **Check assessment status** retries the status read; it does not invoke a model or replay existing work. A credential rejection clears the workspace session; a scope denial keeps the authenticated session and displays the access error.

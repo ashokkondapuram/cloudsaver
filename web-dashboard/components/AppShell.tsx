@@ -74,7 +74,7 @@ function Brand({compact = false}: {compact?: boolean}) {
 }
 
 function ConnectionForm({switching = false}: {switching?: boolean}) {
-  const {connect, busy} = useWorkspace();
+  const {connect, busy,error:sessionError} = useWorkspace();
   const [credential, setCredential] = useState('');
   const [error, setError] = useState('');
   async function submit(event: React.FormEvent) {
@@ -84,7 +84,7 @@ function ConnectionForm({switching = false}: {switching?: boolean}) {
   return <form onSubmit={submit} className="connection-form">
     {!switching && <><span className="pretitle">YOUR CLOUD. A CLEARER PICTURE.</span><h1>Connect your workspace</h1><p>Bring your cloud resources, cost evidence, and review workflows into focus.</p></>}
     {switching && <p>Connect with another authorized workspace credential. Your current workspace stays open until the new connection is verified.</p>}
-    {error && <Notice tone="error">{error}</Notice>}
+    {(error||(!switching&&sessionError)) && <Notice tone="error">{error||sessionError}</Notice>}
     <label htmlFor={switching ? 'switch-key' : 'access-key'}>Workspace access key or Entra Bearer token</label>
     <div className="credential-input"><LockKeyhole size={17}/><input id={switching ? 'switch-key' : 'access-key'} type="password" autoComplete="off" value={credential} onChange={event => setCredential(event.target.value)} placeholder="Paste your workspace credential" required disabled={!!busy}/></div>
     <button className="button primary connection-submit" type="submit" disabled={!!busy || !credential.trim()}>{busy ? <><Loader2 className="spin" size={17}/>Verifying workspace…</> : <>Connect workspace<ArrowRight size={17}/></>}</button>

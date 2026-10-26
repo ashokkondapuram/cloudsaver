@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect} from './test';
 import {mockWorkspace,navigate} from './workspace-fixture';
 
 test('mobile resources keep document scrolling inside the viewport',async({page})=>{

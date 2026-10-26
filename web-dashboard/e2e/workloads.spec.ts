@@ -1,4 +1,4 @@
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,type Page} from './test';
 import {mockWorkspace,scanId,subscriptionId,scanTime} from './workspace-fixture';
 import {groupWorkloads} from '../lib/workloads.mjs';
 const resourceId=`/subscriptions/${subscriptionId}/resourceGroups/qa/providers/Microsoft.Compute/virtualMachines/payments-vm`;

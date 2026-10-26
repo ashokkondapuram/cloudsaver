@@ -202,6 +202,11 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
 
 export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId: string; resourceKey: string | null; onClose: () => void; onChange: () => void}) {
   const {token} = useWorkspace();
+  return resourceKey ? <ResourceDetailDrawer key={JSON.stringify([scanId,resourceKey,token])} scanId={scanId} resourceKey={resourceKey} onClose={onClose} onChange={onChange}/> : null;
+}
+
+function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:string;resourceKey:string;onClose:()=>void;onChange:()=>void}) {
+  const {token} = useWorkspace();
   const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
   useEffect(() => {
     if (!resourceKey) return;

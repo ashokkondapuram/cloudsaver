@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './test';
 import {opportunityTotals} from '../lib/finops';
 import type {Finding} from '../lib/types';
 

@@ -5,7 +5,7 @@ export const categories=[['storage','Storage'],['compute','Compute'],['database'
 export type Category=typeof categories[number][0];
 export type Intent=''|'protected'|'review';
 export type Pricing=''|'known'|'unknown';
-export function categoryOf(finding:Finding):Category{
+export function categoryOf(finding:Pick<Finding,'resource_type'>):Category{
   const kind=finding.resource_type.toLowerCase();
   if(['disk','volume','storage'].some(s=>kind.includes(s)))return 'storage';
   if(['rds','sql','database','alloydb','aurora'].some(s=>kind.includes(s)))return 'database';

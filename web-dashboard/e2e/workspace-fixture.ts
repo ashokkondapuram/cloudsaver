@@ -1,10 +1,11 @@
 import {createHash} from 'node:crypto';
-import {Page,expect} from '@playwright/test';
+import {Page,expect} from './test';
+
 import {foundryView} from './foundry-fixture';
 
 function identityOf(provider:string,resourceId:string){return `${provider}|${provider==='azure'?resourceId.toLowerCase():resourceId}`;}
 function resourceKey(provider:string,resourceId:string){return createHash('sha256').update(identityOf(provider,resourceId)).digest('hex');}
-function buildResourceItems(findings:ReturnType<typeof createFindings>){
+export function buildResourceItems(findings:ReturnType<typeof createFindings>){
   const groups=new Map<string,ReturnType<typeof createFindings>>();
   for(const f of findings){
     const provider=f.cloud_provider||'azure';
@@ -20,7 +21,7 @@ function buildResourceItems(findings:ReturnType<typeof createFindings>){
     return {resource_key:resourceKey(provider,f.resource_id),provider,resource_id:f.resource_id,resource_name:f.resource_name,resource_type:f.resource_type,resource_group:f.resource_group,scope_id:f.scope_id||f.subscription_id||'',service_category:'storage',finding_count:group.length,rule_ids:group.map(x=>x.rule_id),review_priority:'high',disposition:'requires_review',protected_reasons:[],risk_level:'unknown',risk_check_codes:[],evidence_gap_codes:[],evidence_coverage:{observed:2,total:10},billed_cost_usd:provider==='azure'?12.5:null,effective_cost_usd:15,retail_estimate_usd:retail,evidence_digest:'b'.repeat(64),pillars:{cost:'unknown',reliability:'unknown',performance:'unknown',security:'unknown',operations:'observed'},ai:{status:'not_run',risk_level:null,summary:null,actions:[],assessment_id:null,created_at:null,reason:null},decision:null};
   });
 }
-function resourceDetail(scanId:string,findings:ReturnType<typeof createFindings>,key:string){
+export function resourceDetail(scanId:string,findings:ReturnType<typeof createFindings>,key:string){
   const row=buildResourceItems(findings).find(r=>r.resource_key===key)||buildResourceItems(findings)[0];
   const related=findings.filter(f=>identityOf(row.provider,f.resource_id)===identityOf(row.provider,row.resource_id));
   const retail=related[0]?.estimated_monthly_waste_usd??null;
@@ -52,7 +53,6 @@ export function createFindings(count=12){
 }
 
 export async function mockWorkspace(page:Page,options:{role?:string;human?:boolean;count?:number;legacy?:boolean;publishing?:boolean;ai?:boolean;protected?:boolean;zeroPrice?:boolean}={}){
-  page.on('pageerror',error=>console.error('Browser runtime:',error.message));
   const findings=createFindings(options.count??12);
   if(options.zeroPrice)findings[0].estimated_monthly_waste_usd=0;
   if(options.protected)(findings[0].evidence.tags as Record<string,string>).Role='DR-Standby';
