@@ -27,6 +27,17 @@ def _auto_submit(jobs,tenant,now):
     except WorkflowConflict:pass
 
 
+def _recover_orphaned_jobs(settings):
+    """Only one leader process holds the advisory lock below, so any job still marked 'running' at
+    startup belongs to a previous process that is gone (crash, deploy, restart) -- its in-memory
+    progress is lost and its long lease would otherwise strand it for hours. Requeue it immediately."""
+    jobs=BillingJobs(EnterpriseStore(settings));now=datetime.now(timezone.utc).isoformat()
+    for tenant in settings.tenants:
+        with jobs.store.transaction(tenant['tenant_id'],write=True) as db:
+            db.execute("UPDATE billing_sync_jobs SET state='queued',lease_token=NULL,lease_until=NULL,updated_at=%s "
+                       "WHERE tenant_id=%s AND state IN ('running','cancel_requested')",(now,tenant['tenant_id']))
+
+
 def run_once(settings,leader_probe=None):
     from app.config import require_directory_freshness
     require_directory_freshness(settings)
@@ -54,6 +65,8 @@ def main():
     with psycopg.connect(settings.database_url,connect_timeout=5,autocommit=True) if settings.database_url else nullcontext(None) as lock:
         if lock:
             if not lock.execute("SELECT pg_try_advisory_lock(hashtextextended('cloudsaver:billing-worker',0))").fetchone()[0]:return
+        try:_recover_orphaned_jobs(settings)
+        except Exception:logging.getLogger('cloudsaver.billing').warning('Orphaned billing job recovery unavailable')
         while not stop.is_set():
             if lock:lock.execute('SELECT 1')  # fail-stop on leader connection loss
             try:run_once(settings,lambda:lock.execute('SELECT 1') if lock else None)
