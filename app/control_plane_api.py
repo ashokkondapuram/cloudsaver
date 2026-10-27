@@ -29,12 +29,12 @@ class PlanRequest(_Strict):
 
 
 class PlanVersionRequest(_Strict):
+    # exclusive_targets/consumes_ha_headroom/skus are deliberately not accepted: PlanVersion.identity()
+    # would hash them, but cp_plan_versions has no columns to persist them, which would make the
+    # stored digest unreproducible. Add them once a migration adds the columns.
     expected_version: int = Field(ge=0)
     targets: list[str] = Field(min_length=1, max_length=200)
     parameters: dict = Field(default_factory=dict)
-    exclusive_targets: list[str] = Field(default_factory=list)
-    consumes_ha_headroom: list[str] = Field(default_factory=list)
-    skus: dict[str, str] = Field(default_factory=dict)
 
 
 class TransitionRequest(_Strict):
@@ -45,6 +45,15 @@ class TransitionRequest(_Strict):
 class ApprovalRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     expires_at: datetime
+    identity_digest: str = Field(min_length=1, max_length=64)
+
+
+def _require_human_approver(tenant):
+    """Reject the one machine-identity marker this codebase already uses for 'not a human'
+    (see app/data_governance_api.py's owner() check); a bare workspace API key is treated as an
+    operator-held credential, consistent with how other TENANT_ADMIN routes in this app authorize."""
+    if tenant.get('subject_type') == 'service_account':
+        raise HTTPException(403, 'A human approver is required; service accounts cannot approve plans.')
 
 
 def create_router(store, current_tenant):
@@ -64,9 +73,7 @@ def create_router(store, current_tenant):
         policy_digest = digest({'parameters': body.parameters})
         evidence_digest = digest({'targets': sorted(body.targets)})
         version = PlanVersion(plan_id=str(plan_id), version=body.expected_version + 1, targets=tuple(body.targets),
-                              parameters=body.parameters, policy_digest=policy_digest, evidence_digest=evidence_digest,
-                              exclusive_targets=tuple(body.exclusive_targets), consumes_ha_headroom=tuple(body.consumes_ha_headroom),
-                              skus=body.skus)
+                              parameters=body.parameters, policy_digest=policy_digest, evidence_digest=evidence_digest)
         try:
             result = cp_store.add_plan_version(store, tenant['tenant_id'], str(plan_id), body.expected_version,
                                                version.identity(), body.targets, body.parameters, policy_digest,
@@ -90,13 +97,13 @@ def create_router(store, current_tenant):
 
     @router.post('/plan-versions/{version_id}/approvals', status_code=201)
     def approve(version_id: UUID, body: ApprovalRequest, tenant=Depends(admin)):
+        _require_human_approver(tenant)
         try:
-            current = cp_store.get_plan_version(store, tenant['tenant_id'], str(version_id))
-        except NotFoundError:
-            raise HTTPException(404, 'Plan version not found') from None
-        try:
+            # The caller attests which identity_digest they reviewed; record_approval itself
+            # rejects a mismatch against the version's current digest, so an edited plan cannot
+            # inherit an approval the approver never actually saw.
             approval_id = cp_store.record_approval(store, tenant['tenant_id'], str(version_id),
-                                                   current['identity_digest'], actor(tenant), True, body.expires_at)
+                                                   body.identity_digest, actor(tenant), True, body.expires_at)
         except NotFoundError:
             raise HTTPException(404, 'Plan version not found') from None
         except ConflictError as error:
@@ -110,7 +117,9 @@ def create_router(store, current_tenant):
             existing = db.execute('SELECT id FROM cp_action_assessments WHERE tenant_id=%s AND idempotency_key=%s',
                                   (tid, body.idempotency_key)).fetchone()
         outcome = evaluate_action_safety({'id': body.action_id, 'supported': body.supported}, body.evidence)
-        evidence_digest = digest(body.evidence)
+        # supported changes the computed decision; fold it into the digest so a replay with the same
+        # idempotency_key but a flipped supported flag is detected as a conflict, not served stale.
+        evidence_digest = digest({'evidence': body.evidence, 'supported': body.supported})
         policy_digest = digest({'rule_version': outcome['rule_version']})
         try:
             assessment_id = cp_store.save_action_assessment(store, tid, body.idempotency_key, body.action_id, outcome,

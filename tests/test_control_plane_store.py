@@ -85,7 +85,12 @@ def test_approval_requires_matching_digest_and_human():
         cs.record_approval(FakeStore([Cur([("other",)])]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
     with pytest.raises(cs.ConflictError):
         cs.record_approval(FakeStore(), "t1", "v", "digest", "a", False, datetime(2030, 1, 1, tzinfo=timezone.utc))
-    assert cs.record_approval(FakeStore([Cur([("digest", "review_requested")]), Cur()]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
+    assert cs.record_approval(FakeStore([Cur([("digest", "review_requested", "creator")]), Cur()]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
+
+
+def test_approval_rejects_the_version_creator_as_approver():
+    with pytest.raises(cs.ConflictError):
+        cs.record_approval(FakeStore([Cur([("digest", "review_requested", "a")])]), "t1", "v", "digest", "a", True, datetime(2030, 1, 1, tzinfo=timezone.utc))
 
 
 def test_replay_protection_and_reminders():
@@ -145,3 +150,34 @@ def test_record_approval_against_real_store_accepts_a_future_expiry(evidence):
     approval_id = cs.record_approval(repo, TID, pv_result['id'], 'identity-1', 'approverhash', True,
                                      datetime.now(timezone.utc) + timedelta(hours=1))
     assert approval_id
+
+
+def test_record_approval_against_real_store_rejects_the_version_creator(evidence):
+    from datetime import timedelta, timezone
+    settings, repo, scan = evidence
+    plan_id = cs.create_plan(repo, TID, 'x', 'sameactor')
+    pv_result = cs.add_plan_version(repo, TID, plan_id, 0, 'identity-2', ['r1'], {}, 'pd', 'ed', 'sameactor')
+    cs.transition_state(repo, TID, pv_result['id'], 'draft', 'evidence_required')
+    cs.transition_state(repo, TID, pv_result['id'], 'evidence_required', 'assessed')
+    cs.transition_state(repo, TID, pv_result['id'], 'assessed', 'review_requested')
+    with pytest.raises(cs.ConflictError):
+        cs.record_approval(repo, TID, pv_result['id'], 'identity-2', 'sameactor', True,
+                           datetime.now(timezone.utc) + timedelta(hours=1))
+
+
+def test_record_approval_against_real_store_accepts_a_non_utc_offset_expiry(evidence):
+    """A client-supplied non-UTC offset must be normalized before it is compared as TEXT against
+    created_at (also TEXT); otherwise two timestamps that are the same instant in different offsets
+    compare incorrectly under SQLite's lexicographic CHECK, and later under transition_state's
+    expires_at>%s comparison too."""
+    from datetime import timedelta, timezone
+    settings, repo, scan = evidence
+    plan_id = cs.create_plan(repo, TID, 'x', 'ownerhash')
+    pv_result = cs.add_plan_version(repo, TID, plan_id, 0, 'identity-3', ['r1'], {}, 'pd', 'ed', 'actorhash')
+    cs.transition_state(repo, TID, pv_result['id'], 'draft', 'evidence_required')
+    cs.transition_state(repo, TID, pv_result['id'], 'evidence_required', 'assessed')
+    cs.transition_state(repo, TID, pv_result['id'], 'assessed', 'review_requested')
+    non_utc = (datetime.now(timezone.utc) + timedelta(hours=1)).astimezone(timezone(timedelta(hours=-8)))
+    approval_id = cs.record_approval(repo, TID, pv_result['id'], 'identity-3', 'approverhash', True, non_utc)
+    assert approval_id
+    cs.transition_state(repo, TID, pv_result['id'], 'review_requested', 'approved')
