@@ -26,7 +26,7 @@ def evidence_digest(row):
         'data_sources':row.get('data_sources'),'reconciliation_status':row.get('reconciliation_status')})
 
 
-def workspace(scan):
+def workspace(scan,tenant=None):
     rows=[r for r in scan.get('inventory',[]) if r.get('cloud_provider')=='kubernetes']
     outcomes=[r for r in scan.get('rule_evaluations',[]) if r.get('cloud_provider')=='kubernetes']
     by_resource=defaultdict(list)
@@ -50,6 +50,15 @@ def workspace(scan):
             billed_node_cost_usd=sum(r['evidence']['billed_node_cost_usd'] for r in nodes) if nodes and all(r['evidence'].get('billed_node_cost_usd') is not None for r in nodes) else None,
             realizable_node_savings_usd=sum(next(iter(v)) for v in {pool:{r['evidence'].get('realizable_node_savings_usd') for r in nodes if r['evidence'].get('node_pool')==pool} for pool in {r['evidence'].get('node_pool') for r in nodes}}.values()) if nodes and all(r['evidence'].get('realizable_node_savings_usd') is not None for r in nodes) else None,
             reconciliation_status='source_conflict' if any(r.get('reconciliation_status')=='source_conflict' for r in selected) else 'partial_telemetry'))
+    discovered={c['cluster_id'] for c in clusters}
+    empty_capacity={'cpu':dict(allocatable=None,requested=None,daemonset=None,actual_p95=None,physical=None),
+                    'memory':dict(allocatable=None,requested=None,daemonset=None,actual_p95=None,physical=None)}
+    for entry in sorted((tenant or {}).get('kubernetes_clusters') or [], key=lambda e:e['cluster_id']):
+        if entry['cluster_id'] in discovered:continue
+        clusters.append(dict(cluster_id=entry['cluster_id'],coverage={},sources=[],capacity=empty_capacity,
+            billed_node_cost_usd=None,realizable_node_savings_usd=None,
+            reconciliation_status='telemetry_not_configured' if not entry.get('prometheus_url') else 'partial_telemetry'))
+        discovered.add(entry['cluster_id'])
     return dict(scan_id=scan['scan_id'],observed_at=scan['timestamp'],clusters=clusters,
         rule_matrix=[dict(rule_id=r[0],name=r[2],pillar=r[3],outcomes=dict(Counter(o['outcome'] for o in outcomes if o['rule_id']==r[0]))) for r in DEFINITIONS],
         resources=[dict(resource_id=r['resource_id'],resource_name=r['resource_name'],cluster_id=r['scope_id'],resource_type=r['resource_type'],
@@ -74,7 +83,7 @@ def create_router(store,current_tenant,*,evidence_store=None):
         if evidence_store is not None:
             from app.focus import FocusRepository
             scan=FocusRepository(evidence_store).attach(tenant,scan)
-        return workspace(scan)
+        return workspace(scan,tenant)
 
     @router.post('/{scan_id}/kubernetes/patch-preview')
     def preview(scan_id:UUID,body:Preview,tenant=Depends(current_tenant)):
