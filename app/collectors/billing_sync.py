@@ -55,11 +55,11 @@ def bindings(tenant):
 def _post(url, token, body):
     import time
     with httpx.Client(timeout=httpx.Timeout(25, connect=5), follow_redirects=False) as client:
-        for attempt in range(4):
+        for attempt in range(8):
             with client.stream('POST', url, headers={'Authorization':'Bearer '+token}, json=body) as response:
-                if response.status_code == 429 and attempt < 3:
+                if response.status_code == 429 and attempt < 7:
                     response.read()
-                    try: wait = min(float(response.headers.get('retry-after', 5)), 60)
+                    try: wait = min(float(response.headers.get('retry-after', 5)), 120)
                     except ValueError: wait = 5
                     time.sleep(wait)
                     continue
@@ -73,12 +73,14 @@ def _post(url, token, body):
 
 
 def _azure_query(url, token, kind, start, end):
+    import time
     body = dict(type=kind, timeframe='Custom',
         timePeriod={'from':start.isoformat()+'T00:00:00Z','to':(end-timedelta(days=1)).isoformat()+'T23:59:59Z'},
         dataset={'granularity':'Daily','aggregation':{'cost':{'name':'PreTaxCost','function':'Sum'}},
                  'grouping':[{'type':'Dimension','name':'ResourceId'}]})
     rows, page = [], url
-    for _ in range(100):
+    for i in range(100):
+        if i: time.sleep(2)  # ponytail: fixed pace between pages avoids bursting Azure's per-entity quota; back off further if still too aggressive
         properties = _post(page, token, body)['properties']
         names = [c['name'].lower() for c in properties['columns']]
         rows.extend(dict(zip(names,row)) for row in properties['rows'])
