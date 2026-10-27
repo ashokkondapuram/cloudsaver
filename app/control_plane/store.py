@@ -177,7 +177,7 @@ def record_approval(store, tenant_id, version_id, identity_digest, approver_hash
             raise ConflictError("plan must request review before approval")
         db.execute("INSERT INTO cp_plan_approvals(id,tenant_id,plan_version_id,identity_digest,approver_hash,"
                    "verified_human,expires_at,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
-                   (approval_id, tenant_id, version_id, identity_digest, approver_hash, True, expires_at, _now()))
+                   (approval_id, tenant_id, version_id, identity_digest, approver_hash, True, expires_at.isoformat(), _now()))
     return approval_id
 
 

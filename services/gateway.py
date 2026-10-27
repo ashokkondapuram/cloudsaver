@@ -426,6 +426,30 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         params = {k: v for k, v in request.query_params.items() if k in ('resource_id', 'scope_id')}
         return await forward('POST', 'scanner', '/api/v1/finops/resource-cost', authorization, params)
 
+    @app.post('/api/v1/control-plane/plans')
+    async def control_plane_create_plan(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/control-plane/plans', request, authorization)
+
+    @app.post('/api/v1/control-plane/plans/{plan_id}/versions')
+    async def control_plane_create_plan_version(plan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/control-plane/plans/{plan_id}/versions', request, authorization)
+
+    @app.post('/api/v1/control-plane/plan-versions/{version_id}/transitions')
+    async def control_plane_transition(version_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/control-plane/plan-versions/{version_id}/transitions', request, authorization)
+
+    @app.post('/api/v1/control-plane/plan-versions/{version_id}/approvals')
+    async def control_plane_approve(version_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/control-plane/plan-versions/{version_id}/approvals', request, authorization)
+
+    @app.post('/api/v1/control-plane/action-assessments')
+    async def control_plane_action_assessment(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/control-plane/action-assessments', request, authorization)
+
+    @app.post('/api/v1/control-plane/financial-scenarios')
+    async def control_plane_financial_scenario(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/control-plane/financial-scenarios', request, authorization)
+
     @app.get('/api/v1/finops/unit-economics/preview')
     async def unit_economics_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
         params = {k: v for k, v in request.query_params.items() if k in ('prior_cost', 'current_cost', 'prior_volume', 'current_volume')}

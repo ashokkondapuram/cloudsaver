@@ -129,3 +129,19 @@ def test_plan_version_update_trigger_blocks_non_state_columns(evidence):
     with repo.transaction(TID) as db:
         row = db.execute("SELECT state FROM cp_plan_versions WHERE id='v1'").fetchone()
     assert row[0] == 'assessed'
+
+
+def test_record_approval_against_real_store_accepts_a_future_expiry(evidence):
+    """record_approval binds a raw datetime; SQLite's default adapter must not format it
+    differently than the app's own _now() string, or the expires_at>created_at CHECK
+    would compare two incompatible string formats and reject a genuinely future expiry."""
+    from datetime import timedelta, timezone
+    settings, repo, scan = evidence
+    plan_id = cs.create_plan(repo, TID, 'x', 'ownerhash')
+    pv_result = cs.add_plan_version(repo, TID, plan_id, 0, 'identity-1', ['r1'], {}, 'pd', 'ed', 'actorhash')
+    cs.transition_state(repo, TID, pv_result['id'], 'draft', 'evidence_required')
+    cs.transition_state(repo, TID, pv_result['id'], 'evidence_required', 'assessed')
+    cs.transition_state(repo, TID, pv_result['id'], 'assessed', 'review_requested')
+    approval_id = cs.record_approval(repo, TID, pv_result['id'], 'identity-1', 'approverhash', True,
+                                     datetime.now(timezone.utc) + timedelta(hours=1))
+    assert approval_id
