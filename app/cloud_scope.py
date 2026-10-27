@@ -47,11 +47,14 @@ def normalize_sources(tenant):
             else:
                 if not matches(NAME, entry.get('cluster_id')):
                     raise ValueError('Invalid Kubernetes cluster ID')
-                url = urlsplit(entry.get('prometheus_url', ''))
-                if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment:
-                    raise ValueError('Prometheus requires an operator-configured HTTPS URL')
-                if not matches(r'CLOUDSAVER_PROMETHEUS_TOKEN_[A-Z0-9_]{1,80}', entry.get('bearer_token_env', '')):
-                    raise ValueError('Explicit Prometheus bearer-token environment binding required')
+                # Telemetry is optional at registration time: a cluster can be recognized before its
+                # Prometheus binding exists, but if either field is set both must be valid together.
+                if entry.get('prometheus_url') or entry.get('bearer_token_env'):
+                    url = urlsplit(entry.get('prometheus_url', ''))
+                    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment:
+                        raise ValueError('Prometheus requires an operator-configured HTTPS URL')
+                    if not matches(r'CLOUDSAVER_PROMETHEUS_TOKEN_[A-Z0-9_]{1,80}', entry.get('bearer_token_env', '')):
+                        raise ValueError('Explicit Prometheus bearer-token environment binding required')
                 identity = entry['cluster_id']
             if identity in seen:
                 raise ValueError('Duplicate cloud source')
