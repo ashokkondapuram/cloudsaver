@@ -72,7 +72,19 @@ def _post(url, token, body):
                 return json.loads(raw,parse_float=Decimal)
 
 
-def _azure_query(url, token, kind, start, end):
+def _token(credential):
+    """Refresh (or return the still-valid cached) token; azure-identity only hits the network when near expiry.
+    Retries transient DNS/connection failures so an hours-long paced sync survives a momentary network blip."""
+    import time
+    for attempt in range(4):
+        try:
+            return credential.get_token('https://management.azure.com/.default').token
+        except Exception:
+            if attempt == 3: raise
+            time.sleep(10)
+
+
+def _azure_query(url, credential, kind, start, end):
     import time
     body = dict(type=kind, timeframe='Custom',
         timePeriod={'from':start.isoformat()+'T00:00:00Z','to':(end-timedelta(days=1)).isoformat()+'T23:59:59Z'},
@@ -81,7 +93,7 @@ def _azure_query(url, token, kind, start, end):
     rows, page = [], url
     for i in range(100):
         if i: time.sleep(60)  # one page (batch of resources) per minute, matching Azure's observed per-entity quota recovery rate
-        properties = _post(page, token, body)['properties']
+        properties = _post(page, _token(credential), body)['properties']
         names = [c['name'].lower() for c in properties['columns']]
         rows.extend(dict(zip(names,row)) for row in properties['rows'])
         if len(rows) > MAX_ROWS: raise ValueError('Billing row limit exceeded')
@@ -96,12 +108,11 @@ def azure_rows(binding, tenant, start, end):
     from app.cloud_identity import azure_credential
     credential = azure_credential(tenant)
     try:
-        token = credential.get_token('https://management.azure.com/.default').token
         url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
             if i: time.sleep(60)  # same per-minute pace between the two cost-kind queries
-            for value in _azure_query(url, token, kind, start, end):
+            for value in _azure_query(url, credential, kind, start, end):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
                 totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
                 totals[field] += Decimal(str(value.get('pretaxcost',value.get('cost'))))
@@ -120,7 +131,6 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
     from app.cloud_identity import azure_credential
     credential = azure_credential(tenant)
     try:
-        token = credential.get_token('https://management.azure.com/.default').token
         url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
@@ -129,7 +139,7 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
                 timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
                 dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
                          'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
-            properties = _post(url, token, body)['properties']
+            properties = _post(url, _token(credential), body)['properties']
             names = [c['name'].lower() for c in properties['columns']]
             for value in (dict(zip(names, row)) for row in properties['rows']):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])

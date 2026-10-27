@@ -34,7 +34,7 @@ def test_azure_merges_actual_and_amortized_cost_across_pages(monkeypatch):
 
 def test_azure_pagination_rejects_foreign_hosts(monkeypatch):
     monkeypatch.setattr(billing_sync,'_post',lambda *_:{'properties':{'columns':[],'rows':[],'nextLink':'https://attacker.example/next'}})
-    with pytest.raises(ValueError,match='pagination host'):billing_sync._azure_query('https://management.azure.com/q','t','ActualCost',START,END)
+    with pytest.raises(ValueError,match='pagination host'):billing_sync._azure_query('https://management.azure.com/q',Credential(),'ActualCost',START,END)
 
 
 class Athena:
