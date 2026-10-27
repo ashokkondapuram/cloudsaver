@@ -235,6 +235,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
   const [tab, setTab] = useState('overview');
   useEffect(() => {setTab('overview');}, [resourceKey]);
   const changed = () => {setVersion(v => v + 1); onChange();};
+  const refetch = () => setVersion(v => v + 1);
   const current = detail && detail.assessment.resource_key === resourceKey ? detail : null;
   const a = current?.assessment;
   const tabs = current ? [
@@ -267,7 +268,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         {tab === 'overview' && <Overview detail={current}/>}
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
-        {tab === 'costs' && <Costs detail={current} onFetched={changed}/>}
+        {tab === 'costs' && <Costs detail={current} onFetched={refetch}/>}
         {tab === 'observability' && <Observability detail={current}/>}
         {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
         {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}
