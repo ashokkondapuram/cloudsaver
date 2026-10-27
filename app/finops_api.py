@@ -109,6 +109,8 @@ def create_router(repository, current_tenant):
         start = end - timedelta(days=30)
         try:
             rows = await run_in_threadpool(azure_resource_rows, scope_id, resource_id, tenant, start, end)
+        except FocusError as error:
+            raise HTTPException(error.status, str(error)) from None
         except Exception:
             raise HTTPException(503, 'Resource cost is unavailable right now') from None
         currencies = sorted({r['currency'] for r in rows})

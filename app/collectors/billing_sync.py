@@ -14,6 +14,41 @@ from app.v150_store import WorkflowStore
 
 MAX_ROWS = 200000
 OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_region','athena_workgroup','athena_database','athena_table'}
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def _azure_cost_lock(scope_id, wait_seconds=90):
+    """Serialize every Azure Cost Management call against one subscription (bulk sync and on-demand
+    per-resource fetches alike) so two callers never race for the same strict per-entity quota."""
+    import time
+    from app.config import Settings
+    try:
+        import psycopg
+    except ImportError:
+        psycopg = None
+    url = psycopg and Settings.load().database_url
+    if not url:
+        yield
+        return
+    conn = psycopg.connect(url, autocommit=True)
+    key = 'azure-cost:' + scope_id
+    try:
+        deadline = time.monotonic() + wait_seconds
+        while not conn.execute('SELECT pg_try_advisory_lock(hashtextextended(%s,0))', (key,)).fetchone()[0]:
+            if time.monotonic() > deadline:
+                raise FocusError('An Azure cost query for this subscription is already running; try again shortly', 503)
+            time.sleep(2)
+        try:
+            yield
+        finally:
+            conn.execute('SELECT pg_advisory_unlock(hashtextextended(%s,0))', (key,))
+    finally:
+        conn.close()
+
+
 NAME = r'[A-Za-z0-9_-]{1,100}'
 
 
@@ -106,21 +141,22 @@ def _azure_query(url, credential, kind, start, end):
 def azure_rows(binding, tenant, start, end):
     import time
     from app.cloud_identity import azure_credential
-    credential = azure_credential(tenant)
-    try:
-        url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
-        merged = {}
-        for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
-            if i: time.sleep(60)  # same per-minute pace between the two cost-kind queries
-            for value in _azure_query(url, credential, kind, start, end):
-                key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
-                totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
-                totals[field] += Decimal(str(value.get('pretaxcost',value.get('cost'))))
-        result = [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
+    with _azure_cost_lock(binding['scope_id'], wait_seconds=1800):
+        credential = azure_credential(tenant)
+        try:
+            url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+            merged = {}
+            for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
+                if i: time.sleep(60)  # same per-minute pace between the two cost-kind queries
+                for value in _azure_query(url, credential, kind, start, end):
+                    key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
+                    totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
+                    totals[field] += Decimal(str(value.get('pretaxcost',value.get('cost'))))
+            result = [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
                        category='Credit' if v['billed']<0 else 'Usage') for (day,resource,currency),v in merged.items()]
-        return result, 'resource', ['Azure ActualCost is imported as billed cost and AmortizedCost as effective cost. Reservation and savings plan purchases are spread across covered usage.']
-    finally:
-        credential.close()
+            return result, 'resource', ['Azure ActualCost is imported as billed cost and AmortizedCost as effective cost. Reservation and savings plan purchases are spread across covered usage.']
+        finally:
+            credential.close()
 
 
 def azure_resource_rows(scope_id, resource_id, tenant, start, end):
@@ -129,26 +165,27 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
     Returned in the same shape as azure_rows so callers can persist through _import_snapshot like a normal sync."""
     import time
     from app.cloud_identity import azure_credential
-    credential = azure_credential(tenant)
-    try:
-        url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
-        merged = {}
-        for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
-            if i: time.sleep(5)
-            body = dict(type=kind, timeframe='Custom',
-                timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
-                dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
-                         'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
-            properties = _post(url, _token(credential), body)['properties']
-            names = [c['name'].lower() for c in properties['columns']]
-            for value in (dict(zip(names, row)) for row in properties['rows']):
-                key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])
-                totals = merged.setdefault(key, {'billed': Decimal(0), 'effective': Decimal(0)})
-                totals[field] += Decimal(str(value.get('pretaxcost', value.get('cost'))))
-        return [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
-                    category='Credit' if v['billed'] < 0 else 'Usage') for (day, resource, currency), v in merged.items()]
-    finally:
-        credential.close()
+    with _azure_cost_lock(scope_id, wait_seconds=90):
+        credential = azure_credential(tenant)
+        try:
+            url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+            merged = {}
+            for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
+                if i: time.sleep(5)
+                body = dict(type=kind, timeframe='Custom',
+                    timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
+                    dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
+                             'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
+                properties = _post(url, _token(credential), body)['properties']
+                names = [c['name'].lower() for c in properties['columns']]
+                for value in (dict(zip(names, row)) for row in properties['rows']):
+                    key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])
+                    totals = merged.setdefault(key, {'billed': Decimal(0), 'effective': Decimal(0)})
+                    totals[field] += Decimal(str(value.get('pretaxcost', value.get('cost'))))
+            return [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
+                        category='Credit' if v['billed'] < 0 else 'Usage') for (day, resource, currency), v in merged.items()]
+        finally:
+            credential.close()
 
 
 CUR_CATEGORIES = {'Tax':'Tax','Credit':'Credit','Refund':'Adjustment','Fee':'Purchase','RIFee':'Purchase',
