@@ -38,7 +38,9 @@ export default async function RepoDocPage({params}: PageProps) {
         </div>
       </header>
       <article className="panel doc-guide-content">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+          table: ({node: _node, ...props}) => <div className="summary-table-scroll" tabIndex={0} aria-label="Documentation reference table"><table {...props}/></div>,
+        }}>{markdown}</ReactMarkdown>
       </article>
     </div>
   );

@@ -3,6 +3,7 @@ import type {ReactNode} from 'react';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './globals.css';
+import './experience.css';
 import {AppShell} from '../components/AppShell';
 import {SessionProvider} from '../components/SessionProvider';
 import {ThemeProvider} from '../components/ThemeProvider';

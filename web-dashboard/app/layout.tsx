@@ -3,6 +3,7 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 import './globals.css';
 import './console-theme.css';
+import './experience.css';
 import {ThemeProvider} from '../components/ThemeProvider';
 import {WorkspaceProvider} from '../components/WorkspaceProvider';
 import {AppShell} from '../components/AppShell';

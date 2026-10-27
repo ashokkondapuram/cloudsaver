@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "5aa2f19561d7b61cbcafb43bb944d7bfab1d4a932879387d3aed60319a04c112",
+  "inventory_sha256": "fac986ffc5a310b7d2e55841252005bbb968dd7f0ca13e7b18756ba5cd89beef",
   "migration_heads": {
     "core": "0026_control_plane",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -108,6 +108,11 @@
       "path": "TEST_REPORT.md",
       "sha256": "07ffc79c2868e5b7c3d1e8e923e0df824e6406f4986d7434b7f46a146a1c0f57",
       "bytes": 6975
+    },
+    {
+      "path": "UI_UX_IMPROVEMENTS_README.md",
+      "sha256": "4a76d0184a5227019d578291313bf1f61b5d3f28cfe619e46bf6399c147e1f6f",
+      "bytes": 27201
     },
     {
       "path": "agent-worker/.dockerignore",
@@ -276,8 +281,8 @@
     },
     {
       "path": "app/billing_jobs.py",
-      "sha256": "2de5ed50635791177c07d8fb8bc37381d63a9d8a848d880105a9a533b8155518",
-      "bytes": 10888
+      "sha256": "04bb11d0eba0ae2b021849d2a1e8bd33d0f0434ce281c15e0117f8fd714fd655",
+      "bytes": 10889
     },
     {
       "path": "app/billing_plan.py",
@@ -296,8 +301,8 @@
     },
     {
       "path": "app/cloud_identity.py",
-      "sha256": "3b7f888e082ae0e0039cb7cdec51f56b8cd77823f09de0821284335d69fac59a",
-      "bytes": 12289
+      "sha256": "a56130aad66a1ab5abec8609f5e13cb02f10c59f0f7d9a4720dd9f031a4a5106",
+      "bytes": 12359
     },
     {
       "path": "app/cloud_scope.py",
@@ -321,8 +326,8 @@
     },
     {
       "path": "app/collectors/billing_sync.py",
-      "sha256": "ab2f5fe8bd9eb8bbb9e64c786ec5003be88296523648f3856c3d1ef22f7b4031",
-      "bytes": 22161
+      "sha256": "1ddbbaa9f80118be0891f7e71fb523f7433b28318e7602390845e8694f00cd6c",
+      "bytes": 24874
     },
     {
       "path": "app/collectors/commitments.py",
@@ -491,8 +496,8 @@
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "be6582d9756b292f01ed5c7a9ad26381fa660f5dd2b7177f3ab356811e7010b3",
-      "bytes": 5858
+      "sha256": "d53504f9bfa0e9c9d20ff0efe0474dc8c7d1c97fb39dd84a5df4f96b56c815db",
+      "bytes": 7347
     },
     {
       "path": "app/focus.py",
@@ -716,8 +721,8 @@
     },
     {
       "path": "app/resource_access.py",
-      "sha256": "18b0787e6f081e54846448d5331e766780280c66f442868f59a0eb2f3eae0960",
-      "bytes": 2827
+      "sha256": "34d6cafec0ed8660501709bf5537061675b190493995fd9ff7197b7ed2acfd5b",
+      "bytes": 2921
     },
     {
       "path": "app/resource_api.py",
@@ -846,8 +851,8 @@
     },
     {
       "path": "compose.yaml",
-      "sha256": "59a30bf1cce335b50dbb60fa388591ae6e488091c452fcaf3b39a5366a4db3ae",
-      "bytes": 15185
+      "sha256": "8b3dcd5647c99402313e24c52ed5029bf1bd2a498a2afb86e19eafb8d4aed79e",
+      "bytes": 15283
     },
     {
       "path": "database/.dockerignore",
@@ -933,6 +938,11 @@
       "path": "docs/CODE_AND_FEATURE_IMPROVEMENTS_README.md",
       "sha256": "2c69aa92eec1f84443ba72bfc0b3899cc07d8f388970a59a4cb714ff7fbf235d",
       "bytes": 31304
+    },
+    {
+      "path": "docs/CSS_PAGE_TAB_AUDIT.md",
+      "sha256": "cc342e663ecc12aa4a964942d5e48217b675160f54d6bdc3a3faf15bc79da449",
+      "bytes": 9757
     },
     {
       "path": "docs/DELIVERY.md",
@@ -1088,6 +1098,11 @@
       "path": "docs/UI_UX.md",
       "sha256": "354d00ed019eedf544849415a26ef312ef6628f0839527dfd1bfd4a1acd6b38c",
       "bytes": 7603
+    },
+    {
+      "path": "docs/UI_UX_IMPLEMENTATION.md",
+      "sha256": "0722f9f1d7c42e953f1a0111a6c085e7c910c31f2af4e22921e10b5eadfa1387",
+      "bytes": 11300
     },
     {
       "path": "docs/V1_4_IMPLEMENTATION.md",
@@ -1641,8 +1656,8 @@
     },
     {
       "path": "platform/identity/resource_access.py",
-      "sha256": "054a569519d8faea121ebc23e8095be4d1fed18824e678bc2b74d35c379d064e",
-      "bytes": 4341
+      "sha256": "4c54a11759be372ac488bd88cfaeb5f36a96b174bb6c79fe77c75b93cce3a526",
+      "bytes": 4483
     },
     {
       "path": "platform/identity/service.py",
@@ -1860,6 +1875,11 @@
       "bytes": 217
     },
     {
+      "path": "platform/portal/app/experience.css",
+      "sha256": "350f3890fffcae0aee0ee56cafa479515f381abd32d463958438de42e3ff257f",
+      "bytes": 8745
+    },
+    {
       "path": "platform/portal/app/globals.css",
       "sha256": "b1feafdc4ba8a950a6aca13b49c06fecc3c51b5402edbf6052eaae42eb592d97",
       "bytes": 28276
@@ -1871,8 +1891,8 @@
     },
     {
       "path": "platform/portal/app/layout.tsx",
-      "sha256": "0c7ec717baa6b021891b29767c5baaf43240e028845f768c75ac3e110c39d38f",
-      "bytes": 949
+      "sha256": "2fb34c897224faa91d934c9f60d42b0444135b821939de40d43b038c7fe5ce5e",
+      "bytes": 976
     },
     {
       "path": "platform/portal/app/page.tsx",
@@ -2036,8 +2056,8 @@
     },
     {
       "path": "platform/portal/components/settings/ResourceAccessSection.tsx",
-      "sha256": "e71ec3b6c038b6383c0ba693f665b6f106a321eee85df6c77aee6d102f91de78",
-      "bytes": 5450
+      "sha256": "3591b645ebcbe9c5b8ba5d5f67f2450ad306976bb7dc7869c38b73a870daddf9",
+      "bytes": 5514
     },
     {
       "path": "platform/portal/components/ui/Dialog.tsx",
@@ -2086,8 +2106,8 @@
     },
     {
       "path": "platform/portal/components/workspaces/RulesTab.tsx",
-      "sha256": "56ce0f41fade6b161f6c37344d4e6003c0db71899343d09ef6d4f0c5e433c23d",
-      "bytes": 2807
+      "sha256": "03940a725f33e61e9ca72bdb4ddaace70475eae4739b790b3cc1d141346124e8",
+      "bytes": 9446
     },
     {
       "path": "platform/portal/components/workspaces/UsageTab.tsx",
@@ -2096,8 +2116,8 @@
     },
     {
       "path": "platform/portal/components/workspaces/WorkspaceDetail.tsx",
-      "sha256": "dd0a6034f6b3860a216319f8c59684d4c612b689494e9425d13e155092d56d82",
-      "bytes": 3721
+      "sha256": "97da43b8c86d19cc437b19c3d8b38f56e5d91122104275b905110d92201b0447",
+      "bytes": 5433
     },
     {
       "path": "platform/portal/components/workspaces/WorkspaceList.tsx",
@@ -2111,8 +2131,8 @@
     },
     {
       "path": "platform/portal/e2e/portal.spec.ts",
-      "sha256": "6e2964dc87eecc36dc0801d28262d2597745fffee562520eaad1e23dd7e2dc87",
-      "bytes": 6371
+      "sha256": "684c1e424e6c53823a13b7dfa4967b25dc0aed59215971ff9e3659a543845b17",
+      "bytes": 12275
     },
     {
       "path": "platform/portal/e2e/test.ts",
@@ -2178,6 +2198,11 @@
       "path": "platform/portal/lib/useLoad.ts",
       "sha256": "3fc2dda0c763931ee95d8c0704350cda75e94622400ad752ccf7ff563fd573eb",
       "bytes": 1764
+    },
+    {
+      "path": "platform/portal/lib/useUnsavedPolicy.ts",
+      "sha256": "28a6900b9cb57da1602b4d83a84f98d6c8a2ab26eff8f78cf16514c39377102f",
+      "bytes": 1900
     },
     {
       "path": "platform/portal/next-env.d.ts",
@@ -2931,8 +2956,13 @@
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
-      "sha256": "61d43f8b0aea6feaec0ad9b8bc035c448c3b649e1162398d1216b639d5e39d81",
-      "bytes": 1295
+      "sha256": "6e6dab1586e6e729a2c4b42ae3222f0c38a3da66bb262167fcb86e9ce95482c7",
+      "bytes": 1487
+    },
+    {
+      "path": "web-dashboard/app/experience.css",
+      "sha256": "e32105e63734db21e9bdd02214e2b2b94a260465eaf4589b614588f82efabed2",
+      "bytes": 10372
     },
     {
       "path": "web-dashboard/app/findings/page.tsx",
@@ -2956,8 +2986,8 @@
     },
     {
       "path": "web-dashboard/app/layout.tsx",
-      "sha256": "635860755753f5c795928f6f255c5ab112e7fa5687ae5dedb12d7eaf67be6d4d",
-      "bytes": 861
+      "sha256": "4ea707a50cb45ac78e48fcbdb66a1791bf41b6e2f08a0db62e101c474f299141",
+      "bytes": 888
     },
     {
       "path": "web-dashboard/app/optimization/page.tsx",
@@ -3001,8 +3031,8 @@
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
-      "sha256": "da941ed070a757ff060dcd09e0f60a53b7d0ecc835532912b298ae660d245dc0",
-      "bytes": 24370
+      "sha256": "c0e7f7fc7e2d7986a01fa6005fa741e6e57c78ec14f879754a45575da03fea57",
+      "bytes": 24570
     },
     {
       "path": "web-dashboard/components/ClaimView.tsx",
@@ -3020,14 +3050,19 @@
       "bytes": 24889
     },
     {
+      "path": "web-dashboard/components/EvidenceHealth.tsx",
+      "sha256": "d79ebce03c5723c6326ebcb9c0189fe5405bcfc8b5ed3a24f8068a7635a910e0",
+      "bytes": 2963
+    },
+    {
       "path": "web-dashboard/components/GitOpsPanel.tsx",
       "sha256": "8e2c784a677cba2de736cb09b6d518666dc7fee5dcc0f4d3d9997164d010f5d7",
       "bytes": 13822
     },
     {
       "path": "web-dashboard/components/Overview.tsx",
-      "sha256": "f8026a9d10f38300488ef332f000ac368f0ed3f3adca653008b2b78cf87664c1",
-      "bytes": 12450
+      "sha256": "b42f9e04a28480fa1f9c78b352f94bbe4eb487fcde8f9df03a152dce24aec9e0",
+      "bytes": 13180
     },
     {
       "path": "web-dashboard/components/ReliabilityPanel.tsx",
@@ -3046,8 +3081,13 @@
     },
     {
       "path": "web-dashboard/components/V150Views.tsx",
-      "sha256": "fb1e9399c1e4f02fe520e6c394d48f9b0460c5c8c7b168d251328e3f8fc4a608",
-      "bytes": 14648
+      "sha256": "20b519643555b5e69a98b458a6f9670cc49a9af8c967122acb0dec8e86996904",
+      "bytes": 15672
+    },
+    {
+      "path": "web-dashboard/components/WorkspaceContext.tsx",
+      "sha256": "eb03c41c625085fa685ce8e687a125535135dbdfc60c7f09a20ae62e117c0fc3",
+      "bytes": 940
     },
     {
       "path": "web-dashboard/components/WorkspaceProvider.tsx",
@@ -3066,8 +3106,8 @@
     },
     {
       "path": "web-dashboard/components/agents/agents.css",
-      "sha256": "fe62c56ae4baeadd442bfacf91de1b60d4344aa0c7dc5588188b82853c70953d",
-      "bytes": 2524
+      "sha256": "59a1c96a6695b82be1363e20769b94cb138982a897dbb3cfabeea0656b41ee69",
+      "bytes": 2673
     },
     {
       "path": "web-dashboard/components/datagrid/ExplorerSummary.tsx",
@@ -3136,8 +3176,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
-      "sha256": "f69d83aeaf376d7a0b2eddc8359221e7fac98cd73225bc3e2997d4e089052e04",
-      "bytes": 30132
+      "sha256": "96cf0ce8f181983c7ffbb3c9b6673fdb7c96db2f40914ad2a406489276699a23",
+      "bytes": 30961
     },
     {
       "path": "web-dashboard/components/resources/ResourceParts.tsx",
@@ -3151,8 +3191,8 @@
     },
     {
       "path": "web-dashboard/components/rules/CustomerRuleSettings.tsx",
-      "sha256": "0ac29fcd4ff42fff523f41990fc58b1ee1c30ca96604744f150bbe1ae6909b5b",
-      "bytes": 6926
+      "sha256": "bb3f9927b1464988475372d20efea73c5a2ef2f190feb57528932172dc3eb53a",
+      "bytes": 13962
     },
     {
       "path": "web-dashboard/components/settings/AIFoundryConfigurationEditor.tsx",
@@ -3260,6 +3300,11 @@
       "bytes": 12219
     },
     {
+      "path": "web-dashboard/e2e/improvement-workflows.spec.ts",
+      "sha256": "161a86cd21e68b1419b899d1d0d643c9069d0a1026ccddecbf3abbe12d57ab75",
+      "bytes": 8013
+    },
+    {
       "path": "web-dashboard/e2e/kubernetes.spec.ts",
       "sha256": "68caba90fa8c254360947f6bec890f50f9fe0237e9dd192c00ac707b0848f101",
       "bytes": 5880
@@ -3331,8 +3376,8 @@
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "130c5d19d62188b8824a4fc51466f9633bb15552c43e8733c74b0620e6f2543a",
-      "bytes": 19222
+      "sha256": "17c268a822e93fd5f81e73efb6943882942604b47a43c6eeee2d92d2c1d92448",
+      "bytes": 19241
     },
     {
       "path": "web-dashboard/lib/api.ts",
@@ -3383,6 +3428,11 @@
       "path": "web-dashboard/lib/types.ts",
       "sha256": "b697154a8c5481b3799c778aeaf06700100fba4ee48ef3333796133c2c884c82",
       "bytes": 6592
+    },
+    {
+      "path": "web-dashboard/lib/useUnsavedPolicy.ts",
+      "sha256": "28a6900b9cb57da1602b4d83a84f98d6c8a2ab26eff8f78cf16514c39377102f",
+      "bytes": 1900
     },
     {
       "path": "web-dashboard/lib/workloads.d.mts",
@@ -3446,8 +3496,8 @@
     },
     {
       "path": "workers/billing_sync.py",
-      "sha256": "6067178b88fedc602284727a7475e5c5979165e9974ebd817d681d322f7c2b4c",
-      "bytes": 1957
+      "sha256": "afd9c336d302b58953e17dd8915dd450616393182c9606c1d9ea2c8cc2fa795c",
+      "bytes": 3226
     },
     {
       "path": "workers/data_retention.py",

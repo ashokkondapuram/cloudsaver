@@ -127,7 +127,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
   await page.getByLabel('Workspace access key or Entra Bearer token').fill('test-only-browser-credential');
   await page.getByRole('button',{name:'Connect workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
-  await expect.poll(()=>resourceReads).toBeGreaterThan(0);
+  if(!options.legacy)await expect.poll(()=>resourceReads).toBeGreaterThan(0);
   return {mutations,findings:current.findings};
 }
 

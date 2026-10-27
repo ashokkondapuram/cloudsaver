@@ -5,6 +5,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {ArrowDownRight, ArrowRight, ArrowUpRight, Blocks, CheckCircle2, ChevronRight, Cloud, FileCode2, History, ShieldCheck, Sparkles, Target, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
+import {EvidenceHealth} from './EvidenceHealth';
 import {compact, dateTime, money, opportunityTotals, providerColors, providerNames, providerOf, scopeOf} from '../lib/finops';
 import type {Finding} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
@@ -55,16 +56,18 @@ function Distribution({findings}: {findings:Finding[]}) {
 
 export function Overview() {
   const {scan,workspace,scope,canAdmin,setOverlay,token}=useWorkspace();
-  const {page,error}=useResources(scan?.scan_id,token,!!scan&&scan.status==='completed');
+  const {page,error}=useResources(scan?.scan_id,token,!!scan&&scan.status==='completed'&&scan.data_origin!=='legacy_synthetic');
   const findings=useScopedFindings();
   const rows=(page?.items||[]).filter(r=>!scope.length||scope.includes(r.scope_id));
   const complete=!!page&&page.total===page.items.length;
   const eligible=new Set(rows.filter(r=>r.disposition==='requires_review').map(r=>r.resource_id));
   const opportunities=findings.filter(f=>eligible.has(f.resource_id));
   const totals=opportunityTotals(opportunities);
-  const priorities=[...rows].filter(r=>r.disposition==='requires_review').slice(0,5);
+  const priorityOrder:Record<string,number>={critical:0,high:1,medium:2,low:3,none:4};
+  const priorities=[...rows].filter(r=>r.disposition==='requires_review').sort((a,b)=>(priorityOrder[a.review_priority]??5)-(priorityOrder[b.review_priority]??5)||a.resource_name.localeCompare(b.resource_name)).slice(0,5);
   const baseline=page?.commitment_baseline;
   return <>
+    <EvidenceHealth rows={rows} ready={complete} error={error}/>
     {error&&<Notice tone="error">{error}</Notice>}
     {!complete&&page&&<Notice>Resource metrics require the complete authorized result set. Narrow the scan before relying on totals.</Notice>}
     <section className="kpi-grid" aria-label="Workspace metrics">
@@ -75,7 +78,7 @@ export function Overview() {
     </section>
     {baseline&&<Notice>{baseline.warning}</Notice>}
     <div className="analytics-grid"><TrendChart/><Distribution findings={findings}/></div>
-    <div className="overview-lower"><section className="panel priority-panel"><SectionTitle title="Your resource review queue" action={<Link className="text-link" href="/resources">View all resources<ArrowRight size={15}/></Link>}>Merged cost, reliability, performance, security and operations evidence</SectionTitle>{priorities.length?<div className="priority-list">{priorities.map(r=><Link className="priority-row" key={r.resource_key} href={`/resources?resource=${r.resource_key}`}><span className={`resource-symbol resource-${r.provider}`}><Blocks size={18}/></span><span className="priority-resource"><strong>{r.resource_name}</strong><small>{r.finding_count} rule signal{r.finding_count===1?'':'s'} · {sentence(r.review_priority)} priority</small></span><ProviderBadge provider={r.provider}/><span className="priority-cost">{money(r.retail_estimate_usd)}</span><ChevronRight size={15}/></Link>)}</div>:<EmptyState icon={ShieldCheck} title={scan?'No resources require review in this view':'Ready for your first scan'}>{scan?'Review evidence gaps and healthy inventory in Resources.':'Discover resources across your authorized cloud scopes.'}{!scan&&canAdmin&&<button className="button primary" onClick={()=>setOverlay('scan')}>Run first scan</button>}</EmptyState>}</section><section className="panel workspace-checklist"><SectionTitle title="Workspace foundations">Keep evidence and execution connected</SectionTitle><div className="checklist-item"><Cloud size={16}/><div><strong>Authorized cloud scopes</strong><p>{workspace?.configured_scope_count??workspace?.subscription_ids?.length??0} configured for this workspace</p></div></div><div className={`checklist-item ${scan?'':'pending'}`}><History size={16}/><div><strong>Latest snapshot</strong><p>{scan?dateTime(scan.timestamp):'Run a scan to capture your first snapshot.'}</p></div></div><div className="checklist-actions"><Link className="button secondary" href="/settings">Configure scopes</Link><Link className="button secondary" href="/agents">Review agent tasks</Link></div></section></div>
+    <div className="overview-lower"><section className="panel priority-panel"><SectionTitle title="Your resource review queue" action={<Link className="text-link" href="/resources">View all resources<ArrowRight size={15}/></Link>}>Merged cost, reliability, performance, security and operations evidence</SectionTitle>{scan&&!complete?<div className="empty-state" role="status">{error?'The review queue is unavailable until resource evidence can be loaded.':scan.data_origin==='legacy_synthetic'?'Open Resources to inspect this historical snapshot.':scan.status!=='completed'?'The selected scan has not completed.':'Loading the complete resource review queue…'}</div>:priorities.length?<div className="priority-list">{priorities.map(r=><Link className="priority-row" key={r.resource_key} href={`/resources?resource=${r.resource_key}`}><span className={`resource-symbol resource-${r.provider}`}><Blocks size={18}/></span><span className="priority-resource"><strong>{r.resource_name}</strong><small>{r.finding_count} rule signal{r.finding_count===1?'':'s'} · {sentence(r.review_priority)} priority</small></span><ProviderBadge provider={r.provider}/><span className="priority-cost">{money(r.retail_estimate_usd)}</span><ChevronRight size={15}/></Link>)}</div>:<EmptyState icon={ShieldCheck} title={scan?'No resources require review in this view':'Ready for your first scan'}>{scan?'Review evidence gaps and healthy inventory in Resources.':'Discover resources across your authorized cloud scopes.'}{!scan&&canAdmin&&<button className="button primary" onClick={()=>setOverlay('scan')}>Run first scan</button>}</EmptyState>}</section><section className="panel workspace-checklist"><SectionTitle title="Workspace foundations">Keep evidence and execution connected</SectionTitle><div className="checklist-item"><Cloud size={16}/><div><strong>Authorized cloud scopes</strong><p>{workspace?.configured_scope_count??workspace?.subscription_ids?.length??0} configured for this workspace</p></div></div><div className={`checklist-item ${scan?'':'pending'}`}><History size={16}/><div><strong>Selected snapshot</strong><p>{scan?dateTime(scan.timestamp):'Run a scan to capture your first snapshot.'}</p></div></div><div className="checklist-actions"><Link className="button secondary" href="/settings">Configure scopes</Link><Link className="button secondary" href="/agents">Review agent tasks</Link></div></section></div>
   </>;
 }
 

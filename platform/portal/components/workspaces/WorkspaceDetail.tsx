@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useState} from 'react';
+import {useEffect, useState, type KeyboardEvent} from 'react';
 import {Activity, ArrowLeft, BarChart3, Cloud, KeyRound, LayoutGrid, ListChecks, RefreshCw} from 'lucide-react';
 import {portal} from '../../lib/api';
 import type {Workspace} from '../../lib/types';
@@ -28,6 +28,24 @@ type Tab = typeof TABS[number]['id'];
 
 export function WorkspaceDetail({tenantId}: {tenantId: string}) {
   const [tab, setTab] = useState<Tab>('overview');
+  useEffect(() => {
+    const update = () => {
+      const requested = new URLSearchParams(window.location.search).get('tab');
+      setTab(TABS.some(item => item.id === requested) ? requested as Tab : 'overview');
+    };
+    update(); window.addEventListener('popstate', update);
+    return () => window.removeEventListener('popstate', update);
+  }, [tenantId]);
+  function chooseTab(next: Tab) {
+    setTab(next);
+    const url = new URL(window.location.href); url.searchParams.set('tab', next);
+    window.history.replaceState(null, '', url);
+  }
+  function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const next = event.key === 'ArrowRight' ? (index + 1) % TABS.length : event.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault(); chooseTab(TABS[next].id); document.getElementById(`tab-${TABS[next].id}`)?.focus();
+  }
   const {data: workspace, setData, error, loading, reload} = useLoad(() => portal<Workspace>(`workspaces/${encodeURIComponent(tenantId)}`), [tenantId]);
 
   if (loading && !workspace) return <Loading label="Loading workspace…"/>;
@@ -38,14 +56,19 @@ export function WorkspaceDetail({tenantId}: {tenantId: string}) {
 
   return <>
     <Link className="breadcrumb" href="/workspaces"><ArrowLeft size={14}/>Workspaces</Link>
-    <PageHeading eyebrow="WORKSPACE" title={workspace.name} actions={<button type="button" className="button secondary" onClick={() => void reload()}><RefreshCw size={15}/>Refresh</button>}>
+    <PageHeading eyebrow="WORKSPACE" title={workspace.name} actions={<button type="button" className="button secondary" data-discard-policy-draft onClick={() => void reload()}><RefreshCw size={15}/>Refresh</button>}>
       <StatusBadge status={workspace.status}/> <Link className="text-link" href={`/customers/${encodeURIComponent(workspace.customer_id)}`}>{workspace.customer_name}</Link> · <code>{workspace.tenant_id}</code>
     </PageHeading>
+    <section className="operator-workspace-context" aria-label="Administration context">
+      <div><span>Customer</span><strong>{workspace.customer_name}</strong></div><div><span>Directory record (loaded)</span><strong>Version {workspace.version} · {workspace.status}</strong></div>
+      <Link className="text-link" href={`/customers/${encodeURIComponent(workspace.customer_id)}?tab=billing`}>Customer billing →</Link>
+      <button className="text-button" data-discard-policy-draft onClick={() => chooseTab('activity')}>Workspace activity →</button>
+    </section>
     {error && <Notice tone="error">{error}</Notice>}
     {workspace.status === 'suspended' && <Notice tone="warning">This workspace is suspended. Its keys don’t work until you reactivate it.</Notice>}
     {workspace.status === 'deleted' && <Notice tone="warning">This workspace was deleted. Its keys are revoked and it can’t be changed.</Notice>}
     <div className="page-tabs" role="tablist" aria-label="Workspace sections">
-      {TABS.map(item => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-controls={`panel-${item.id}`} aria-selected={tab === item.id} onClick={() => setTab(item.id)}><item.icon size={15}/>{item.label}</button>)}
+      {TABS.map((item, index) => <button key={item.id} type="button" role="tab" id={`tab-${item.id}`} aria-controls={`panel-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => moveTab(event, index)} onClick={() => chooseTab(item.id)}><item.icon size={15}/>{item.label}</button>)}
     </div>
     <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
       {tab === 'overview' && <OverviewTab workspace={workspace} onChange={setData} reload={reload}/>}

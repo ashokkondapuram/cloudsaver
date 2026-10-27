@@ -77,3 +77,53 @@ test('mobile customer view fits the viewport with a loaded record',async({page})
   await expect(page.getByRole('link',{name:'Original customer',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
+
+const tenantId='11111111-1111-4111-8111-111111111111';
+const workspace={tenant_id:tenantId,customer_id:'customer-a',customer_name:'Original customer',name:'Production workspace',plan_tier:'GROWTH',status:'active',identity:{},subscription_ids:[],aws_accounts:[],gcp_projects:[],kubernetes_clusters:[],providers:['azure'],version:5,created_at:'2026-10-01T00:00:00Z',updated_at:'2026-10-01T00:00:00Z',created_by:'synthetic',updated_by:'synthetic',suspended_at:null,deleted_at:null,active_keys:1,last_used_at:null,next_expiry:null};
+const rule={id:'TEST_RULE',name:'Disk assessment',description:'Synthetic rule with an explicit evidence requirement',provider:'azure',service_category:'storage',resource_type:'microsoft.compute/disks',pillar:'cost',status:'published',enabled:true,unavailable_reason:null,catalog_version:2,override_version:null};
+async function workspaceRules(page:Page,operator=true){
+  await setup(page,operator);
+  await page.route(`**/api/portal/workspaces/${tenantId}`,route=>route.fulfill({json:workspace}));
+  await page.route(`**/api/portal/workspaces/${tenantId}/analysis-rules`,route=>route.fulfill({json:{tenant_id:tenantId,version:5,items:[rule,{...rule,id:'TEST_UNAVAILABLE',name:'Unavailable rule',unavailable_reason:'Source not configured'}]}}));
+  await page.goto(`/workspaces/${tenantId}?tab=rules`);await expect(page.getByRole('heading',{name:'Published rules'})).toBeVisible();
+}
+
+test('workspace rule edits require exact customer and workspace review before one versioned write',async({page})=>{
+  await workspaceRules(page);const writes:unknown[]=[];
+  await page.route(`**/api/portal/workspaces/${tenantId}/analysis-rules`,async route=>{
+    if(route.request().method()==='PUT'){writes.push(route.request().postDataJSON());return route.fulfill({json:{tenant_id:tenantId,version:6,items:[{...rule,enabled:false}]}});}
+    return route.fulfill({json:{tenant_id:tenantId,version:5,items:[rule]}});
+  });
+  await page.getByRole('switch',{name:'Toggle Disk assessment'}).click();expect(writes).toEqual([]);await page.getByRole('button',{name:'Review 1 rule changes'}).click();
+  const review=page.getByRole('dialog',{name:'Review workspace rule changes'});await expect(review).toContainText('Original customer');await expect(review).toContainText('Production workspace');await expect(review).toContainText('Enabled → Disabled');
+  await review.getByRole('button',{name:'Apply rule changes'}).click();await expect(review).toHaveCount(0);expect(writes).toEqual([{version:5,rules:[{rule_id:'TEST_RULE',enabled:false}]}]);
+  await expect(page.getByRole('status').filter({hasText:'Policy version 6 saved'})).toBeVisible();
+});
+
+test('auditor can inspect rule provenance without edits and keyboard tabs preserve workspace context',async({page})=>{
+  await workspaceRules(page,false);await expect(page.getByRole('switch')).toHaveCount(0);await page.getByText('Rule details: Disk assessment',{exact:true}).click();await expect(page.locator('.rule-details[open]')).toContainText('TEST_RULE');
+  await expect(page.getByRole('region',{name:'Administration context'})).toContainText('Original customer');const tab=page.getByRole('tab',{name:'Rules',exact:true});await tab.focus();await page.keyboard.press('Home');await expect(page.getByRole('tab',{name:'Overview',exact:true})).toBeFocused();await expect(page).toHaveURL(/tab=overview/);
+});
+
+test('operator policy conflict blocks reapply until a read refresh and retains intended draft',async({page})=>{
+  await workspaceRules(page);let writes=0,version=5;
+  await page.route(`**/api/portal/workspaces/${tenantId}/analysis-rules`,async route=>{
+    if(route.request().method()==='PUT'){writes++;version=6;return route.fulfill({status:409,json:{detail:'Policy changed'}});}
+    return route.fulfill({json:{tenant_id:tenantId,version,items:[rule]}});
+  });
+  await page.getByRole('switch',{name:'Toggle Disk assessment'}).click();await page.getByRole('button',{name:'Review 1 rule changes'}).click();await page.getByRole('button',{name:'Apply rule changes'}).click();await expect(page.getByRole('button',{name:'Review 1 rule changes'})).toBeDisabled();
+  await page.getByRole('button',{name:'Reload current policy',exact:true}).click();await expect(page.getByRole('switch',{name:'Toggle Disk assessment'})).not.toBeChecked();await page.getByRole('button',{name:'Review 1 rule changes'}).click();await expect(page.getByRole('dialog',{name:'Review workspace rule changes'})).toContainText('Expected policy version: 6');expect(writes).toBe(1);
+});
+
+test('workspace rule filters fit mobile and unavailable rules have no mutation control',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await workspaceRules(page);await page.getByLabel('Effective state',{exact:true}).selectOption('Unavailable');await expect(page.getByRole('switch')).toHaveCount(0);await expect(page.getByText('Unavailable rule',{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test('unsaved operator rules require confirmation before leaving the workspace tab',async({page})=>{
+  await workspaceRules(page);await page.getByRole('switch',{name:'Toggle Disk assessment'}).click();
+  page.once('dialog',dialog=>dialog.dismiss());await page.getByRole('tab',{name:'Overview',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'Rules',exact:true})).toHaveAttribute('aria-selected','true');
+  await page.getByRole('tab',{name:'Rules',exact:true}).focus();page.once('dialog',dialog=>dialog.dismiss());await page.keyboard.press('Home');await expect(page.getByRole('tab',{name:'Rules',exact:true})).toHaveAttribute('aria-selected','true');
+  page.once('dialog',dialog=>dialog.accept());await page.getByRole('tab',{name:'Overview',exact:true}).click();
+  await expect(page.getByRole('tab',{name:'Overview',exact:true})).toHaveAttribute('aria-selected','true');
+});

@@ -1,0 +1,242 @@
+/* Shared visual conventions; each independently deployed app owns its copy. */
+:root {
+  --experience-radius: 14px;
+  --experience-inset: 24px;
+  --experience-shadow: 0 1px 3px #0f172a06, 0 8px 28px #0f172a04;
+}
+html[data-theme=dark] {
+  --experience-shadow: 0 1px 0 #ffffff03, 0 8px 28px #00000012;
+}
+
+/* Keep navigation reachable on short laptops and at increased zoom. */
+.sidebar { overflow: hidden; }
+.sidebar .brand, .sidebar-bottom { flex-shrink: 0; }
+.sidebar nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  padding-bottom: 12px;
+}
+.sidebar-bottom { padding-top: 16px; }
+.sidebar .nav-link:focus-visible { outline: 2px solid var(--indigo-600); outline-offset: -2px; }
+.panel { border-radius: var(--experience-radius); box-shadow: var(--experience-shadow); }
+.page-heading h1 { text-wrap: balance; }
+.page-heading p { max-width: 76ch; }
+.button { border-radius: 8px; }
+.button:focus-visible, .icon-button:focus-visible, .rule-details summary:focus-visible {
+  outline: 2px solid var(--indigo-600);
+  outline-offset: 3px;
+}
+.page-tabs { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.page-tabs > button { min-height: 44px; }
+.dialog-actions { flex-wrap: wrap; background: var(--surface); }
+.dialog-content { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+/* Catalog controls have a deliberate grid instead of compressed flex rows. */
+.rule-catalog-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+  gap: 16px;
+  padding: 0 var(--experience-inset) 20px;
+}
+.rule-catalog-filters label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--slate-700);
+}
+.rule-catalog-filters label:has(input[type=search]) { grid-column: span 2; }
+.rule-catalog-filters > .button { justify-self: start; min-height: 38px; }
+.rule-catalog-filters :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 11px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+}
+.rule-catalog-filters :is(input, select):focus-visible {
+  outline: 2px solid var(--indigo-600);
+  outline-offset: 2px;
+}
+.rule-catalog-caption {
+  margin: 0;
+  padding: 0 var(--experience-inset) 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.summary-table-scroll[aria-label$="rule catalog" i] {
+  border-top: 1px solid var(--border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.summary-table-scroll[aria-label$="rule catalog" i]:focus-visible { outline: 2px solid var(--indigo-600); outline-offset: -2px; }
+.summary-table-scroll[aria-label$="rule catalog" i] td:first-child {
+  min-width: 240px;
+  max-width: 420px;
+  white-space: normal;
+}
+.summary-table-scroll[aria-label$="rule catalog" i] td:first-child > :is(p, small) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+.summary-table-scroll[aria-label$="rule catalog" i] :is(th, td) { vertical-align: top; }
+.summary-table-scroll[aria-label$="rule catalog" i] td { padding-block: 17px; }
+.summary-table-scroll[aria-label$="rule catalog" i] th {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.summary-table-scroll[aria-label$="rule catalog" i] td > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.rule-details {
+  max-width: 460px;
+  margin-top: 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+.rule-details summary {
+  padding: 6px 0;
+  color: var(--indigo-600);
+  font-size: 12px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.rule-details[open] {
+  padding: 10px 12px;
+  border-color: var(--border);
+  background: var(--slate-50);
+}
+.rule-details[open] summary { padding-top: 0; }
+.rule-details dl { display: grid; gap: 10px; margin: 14px 0; }
+.rule-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr);
+  gap: 12px;
+}
+.rule-details dt { color: var(--muted); font-size: 12px; }
+.rule-details dd { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.rule-details code { font-size: 11px; }
+.rule-details p { margin-top: 10px; font-size: 12px; line-height: 1.75; white-space: normal; }
+.rule-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 18px var(--experience-inset);
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--indigo-50) 30%, var(--surface));
+}
+.rule-draft-actions > span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.rule-change-list {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+.rule-change-list li { padding: 14px; background: var(--slate-50); border: 1px solid var(--border); border-radius: 10px; }
+.rule-change-list strong { display: block; font-size: 13px; }
+.rule-change-list p { margin-top: 5px; font-size: 13px; line-height: 1.7; }
+
+@media (max-width: 1000px) {
+  .rule-catalog-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  :root { --experience-inset: 16px; }
+  .rule-catalog-filters { gap: 14px 12px; }
+  .rule-catalog-filters > .button { grid-column: 1 / -1; }
+  .rule-catalog-filters :is(input, select), .rule-draft-actions .button { min-height: 44px; }
+  .rule-draft-actions .button { flex: 1 1 140px; white-space: normal; }
+  .rule-draft-actions > span { flex-basis: 100%; }
+  .rule-details dl > div { grid-template-columns: 1fr; gap: 3px; }
+  .dialog-actions .button { min-height: 44px; white-space: normal; }
+}
+
+/* Customer identity is visible before the operator edits a workspace. */
+.operator-workspace-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 28px;
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--experience-shadow);
+}
+.operator-workspace-context > div { display: grid; gap: 5px; min-width: 0; }
+.operator-workspace-context span { color: var(--muted); font-size: 11px; }
+.operator-workspace-context strong { font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.operator-workspace-context .text-link { margin-left: auto; }
+.operator-workspace-context :is(a, button) { font-size: 12px; }
+@media (max-width: 600px) {
+  .operator-workspace-context { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 16px; }
+  .operator-workspace-context > div { grid-template-columns: 90px minmax(0, 1fr); align-items: baseline; gap: 10px; }
+  .operator-workspace-context .text-link { margin-left: 0; }
+  .operator-workspace-context button { justify-self: start; }
+}
+
+/* Page/tab audit: narrow headers, native fieldsets and direct panel fields. */
+.page-heading > div, .section-title > div { min-width: 0; }
+.page-heading-actions { max-width: 100%; flex-wrap: wrap; }
+.section-title { flex-wrap: wrap; }
+.detail-list { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.panel fieldset { min-inline-size: 0; max-width: 100%; }
+.panel > fieldset {
+  margin: 0 var(--experience-inset) 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.panel .field-label { display: grid; min-width: 0; gap: 6px; font-size: 12px; color: var(--slate-700); }
+.panel > :is(.field-label, p.muted) { margin: 0 var(--experience-inset) 12px; }
+.panel > .input {
+  display: block;
+  width: calc(100% - 2 * var(--experience-inset));
+  max-width: calc(100% - 2 * var(--experience-inset));
+  margin: 0 var(--experience-inset) 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.panel .field-label > :is(input, select, textarea) { width: 100%; min-width: 0; max-width: 100%; }
+.panel > fieldset .field-label { margin-block: 12px; }
+.panel > fieldset .field-label > :is(input, textarea) {
+  border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px;
+  background: var(--surface); color: var(--text); font: inherit;
+}
+@media (max-width: 600px) {
+  .page-heading-actions { width: 100%; gap: 8px; }
+  .page-heading-actions .button { white-space: normal; }
+}
+
+/* Table headers contain visually hidden labels; anchor them to the scroller. */
+.summary-table-scroll { position: relative; min-width: 0; max-width: 100%; }
+.panel p, .inline-help code { overflow-wrap: anywhere; }
+.panel fieldset .button { max-width: 100%; white-space: normal; }
