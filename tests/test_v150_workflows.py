@@ -152,7 +152,7 @@ def test_keyless_billing_readers_bind_exact_scopes_and_report_real_granularity(m
         def close(self):calls.append('closed')
         def refresh(self,request):pass
     monkeypatch.setattr(cloud_identity,'azure_credential',lambda tenant:Credential())
-    def azure_post(url,token,body):
+    def azure_post(url,token,body,scope_id=None):
         assert '/subscriptions/'+SUB+'/' in url and token=='synthetic'
         return {'properties':{'columns':[{'name':n} for n in ('PreTaxCost','UsageDate','ResourceId','Currency')],'rows':[['2.50',20261001,None,'USD']]}}
     monkeypatch.setattr('app.collectors.billing_sync._post',azure_post)
