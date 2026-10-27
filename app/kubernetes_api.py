@@ -26,7 +26,20 @@ def evidence_digest(row):
         'data_sources':row.get('data_sources'),'reconciliation_status':row.get('reconciliation_status')})
 
 
+def _azure_summary(resource):
+    """Baseline Azure Resource Graph facts for an AKS cluster -- never Prometheus-derived."""
+    if resource is None:return None
+    e=resource.get('evidence') or {}
+    return dict(resource_id=resource['resource_id'],resource_group=resource.get('resource_group'),
+        region=resource.get('region'),sku_tier=e.get('sku_tier'),kubernetes_version=e.get('kubernetes_version'),
+        node_resource_group=e.get('node_resource_group'),power_state=e.get('power_state'),fqdn=e.get('fqdn'),
+        private_cluster=e.get('private_cluster'),network_plugin=e.get('network_plugin'),
+        node_pools=e.get('node_pools') or [],node_count=e.get('node_count'),tags=e.get('tags') or {})
+
+
 def workspace(scan,tenant=None):
+    azure_by_name={r['resource_name']:r for r in scan.get('inventory',[])
+        if r.get('cloud_provider','azure')=='azure' and r['resource_type'].lower()=='microsoft.containerservice/managedclusters'}
     rows=[r for r in scan.get('inventory',[]) if r.get('cloud_provider')=='kubernetes']
     outcomes=[r for r in scan.get('rule_evaluations',[]) if r.get('cloud_provider')=='kubernetes']
     by_resource=defaultdict(list)
@@ -46,7 +59,7 @@ def workspace(scan,tenant=None):
                 daemonset=sum(r['evidence']['requests']['daemon_'+dimension] for r in nodes) if known else None,
                 actual_p95=None,physical=None)
         clusters.append(dict(cluster_id=cluster,coverage=coverage(selected,[f for f in scan['findings'] if f['resource_id'] in ids],[r for r in outcomes if r['resource_id'] in ids]),
-            sources=list(source_map.values()),capacity=capacity,
+            sources=list(source_map.values()),capacity=capacity,azure_resource=_azure_summary(azure_by_name.get(cluster)),
             billed_node_cost_usd=sum(r['evidence']['billed_node_cost_usd'] for r in nodes) if nodes and all(r['evidence'].get('billed_node_cost_usd') is not None for r in nodes) else None,
             realizable_node_savings_usd=sum(next(iter(v)) for v in {pool:{r['evidence'].get('realizable_node_savings_usd') for r in nodes if r['evidence'].get('node_pool')==pool} for pool in {r['evidence'].get('node_pool') for r in nodes}}.values()) if nodes and all(r['evidence'].get('realizable_node_savings_usd') is not None for r in nodes) else None,
             reconciliation_status='source_conflict' if any(r.get('reconciliation_status')=='source_conflict' for r in selected) else 'partial_telemetry'))
@@ -56,6 +69,7 @@ def workspace(scan,tenant=None):
     for entry in sorted((tenant or {}).get('kubernetes_clusters') or [], key=lambda e:e['cluster_id']):
         if entry['cluster_id'] in discovered:continue
         clusters.append(dict(cluster_id=entry['cluster_id'],coverage={},sources=[],capacity=empty_capacity,
+            azure_resource=_azure_summary(azure_by_name.get(entry['cluster_id'])),
             billed_node_cost_usd=None,realizable_node_savings_usd=None,
             reconciliation_status='telemetry_not_configured' if not entry.get('prometheus_url') else 'partial_telemetry'))
         discovered.add(entry['cluster_id'])

@@ -17,12 +17,31 @@ type Resource={resource_id:string;resource_name:string;cluster_id:string;resourc
   evidence:{pod?:string;container?:string;node?:string;controller?:{name:string;kind:string}|null;qos_class?:string;hpa_present?:boolean|null;cpu_request?:number|null;memory_request?:number|null;fixed_heap_configured?:boolean;node_pool?:string;metrics?:Record<string,Metric|null>};
   costs:{workload_used_estimate_usd:number|null;workload_request_slack_estimate_usd:number|null;cluster_unallocated_slack_usd:number|null;billed_node_cost_usd:number|null;realizable_node_savings_usd:number|null;allocation_total_usd:number|null;explanation:string};evaluations:Evaluation[]};
 type Capacity={allocatable:number|null;requested:number|null;daemonset:number|null;actual_p95:number|null;physical:number|null};
-type Cluster={cluster_id:string;coverage:Record<string,number>;sources:Source[];capacity:Record<'cpu'|'memory',Capacity>;billed_node_cost_usd?:number|null;realizable_node_savings_usd?:number|null;reconciliation_status:string};
+type NodePool={name:string|null;vm_size:string|null;count:number|null;mode:string|null;os_type:string|null};
+type AzureResource={resource_id:string;resource_group:string|null;region:string|null;sku_tier:string|null;kubernetes_version:string|null;
+  node_resource_group:string|null;power_state:string|null;fqdn:string|null;private_cluster:boolean|null;network_plugin:string|null;
+  node_pools:NodePool[];node_count:number|null;tags:Record<string,string>};
+type Cluster={cluster_id:string;coverage:Record<string,number>;sources:Source[];capacity:Record<'cpu'|'memory',Capacity>;azure_resource:AzureResource|null;billed_node_cost_usd?:number|null;realizable_node_savings_usd?:number|null;reconciliation_status:string};
 type View={scan_id:string;observed_at:string;clusters:Cluster[];resources:Resource[];financial_note:string;rule_matrix:{rule_id:string;name:string;pillar:string;outcomes:Record<string,number>}[]};
 type Patch={filename:string;content:string;diff:string;replicas_reviewed:number;warning:string;review_commands:string[]};
 const labelOverrides:Record<string,string>={OOMKILL_OBSERVED:'Out-of-memory kill observed'};
 const label=(value:string)=>labelOverrides[value]||sentence(value);
 const amount=(value:number|null|undefined,unit='')=>value==null?'Unknown':value.toLocaleString('en-US',{maximumFractionDigits:2})+unit;
+
+function AzureClusterDetails({resource}:{resource:AzureResource|null}) {
+  if(!resource)return <p className="inline-help">No Azure resource matched this cluster in the current scan.</p>;
+  const fields:[string,string][]=[
+    ['Resource group',resource.resource_group||'Unknown'],['Region',resource.region||'Unknown'],
+    ['Kubernetes version',resource.kubernetes_version||'Unknown'],['SKU tier',resource.sku_tier||'Unknown'],
+    ['Node resource group',resource.node_resource_group||'Unknown'],['Power state',resource.power_state||'Unknown'],
+    ['Network plugin',resource.network_plugin||'Unknown'],['Private cluster',resource.private_cluster==null?'Unknown':resource.private_cluster?'Yes':'No'],
+    ['Node count',resource.node_count==null?'Unknown':String(resource.node_count)]];
+  return <div className="k8s-azure-details">
+    <dl className="settings-key-values">{fields.map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>
+    {!!resource.node_pools.length&&<div className="drawer-cost-grid">{resource.node_pools.map((pool,i)=><article key={pool.name||i}><span>{pool.name||'Node pool'}</span><strong>{pool.count??'Unknown'}</strong><small>{pool.vm_size||'Unknown size'} · {pool.mode||'Unknown mode'} · {pool.os_type||'Unknown OS'}</small></article>)}</div>}
+    <p className="inline-help">Fetched from Azure Resource Graph. Utilization, OOM kills and allocation evidence below require a Prometheus binding for this cluster.</p>
+  </div>;
+}
 
 function CapacityBar({value,dimension}:{value:Capacity;dimension:'cpu'|'memory'}) {
   const divisor=dimension==='memory'?1024**3:1,unit=dimension==='memory'?' GiB':' cores';
@@ -76,7 +95,9 @@ export function KubernetesWorkspace() {
     {!scan?<EmptyState icon={Boxes} title="No scan selected">Run a scan with Kubernetes selected to discover your authorized clusters.</EmptyState>:error?<Notice tone="error">{error}</Notice>:!data?<Loading label="Loading Kubernetes evidence…"/>:!data.clusters.length?<EmptyState icon={Boxes} title="No Kubernetes inventory in this scan">Choose a completed Kubernetes scan. An operator API binding enables full discovery; metrics-only discovery cannot prove cluster coverage.</EmptyState>:<>
       <Notice tone="info">Observed {dateTime(data.observed_at)}. {data.financial_note} <Link className="text-link" href="/settings?tab=rules">Manage analysis rules</Link></Notice>
       <section className="panel"><div className="grid-heading"><div><h2>Cluster & source health</h2><p>Unknown metrics retain inventory and block dependent recommendations.</p></div><ShieldCheck size={20}/></div>
-        {clusters.map(c=><article className="k8s-cluster" key={c.cluster_id}><h3>{c.cluster_id} <span className="status-tag">{label(c.reconciliation_status)}</span></h3><dl className="k8s-counts">{['discovered_count','in_scope_count','evaluated_count','insufficient_evidence_count','excluded_count','unsupported_count'].map(key=><div key={key}><dt>{label(key.replace('_count',''))}</dt><dd>{c.coverage[key]??'Unknown'}</dd></div>)}</dl><p className="inline-help">Counters describe resource sets and may overlap across rules. Secondary-source failures appear below; primary inventory failures do not create a clean snapshot.</p>
+        {clusters.map(c=><article className="k8s-cluster" key={c.cluster_id}><h3>{c.cluster_id} <span className="status-tag">{label(c.reconciliation_status)}</span></h3>
+          <AzureClusterDetails resource={c.azure_resource}/>
+          <dl className="k8s-counts">{['discovered_count','in_scope_count','evaluated_count','insufficient_evidence_count','excluded_count','unsupported_count'].map(key=><div key={key}><dt>{label(key.replace('_count',''))}</dt><dd>{c.coverage[key]??'Unknown'}</dd></div>)}</dl><p className="inline-help">Counters describe resource sets and may overlap across rules. Secondary-source failures appear below; primary inventory failures do not create a clean snapshot.</p>
           <div className="k8s-sources">{c.sources.map(s=><details key={s.source_id}><summary><strong>{s.source_id}</strong><span>{label(s.status)}{s.coverage_ratio!=null?` · ${(100*s.coverage_ratio).toFixed(1)}%`:''}</span></summary><p>{s.expected_samples?`${s.valid_samples?.toLocaleString()} / ${s.expected_samples.toLocaleString()} samples`:'No sample denominator available'}</p><p>{s.observed_window_start?dateTime(s.observed_window_start):'Window unknown'} → {s.observed_window_end?dateTime(s.observed_window_end):'Unknown'}</p>{s.reason_code&&<p>{label(s.reason_code)}</p>}</details>)}</div>
           <p className="inline-help">Imported 30-day billed node cost: {c.billed_node_cost_usd==null?'Unknown':money(c.billed_node_cost_usd)} · Modeled consolidation under verified scheduling: {c.realizable_node_savings_usd==null?'Unknown':money(c.realizable_node_savings_usd)}. This is not post-change verified savings.</p><div className="k8s-capacity-grid"><CapacityBar value={c.capacity.cpu} dimension="cpu"/><CapacityBar value={c.capacity.memory} dimension="memory"/></div></article>)}
       </section>

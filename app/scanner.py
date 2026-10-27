@@ -116,7 +116,11 @@ INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
     ', encryptionType=tostring(properties.encryption.type), minimumTlsVersion=tostring(properties.minimumTlsVersion)'
     ', backupRetentionDays=toint(properties.backupRetentionDays), highAvailability=properties.highAvailability.mode'
     ', disableLocalAuth=properties.disableLocalAuth, allowBlobPublicAccess=properties.allowBlobPublicAccess'
-    ', zoneRedundant=properties.zoneRedundant, zones=zones')
+    ', zoneRedundant=properties.zoneRedundant, zones=zones'
+    ', kubernetesVersion=tostring(properties.kubernetesVersion), nodeResourceGroup=tostring(properties.nodeResourceGroup)'
+    ', aksPowerState=tostring(properties.powerState.code), fqdn=tostring(properties.fqdn)'
+    ', privateCluster=properties.apiServerAccessProfile.enablePrivateCluster'
+    ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles')
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
@@ -136,6 +140,18 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
         for source,target in (('allowBlobPublicAccess','allow_blob_public_access'),('zoneRedundant','multi_az'),('disableLocalAuth','managed_secrets'),('allowBlobPublicAccess','publicly_accessible')):
             if type(row.get(source)) is bool:evidence[target]=row[source]
         if row.get('minimumTlsVersion') in ('1.2','1.3','TLS1_2','TLS1_3'):evidence['tls_required']=True
+        if row['type'].lower() == 'microsoft.containerservice/managedclusters':
+            for source, target in (('kubernetesVersion', 'kubernetes_version'), ('nodeResourceGroup', 'node_resource_group'),
+                                    ('aksPowerState', 'power_state'), ('fqdn', 'fqdn'), ('networkPlugin', 'network_plugin')):
+                if isinstance(row.get(source), str) and row[source]:
+                    evidence[target] = row[source]
+            if isinstance(row.get('privateCluster'), bool):
+                evidence['private_cluster'] = row['privateCluster']
+            pools = row.get('agentPoolProfiles')
+            if isinstance(pools, list):
+                evidence['node_pools'] = [dict(name=p.get('name'), vm_size=p.get('vmSize'), count=p.get('count'),
+                    mode=p.get('mode'), os_type=p.get('osType')) for p in pools if isinstance(p, dict)]
+                evidence['node_count'] = sum(p.get('count') or 0 for p in pools if isinstance(p, dict) and type(p.get('count')) is int)
         edges = []
         def edge(kind, source, target):
             if isinstance(source, str) and isinstance(target, str) and source and target:
