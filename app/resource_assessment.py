@@ -75,7 +75,7 @@ def merge(key, findings, *, observed_at=None, now=None):
         pillars=pillars, guardrails=guardrails,
         evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
         retail_estimate_usd=float(max(amounts).quantize(Decimal('0.01'))) if amounts else None,
-        billed_cost_usd=results[0].get('billed_cost_usd'), effective_cost_usd=results[0].get('effective_cost_usd'), commitment_locked=results[0].get('commitment_locked',False), realizable_savings_usd=None, automatic_execution=False)
+        billed_cost_usd=results[0].get('billed_cost_usd'), effective_cost_usd=results[0].get('effective_cost_usd'), commitment_locked=results[0].get('commitment_locked',False), currency=results[0].get('currency'), realizable_savings_usd=None, automatic_execution=False)
     context = dict(
         resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,
         findings=[dict(rule_id=f['rule_id'], facts=ai_context(f, r)['facts']) for f, r in zip(findings, results)],
@@ -129,7 +129,7 @@ def merge_inventory(key, obs, *, observed_at=None, now=None):
         risk_level='unknown', risk_check_codes=[], evidence_gap_codes=[],
         pillars=pillars, guardrails=['INVENTORY_ONLY'],
         evidence_coverage=dict(observed=0, total=0),
-        retail_estimate_usd=None, billed_cost_usd=None, realizable_savings_usd=None, automatic_execution=False,
+        retail_estimate_usd=None, billed_cost_usd=None, currency=None, realizable_savings_usd=None, automatic_execution=False,
     )
     context = dict(
         resource_reference=key, provider=provider, service_category=kind, policy_version=POLICY_VERSION,

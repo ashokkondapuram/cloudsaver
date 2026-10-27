@@ -168,10 +168,12 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         overlaps = [dict(resource_id=row['resource_id'], resource_name=row.get('resource_name'), rule_id=row['rule_id'])
                     for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_id(row['resource_id']) != selected_id]
         from app.pricing import opportunity_totals
+        billed_currency = assessment.get('currency')
         costs = dict(billed_cost_usd=assessment.get('billed_cost_usd'), effective_cost_usd=assessment.get('effective_cost_usd'),retail_estimate_usd=assessment['retail_estimate_usd'], modeled_future_cost_usd=None,
                      opportunity_usd=opportunity_totals(findings, realized=True)['total_monthly_opportunity_usd'],
-                     verified_realized_savings_usd=None, currency='USD',
-                     explanation='Billed/effective values are exact resource-period USD FOCUS imports where available; inspect coverage. Retail opportunities are estimates and post-change savings remain unverified.')
+                     verified_realized_savings_usd=None, currency=billed_currency or 'USD',
+                     explanation=f'Billed/effective values are exact resource-period {billed_currency} FOCUS imports where available; inspect coverage. Retail opportunities are estimates in USD and post-change savings remain unverified.' if billed_currency
+                     else 'Billed/effective values are exact resource-period FOCUS imports where available; inspect coverage. Retail opportunities are estimates in USD and post-change savings remain unverified.')
         return dict(scan_id=scan['scan_id'], assessment=assessment, findings=findings, ai_context=context,
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,

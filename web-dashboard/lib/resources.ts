@@ -33,7 +33,7 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
   observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
   rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean}[];
-  costs?: {billed_cost_usd: number | null;effective_cost_usd?:number|null; retail_estimate_usd: number | null; modeled_future_cost_usd: number | null; opportunity_usd: number | null; verified_realized_savings_usd: number | null; explanation: string};
+  costs?: {billed_cost_usd: number | null;effective_cost_usd?:number|null; retail_estimate_usd: number | null; modeled_future_cost_usd: number | null; opportunity_usd: number | null; verified_realized_savings_usd: number | null; explanation: string; currency?: string};
   financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[];
   observability?: ObservedSignals | null};
 export type ObservedMetric = {connector: string; query_id: string; metric: string; unit: string; window_start: string | null; window_end: string | null;

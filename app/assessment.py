@@ -93,6 +93,7 @@ def assess(finding, *, observed_at=None, now=None):
           'A saved retail estimate is available; billed spend and realizable savings are unverified.' if amount is not None else 'No verified retail estimate is attached.')
     billed, effective = number(evidence.get('billed_cost_usd')), number(evidence.get('effective_cost_usd'))
     locked = evidence.get('commitment_locked') is True
+    currency = evidence.get('currency')
     check('cost', 'BILLED_COST', 'risk' if locked else 'observed' if billed is not None else 'unknown',
           'Imported charges indicate commitment coverage; verify reallocation before a change.' if locked else
           f'Imported 30-day USD charges: billed {billed:.2f}; effective {effective:.2f}. Coverage must be reviewed.' if billed is not None and effective is not None else
@@ -206,7 +207,7 @@ def assess(finding, *, observed_at=None, now=None):
                 risk_level='high' if any(c['status']=='risk' and c['code']!='OBSERVATION_FRESHNESS' for c in checks) else 'unknown',
                 automatic_execution=False, pillars=pillars, guardrails=guardrails,
                 evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in checks), total=len(checks)),
-                retail_estimate_usd=amount, billed_cost_usd=billed, effective_cost_usd=effective, commitment_locked=locked, realizable_savings_usd=None)
+                retail_estimate_usd=amount, billed_cost_usd=billed, effective_cost_usd=effective, commitment_locked=locked, currency=currency, realizable_savings_usd=None)
     # The digest covers only evaluated evidence and policy, never free text or raw identities.
     result['evidence_digest'] = hashlib.sha256(json.dumps(dict(context=ai_context(finding, result), retail_estimate_usd=amount), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return result
