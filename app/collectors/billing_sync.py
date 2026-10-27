@@ -12,7 +12,7 @@ import httpx
 from app.focus import Charge, FocusError, ImportRequest, authorized, digest
 from app.v150_store import WorkflowStore
 
-MAX_ROWS = 20000
+MAX_ROWS = 200000
 OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_region','athena_workgroup','athena_database','athena_table'}
 NAME = r'[A-Za-z0-9_-]{1,100}'
 
@@ -78,7 +78,7 @@ def _azure_query(url, token, kind, start, end):
         dataset={'granularity':'Daily','aggregation':{'cost':{'name':'PreTaxCost','function':'Sum'}},
                  'grouping':[{'type':'Dimension','name':'ResourceId'}]})
     rows, page = [], url
-    for _ in range(10):
+    for _ in range(100):
         properties = _post(page, token, body)['properties']
         names = [c['name'].lower() for c in properties['columns']]
         rows.extend(dict(zip(names,row)) for row in properties['rows'])
