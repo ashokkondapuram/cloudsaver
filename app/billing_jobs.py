@@ -61,7 +61,7 @@ class BillingJobs:
                 state='cancelled' if row[3]=='cancel_requested' else 'expired'
                 db.execute('UPDATE billing_sync_jobs SET state=%s,updated_at=%s WHERE tenant_id=%s AND id=%s',(state,now.isoformat(),tenant_id,row[0]));return None
             token=str(uuid4())
-            db.execute("UPDATE billing_sync_jobs SET state='running',lease_token=%s,lease_until=%s,updated_at=%s WHERE tenant_id=%s AND id=%s",(token,(now+timedelta(minutes=30)).isoformat(),now.isoformat(),tenant_id,row[0]))
+            db.execute("UPDATE billing_sync_jobs SET state='running',lease_token=%s,lease_until=%s,updated_at=%s WHERE tenant_id=%s AND id=%s",(token,(now+timedelta(minutes=300)).isoformat(),now.isoformat(),tenant_id,row[0]))
             return dict(id=str(row[0]),token=token,payload=decode(row[1]))
 
     def execute_scope(self,tenant,claim,*,readers=None,refresh=None,commitment_readers=None):

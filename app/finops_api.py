@@ -94,6 +94,27 @@ def create_router(repository, current_tenant):
             raise HTTPException(error.status if isinstance(error,FocusError) else 422,
                                 str(error) if isinstance(error,FocusError) else 'Budget must be a nonnegative decimal string') from None
 
+    @router.post('/resource-cost')
+    async def resource_cost(resource_id: str = Query(..., min_length=1, max_length=300), scope_id: str = Query(..., min_length=1, max_length=64),
+                            tenant=Depends(finance)):
+        from app.collectors.billing_sync import azure_resource_rows, bindings, _import_snapshot
+        from datetime import timedelta
+        selected = bindings(tenant)
+        binding = next((b for b in selected if b['provider'] == 'azure' and b['scope_id'] == scope_id), None)
+        if not binding:
+            raise HTTPException(403, 'This Azure subscription is not an authorized billing scope')
+        if not resource_id.lower().startswith(f'/subscriptions/{scope_id}/'.lower()):
+            raise HTTPException(422, 'resource_id must belong to the given subscription scope')
+        end = datetime.now(timezone.utc).date() - timedelta(days=1)
+        start = end - timedelta(days=30)
+        try:
+            rows = await run_in_threadpool(azure_resource_rows, scope_id, resource_id, tenant, start, end)
+        except Exception:
+            raise HTTPException(503, 'Resource cost is unavailable right now') from None
+        currencies = sorted({r['currency'] for r in rows})
+        imported = [await run_in_threadpool(_import_snapshot, repository, tenant, binding, rows, start, end, c) for c in currencies]
+        return dict(resource_id=resource_id, rows=len(rows), currencies=currencies, inserted=sum(x['inserted'] for x in imported))
+
     @router.get('/unit-economics/preview')
     def unit_economics_preview(
         prior_cost: str = Query(..., min_length=1, max_length=32),

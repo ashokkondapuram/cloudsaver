@@ -54,10 +54,24 @@ function Rules({detail}: {detail: ResourceDetail}) {
     <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}</small></article>)}</div>}</div>;
 }
 
-function Costs({detail}: {detail: ResourceDetail}) {
+function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => void}) {
+  const {token} = useWorkspace();
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const fields = [['billed_cost_usd', '30-day billed cost'], ['effective_cost_usd','30-day effective cost'], ['retail_estimate_usd', 'Retail review estimate'], ['modeled_future_cost_usd', 'Modeled future cost'],
     ['opportunity_usd', 'Modeled opportunity'], ['verified_realized_savings_usd', 'Verified realized savings']] as const;
-  return <div className="drawer-section"><h3>Financial evidence</h3><dl className="settings-key-values">{fields.map(([key, name]) => <div key={key}><dt>{name}</dt><dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key])}</dd></div>)}</dl>
+  async function fetchCost() {
+    setBusy(true); setError('');
+    try {
+      const qs = new URLSearchParams({resource_id: detail.assessment.resource_id, scope_id: detail.assessment.scope_id}).toString();
+      await api(`/finops/resource-cost?${qs}`, token, {method: 'POST', body: {}});
+      onFetched();
+    } catch (cause) {setError((cause as Error).message);}
+    finally {setBusy(false);}
+  }
+  return <div className="drawer-section"><h3>Financial evidence</h3>
+    {detail.assessment.provider === 'azure' && <p><button className="button secondary" disabled={busy} onClick={fetchCost}>{busy ? 'Fetching cost…' : 'Fetch latest cost for this resource'}</button></p>}
+    {error && <Notice tone="error">{error}</Notice>}
+    <dl className="settings-key-values">{fields.map(([key, name]) => <div key={key}><dt>{name}</dt><dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key])}</dd></div>)}</dl>
     <p>{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
     {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {item.rule_id}</li>)}</ul></Notice>}</div>;
 }
@@ -251,7 +265,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         {tab === 'overview' && <Overview detail={current}/>}
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
-        {tab === 'costs' && <Costs detail={current}/>}
+        {tab === 'costs' && <Costs detail={current} onFetched={changed}/>}
         {tab === 'observability' && <Observability detail={current}/>}
         {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
         {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}

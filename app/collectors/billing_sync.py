@@ -80,7 +80,7 @@ def _azure_query(url, token, kind, start, end):
                  'grouping':[{'type':'Dimension','name':'ResourceId'}]})
     rows, page = [], url
     for i in range(100):
-        if i: time.sleep(2)  # ponytail: fixed pace between pages avoids bursting Azure's per-entity quota; back off further if still too aggressive
+        if i: time.sleep(60)  # one page (batch of resources) per minute, matching Azure's observed per-entity quota recovery rate
         properties = _post(page, token, body)['properties']
         names = [c['name'].lower() for c in properties['columns']]
         rows.extend(dict(zip(names,row)) for row in properties['rows'])
@@ -100,7 +100,7 @@ def azure_rows(binding, tenant, start, end):
         url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
-            if i: time.sleep(5)  # ponytail: extra pace between the two cost-kind queries, same entity quota as page pacing above
+            if i: time.sleep(60)  # same per-minute pace between the two cost-kind queries
             for value in _azure_query(url, token, kind, start, end):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
                 totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
@@ -108,6 +108,35 @@ def azure_rows(binding, tenant, start, end):
         result = [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
                        category='Credit' if v['billed']<0 else 'Usage') for (day,resource,currency),v in merged.items()]
         return result, 'resource', ['Azure ActualCost is imported as billed cost and AmortizedCost as effective cost. Reservation and savings plan purchases are spread across covered usage.']
+    finally:
+        credential.close()
+
+
+def azure_resource_rows(scope_id, resource_id, tenant, start, end):
+    """Daily cost rows for exactly one resource, filtered (not grouped) so it stays tiny regardless of subscription size.
+
+    Returned in the same shape as azure_rows so callers can persist through _import_snapshot like a normal sync."""
+    import time
+    from app.cloud_identity import azure_credential
+    credential = azure_credential(tenant)
+    try:
+        token = credential.get_token('https://management.azure.com/.default').token
+        url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+        merged = {}
+        for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
+            if i: time.sleep(5)
+            body = dict(type=kind, timeframe='Custom',
+                timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
+                dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
+                         'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
+            properties = _post(url, token, body)['properties']
+            names = [c['name'].lower() for c in properties['columns']]
+            for value in (dict(zip(names, row)) for row in properties['rows']):
+                key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])
+                totals = merged.setdefault(key, {'billed': Decimal(0), 'effective': Decimal(0)})
+                totals[field] += Decimal(str(value.get('pretaxcost', value.get('cost'))))
+        return [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
+                    category='Credit' if v['billed'] < 0 else 'Usage') for (day, resource, currency), v in merged.items()]
     finally:
         credential.close()
 

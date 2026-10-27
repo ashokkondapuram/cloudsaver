@@ -148,7 +148,6 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
       validateScan(result);
       setScans(previous => [result, ...previous.filter(s => s.scan_id !== result.scan_id)]);
       setSelected(result.scan_id); clearContext(); notify(`Scan completed. ${result.total_items_found.toLocaleString()} findings ready to review.`);
-      if (workspace?.roles.includes('TenantAdmin') || workspace?.roles.includes('BillingAdmin')) api('/finops/sync', token, {body: {idempotency_key: crypto.randomUUID()}}).catch(() => {}); // ponytail: best-effort, errors (e.g. no billing connectors) are surfaced via the finops sync-status panel
     } catch (cause) {if (version === session.current) {const message = cause instanceof Error ? cause.message : 'Scan could not be completed.'; setError(message); notify(message, 'error');}}
     finally {if (version === session.current) setBusy('');}
   }
