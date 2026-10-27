@@ -58,8 +58,8 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
   const {token} = useWorkspace();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const billedCurrency = detail.costs?.currency || 'USD';
-  const fields = [['billed_cost_usd', '30-day billed cost', billedCurrency], ['effective_cost_usd','30-day effective cost', billedCurrency],
-    ['retail_estimate_usd', 'Retail review estimate', 'USD'], ['modeled_future_cost_usd', 'Modeled future cost', 'USD'],
+  const actuals = [['billed_cost_usd', '30-day billed cost', billedCurrency], ['effective_cost_usd', '30-day effective cost', billedCurrency]] as const;
+  const modeled = [['retail_estimate_usd', 'Retail review estimate', 'USD'], ['modeled_future_cost_usd', 'Modeled future cost', 'USD'],
     ['opportunity_usd', 'Modeled opportunity', 'USD'], ['verified_realized_savings_usd', 'Verified realized savings', 'USD']] as const;
   async function fetchCost() {
     setBusy(true); setError('');
@@ -73,8 +73,12 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
   return <div className="drawer-section"><h3>Financial evidence</h3>
     {detail.assessment.provider === 'azure' && <p><button className="button secondary" disabled={busy} onClick={fetchCost}>{busy ? 'Fetching cost…' : 'Fetch latest cost for this resource'}</button></p>}
     {error && <Notice tone="error">{error}</Notice>}
-    <dl className="settings-key-values">{fields.map(([key, name, currency]) => <div key={key}><dt>{name}</dt><dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</dd></div>)}</dl>
-    <p>{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
+    <div className="drawer-cost-grid">{actuals.map(([key, name, currency]) => <article key={key}><span>{name}</span>
+      <strong className={detail.costs?.[key] == null ? 'metric-unknown' : ''}>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</strong>
+      <small>{currency} / 30 days</small></article>)}</div>
+    <dl className="settings-key-values">{modeled.map(([key, name, currency]) => <div key={key}><dt>{name}</dt>
+      <dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</dd></div>)}</dl>
+    <p className="inline-help">{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
     {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {item.rule_id}</li>)}</ul></Notice>}</div>;
 }
 
