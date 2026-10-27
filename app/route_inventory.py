@@ -57,6 +57,7 @@ ROUTES = {
     ('GET','/api/v1/optimization/scans/{scan_id}/auto-scenarios'):'scoped_read',
     ('GET','/api/v1/gitops/syncs'):'full_scope',
     ('POST','/api/v1/finops/sync'):'full_scope',
+    ('POST','/api/v1/finops/resource-cost'):'full_scope',
     ('GET','/api/v1/finops/sync-status'):'full_scope',
     ('GET','/api/v1/finops/commitments'):'full_scope',
     ('GET','/api/v1/observability/connectors'):'full_scope',
