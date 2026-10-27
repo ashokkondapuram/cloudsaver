@@ -205,8 +205,8 @@ class FocusRepository:
         args = [v for pair in scopes for v in pair]
         totals = {}
         with self.store.transaction(tenant['tenant_id']) as db:
-            coverage = db.execute('SELECT provider,sub_account,period_start,period_end,complete FROM focus_imports WHERE tenant_id=%s AND currency=%s AND ('+fence+') AND period_start<%s AND period_end>%s ORDER BY created_at,id LIMIT 50001',
-                [tenant['tenant_id'],'USD',*args,finish.date().isoformat(),begin.date().isoformat()]).fetchall()
+            coverage = db.execute('SELECT provider,sub_account,period_start,period_end,complete FROM focus_imports WHERE tenant_id=%s AND ('+fence+') AND period_start<%s AND period_end>%s ORDER BY created_at,id LIMIT 50001',
+                [tenant['tenant_id'],*args,finish.date().isoformat(),begin.date().isoformat()]).fetchall()
             if len(coverage)>50000:raise FocusError('Narrow the resource billing import window')
             days={}
             for provider,account,a,b,complete in coverage:
@@ -216,18 +216,21 @@ class FocusRepository:
             for offset in range(0,len(normalized),300):
                 selected=sorted(normalized)[offset:offset+300]
                 marks=','.join('%s' for _ in selected)
-                rows=db.execute('SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category FROM focus_charges WHERE tenant_id=%s AND currency=%s AND ('+fence+') AND resource_id IN ('+marks+') AND period_start>=%s AND period_end<=%s ORDER BY id LIMIT 50001',
-                    [tenant['tenant_id'],'USD',*args,*selected,begin.isoformat(),finish.isoformat()]).fetchall()
+                # Each provider account bills in one native currency; charges are never filtered to a
+                # fixed currency here (that assumption previously hid every non-USD subscription's costs).
+                rows=db.execute('SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category,currency FROM focus_charges WHERE tenant_id=%s AND ('+fence+') AND resource_id IN ('+marks+') AND period_start>=%s AND period_end<=%s ORDER BY id LIMIT 50001',
+                    [tenant['tenant_id'],*args,*selected,begin.isoformat(),finish.isoformat()]).fetchall()
                 if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
-                for provider,account,rid,billed,effective,list_cost,category in rows:
+                for provider,account,rid,billed,effective,list_cost,category,currency in rows:
                     key=(provider,rid.lower() if provider=='azure' else rid)
-                    value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account))
+                    value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account,currency=currency))
+                    if value['currency']!=currency:continue  # a resource should not mix currencies; keep the first observed and ignore stray rows
                     value['billed']+=Decimal(billed);value['effective']+=Decimal(effective)
                     if list_cost is None:value['list_complete']=False
                     else:value['list']+=Decimal(list_cost)
                     value['locked'] |= category=='Purchase' or Decimal(effective)>Decimal(billed)
         return {key:dict(billed_cost_usd=float(v['billed']),effective_cost_usd=float(v['effective']),list_cost_usd=float(v['list']) if v['list_complete'] else None,
-            commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency='USD',billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
+            commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency=v['currency'],billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
             billing_window_start=begin.isoformat(),billing_window_end=finish.isoformat(),billing_basis='imported_FOCUS_not_provider_reconciled') for key,v in totals.items()}
 
     def attach(self, tenant, scan):
