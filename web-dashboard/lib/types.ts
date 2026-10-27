@@ -82,7 +82,7 @@ export type AccessEvent = {id: string; occurred_at: string; actor: string; actor
 export type Frequency = 'manual' | 'daily' | 'hourly';
 export type AwsAccount = {account_id: string; region: string; role_arn: string};
 export type GcpProject = {project_id: string; regions: string[]};
-export type KubernetesCluster = {cluster_id: string; prometheus_url: string; bearer_token_env: string};
+export type KubernetesCluster = {cluster_id: string; prometheus_url: string | null; bearer_token_env: string | null};
 
 export type TenantSettings = {
   tenant_id: string;

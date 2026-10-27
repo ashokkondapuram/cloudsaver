@@ -78,7 +78,7 @@ def public_tenant(tenant):
         'active': tenant.get('active', True), 'version': tenant.get('version', 0),
         'subscription_ids': tenant['subscription_ids'], 'aws_accounts': tenant.get('aws_accounts', []),
         'gcp_projects': tenant.get('gcp_projects', []),
-        'kubernetes_clusters': [{k: c[k] for k in ('cluster_id', 'prometheus_url', 'bearer_token_env')}
+        'kubernetes_clusters': [{k: c.get(k) for k in ('cluster_id', 'prometheus_url', 'bearer_token_env')}
                                 for c in tenant.get('kubernetes_clusters', [])],
         'identity': tenant.get('identity', {}), 'schedule': tenant.get('schedule', {}),
         'ai_foundry': tenant.get('ai_foundry'),

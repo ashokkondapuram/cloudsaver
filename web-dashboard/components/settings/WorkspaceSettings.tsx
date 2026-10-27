@@ -118,7 +118,7 @@ export function CloudScopesEditor() {
     </fieldset>}
     {allowed.includes('kubernetes') && <fieldset className="settings-fieldset" disabled>
       <legend><ProviderBadge provider="kubernetes"/>Kubernetes clusters</legend>
-      {data.settings.kubernetes_clusters.length ? <div className="subscription-list">{data.settings.kubernetes_clusters.map(c => <div key={c.cluster_id}><code>{c.cluster_id}</code><span className="inline-help">{c.prometheus_url}</span></div>)}</div> : <p className="inline-help">No clusters are connected.</p>}
+      {data.settings.kubernetes_clusters.length ? <div className="subscription-list">{data.settings.kubernetes_clusters.map(c => <div key={c.cluster_id}><code>{c.cluster_id}</code><span className="inline-help">{c.prometheus_url || 'Telemetry not configured'}</span></div>)}</div> : <p className="inline-help">No clusters are connected.</p>}
       <p className="inline-help">Your platform operator manages cluster endpoints because they use operator-held tokens.</p>
     </fieldset>}
   </form>;
