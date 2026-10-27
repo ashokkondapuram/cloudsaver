@@ -165,7 +165,7 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
     Returned in the same shape as azure_rows so callers can persist through _import_snapshot like a normal sync."""
     import time
     from app.cloud_identity import azure_credential
-    with _azure_cost_lock(scope_id, wait_seconds=90):
+    with _azure_cost_lock(scope_id, wait_seconds=10):
         credential = azure_credential(tenant)
         try:
             url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
