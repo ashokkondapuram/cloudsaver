@@ -92,13 +92,15 @@ def _azure_query(url, token, kind, start, end):
 
 
 def azure_rows(binding, tenant, start, end):
+    import time
     from app.cloud_identity import azure_credential
     credential = azure_credential(tenant)
     try:
         token = credential.get_token('https://management.azure.com/.default').token
         url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
-        for kind, field in (('ActualCost','billed'),('AmortizedCost','effective')):
+        for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
+            if i: time.sleep(5)  # ponytail: extra pace between the two cost-kind queries, same entity quota as page pacing above
             for value in _azure_query(url, token, kind, start, end):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
                 totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
