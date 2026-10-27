@@ -100,3 +100,32 @@ def test_record_check_is_insert_only():
     cs.record_check(s, "t1", CheckRecord(1, "b", "h", "pd", "pol", "ev", "blocked", True), "failure")
     sql = s.db.calls[0][0]
     assert sql.startswith("INSERT") and "ON CONFLICT DO NOTHING" in sql
+
+
+# --- Real EnterpriseStore (SQLite) integration: the control-plane tables must exist and be
+# reachable through the production store shape, not just the FakeStore above. ---
+from tests.test_enterprise import evidence, workspace, TID  # noqa: E402
+
+
+def test_control_plane_tables_exist(evidence):
+    settings, repo, scan = evidence
+    with repo.transaction(TID) as db:
+        for table in ('cp_plans', 'cp_plan_versions', 'cp_plan_approvals', 'cp_action_assessments'):
+            db.execute(f'SELECT COUNT(*) FROM {table}')  # raises OperationalError if the table is missing
+
+
+def test_plan_version_update_trigger_blocks_non_state_columns(evidence):
+    settings, repo, scan = evidence
+    import sqlite3
+    with repo.transaction(TID, write=True) as db:
+        db.execute("INSERT INTO cp_plans(id,tenant_id,objective,owner_hash,created_at) VALUES('p1',%s,'x','h','2026-01-01')", (TID,))
+        db.execute("INSERT INTO cp_plan_versions(id,tenant_id,plan_id,version,identity_digest,targets,parameters,policy_digest,evidence_digest,state,created_by_hash,created_at,updated_at) "
+                   "VALUES('v1',%s,'p1',1,'d','[]','{}','p','e','draft','h','2026-01-01','2026-01-01')", (TID,))
+    with pytest.raises(sqlite3.IntegrityError):
+        with repo.transaction(TID, write=True) as db:
+            db.execute("UPDATE cp_plan_versions SET targets='[\"changed\"]' WHERE id='v1'")
+    with repo.transaction(TID, write=True) as db:
+        db.execute("UPDATE cp_plan_versions SET state='assessed',updated_at='2026-01-02' WHERE id='v1'")
+    with repo.transaction(TID) as db:
+        row = db.execute("SELECT state FROM cp_plan_versions WHERE id='v1'").fetchone()
+    assert row[0] == 'assessed'
