@@ -20,7 +20,7 @@ class Credential:
 
 def test_azure_merges_actual_and_amortized_cost_across_pages(monkeypatch):
     calls=[]
-    def post(url,token,body):
+    def post(url,token,body,scope_id=None):
         calls.append((url,body['type']))
         rows={'ActualCost':[[20261001,'/sub/r1','USD','12.5']],'AmortizedCost':[[20261001,'/sub/r1','USD','8.25']]}[body['type']]
         nxt='https://management.azure.com/next' if url.endswith('2023-11-01') else None
@@ -34,7 +34,7 @@ def test_azure_merges_actual_and_amortized_cost_across_pages(monkeypatch):
 
 def test_azure_pagination_rejects_foreign_hosts(monkeypatch):
     monkeypatch.setattr(billing_sync,'_post',lambda *_:{'properties':{'columns':[],'rows':[],'nextLink':'https://attacker.example/next'}})
-    with pytest.raises(ValueError,match='pagination host'):billing_sync._azure_query('https://management.azure.com/q',Credential(),'ActualCost',START,END)
+    with pytest.raises(ValueError,match='pagination host'):billing_sync._azure_query('https://management.azure.com/q',Credential(),'ActualCost',START,END,SUB)
 
 
 class Athena:
@@ -81,7 +81,7 @@ def test_connector_validation_rejects_partial_athena_and_misapplied_export_type(
 
 def test_gcp_detailed_export_returns_resource_rows(monkeypatch):
     seen={}
-    def post(url,token,body):
+    def post(url,token,body,scope_id=None):
         seen.update(body)
         return {'jobComplete':True,'totalRows':'1','rows':[{'f':[{'v':'2026-10-01'},{'v':'USD'},{'v':'regular'},{'v':'//compute/vm-1'},{'v':'4'},{'v':'3'}]}]}
     monkeypatch.setattr(billing_sync,'_post',post)
