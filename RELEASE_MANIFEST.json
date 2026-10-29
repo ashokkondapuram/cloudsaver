@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "186dc6d25ab3c546f479473fa85361d0f9af4a753ef1c28ad6f5070d61a5ab27",
+  "inventory_sha256": "b53140a1a2584bed2bfa80724adfd7587e0ad3b0007fbc3dd927df1a9a5c1cb8",
   "migration_heads": {
     "core": "0027_engineering_workloads",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -651,8 +651,8 @@
     },
     {
       "path": "app/keycloak.py",
-      "sha256": "2dff345f315950ae7f65b87bb5716bfe2ef51b0ab914e110b8d232c3721578ca",
-      "bytes": 11947
+      "sha256": "24a1fbef4ab004e7599f795de77bb83d0d32c0a5185d83ed41d1e60f3756aa82",
+      "bytes": 12568
     },
     {
       "path": "app/kubernetes_api.py",
@@ -960,6 +960,21 @@
       "bytes": 3009
     },
     {
+      "path": "deploy/keycloak/README.md",
+      "sha256": "e10f7f2df04b34051748da3d630586c3962d298f2d52267e2fca11c30a99bdc6",
+      "bytes": 6656
+    },
+    {
+      "path": "deploy/keycloak/cloudsaver.override.yaml",
+      "sha256": "d89593ceddb7af28fedc6e07978366b3b0cf50f24ca20792e4fa1a150b3728b4",
+      "bytes": 1223
+    },
+    {
+      "path": "deploy/keycloak/compose.yaml",
+      "sha256": "71a9d2e3fdf9f197a70aa308b8798853cf0f08f9c3b76a2521bc15d271548217",
+      "bytes": 1969
+    },
+    {
       "path": "docs/AETHERGUARD_LOCAL_VERIFICATION.md",
       "sha256": "e9dd90696ded0e40ef3e918d8951ea0b3e115acf53d4e5d7dfe896c140296302",
       "bytes": 11428
@@ -1061,8 +1076,8 @@
     },
     {
       "path": "docs/KEYCLOAK_AND_COLLECTION.md",
-      "sha256": "9d9b126cfa724ef52db96eef5f18a5efde476a0fc04ed57fe26b8f195b0bed23",
-      "bytes": 12986
+      "sha256": "0c8f455b8c01a3638302929dcb53bdf274bb97d7da59ffcb39732f8734382756",
+      "bytes": 13363
     },
     {
       "path": "docs/KUBERNETES_AND_MULTI_SOURCE_ANALYSIS_IMPROVEMENTS_README.md",
@@ -2166,8 +2181,8 @@
     },
     {
       "path": "platform/portal/components/workspaces/KeyDialogs.tsx",
-      "sha256": "be54d3d810ccdec6aa59fdcc6574e11b4d0efc12d79f9d0cbd9bc310ea4363f4",
-      "bytes": 13179
+      "sha256": "d0ae3c4a3e4451bb136fbedd46c8f9e160d8a19683120605e4b865d28654cd76",
+      "bytes": 13257
     },
     {
       "path": "platform/portal/components/workspaces/KeyFields.tsx",
@@ -2435,6 +2450,11 @@
       "bytes": 4295
     },
     {
+      "path": "scripts/keycloak_login.py",
+      "sha256": "bbb3975a78647a22145a94532b095322900fa6c31704863b7d3c01841f69e8de",
+      "bytes": 3213
+    },
+    {
       "path": "scripts/provision_tenants.py",
       "sha256": "cc584d6afb89d74310385a97bc100f83f44a3b3665f9831cace0113d7d87285f",
       "bytes": 3965
@@ -2468,6 +2488,11 @@
       "path": "scripts/setup_compose.py",
       "sha256": "c4183e044724df4af191c7455ee2fe6530d9c1490086b7367856167475f0e627",
       "bytes": 8967
+    },
+    {
+      "path": "scripts/setup_keycloak.py",
+      "sha256": "a2123a36d4a78e8b778a1eed89b5d48daf6155dfd103a6e43adb9aa90690a753",
+      "bytes": 6267
     },
     {
       "path": "scripts/smoke_stack.py",
@@ -2836,8 +2861,8 @@
     },
     {
       "path": "tests/test_keycloak.py",
-      "sha256": "6281da489656b14fd658cd902fcb09c471a7a2374c30ee75312cd4be55bdc860",
-      "bytes": 8172
+      "sha256": "aba53efc262762b8a83943143cee5f203bda9b4dfe28b971814202e0820b8d32",
+      "bytes": 9336
     },
     {
       "path": "tests/test_kubernetes_federation.py",
@@ -2973,6 +2998,11 @@
       "path": "tests/test_setup_compose.py",
       "sha256": "8a48913e8f04a2bf0f4e3400d9dd9716c818f3438a42553c8b5de437f25cfefe",
       "bytes": 6558
+    },
+    {
+      "path": "tests/test_setup_keycloak.py",
+      "sha256": "d8422d2257e218eee2173c2cbde45a011f18a69fca86fe7fa514881b890f2fec",
+      "bytes": 1422
     },
     {
       "path": "tests/test_unit_economics.py",

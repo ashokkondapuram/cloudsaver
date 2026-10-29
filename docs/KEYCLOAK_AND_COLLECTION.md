@@ -1,6 +1,6 @@
 # Keycloak, provider collection and service health
 
-Implementation status: opt-in code with local contract tests. This is not a declaration of production support for every provider, service or identity deployment. The approved validation environment for this change is local only. No customer cloud, Keycloak realm or infrastructure deployment was changed.
+Implementation status: opt-in code with local contract tests. This is not a declaration of production support for every provider, service or identity deployment. The approved validation environment for this change is local only. No customer cloud deployment was changed. A subsequent local Keycloak deployment is described in `deploy/keycloak/README.md`; it does not establish public production hosting.
 
 ## Keycloak owns client access and licensing decisions
 
@@ -27,7 +27,7 @@ These identifiers are examples. `client_uuid` is the internal UUID of the resour
 
 The verifier service identity needs the deployment-specific read permissions to introspect tokens and read users, their group memberships, effective client roles, and the registered group. Grant no user/group/role-management permission to CloudSaver. Test fine-grained administrative permissions against the selected Keycloak version before rollout; a broad `realm-admin` grant is not a requirement. Protect the resource client and tenant group from delegated edits that could grant access to another client.
 
-The registered group has exactly one `cloudsaver_license` attribute value containing JSON:
+The logical license record below is stored as numbered `cloudsaver_license_v1` group-attribute chunks by the deployment generator, because Keycloak limits individual attribute values to 255 characters. The legacy single-value `cloudsaver_license` record is still accepted. See `deploy/keycloak/README.md` for encoding and deployment details. The reconstructed JSON is:
 
 ```json
 {

@@ -167,9 +167,20 @@ class KeycloakValidator:
         group=self._request(client,'GET',binding.admin_url+'/groups/'+binding.group_id,headers=headers)
         try:
             if group.get('id')!=binding.group_id:raise ValueError()
-            values=group['attributes']['cloudsaver_license']
-            if not isinstance(values,list) or len(values)!=1 or not isinstance(values[0],str) or len(values[0])>10000:raise ValueError()
-            licence=json.loads(values[0])
+            attrs=group['attributes']
+            if 'cloudsaver_license_v1' in attrs:
+                values=attrs['cloudsaver_license_v1']
+                if 'cloudsaver_license' in attrs or not isinstance(values,list) or not 1<=len(values)<=50:raise ValueError()
+                if any(not isinstance(v,str) or not 6<=len(v)<=245 for v in values):raise ValueError()
+                values=sorted(values)
+                if any(not v.startswith(f'{i:04d}:') for i,v in enumerate(values)):raise ValueError()
+                raw=''.join(v[5:] for v in values)
+            else:
+                values=attrs['cloudsaver_license']
+                if not isinstance(values,list) or len(values)!=1 or not isinstance(values[0],str):raise ValueError()
+                raw=values[0]
+            if len(raw)>10000:raise ValueError()
+            licence=json.loads(raw)
             if (not isinstance(licence,dict) or set(licence)!={'schema_version','enabled','expires_at','plan'}
                 or type(licence['schema_version']) is not int or licence['schema_version']!=1 or type(licence['enabled']) is not bool):raise ValueError()
             expires=datetime.fromisoformat(licence['expires_at'].replace('Z','+00:00'))

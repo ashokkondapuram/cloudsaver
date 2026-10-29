@@ -147,3 +147,24 @@ def test_worker_licence_expiry_blocks_collection_before_the_scanner(identity,mon
     with pytest.raises(HTTPException) as exc:
         authorized_tenant(SimpleNamespace(tenants=[tenant]),None,TID,[])
     assert exc.value.status_code==403
+
+@pytest.mark.parametrize('corruption',['none','duplicate','missing','mixed'])
+def test_keycloak_group_license_chunks(identity,corruption):
+    validator,claims,encode,tenant,state,_,binding=identity
+    original=validator._request
+    def request(client,method,url,**kwargs):
+        result=original(client,method,url,**kwargs)
+        if url.endswith('/groups/'+GROUP):
+            raw=json.dumps(state['licence'],separators=(',',':'))
+            chunks=[f'{i//240:04d}:'+raw[i:i+240] for i in range(0,len(raw),240)]
+            assert len(chunks)>1 and max(map(len,chunks))<=245
+            if corruption=='duplicate':chunks.append(chunks[0])
+            if corruption=='missing':chunks.pop(0)
+            result['attributes']={'cloudsaver_license_v1':list(reversed(chunks))}
+            if corruption=='mixed':result['attributes']['cloudsaver_license']=[raw]
+        return result
+    validator._request=request
+    if corruption=='none':assert validator.workspace(encode(claims),[tenant])['plan_tier']=='GROWTH'
+    else:
+        with pytest.raises(HTTPException) as exc:validator.workspace(encode(claims),[tenant])
+        assert exc.value.status_code==503

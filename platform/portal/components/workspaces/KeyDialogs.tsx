@@ -28,7 +28,7 @@ export function IssueKeyDialog({open, workspace, onClose, onIssued}: {open: bool
     // The workspace reloads after issuing; resetting on that would discard the one-time secret.
   }, [open]);
 
-  function close() {setSecret(''); onClose();}
+  function close() {const issued = Boolean(secret); setSecret(''); onClose(); if (issued) onIssued();}
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -40,7 +40,6 @@ export function IssueKeyDialog({open, workspace, onClose, onIssued}: {open: bool
         method: 'POST', body: {name: name.trim(), ...accessBody(access, session), expires_at: expiryIso(expiry)},
       });
       setSecret(issued.secret);
-      onIssued();
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -141,7 +140,7 @@ export function RotateKeyDialog({apiKey, workspace, onClose, onRotated}: {apiKey
   }, [apiKey]);
 
   if (!apiKey) return null;
-  function close() {setSecret(''); onClose();}
+  function close() {const rotated = Boolean(secret); setSecret(''); onClose(); if (rotated) onRotated();}
   const until = new Date(Date.now() + overlap * 3_600_000);
 
   async function submit(event: React.FormEvent) {
@@ -153,7 +152,6 @@ export function RotateKeyDialog({apiKey, workspace, onClose, onRotated}: {apiKey
     try {
       const rotated = await portal<IssuedKey>(`keys/${encodeURIComponent(apiKey.key_id)}/rotate`, {method: 'POST', body: {overlap_hours: overlap, ...accessBody(access, session)}});
       setSecret(rotated.secret);
-      onRotated();
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {

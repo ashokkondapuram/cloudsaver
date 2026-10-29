@@ -1,0 +1,25 @@
+# Layer over CloudSaver compose.yaml and load generated cloudsaver.env last.
+x-keycloak-connection: &connection
+  environment: &identity
+    CLOUDSAVER_AUTH_MODE: keycloak
+    CLOUDSAVER_DIRECTORY_MODE: registry
+    CLOUDSAVER_KEY_VERIFIER: local
+    CLOUDSAVER_KEYCLOAK_BINDINGS: ${CLOUDSAVER_KEYCLOAK_BINDINGS:?Load generated cloudsaver.env}
+    CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY: ${CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY:?Load generated cloudsaver.env}
+    SSL_CERT_FILE: /run/keycloak-ca.pem
+    REQUESTS_CA_BUNDLE: /run/keycloak-ca.pem
+    NO_PROXY: localhost,127.0.0.1,::1,keycloak.localhost,api-gateway,scanner-service,agent-gateway,identity-service,postgres,redis
+    no_proxy: localhost,127.0.0.1,::1,keycloak.localhost,api-gateway,scanner-service,agent-gateway,identity-service,postgres,redis
+  volumes:
+    - ${KEYCLOAK_CA_BUNDLE:?Set combined CA bundle path}:/run/keycloak-ca.pem:ro
+services:
+  api-gateway: *connection
+  scanner-service: *connection
+  governance-monitor: *connection
+  agent-gateway: *connection
+  data-retention-worker: *connection
+  billing-sync-worker: *connection
+  observability-worker: *connection
+  scan-worker: *connection
+  delivery-dispatcher: *connection
+  scan-scheduler: *connection
