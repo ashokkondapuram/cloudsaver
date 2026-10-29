@@ -45,6 +45,7 @@ def test_start_orders_migrations_before_workers_and_waits_for_every_project(tmp_
     home=setup_root(tmp_path,monkeypatch)
     stack=start_stack.Stack(tmp_path/'.env',home,180,no_build=True)
     stack.shared_network=lambda:None
+    stack.license_configuration=lambda:None
     calls=[]
     stack.run=lambda args,**kwargs:calls.append(args)
     stack.keycloak=lambda tenant:calls.append(['keycloak-ready',tenant])
@@ -65,6 +66,7 @@ def test_failure_stops_later_services(tmp_path,monkeypatch):
     home=setup_root(tmp_path,monkeypatch)
     stack=start_stack.Stack(tmp_path/'.env',home,180,no_build=True)
     stack.shared_network=lambda:None
+    stack.license_configuration=lambda:None
     calls=[]
     def fail(args,**kwargs):
         calls.append(args)
@@ -135,3 +137,24 @@ def test_unified_env_refuses_symlink_target(tmp_path,monkeypatch):
     (tmp_path/'.env').symlink_to(other)
     with pytest.raises(ValueError,match='symlink'):start_stack.sync_secrets(tmp_path/'.env',home)
     assert other.read_text()=='preserve'
+
+
+def test_signing_key_generated_once_and_mounted_only_in_issuer(tmp_path,monkeypatch):
+    import shutil
+    if not shutil.which('openssl'):pytest.skip('OpenSSL required')
+    home=setup_root(tmp_path,monkeypatch)
+    env=tmp_path/'.env';start_stack.prepare_settings(env,home)
+    stack=start_stack.Stack(env,home,180,auth_mode='license')
+    stack.license_configuration()
+    original=(home/'license-private.pem').read_bytes()
+    config=json.loads((home/'platform-license.json').read_text())
+    assert set(config['services'])=={'identity-service'}
+    assert config['services']['identity-service']['volumes']==[str(home/'license-private.pem')+':/run/license-private.pem:ro']
+    values=start_stack.env_values(env)
+    assert values['CLOUDSAVER_AUTH_MODE']=='license'
+    assert 'PRIVATE KEY' not in values['CLOUDSAVER_LICENSE_PUBLIC_KEYS']
+    assert 'PUBLIC KEY' in values['CLOUDSAVER_LICENSE_PUBLIC_KEYS']
+    stack.license_configuration()
+    assert (home/'license-private.pem').read_bytes()==original
+    (home/'license-private.pem').unlink()
+    with pytest.raises(ValueError,match='never silently rotates'):stack.license_configuration()

@@ -25,7 +25,7 @@ _proxy_cache = {}
 
 
 def redact(text):
-    return KEY_PATTERN.sub('[redacted]', text) if isinstance(text, str) else text
+    return re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+','[redacted]',KEY_PATTERN.sub('[redacted]',text)) if isinstance(text,str) else text
 
 
 def _trusted(peer, entries):
@@ -167,6 +167,11 @@ def install(app, settings, *, redis_required=False, targets=()):
         checks['database'] = database_probe
     if redis_required:
         checks['redis'] = redis_probe
+    if os.getenv('CLOUDSAVER_AUTH_MODE')=='license':
+        async def license_probe():
+            from app.offline_license import trust
+            await run_in_threadpool(trust)
+        checks['offline_license_trust']=license_probe
     for name, url in targets:
         async def check(url=url):
             import httpx

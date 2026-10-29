@@ -13,11 +13,14 @@ import {useSession} from '../SessionProvider';
 import {EmptyState, KeyStatusBadges, Loading, Notice, ProviderList, SectionTitle} from '../ui/shared';
 import {EditKeyDialog, IssueKeyDialog, RevokeAllDialog, RevokeKeyDialog, RotateKeyDialog} from './KeyDialogs';
 
+import {LicenseTokenDialog} from './LicenseTokenDialog';
+
 const LIVE: ApiKey['status'][] = ['active', 'expiring_soon', 'rotating_out'];
 const BLOCKED = 'This customer doesn’t have an active subscription.';
 
 export function KeysTab({workspace, reloadWorkspace}: {workspace: Workspace; reloadWorkspace: () => Promise<void>}) {
   const {session, canWrite} = useSession();
+  const [licensing,setLicensing]=useState(false);
   const [issuing, setIssuing] = useState(false);
   const [revokingAll, setRevokingAll] = useState(false);
   const [editing, setEditing] = useState<ApiKey | null>(null);
@@ -35,6 +38,7 @@ export function KeysTab({workspace, reloadWorkspace}: {workspace: Workspace; rel
 
   return <section className="panel">
     <SectionTitle title="Keys" action={editable ? <div className="section-actions">
+      <button type="button" className="button secondary small" disabled={blocked} onClick={()=>setLicensing(true)}>Issue license token</button>
       {live.length > 0 && <button type="button" className="button danger-outline small" onClick={() => setRevokingAll(true)}><ShieldOff size={14}/>Revoke all keys</button>}
       <button type="button" className="button primary small" disabled={blocked} title={blockedTitle} onClick={() => setIssuing(true)}><Plus size={14}/>Issue key</button>
     </div> : undefined}>Customers use workspace keys to sign in to the CloudSaver dashboard and API.</SectionTitle>
@@ -63,6 +67,7 @@ export function KeysTab({workspace, reloadWorkspace}: {workspace: Workspace; rel
           </tr>;
         })}</tbody>
       </table></div>}
+    <LicenseTokenDialog open={licensing} workspace={workspace} onClose={()=>setLicensing(false)}/>
     <IssueKeyDialog open={issuing} workspace={workspace} onClose={() => setIssuing(false)} onIssued={() => {setMessage('Key issued.'); refreshAll();}}/>
     <EditKeyDialog apiKey={editing} workspace={workspace} onClose={() => setEditing(null)} onSaved={() => {setEditing(null); setMessage('Key updated.'); refreshAll();}}/>
     <RotateKeyDialog apiKey={rotating} workspace={workspace} onClose={() => setRotating(null)} onRotated={() => {setMessage('Key rotated.'); refreshAll();}}/>

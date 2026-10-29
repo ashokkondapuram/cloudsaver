@@ -24,6 +24,7 @@ const ROUTES: Array<[RegExp, Method[]]> = [
   [new RegExp(`^workspaces/${ID}$`), ['GET', 'PATCH', 'DELETE']],
   [new RegExp(`^workspaces/${ID}/scopes/(azure|aws|gcp|kubernetes)$`), ['PUT']],
   [new RegExp(`^workspaces/${ID}/(suspend|reactivate)$`), ['POST']],
+  [new RegExp(`^workspaces/${ID}/license-tokens$`), ['POST']],
   [new RegExp(`^workspaces/${ID}/keys$`), ['GET', 'POST']],
   [new RegExp(`^workspaces/${ID}/keys/revoke-all$`), ['POST']],
   [new RegExp(`^workspaces/${ID}/usage$`), ['GET']],

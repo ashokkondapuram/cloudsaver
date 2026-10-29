@@ -28,8 +28,8 @@ export function accessError(access: Access, session: Session | null) {
   return '';
 }
 
-export function AccessFields({access, onChange, workspace, session, showErrors}: {
-  access: Access; onChange: (access: Access) => void; workspace: Workspace; session: Session | null; showErrors: boolean;
+export function AccessFields({access, onChange, workspace, session, showErrors, freezeProviders = false}: {
+  access: Access; onChange: (access: Access) => void; workspace: Workspace; session: Session | null; showErrors: boolean; freezeProviders?: boolean;
 }) {
   const toggleRole = (role: Role) => onChange({...access, roles: access.roles.includes(role) ? access.roles.filter(r => r !== role) : [...access.roles, role]});
   const toggleProvider = (provider: Provider) => onChange({...access, providers: access.providers.includes(provider) ? access.providers.filter(p => p !== provider) : [...access.providers, provider]});
@@ -41,11 +41,11 @@ export function AccessFields({access, onChange, workspace, session, showErrors}:
     </fieldset>
     <fieldset className="choice-group">
       <legend>Providers</legend>
-      {!session?.provider_scoped_keys ? <span className="muted">All providers, including providers added later</span> : <>
+      {!session?.provider_scoped_keys ? <span className="muted">{freezeProviders ? 'All currently configured providers' : 'All providers, including providers added later'}</span> : <>
         {workspace.providers.length ? <div className="choices">{workspace.providers.map(provider => <label key={provider} className="checkbox-row">
           <input type="checkbox" checked={access.allProviders || access.providers.includes(provider)} disabled={access.allProviders} onChange={() => toggleProvider(provider)}/>{providerLabel[provider]}
         </label>)}</div> : <span className="muted">This workspace has no cloud accounts yet.</span>}
-        <label className="checkbox-row"><input type="checkbox" checked={access.allProviders} onChange={event => onChange({...access, allProviders: event.target.checked})}/>Include providers added later</label>
+        <label className="checkbox-row"><input type="checkbox" checked={access.allProviders} onChange={event => onChange({...access, allProviders: event.target.checked})}/>{freezeProviders ? 'Include all currently configured providers' : 'Include providers added later'}</label>
         {showErrors && !access.allProviders && !access.providers.length && <span className="field-error">Select at least one provider.</span>}
       </>}
     </fieldset>
@@ -83,7 +83,7 @@ export function ExpiryField({value, onChange, showErrors}: {value: string; onCha
 }
 
 /** One-time display of a newly issued secret. The caller clears it from state on close. */
-export function SecretReveal({secret, onClose}: {secret: string; onClose: () => void}) {
+export function SecretReveal({secret, onClose, label = 'New workspace key'}: {secret: string; onClose: () => void; label?: string}) {
   const [copied, setCopied] = useState(false);
   const [stored, setStored] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -93,7 +93,7 @@ export function SecretReveal({secret, onClose}: {secret: string; onClose: () => 
   return <>
     <div className="dialog-content">
       <Notice tone="warning">Copy this key now. You won’t be able to see it again.</Notice>
-      <code className="secret-box" aria-label="New workspace key">{secret}</code>
+      <code className="secret-box" aria-label={label}>{secret}</code>
       {copyError && <span className="field-error">We couldn’t copy the key. Select it and copy it manually.</span>}
       <div><button type="button" className="button secondary" onClick={() => void copy()}>{copied ? <><Check size={15}/>Copied</> : <><Copy size={15}/>Copy key</>}</button></div>
       <label className="checkbox-row"><input type="checkbox" checked={stored} onChange={event => setStored(event.target.checked)}/>I’ve stored this key securely</label>

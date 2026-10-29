@@ -37,7 +37,7 @@ export type Scan = {
 };
 
 export type Workspace = {
-  identity_provider?: 'platform' | 'entra' | 'keycloak';
+  identity_provider?: 'platform' | 'entra' | 'keycloak' | 'offline_license';
   licence_expires_at?: string | null;
   name: string;
   tenant_id: string;

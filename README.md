@@ -26,6 +26,10 @@ Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI
 
 This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
 
+## Offline license access
+
+Use `./start.sh --auth-mode license` to generate signing keys and configure offline validation. In the platform portal, open a workspace's **Keys** tab and select **Issue license token**. The signed token contains expiry, roles, provider/scope access and plan limits; CloudSaver verifies it locally with pinned public keys, without calling the platform or Keycloak. See [offline license tokens](docs/OFFLINE_LICENSE_TOKENS.md) for issuance, revocation limits and background-worker configuration.
+
 ## Feature guides
 
 Every feature has its own detailed guide covering the dashboard workflow, backend modules, API endpoints, permissions, configuration, guardrails and tests. Browse them all in the [feature guide index](docs/features/README.md).

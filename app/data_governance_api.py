@@ -34,7 +34,7 @@ def create_router(store,current_tenant,governor=None):
     router=APIRouter(prefix='/api/v1/ai/governance');retention=DataRetention(store);governor=governor or DataGovernor(store)
     def owner(tenant):
         require_workspace_role(tenant,Role.TENANT_ADMIN)
-        if tenant.get('subject_type')=='service_account':raise HTTPException(403,'A human data owner must authorize privacy and legal-hold requests.')
+        if tenant.get('subject_type') in ('service_account','license'):raise HTTPException(403,'A human data owner must authorize privacy and legal-hold requests.')
     def call(fn,*args):
         try:return fn(*args)
         except RetentionConflict as error:raise HTTPException(409,str(error)) from None

@@ -5,10 +5,11 @@ import re
 from identity.keys import redact as redact_keys
 
 STRIPE = re.compile(r'(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{8,}|whsec_[0-9A-Za-z_]{8,}')
+JWT = re.compile(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
 
 
 def redact(text):
-    return STRIPE.sub('[redacted]', redact_keys(text)) if isinstance(text, str) else text
+    return JWT.sub('[redacted]', STRIPE.sub('[redacted]', redact_keys(text))) if isinstance(text, str) else text
 
 
 def install_log_redaction():

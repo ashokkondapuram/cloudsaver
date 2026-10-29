@@ -68,7 +68,7 @@ export function AccessSettings() {
   }, [token]);
 
   useEffect(() => {
-    if (!roles.length || workspace?.identity_provider === 'keycloak') return;
+    if (!roles.length || workspace?.identity_provider === 'keycloak' || workspace?.identity_provider === 'offline_license') return;
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
@@ -98,6 +98,11 @@ export function AccessSettings() {
     }
   }
 
+  if (workspace?.identity_provider === 'offline_license') return <section className="panel">
+    <SectionTitle title="Signed license access">Access is verified locally from your license token.</SectionTitle>
+    <p>Your roles: {roleList(workspace.roles)}. License expires: {workspace.licence_expires_at ? dateTime(workspace.licence_expires_at) : 'Unavailable'}.</p>
+    <p>Ask your platform operator for a new token to change access. Platform changes take effect when a replacement token is used; your CloudSaver administrator can revoke a token through the local denylist.</p>
+  </section>;
   if (workspace?.identity_provider === 'keycloak') return <section className="panel">
     <SectionTitle title="Access managed in Keycloak">Your organization manages membership, roles, service accounts, and licensing in Keycloak.</SectionTitle>
     <p>Contact your identity administrator to change access. CloudSaver checks current membership, roles, session status, and the client license when you use the application.</p>

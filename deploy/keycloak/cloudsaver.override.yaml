@@ -1,7 +1,7 @@
 # Layer over CloudSaver compose.yaml and load generated cloudsaver.env last.
 x-keycloak-connection: &connection
   environment: &identity
-    CLOUDSAVER_AUTH_MODE: keycloak
+    CLOUDSAVER_AUTH_MODE: ${CLOUDSAVER_AUTH_MODE:-keycloak}
     CLOUDSAVER_DIRECTORY_MODE: registry
     CLOUDSAVER_KEY_VERIFIER: local
     CLOUDSAVER_KEYCLOAK_BINDINGS: ${CLOUDSAVER_KEYCLOAK_BINDINGS:?Load generated cloudsaver.env}

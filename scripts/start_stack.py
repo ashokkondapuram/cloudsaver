@@ -47,16 +47,18 @@ def env_values(path):
     return result
 
 
-def sync_secrets(env_file, home):
+def sync_secrets(env_file, home, auth_mode=None):
     """Collect generated runtime credentials in the ignored root .env, never in an image."""
     target=ROOT/'.env'
     if target.is_symlink():raise ValueError('Refusing to write secrets through a symlink')
+    selected=auth_mode or (env_values(env_file).get('CLOUDSAVER_AUTH_MODE') if env_file.exists() else None)
     values={}
     sources=(target,env_file,ROOT/'platform/.env',home/'runtime.env',
-             home/'config/keycloak.env',home/'config/cloudsaver.env')
+             home/'config/keycloak.env',home/'config/cloudsaver.env',home/'license.env')
     for source in sources:
         if source.exists():values.update(env_values(source))
     values['CLOUDSAVER_STACK_HOME']=str(home)
+    if selected in ('license','keycloak'):values['CLOUDSAVER_AUTH_MODE']=selected
     if (home/'config/keycloak.env').exists():
         values.setdefault('KEYCLOAK_ADMIN_USER','bootstrap-admin')
     operator=home/'operator-login.txt'
@@ -130,10 +132,13 @@ def prepare_settings(env_file, home):
 
 
 class Stack:
-    def __init__(self, env_file, home, timeout, no_build=False):
+    def __init__(self, env_file, home, timeout, no_build=False, auth_mode=None):
         self.env_file,self.home,self.timeout,self.no_build=env_file,home,timeout,no_build
         self.environment=dict(os.environ,COMPOSE_PARALLEL_LIMIT='1',BUILDX_CONFIG=str(home/'buildx'))
         self.environment['KEYCLOAK_CA_BUNDLE']=str(home/'ca-bundle.pem')
+        selected=auth_mode or (env_values(env_file).get('CLOUDSAVER_AUTH_MODE') if env_file.exists() else None)
+        self.auth_mode='license' if selected=='license' else 'keycloak'
+        self.environment['CLOUDSAVER_AUTH_MODE']=self.auth_mode
 
     def run(self,args,**kwargs):
         return subprocess.run(args,cwd=ROOT,env=self.environment,check=True,**kwargs)
@@ -151,8 +156,38 @@ class Stack:
             args+=['--profile','scheduled','--profile','agentic','--profile','delivery']
         if kind=='platform' and (self.home/'platform-network.json').exists():
             args+=['-f',str(self.home/'platform-network.json')]
+        if kind=='platform' and (self.home/'platform-license.json').exists():
+            args+=['-f',str(self.home/'platform-license.json')]
         if (self.home/(kind+'-build.json')).exists():args+=['-f',str(self.home/(kind+'-build.json'))]
         return args
+
+    def license_configuration(self):
+        private=self.home/'license-private.pem'
+        metadata=self.home/'license-settings.json'
+        if metadata.exists() and not private.exists():
+            raise ValueError('Restore the licence signing key; startup never silently rotates it')
+        if not private.exists():
+            self.run(['openssl','genpkey','-algorithm','RSA','-pkeyopt','rsa_keygen_bits:3072','-out',str(private)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            # Docker binds this individual file into the issuer; its host parent remains 0700.
+            private.chmod(0o644)
+        if not metadata.exists():private_write(metadata,json.dumps({'kid':str(uuid4())}))
+        public=subprocess.check_output(['openssl','pkey','-in',str(private),'-pubout'],text=True)
+        kid=json.loads(metadata.read_text())['kid']
+        issuer='https://cloudsaver-platform.local'
+        audience='cloudsaver'
+        values={'PLATFORM_LICENSE_PRIVATE_KEY_FILE':'/run/license-private.pem','PLATFORM_LICENSE_KEY_ID':kid,
+                'PLATFORM_LICENSE_ISSUER':issuer,'PLATFORM_LICENSE_AUDIENCE':audience,
+                'CLOUDSAVER_LICENSE_ISSUER':issuer,'CLOUDSAVER_LICENSE_AUDIENCE':audience,
+                'CLOUDSAVER_LICENSE_PUBLIC_KEYS':json.dumps({kid:public}),
+                'PLATFORM_LICENSE_PRIVATE_KEY_HOST_FILE':str(private)}
+        target=self.home/'license.env'
+        if not target.exists():private_write(target,'')
+        target.write_text(''.join(k+"='"+v+"'\n" for k,v in values.items()))
+        self.environment.update({k:v for k,v in values.items() if k.startswith('CLOUDSAVER_')})
+        config={'services':{'identity-service':{'volumes':[str(private)+':/run/license-private.pem:ro'],
+                'environment':{k:v for k,v in values.items() if k.startswith('PLATFORM_LICENSE_') and not k.endswith('HOST_FILE')}}}}
+        (self.home/'platform-license.json').write_text(json.dumps(config))
+        sync_secrets(self.env_file,self.home,self.auth_mode)
 
     def build_configuration(self):
         ca=os.environ.get('CODEX_PROXY_CERT')
@@ -188,7 +223,7 @@ finally:
             target=config/'keycloak.env';target.write_text(''.join(k+"='"+v+"'\n" for k,v in values.items()))
         if not all((config/f).is_file() for f in ('keycloak.env','cloudsaver.env','import/realm.json')):
             raise ValueError('Keycloak setup is incomplete; inspect the private stack directory before retrying')
-        sync_secrets(self.env_file,self.home)
+        sync_secrets(self.env_file,self.home,self.auth_mode)
         roots=ssl.create_default_context().get_ca_certs(binary_form=True)
         cert=Path(env_values(config/'keycloak.env')['KEYCLOAK_TLS_CERT'])
         (self.home/'ca-bundle.pem').write_text(''.join(ssl.DER_cert_to_PEM_cert(c) for c in roots)+cert.read_text())
@@ -213,6 +248,7 @@ finally:
 
     def start(self,tenant_id):
         self.shared_network()
+        self.license_configuration()
         self.build_configuration()
         if not self.no_build:
             # Serialize builds to bound peak disk/RAM use on Docker Desktop.
@@ -251,17 +287,18 @@ def main():
     parser.add_argument('--state-dir',type=Path,default=Path(saved.get('CLOUDSAVER_STACK_HOME',str(ROOT/'.env.local-stack'))))
     parser.add_argument('--timeout',type=int,default=300)
     parser.add_argument('--no-build',action='store_true',help='Use previously built images')
+    parser.add_argument('--auth-mode',choices=('keycloak','license'),help='Select live Keycloak or offline signed licence validation')
     args=parser.parse_args()
     if args.timeout<30:parser.error('Timeout must be at least 30 seconds')
     for command in ('docker','openssl'):
         if not shutil.which(command):parser.error('Install '+command+' before starting')
     home=args.state_dir.resolve();home.mkdir(parents=True,exist_ok=True,mode=0o700);home.chmod(0o700)
     try:
-        stack=Stack(args.env_file.resolve(),home,args.timeout,args.no_build)
+        stack=Stack(args.env_file.resolve(),home,args.timeout,args.no_build,args.auth_mode)
         stack.run(['docker','info'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         stack.run(['docker','compose','version'],stdout=subprocess.DEVNULL)
         tenant_id=prepare_settings(args.env_file.resolve(),home)
-        sync_secrets(args.env_file.resolve(),home)
+        sync_secrets(args.env_file.resolve(),home,args.auth_mode)
         stack.start(tenant_id)
     except (subprocess.CalledProcessError,ValueError,OSError) as error:
         print('Startup stopped: '+str(error)+'. Existing volumes and credentials were retained.',file=sys.stderr)

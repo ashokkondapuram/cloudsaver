@@ -14,7 +14,7 @@ def bootstrap_tenants(raw=None, *, required=True):
         raise ValueError('Configure explicit CLOUDSAVER_TENANTS (run scripts/setup_compose.py for a local workspace)')
     seen_ids, seen_keys, normalized = set(), set(), []
     for tenant in tenants:
-        if isinstance(tenant, dict) and not tenant.get('api_key_sha256') and os.getenv('CLOUDSAVER_AUTH_MODE') in ('entra','keycloak'):
+        if isinstance(tenant, dict) and not tenant.get('api_key_sha256') and os.getenv('CLOUDSAVER_AUTH_MODE') in ('entra','keycloak','license'):
             tenant = dict(tenant, api_key_sha256=hashlib.sha256(os.urandom(32)).hexdigest())
         row = normalize_tenant(tenant, require_scope=True)
         if row['tenant_id'] in seen_ids or row['api_key_sha256'] in seen_keys:
@@ -33,7 +33,7 @@ def directory_mode():
 
 
 def key_verifier():
-    if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':return 'local'
+    if os.getenv('CLOUDSAVER_AUTH_MODE') in ('keycloak','license'):return 'local'
     value = os.getenv('CLOUDSAVER_KEY_VERIFIER', 'local')
     if value not in ('local', 'shadow', 'identity'):
         raise ValueError('CLOUDSAVER_KEY_VERIFIER must be local, shadow or identity')
@@ -56,6 +56,12 @@ def validate_production(database_url):
         raise ValueError('Production prohibits developer agent credentials')
     if os.getenv('CLOUDSAVER_INSTALL_AZURE_CLI','false').lower()=='true':
         raise ValueError('Production images must not enable developer Azure CLI access')
+    if os.getenv('CLOUDSAVER_AUTH_MODE')=='license':
+        from app.offline_license import trust
+        trust()
+        if directory_mode()!='registry' or os.getenv('CLOUDSAVER_TENANT_REGISTRY')!='database':
+            raise ValueError('Offline licence mode requires the core registry, without platform directory cutover')
+        return
     if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':
         from app.keycloak import bindings
         bindings()
@@ -73,7 +79,7 @@ def validate_production(database_url):
 def require_directory_freshness(settings):
     if os.getenv('CLOUDSAVER_ENVIRONMENT')!='production':return
     # Keycloak requests check current membership, roles and licence directly.
-    if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':return
+    if os.getenv('CLOUDSAVER_AUTH_MODE') in ('keycloak','license'):return
     registry=settings.registry
     lag=registry.projection_lag_seconds() if registry is not None else None
     maximum=int(os.getenv('CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS','30'))

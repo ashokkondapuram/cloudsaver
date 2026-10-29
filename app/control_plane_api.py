@@ -49,11 +49,11 @@ class ApprovalRequest(BaseModel):
 
 
 def _require_human_approver(tenant):
-    """Reject the one machine-identity marker this codebase already uses for 'not a human'
+    """Reject machine identities and offline bearer licences for 'not a human'
     (see app/data_governance_api.py's owner() check); a bare workspace API key is treated as an
     operator-held credential, consistent with how other TENANT_ADMIN routes in this app authorize."""
-    if tenant.get('subject_type') == 'service_account':
-        raise HTTPException(403, 'A human approver is required; service accounts cannot approve plans.')
+    if tenant.get('subject_type') in ('service_account','license'):
+        raise HTTPException(403, 'A human approver is required; service accounts and bearer licences cannot approve plans.')
 
 
 def create_router(store, current_tenant):

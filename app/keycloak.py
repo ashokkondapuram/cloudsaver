@@ -213,5 +213,8 @@ def background_validator():
 
 
 def current_licence(tenant):
+    if os.getenv('CLOUDSAVER_AUTH_MODE')=='license':
+        from app.offline_license import background_workspace
+        return background_workspace(tenant)
     if os.getenv('CLOUDSAVER_AUTH_MODE')!='keycloak':return tenant
     return background_validator().licensed_workspace(tenant)

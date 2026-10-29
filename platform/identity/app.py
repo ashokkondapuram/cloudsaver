@@ -128,6 +128,9 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def ready():
         try:
             service.get_platform()
+            if env('LICENSE_PRIVATE_KEY_FILE'):
+                from identity.license_tokens import signer
+                signer()
             return {'status': 'ready'}
         except Exception:
             return JSONResponse({'status': 'unready'}, status_code=503)
@@ -384,6 +387,11 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     @app.post('/admin/v1/workspaces/{tenant_id}/keys', status_code=201)
     def issue_key(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
         return service.issue_key(tenant_id, payload, identity, rid(request))
+
+    @app.post('/admin/v1/workspaces/{tenant_id}/license-tokens', status_code=201)
+    def issue_license(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):
+        from identity.license_tokens import issue
+        return issue(service,tenant_id,payload,identity,rid(request))
 
     @app.post('/admin/v1/workspaces/{tenant_id}/keys/revoke-all')
     def revoke_all(tenant_id: str, request: Request, payload: dict = Body(...), identity=Depends(operator)):

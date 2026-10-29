@@ -1,4 +1,4 @@
-"""Verify Entra v2 delegated access tokens or workspace keys before deriving workspace roles."""
+"""Verify the selected identity mode before deriving scoped workspace access."""
 import hashlib
 import hmac
 import os
@@ -193,11 +193,16 @@ def tenant_dependency(settings, validator=None, identity_client=None):
     from app.provider_access import access, enforce_route
     from app.runtime import client_ip, request_id
     mode = os.getenv('CLOUDSAVER_AUTH_MODE', 'workspace')
-    if mode not in ('workspace', 'entra', 'keycloak'):
-        raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace, entra or keycloak')
+    if mode not in ('workspace', 'entra', 'keycloak', 'license'):
+        raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace, entra, keycloak or license')
     verifier = key_verifier() if mode == 'workspace' else 'local'
     own_validator = validator is None
-    if mode=='keycloak':
+    if mode=='license':
+        from app.config import directory_mode
+        if directory_mode()!='registry':raise ValueError('Offline licence mode requires CLOUDSAVER_DIRECTORY_MODE=registry')
+        from app.offline_license import LicenseValidator
+        validator=validator or LicenseValidator()
+    elif mode=='keycloak':
         from app.keycloak import KeycloakValidator
         validator=validator or KeycloakValidator()
     else:
@@ -250,7 +255,7 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         try:await run_in_threadpool(require_directory_freshness,settings)
         except Exception:raise HTTPException(503,'Workspace directory is not fresh enough to authorize access',headers={'Retry-After':'5'}) from None
         token = credentials.credentials
-        if mode=='keycloak':
+        if mode in ('keycloak','license'):
             result=await run_in_threadpool(validator.workspace,token,_tenants(settings))
         else:
             result = (await run_in_threadpool(entra, token) if mode=='entra' else
