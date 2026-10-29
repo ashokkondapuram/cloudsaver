@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "b2a549034c4d89c997327f8c0be5a9f73f4c53aa587fdd7b4728a01f34a1c342",
+  "inventory_sha256": "8ff66c0afb428cc848d7c09a568ae1eeb1f55e4ec04229eb39c067cbe2162c2c",
   "migration_heads": {
     "core": "0027_engineering_workloads",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -2771,8 +2771,8 @@
     },
     {
       "path": "tests/test_control_plane_api.py",
-      "sha256": "b55bbd7be57fb79b7729b04cc120e904670bac5f64e1e3169f14efa015b16f65",
-      "bytes": 7418
+      "sha256": "980ad12ae4c52caefcc9c7831d1fa0197d54b7e1511b755c674be7dcd56546ec",
+      "bytes": 7435
     },
     {
       "path": "tests/test_control_plane_boundaries.py",

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -120,7 +121,7 @@ def test_service_account_cannot_approve():
 
 def test_financial_scenario_idempotent_replay(tmp_path):
     c = client(tmp_path)
-    body = {'idempotency_key': 'scenario-key-001', 'currency': 'USD', 'commitment_fee': '100.00',
+    body = {'idempotency_key': str(uuid4()), 'currency': 'USD', 'commitment_fee': '100.00',
             'uncommitted_baseline': '50.00'}
     first = c.post('/api/v1/control-plane/financial-scenarios', json=body, headers=AUTH)
     assert first.status_code == 201 and first.json()['result']['status'] == 'computed'
