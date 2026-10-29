@@ -7,8 +7,8 @@ platform-down:
 	docker compose --project-directory platform -f platform/compose.yaml down
 platform-status:
 	docker compose --project-directory platform -f platform/compose.yaml ps
-up: platform-up
-	docker compose up -d
+up:
+	./start.sh
 status: platform-status
 	docker compose ps
 logs:

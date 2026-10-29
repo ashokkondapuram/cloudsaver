@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "454bfe4da1ccefa16a270f47ed6dd2e1f4b0e8b585740521d58045207d3efe0e",
+  "inventory_sha256": "2300f6206ead603b1b6123796411b2d883ad19e6ac5538134a39a5e196220a49",
   "migration_heads": {
     "core": "0027_engineering_workloads",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -81,13 +81,13 @@
     },
     {
       "path": "Makefile",
-      "sha256": "127cdd845809679f355894a7384262292efdaa483853a8731af574e050e1110b",
-      "bytes": 706
+      "sha256": "50ce3dcb3079cf8a60d027fa1c91dc45d2b0dd4a46f0eb25f8c899a20beb05f0",
+      "bytes": 684
     },
     {
       "path": "README.md",
-      "sha256": "da35ca392cb1621bf81edb82b6dfdc4110d39efa94c5cfd2f1e4791a30d8fdc8",
-      "bytes": 30544
+      "sha256": "4d3870815032604e6e52ee98bfb94b3fb81c8433c5be0634ac949ee857cc357a",
+      "bytes": 32082
     },
     {
       "path": "ROADMAP.md",
@@ -931,8 +931,8 @@
     },
     {
       "path": "database/Dockerfile",
-      "sha256": "034c106d1074a598d6a8b1711efe09fa3458db35d7f9e5b5351ccfe9c92db565",
-      "bytes": 295
+      "sha256": "71d81eaa25502b181595ab2fd608c2bb54bc5886a9fc921e0c718bc3273e9391",
+      "bytes": 326
     },
     {
       "path": "database/bootstrap.py",
@@ -1521,8 +1521,8 @@
     },
     {
       "path": "platform/compose.yaml",
-      "sha256": "8d11def8711155656aa03ae54d55ec50a1cbab37a63157c52ee57047b7a5c08d",
-      "bytes": 6745
+      "sha256": "a8a13f19c14d1210a3b494333b1100ac30f7e14dfe4a2c3418c96041f0588de1",
+      "bytes": 6889
     },
     {
       "path": "platform/contracts/admin-billing-v1.md",
@@ -1886,8 +1886,8 @@
     },
     {
       "path": "platform/platform-db/Dockerfile",
-      "sha256": "996e8178b7923b3c932207bd383d6363f9f96dda46148c661a7231478d4e9142",
-      "bytes": 164
+      "sha256": "29933aa0a6fea152fe5f335cff859a4a50d49c3f5ec1f110a28c9dcd5e3846d5",
+      "bytes": 195
     },
     {
       "path": "platform/platform-db/bootstrap.sql",
@@ -2510,6 +2510,11 @@
       "bytes": 4799
     },
     {
+      "path": "scripts/start_stack.py",
+      "sha256": "9a73329d29b2c4b034972bb2fb9a7be1d82cbe4b2f4f07dd43137d1e076c52ff",
+      "bytes": 13936
+    },
+    {
       "path": "scripts/test_governance_stack.py",
       "sha256": "e4553639f5a817287242c6b1e4dff77aba7a055a32e91b1aa98585fdc39365d4",
       "bytes": 17655
@@ -2623,6 +2628,11 @@
       "path": "specs/drafts/2026-10-25-provider-cost-and-commitment-extraction.md",
       "sha256": "ecfd3ac7b69e4dafc4aaf5a994848a4d86031727c2b96599d7910b1104ee1a1f",
       "bytes": 6265
+    },
+    {
+      "path": "start.sh",
+      "sha256": "2c058c16fcad5833c25112b24750a9fdf2badf7d7c819fbeb7b79f5624bf5af8",
+      "bytes": 130
     },
     {
       "path": "test_platform.py",
@@ -3018,6 +3028,11 @@
       "path": "tests/test_setup_keycloak.py",
       "sha256": "d8422d2257e218eee2173c2cbde45a011f18a69fca86fe7fa514881b890f2fec",
       "bytes": 1422
+    },
+    {
+      "path": "tests/test_start_stack.py",
+      "sha256": "79db48b079beb31d33b670711d0a0a84043aee3ca9d07d18960f9d1170565065",
+      "bytes": 4825
     },
     {
       "path": "tests/test_unit_economics.py",

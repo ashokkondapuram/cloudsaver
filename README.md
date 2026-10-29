@@ -1,5 +1,18 @@
 # CloudSaver v1.7.0 — full FinOps workspace
 
+## Start all servers with one command
+
+```sh
+./start.sh
+```
+
+Requires Docker with Compose v2, Python 3.10+ and OpenSSL. The launcher creates private local settings on first use, builds the images, starts Keycloak and its database, the platform portal/identity services, CloudSaver APIs, dashboard, Redis/PostgreSQL, and all scheduled/delivery/agent workers. It applies migrations before starting workers and waits for health checks. `make up` runs the same command.
+
+Open the dashboard at `http://127.0.0.1:3000`, platform portal at `http://127.0.0.1:3100`, and Keycloak at `https://keycloak.localhost:8443/admin/`. The Keycloak development certificate needs local browser trust. Private credentials and configuration are in the ignored `.env.local-stack/` directory; the platform operator key is saved in `operator-login.txt`, and Keycloak bootstrap credentials in `config/keycloak.env`. Subsequent runs preserve secrets, database volumes and the existing license expiry.
+
+This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
+
+
 v1.7.0 adds workload assessments (application and environment roll-ups of five-pillar evidence), alongside keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md). Existing restored workflows and deployment fixes remain available.
 
 **Latest:** automatic billing sync now reads amortized and per-resource costs from each provider's cost management APIs, plus reservations, savings plans and committed use discounts. Azure imports actual and amortized cost per resource. AWS can read per-resource costs from a CUR 2.0 table through Athena. Google Cloud can read the detailed billing export. Commitment inventory, utilization, coverage, unused cost and upcoming expiry appear in the new Commitments panel on Cost allocation. Every provider call is read-only. See [Cost allocation and billing](docs/features/cost-allocation-and-billing.md).

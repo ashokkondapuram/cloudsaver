@@ -3,3 +3,4 @@ FROM postgres:16-alpine
 # source archive was extracted under a private umask on the host.
 COPY --chmod=0555 init.sh /docker-entrypoint-initdb.d/00-init.sh
 COPY --chmod=0444 001_schema.sql /opt/cloudsaver/001_schema.sql
+RUN chmod 0755 /opt/cloudsaver
