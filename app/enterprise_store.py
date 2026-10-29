@@ -234,6 +234,66 @@ class EnterpriseStore:
                     decision TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',defer_until TEXT,evidence_digest TEXT NOT NULL,
                     actor TEXT NOT NULL,created_at TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS resource_decision_latest ON resource_decisions(tenant_id,resource_key,created_at DESC,id DESC);
+                CREATE TABLE IF NOT EXISTS cp_plans (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,objective TEXT NOT NULL,owner_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,UNIQUE(tenant_id,id));
+                CREATE TRIGGER IF NOT EXISTS cp_plans_no_update BEFORE UPDATE ON cp_plans BEGIN SELECT RAISE(ABORT,'Plans are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_plans_no_delete BEFORE DELETE ON cp_plans BEGIN SELECT RAISE(ABORT,'Plans are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_plan_versions (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,plan_id TEXT NOT NULL,version INTEGER NOT NULL CHECK (version>=1),
+                    identity_digest TEXT NOT NULL,targets TEXT NOT NULL,parameters TEXT NOT NULL,
+                    policy_digest TEXT NOT NULL,evidence_digest TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'draft',
+                    created_by_hash TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+                    UNIQUE(tenant_id,plan_id,version),UNIQUE(tenant_id,id),
+                    CHECK (state IN ('draft','evidence_required','assessed','review_requested','approved','queued','running',
+                      'verification_pending','verified','failed','reconciliation_required','cancelled','expired')));
+                CREATE TRIGGER IF NOT EXISTS cp_plan_versions_restricted_update BEFORE UPDATE ON cp_plan_versions
+                    WHEN NOT(OLD.id=NEW.id AND OLD.tenant_id=NEW.tenant_id AND OLD.plan_id=NEW.plan_id AND OLD.version=NEW.version
+                      AND OLD.identity_digest=NEW.identity_digest AND OLD.targets=NEW.targets AND OLD.parameters=NEW.parameters
+                      AND OLD.policy_digest=NEW.policy_digest AND OLD.evidence_digest=NEW.evidence_digest
+                      AND OLD.created_by_hash=NEW.created_by_hash AND OLD.created_at=NEW.created_at)
+                    BEGIN SELECT RAISE(ABORT,'Only state and updated_at may change on a plan version'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_plan_versions_no_delete BEFORE DELETE ON cp_plan_versions BEGIN SELECT RAISE(ABORT,'Plan versions are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_plan_approvals (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,plan_version_id TEXT NOT NULL,identity_digest TEXT NOT NULL,
+                    approver_hash TEXT NOT NULL,verified_human INTEGER NOT NULL CHECK (verified_human=1),expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,CHECK (expires_at>created_at));
+                CREATE TRIGGER IF NOT EXISTS cp_plan_approvals_no_update BEFORE UPDATE ON cp_plan_approvals BEGIN SELECT RAISE(ABORT,'Approvals are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_plan_approvals_no_delete BEFORE DELETE ON cp_plan_approvals BEGIN SELECT RAISE(ABORT,'Approvals are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_action_assessments (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,action_id TEXT NOT NULL,
+                    rule_version TEXT NOT NULL,findings TEXT NOT NULL,decision TEXT NOT NULL,
+                    evidence_digest TEXT NOT NULL,policy_digest TEXT NOT NULL,created_by_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,UNIQUE(tenant_id,idempotency_key),
+                    CHECK (decision IN ('eligible_for_review','blocked','evidence_required','unsupported','expired')));
+                CREATE INDEX IF NOT EXISTS cp_action_assessments_action ON cp_action_assessments(tenant_id,action_id,created_at DESC);
+                CREATE TRIGGER IF NOT EXISTS cp_action_assessments_no_update BEFORE UPDATE ON cp_action_assessments BEGIN SELECT RAISE(ABORT,'Action assessments are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_action_assessments_no_delete BEFORE DELETE ON cp_action_assessments BEGIN SELECT RAISE(ABORT,'Action assessments are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_financial_scenarios (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,currency TEXT NOT NULL,
+                    input TEXT NOT NULL,result TEXT NOT NULL,status TEXT NOT NULL,evidence_digest TEXT,
+                    created_by_hash TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,idempotency_key));
+                CREATE TRIGGER IF NOT EXISTS cp_financial_scenarios_no_update BEFORE UPDATE ON cp_financial_scenarios BEGIN SELECT RAISE(ABORT,'Financial scenarios are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_financial_scenarios_no_delete BEFORE DELETE ON cp_financial_scenarios BEGIN SELECT RAISE(ABORT,'Financial scenarios are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_gitops_deliveries (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,delivery_id TEXT NOT NULL,repo_id TEXT NOT NULL,
+                    received_at TEXT NOT NULL,UNIQUE(tenant_id,delivery_id));
+                CREATE TRIGGER IF NOT EXISTS cp_gitops_deliveries_no_update BEFORE UPDATE ON cp_gitops_deliveries BEGIN SELECT RAISE(ABORT,'Deliveries are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_gitops_deliveries_no_delete BEFORE DELETE ON cp_gitops_deliveries BEGIN SELECT RAISE(ABORT,'Deliveries are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_gitops_checks (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,repo_id TEXT NOT NULL,base_sha TEXT NOT NULL,
+                    head_sha TEXT NOT NULL,plan_digest TEXT NOT NULL,policy_digest TEXT NOT NULL,
+                    evidence_digest TEXT NOT NULL,decision TEXT NOT NULL,trusted_plan INTEGER NOT NULL,
+                    conclusion TEXT NOT NULL,created_at TEXT NOT NULL,
+                    UNIQUE(tenant_id,repo_id,base_sha,head_sha,plan_digest,policy_digest,evidence_digest));
+                CREATE INDEX IF NOT EXISTS cp_gitops_checks_head ON cp_gitops_checks(tenant_id,repo_id,head_sha);
+                CREATE TRIGGER IF NOT EXISTS cp_gitops_checks_no_update BEFORE UPDATE ON cp_gitops_checks BEGIN SELECT RAISE(ABORT,'Checks are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_gitops_checks_no_delete BEFORE DELETE ON cp_gitops_checks BEGIN SELECT RAISE(ABORT,'Checks are append-only'); END;
+                CREATE TABLE IF NOT EXISTS cp_commitment_reminders (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,commitment_id TEXT NOT NULL,threshold_days INTEGER NOT NULL,
+                    days_remaining INTEGER NOT NULL,created_at TEXT NOT NULL,UNIQUE(tenant_id,commitment_id,threshold_days));
+                CREATE TRIGGER IF NOT EXISTS cp_commitment_reminders_no_update BEFORE UPDATE ON cp_commitment_reminders BEGIN SELECT RAISE(ABORT,'Reminders are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS cp_commitment_reminders_no_delete BEFORE DELETE ON cp_commitment_reminders BEGIN SELECT RAISE(ABORT,'Reminders are append-only'); END;
                 INSERT OR IGNORE INTO ai_data_retention(attempt_id,tenant_id,purpose,policy_digest,expires_at,created_at)
                     SELECT id,tenant_id,'legacy_inference','0000000000000000000000000000000000000000000000000000000000000000',
                     strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'),strftime('%Y-%m-%dT%H:%M:%SZ','now') FROM ai_inference_attempts;

@@ -165,7 +165,7 @@ def record_approval(store, tenant_id, version_id, identity_digest, approver_hash
         raise ConflictError("approval requires a future timezone-aware expiration")
     approval_id = str(uuid4())
     with store.transaction(tenant_id, write=True) as db:
-        row = db.execute("SELECT identity_digest,state FROM cp_plan_versions v WHERE tenant_id=%s AND id=%s "
+        row = db.execute("SELECT identity_digest,state,created_by_hash FROM cp_plan_versions v WHERE tenant_id=%s AND id=%s "
                          "AND NOT EXISTS(SELECT 1 FROM cp_plan_versions newer WHERE newer.tenant_id=v.tenant_id "
                          "AND newer.plan_id=v.plan_id AND newer.version>v.version)",
                          (tenant_id, version_id)).fetchone()
@@ -175,9 +175,12 @@ def record_approval(store, tenant_id, version_id, identity_digest, approver_hash
             raise ConflictError("approval does not match this plan version")
         if row[1] != "review_requested":
             raise ConflictError("plan must request review before approval")
+        if row[2] == approver_hash:
+            raise ConflictError("the requester cannot approve their own plan version")
         db.execute("INSERT INTO cp_plan_approvals(id,tenant_id,plan_version_id,identity_digest,approver_hash,"
                    "verified_human,expires_at,created_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
-                   (approval_id, tenant_id, version_id, identity_digest, approver_hash, True, expires_at, _now()))
+                   (approval_id, tenant_id, version_id, identity_digest, approver_hash, True,
+                    expires_at.astimezone(timezone.utc).isoformat(), _now()))
     return approval_id
 
 
