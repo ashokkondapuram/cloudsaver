@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "b53140a1a2584bed2bfa80724adfd7587e0ad3b0007fbc3dd927df1a9a5c1cb8",
+  "inventory_sha256": "454bfe4da1ccefa16a270f47ed6dd2e1f4b0e8b585740521d58045207d3efe0e",
   "migration_heads": {
     "core": "0027_engineering_workloads",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -441,8 +441,13 @@
     },
     {
       "path": "app/control_plane/store.py",
-      "sha256": "bfc35b8478b38ef19c2783648f5e3bc53c80b147b173b8202a97211fc1257834",
-      "bytes": 12635
+      "sha256": "18295cd34780b66ddfd34cdd951cfc5ff18b7df5218b176f03bf8852af17d353",
+      "bytes": 12831
+    },
+    {
+      "path": "app/control_plane_api.py",
+      "sha256": "38c322e8113878ecab793dbc73206f3fb66616aac0f15ce19d34018a86fd759d",
+      "bytes": 8508
     },
     {
       "path": "app/data_governance.py",
@@ -536,8 +541,8 @@
     },
     {
       "path": "app/enterprise_store.py",
-      "sha256": "a948f079a7eac537b5f27735e6c3536778e1b5b8b3aa08ed67c93cb0bab515f3",
-      "bytes": 23366
+      "sha256": "9c78d493615a7f38547ae69495b762170f20918e376e38e4c58c9b188066efe2",
+      "bytes": 30462
     },
     {
       "path": "app/entitlements.py",
@@ -671,8 +676,8 @@
     },
     {
       "path": "app/main.py",
-      "sha256": "c9e3646cd4aa8efc8cdafd45cdaa2fe2d67adec35a014b84fa94ebb8948024d7",
-      "bytes": 20989
+      "sha256": "33d48d62a3dd8da3a91553b827c53adf4148f5fa54ddf3f0177ecf96e8fa8cc7",
+      "bytes": 21141
     },
     {
       "path": "app/multi_cloud.py",
@@ -811,8 +816,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "4b171067f48d48a660f4e77283e08ecfb985d1913ff22a35fc0a56a3c08cf1cd",
-      "bytes": 12204
+      "sha256": "82eb8ccfac8f5f17642654e5a183ae31de3358b87e22304b3fd7c7648d2e1660",
+      "bytes": 12656
     },
     {
       "path": "app/runtime.py",
@@ -1353,6 +1358,11 @@
       "path": "docs/releases/1.7.0-UPGRADE.md",
       "sha256": "5922891604952b1fff923315611185059f4ea59c5f31c8d0e7b80dd02c6ec885",
       "bytes": 8289
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-27-control-plane-plan-lifecycle.md",
+      "sha256": "ec894a423ba2cfe66af9196c63c3435c84a020bc16835fb58ab12cd26938b162",
+      "bytes": 32957
     },
     {
       "path": "ebpf-flow-exporter/README.md",
@@ -2546,8 +2556,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "40875504bb942d9e36147a708a8f92893d7563a356620d581172a90ad2c37268",
-      "bytes": 35713
+      "sha256": "5e7121eaeb77de56a76dfd5a46835dc574ab75eed60b7281c392abe2f263b8cb",
+      "bytes": 37467
     },
     {
       "path": "services/governance_routes.py",
@@ -2725,6 +2735,11 @@
       "bytes": 2070
     },
     {
+      "path": "tests/test_control_plane_api.py",
+      "sha256": "b55bbd7be57fb79b7729b04cc120e904670bac5f64e1e3169f14efa015b16f65",
+      "bytes": 7418
+    },
+    {
       "path": "tests/test_control_plane_boundaries.py",
       "sha256": "77737135571ccb39cf64766c5ac13ceb1f736a2c31e79a69a97619fbd3021a38",
       "bytes": 4718
@@ -2741,8 +2756,8 @@
     },
     {
       "path": "tests/test_control_plane_store.py",
-      "sha256": "f367143ea075fe5cdadf1514497ac1c43fac612cacbf34f226d96b14fe85d02a",
-      "bytes": 4021
+      "sha256": "7b4525c8c82ade5c2fc5909a3b0878febf938883c59c095f7182b0e21cbd17c9",
+      "bytes": 9088
     },
     {
       "path": "tests/test_control_plane_workflow.py",
