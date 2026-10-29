@@ -13,6 +13,7 @@ import shutil
 import ssl
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -37,11 +38,51 @@ def env_values(path):
             continue
         name,value = line.split('=',1)
         # Generated setup files use only literal values, not shell expansion.
-        if value[:1] in ('"',"'"):
+        if value.startswith("'") and value.endswith("'"):
+            value=value[1:-1].replace("\\'", "'")
+        elif value[:1] in ('"',"'"):
             parts=shlex.split(value,comments=True)
             value=parts[0] if parts else ''
         result[name.strip()]=value
     return result
+
+
+def sync_secrets(env_file, home):
+    """Collect generated runtime credentials in the ignored root .env, never in an image."""
+    target=ROOT/'.env'
+    if target.is_symlink():raise ValueError('Refusing to write secrets through a symlink')
+    values={}
+    sources=(target,env_file,ROOT/'platform/.env',home/'runtime.env',
+             home/'config/keycloak.env',home/'config/cloudsaver.env')
+    for source in sources:
+        if source.exists():values.update(env_values(source))
+    values['CLOUDSAVER_STACK_HOME']=str(home)
+    if (home/'config/keycloak.env').exists():
+        values.setdefault('KEYCLOAK_ADMIN_USER','bootstrap-admin')
+    operator=home/'operator-login.txt'
+    if operator.exists():
+        prefix='Operator access key (shown once): '
+        for line in operator.read_text().splitlines():
+            if line.startswith(prefix):values['PLATFORM_OPERATOR_ACCESS_KEY']=line[len(prefix):]
+    user=home/'config/user-credentials.json'
+    if user.exists():
+        credential=json.loads(user.read_text())
+        values['CLOUDSAVER_LOCAL_ADMIN_USERNAME']=credential['username']
+        values['CLOUDSAVER_LOCAL_ADMIN_PASSWORD']=credential['password']
+    if any('\n' in v or '\r' in v for v in values.values()):
+        raise ValueError('Use file references for multiline secrets')
+    text='# Generated local runtime settings and secrets. Keep private; never commit.\n'
+    text+='\n'.join(k+"='"+v.replace("'", "\\'")+"'" for k,v in sorted(values.items()))+'\n'
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',dir=target.parent,prefix='.env-secrets-',delete=False) as handle:
+            temporary=Path(handle.name)
+            os.fchmod(handle.fileno(),0o600)
+            handle.write(text)
+        os.replace(temporary,target)
+    finally:
+        if temporary:temporary.unlink(missing_ok=True)
+    return target
 
 
 def module(path, name):
@@ -63,6 +104,8 @@ def prepare_settings(env_file, home):
         captured=io.StringIO()
         with contextlib.redirect_stdout(captured):platform.create()
         private_write(home/'operator-login.txt',captured.getvalue())
+    # The unified file quotes values; register the decoded token, not its quotes.
+    platform.parse=env_values
     with contextlib.redirect_stdout(io.StringIO()):platform.add_callers(env_file)
     settings=home/'settings.json'
     if not settings.exists():
@@ -145,6 +188,7 @@ finally:
             target=config/'keycloak.env';target.write_text(''.join(k+"='"+v+"'\n" for k,v in values.items()))
         if not all((config/f).is_file() for f in ('keycloak.env','cloudsaver.env','import/realm.json')):
             raise ValueError('Keycloak setup is incomplete; inspect the private stack directory before retrying')
+        sync_secrets(self.env_file,self.home)
         roots=ssl.create_default_context().get_ca_certs(binary_form=True)
         cert=Path(env_values(config/'keycloak.env')['KEYCLOAK_TLS_CERT'])
         (self.home/'ca-bundle.pem').write_text(''.join(ssl.DER_cert_to_PEM_cert(c) for c in roots)+cert.read_text())
@@ -203,7 +247,8 @@ print('Local workspace ready; no cloud scope was authorized.')
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--env-file',type=Path,default=ROOT/'.env')
-    parser.add_argument('--state-dir',type=Path,default=ROOT/'.env.local-stack')
+    saved=env_values(ROOT/'.env') if (ROOT/'.env').exists() else {}
+    parser.add_argument('--state-dir',type=Path,default=Path(saved.get('CLOUDSAVER_STACK_HOME',str(ROOT/'.env.local-stack'))))
     parser.add_argument('--timeout',type=int,default=300)
     parser.add_argument('--no-build',action='store_true',help='Use previously built images')
     args=parser.parse_args()
@@ -216,6 +261,7 @@ def main():
         stack.run(['docker','info'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         stack.run(['docker','compose','version'],stdout=subprocess.DEVNULL)
         tenant_id=prepare_settings(args.env_file.resolve(),home)
+        sync_secrets(args.env_file.resolve(),home)
         stack.start(tenant_id)
     except (subprocess.CalledProcessError,ValueError,OSError) as error:
         print('Startup stopped: '+str(error)+'. Existing volumes and credentials were retained.',file=sys.stderr)

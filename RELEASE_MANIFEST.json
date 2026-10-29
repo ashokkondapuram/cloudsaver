@@ -1,6 +1,6 @@
 {
   "version": "1.7.0",
-  "inventory_sha256": "2300f6206ead603b1b6123796411b2d883ad19e6ac5538134a39a5e196220a49",
+  "inventory_sha256": "c8b05f1e87f0c90ab519cfb4916e5cffdb259562cb22c079e0ad84e200a6739e",
   "migration_heads": {
     "core": "0027_engineering_workloads",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -16,8 +16,8 @@
     },
     {
       "path": ".env.example",
-      "sha256": "4cf4ddf153335ff85938feec45e2d6119933d5cbb5866b77b0ed4887c1fcaa18",
-      "bytes": 15505
+      "sha256": "6dd21ff5e7d78018db6aee47096e90c048b86273e37319b81d1d2832e5ad9c88",
+      "bytes": 15828
     },
     {
       "path": ".gitattributes",
@@ -86,8 +86,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "4d3870815032604e6e52ee98bfb94b3fb81c8433c5be0634ac949ee857cc357a",
-      "bytes": 32082
+      "sha256": "12d19475380de521bee56294bc2d5edad400dc3f2116db8b030dc89fda9bdcba",
+      "bytes": 32352
     },
     {
       "path": "ROADMAP.md",
@@ -2511,8 +2511,8 @@
     },
     {
       "path": "scripts/start_stack.py",
-      "sha256": "9a73329d29b2c4b034972bb2fb9a7be1d82cbe4b2f4f07dd43137d1e076c52ff",
-      "bytes": 13936
+      "sha256": "68570a81197fee54e9ded8b27baaa68a72ad4c70cd8f15802d5d6237d4cd9057",
+      "bytes": 16255
     },
     {
       "path": "scripts/test_governance_stack.py",
@@ -3031,8 +3031,8 @@
     },
     {
       "path": "tests/test_start_stack.py",
-      "sha256": "79db48b079beb31d33b670711d0a0a84043aee3ca9d07d18960f9d1170565065",
-      "bytes": 4825
+      "sha256": "fa89d0df4df0881c4b09b8be05b7de1d6a7701027521bfb8d637921cd1799bcc",
+      "bytes": 6637
     },
     {
       "path": "tests/test_unit_economics.py",

@@ -99,3 +99,39 @@ def test_adopt_existing_keycloak_workspace_on_first_launcher_run(tmp_path,monkey
     tid='11111111-1111-4111-8111-111111111111'
     (config/'cloudsaver.env').write_text('CLOUDSAVER_KEYCLOAK_BINDINGS='+json.dumps([{'tenant_id':tid}])+'\n')
     assert start_stack.prepare_settings(tmp_path/'.env',home)==tid
+
+
+def test_unified_env_contains_generated_secrets_without_logging(tmp_path,monkeypatch,capsys):
+    import secrets
+    home=setup_root(tmp_path,monkeypatch)
+    env=tmp_path/'.env'
+    start_stack.prepare_settings(env,home)
+    config=home/'config';config.mkdir()
+    admin=secrets.token_urlsafe(32)+"'"+'$literal'
+    verifier=secrets.token_urlsafe(32)
+    (config/'keycloak.env').write_text('KEYCLOAK_ADMIN_PASSWORD='+admin+'\n')
+    (config/'cloudsaver.env').write_text('CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY='+verifier+'\n')
+    target=start_stack.sync_secrets(env,home)
+    values=start_stack.env_values(target)
+    assert values['KEYCLOAK_ADMIN_PASSWORD']==admin
+    assert values['KEYCLOAK_ADMIN_USER']=='bootstrap-admin'
+    assert values['CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY']==verifier
+    assert values['POSTGRES_PASSWORD'] and values['PLATFORM_DB_PASSWORD']
+    assert values['PLATFORM_OPERATOR_ACCESS_KEY'] and values['CLOUDSAVER_AGENT_WORKER_TOKEN']
+    assert values['CLOUDSAVER_STACK_HOME']==str(home)
+    assert target.stat().st_mode&0o777==0o600
+    start_stack.prepare_settings(env,home)
+    start_stack.sync_secrets(env,home)
+    assert start_stack.env_values(target)==values
+    platform=start_stack.env_values(tmp_path/'platform/.env')
+    import hashlib
+    assert json.loads(platform['PLATFORM_IDENTITY_CALLERS'])['gateway']==hashlib.sha256(values['CLOUDSAVER_IDENTITY_TOKEN_GATEWAY'].encode()).hexdigest()
+    assert capsys.readouterr().out==''
+
+
+def test_unified_env_refuses_symlink_target(tmp_path,monkeypatch):
+    home=setup_root(tmp_path,monkeypatch)
+    other=tmp_path/'other';other.write_text('preserve')
+    (tmp_path/'.env').symlink_to(other)
+    with pytest.raises(ValueError,match='symlink'):start_stack.sync_secrets(tmp_path/'.env',home)
+    assert other.read_text()=='preserve'
