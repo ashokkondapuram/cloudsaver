@@ -70,6 +70,8 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         return await upstream(method, targets[target], path, authorization, params=params, transport=transport)
 
     from services.governance_routes import register as register_governance
+    from services.engineering_routes import register as register_engineering
+    register_engineering(app,allowed,targets,transport)
     register_governance(app,allowed,targets,transport)
     from app.onboarding_api import customer_access_router, onboarding_router
     app.include_router(onboarding_router())

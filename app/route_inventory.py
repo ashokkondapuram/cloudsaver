@@ -12,6 +12,20 @@ Classes:
 """
 
 ROUTES = {
+    ('GET','/health/live'):'public',
+    ('GET','/health/ready'):'public',
+    ('GET','/api/v1/engineering/capabilities'):'scoped_read',
+    ('GET','/api/v1/engineering/workloads'):'scoped_read',
+    ('POST','/api/v1/engineering/workloads'):'scoped_read',
+    ('GET','/api/v1/engineering/workloads/{workload_id}'):'scoped_read',
+    ('PATCH','/api/v1/engineering/workloads/{workload_id}'):'scoped_read',
+    ('GET','/api/v1/engineering/workloads/{workload_id}/members'):'scoped_read',
+    ('POST','/api/v1/engineering/workloads/{workload_id}/members'):'scoped_read',
+    ('GET','/api/v1/engineering/workloads/{workload_id}/plans'):'scoped_read',
+    ('POST','/api/v1/engineering/workloads/{workload_id}/plans'):'scoped_read',
+    ('GET','/api/v1/engineering/plans/{plan_id}/versions'):'scoped_read',
+    ('POST','/api/v1/engineering/workloads/{workload_id}/plans/{plan_id}/versions'):'scoped_read',
+    ('GET','/api/v1/engineering/workloads/{workload_id}/events'):'scoped_read',
     ('GET','/api/v1/governance/capabilities'):'scoped_read',
     ('GET','/api/v1/governance/access'):'full_scope',
     ('PUT','/api/v1/governance/access'):'full_scope',

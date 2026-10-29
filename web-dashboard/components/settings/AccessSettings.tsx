@@ -68,11 +68,11 @@ export function AccessSettings() {
   }, [token]);
 
   useEffect(() => {
-    if (!roles.length) return;
+    if (!roles.length || workspace?.identity_provider === 'keycloak') return;
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load, roles.length]);
+  }, [load, roles.length, workspace?.identity_provider]);
 
   async function act(run: () => Promise<unknown>, message: string) {
     try {
@@ -98,6 +98,11 @@ export function AccessSettings() {
     }
   }
 
+  if (workspace?.identity_provider === 'keycloak') return <section className="panel">
+    <SectionTitle title="Access managed in Keycloak">Your organization manages membership, roles, service accounts, and licensing in Keycloak.</SectionTitle>
+    <p>Contact your identity administrator to change access. CloudSaver checks current membership, roles, session status, and the client license when you use the application.</p>
+    <p>Your roles: {roleList(workspace.roles)}. License expires: {workspace.licence_expires_at ? dateTime(workspace.licence_expires_at) : 'Unavailable'}.</p>
+  </section>;
   if (!roles.length) {
     return <section className="panel"><SectionTitle title="Users and keys">Manage who can use this workspace</SectionTitle>
       <EmptyState icon={Users} title="Organization access isn't available with this key">Connect with your personal key to manage users and keys. If your organization hasn't been claimed yet, ask your platform operator for an onboarding key and open the claim page.</EmptyState>

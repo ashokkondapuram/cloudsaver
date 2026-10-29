@@ -56,8 +56,11 @@ def test_readiness_fails_closed_but_liveness_stays_up(tmp_path):
         assert response.status_code == 503
         assert response.json() == {'status': 'unready', 'dependencies': {'database': 'up', 'redis': 'down'}}
         assert client.get('/healthz').status_code == 200
+        assert client.get('/health/live').status_code == 200
+        assert client.get('/health/ready').status_code == 503
         app.state.readiness_checks['redis'] = up
         assert client.get('/readyz').status_code == 200
+        assert client.get('/health/ready').status_code == 200
 
 
 def test_cors_is_explicit_and_validation_does_not_echo_input(tmp_path, monkeypatch):

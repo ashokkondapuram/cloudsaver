@@ -124,7 +124,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(response)});
   });
   await page.goto('/');
-  await page.getByLabel('Workspace access key or Entra Bearer token').fill('test-only-browser-credential');
+  await page.getByLabel('Workspace access key or identity access token').fill('test-only-browser-credential');
   await page.getByRole('button',{name:'Connect workspace',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
   if(!options.legacy)await expect.poll(()=>resourceReads).toBeGreaterThan(0);
@@ -135,10 +135,13 @@ export async function navigate(page:Page,label:string){
   const settings:Record<string,string>={'Analysis rules':'Analysis rules','AI data governance':'AI & data governance','People & access':'Access & API keys'};
   const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Settings & integrations':'Settings','Automation':'Automation & GitOps','Inventory & findings':'Resources','Resource analysis':'Resources'};
   const target=settings[label]?'Settings':aliases[label]||label;
-  if(await page.getByRole('button',{name:'Open navigation'}).isVisible()){
-    await page.getByRole('button',{name:'Open navigation'}).click();
-    await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:target,exact:true}).click();
-  }else await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('link',{name:target,exact:true}).click();
+  const mobile=await page.getByRole('button',{name:'Open navigation'}).isVisible();
+  if(mobile)await page.getByRole('button',{name:'Open navigation'}).click();
+  const nav=page.getByRole('navigation',{name:mobile?'Mobile navigation':'Primary navigation'});
+  await expect(nav).toBeVisible();
+  const destination=nav.getByRole('link',{name:target,exact:true});
+  if(['Services','Kubernetes','Optimization evidence','Agent worker'].includes(target)&&!await destination.isVisible())await nav.getByRole('button',{name:'Specialist tools',exact:true}).click();
+  await destination.click();
   if(settings[label])await page.getByRole('tab',{name:settings[label],exact:true}).click();
 }
 

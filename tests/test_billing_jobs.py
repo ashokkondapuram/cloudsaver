@@ -24,6 +24,28 @@ def total(store):
     with store.transaction(TID) as db:return sum((Decimal(str(r[0])) for r in db.execute('SELECT billed_cost FROM focus_charges WHERE tenant_id=%s',(TID,)).fetchall()),Decimal(0))
 
 
+def test_provider_cooldown_defers_same_scope_without_saving_partial_lines(evidence,monkeypatch):
+    from app.provider_retry import ProviderDeferred
+    _,store,_=evidence;config(monkeypatch);jobs=BillingJobs(store)
+    job=jobs.submit(workspace(),str(uuid4()));claim=jobs.claim(TID)
+    def throttled(*args):raise ProviderDeferred(120)
+    jobs.execute_scope(workspace(),claim,readers={'azure':throttled})
+    saved=jobs.get(TID,job['id'])
+    assert saved['status']=='queued' and saved['payload']['scope_index']==0
+    assert saved['payload']['last_error_code']=='BILLING_PROVIDER_THROTTLED'
+    assert jobs.claim(TID) is None and total(store)==0
+    assert jobs.cancel(TID,job['id'])['status']=='cancelled'
+    assert jobs.claim(TID,now=datetime.now(timezone.utc)+timedelta(minutes=3)) is None
+
+
+def test_recovery_preserves_requested_cancellation(evidence,monkeypatch):
+    from workers.billing_sync import _recover_orphaned_jobs
+    settings,store,_=evidence;config(monkeypatch);jobs=BillingJobs(store)
+    job=jobs.submit(workspace(),str(uuid4()));jobs.claim(TID);jobs.cancel(TID,job['id'])
+    _recover_orphaned_jobs(settings)
+    assert jobs.get(TID,job['id'])['status']=='cancelled' and jobs.claim(TID) is None
+
+
 def test_api_enqueue_returns_202_reuses_key_and_never_calls_provider(evidence,monkeypatch):
     settings,store,_=evidence;config(monkeypatch)
     monkeypatch.setattr('app.collectors.billing_sync.READERS',{'azure':lambda *_:pytest.fail('The HTTP request must not call a provider')})

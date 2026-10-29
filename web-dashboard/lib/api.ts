@@ -12,7 +12,7 @@ export function watchUnauthorized(token: string, callback: () => void) {
 }
 const unknownOutcome='The request outcome could not be confirmed. Check its status or activity before submitting again.';
 
-export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'} = {}): Promise<T> {
+export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; idempotencyKey?: string; version?: number} = {}): Promise<T> {
   const hasBody=options.body!==undefined||options.rawBody!==undefined;
   const method=options.method??(hasBody?'POST':'GET'), mutation=method!=='GET';
   const controller=new AbortController();
@@ -24,7 +24,7 @@ export async function api<T>(path: string, token: string, options: {body?: unkno
   let response:Response, raw:unknown;
   try {
     response=await fetch('/api/v1'+path,{
-      method,headers:{Authorization:'Bearer '+token,...(hasBody?{'Content-Type':'application/json'}:{})},
+      method,headers:{Authorization:'Bearer '+token,...(hasBody?{'Content-Type':'application/json'}:{}),...(options.idempotencyKey?{'Idempotency-Key':options.idempotencyKey}:{}),...(options.version?{'If-Match':`"${options.version}"`}:{})},
       body:options.rawBody??(options.body===undefined?undefined:JSON.stringify(options.body)),cache:'no-store',signal,
     });
     // Revoke the session before waiting for any untrusted error response body.

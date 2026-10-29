@@ -118,10 +118,12 @@ def create_app(service=None, callers=None, operator_auth=None, flush_interval=30
     def rid(request):
         return request.state.request_id
 
+    @app.get('/health/live',include_in_schema=False)
     @app.get('/healthz')
     def health():
         return {'status': 'healthy', 'service': 'identity-service'}
 
+    @app.get('/health/ready',include_in_schema=False)
     @app.get('/readyz')
     def ready():
         try:

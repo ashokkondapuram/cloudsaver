@@ -136,6 +136,8 @@ def main():
     from workers.storage import JobRepository
     from workers.tasks import execute_subscription_scan
     settings=Settings.load()
+    from workers.health import WorkerHealth
+    health=WorkerHealth().start()
     configured={t['tenant_id'] for t in settings.tenants}
     if any(t.tenant_id not in configured for t in load_targets()):
         raise ValueError('Notification targets must belong to configured tenants')
@@ -150,11 +152,14 @@ def main():
         while not stop.is_set():
             try:
                 count=run_batch(settings,repository,targets=load_targets(settings),publish_scan=publish,client=client,jobs=jobs,should_stop=stop.is_set)
+                health.touch()
             except Exception:
+                health.touch(False)
                 # Avoid logging a DSN, broker URL or provider exception.
                 logger.error('Delivery batch failed; durable work retained')
                 count=0
             stop.wait(1 if count else 5)
+    health.close()
 
 
 if __name__=='__main__':

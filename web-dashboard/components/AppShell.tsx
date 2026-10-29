@@ -18,27 +18,55 @@ import {ClaimView} from './ClaimView';
 import {WorkspaceContext} from './WorkspaceContext';
 
 export const navigation = [
-  {href:'/',label:'Overview',icon:LayoutDashboard,group:'UNDERSTAND',shortcut:'G D'},
+  {href:'/',label:'Overview',icon:LayoutDashboard,group:'WORKSPACE',shortcut:'G D'},
   {href:'/resources',label:'Resources',icon:Blocks,group:'',shortcut:'G R'},
   {href:'/workloads',label:'Workload assessments',icon:Layers,group:''},
-  {href:'/services/disks',label:'Services',icon:Database,group:''},
-  {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
-  {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:'IMPROVE'},
   {href:'/allocation',label:'Cost allocation',icon:Wallet,group:'FINANCE'},
   {href:'/outcomes',label:'Savings & investigations',icon:ClipboardCheck,group:''},
-  {href:'/governance',label:'Risk & compliance',icon:ShieldCheck,group:'ACT & GOVERN'},
-  {href:'/agents',label:'Agent worker',icon:Sparkles,group:''},
+  {href:'/governance',label:'Risk & compliance',icon:ShieldCheck,group:'CHANGE & GOVERN'},
   {href:'/automation',label:'Automation & GitOps',icon:FileCode2,group:''},
-  {href:'/activity',label:'Activity & delivery',icon:Activity,group:'OPERATE'},
-  {href:'/settings',label:'Settings',icon:Settings2,group:'ADMINISTER',shortcut:'G S'},
+  {href:'/services/disks',label:'Services',icon:Database,group:''},
+  {href:'/kubernetes',label:'Kubernetes',icon:Blocks,group:'',shortcut:'G K'},
+  {href:'/optimization',label:'Optimization evidence',icon:Wallet,group:''},
+  {href:'/agents',label:'Agent worker',icon:Sparkles,group:''},
+  {href:'/activity',label:'Activity & delivery',icon:Activity,group:'MANAGE'},
+  {href:'/settings',label:'Settings',icon:Settings2,group:'',shortcut:'G S'},
 ];
+
+const specialistHrefs = new Set(['/services/disks', '/kubernetes', '/optimization', '/agents']);
+const managementHrefs = new Set(['/activity', '/settings']);
+const isCurrentPage = (href: string, pathname: string) => pathname === href || href === '/services/disks' && pathname.startsWith('/services/');
+
+function WorkspaceNavigation({collapsed = false, mobile = false, onNavigate}: {collapsed?: boolean; mobile?: boolean; onNavigate?: () => void}) {
+  const pathname = usePathname();
+  const activeSpecialist = navigation.some(item => specialistHrefs.has(item.href) && isCurrentPage(item.href, pathname));
+  const [toolsOpen, setToolsOpen] = useState(activeSpecialist);
+  useEffect(() => {setToolsOpen(activeSpecialist);}, [pathname, activeSpecialist]);
+  const toolsId = mobile ? 'mobile-specialist-links' : 'sidebar-specialist-links';
+  const link = (item: typeof navigation[number]) => <div key={item.href}>
+    {item.group && !collapsed && <div className="nav-group">{item.group}</div>}
+    <Link href={item.href} aria-label={item.label} className={`nav-link ${isCurrentPage(item.href, pathname) ? 'active' : ''}`} aria-current={isCurrentPage(item.href, pathname) ? 'page' : undefined} title={collapsed ? item.label : undefined} onClick={onNavigate}>
+      <item.icon size={19}/>{!collapsed && <span>{item.label}</span>}
+    </Link>
+  </div>;
+  return <nav aria-label={mobile ? 'Mobile navigation' : 'Primary navigation'}>
+    {navigation.filter(item => !specialistHrefs.has(item.href) && !managementHrefs.has(item.href)).map(link)}
+    <div className="specialist-navigation">
+      <button type="button" className={`nav-link specialist-toggle ${activeSpecialist ? 'specialist-active' : ''}`} aria-label="Specialist tools" title={collapsed ? 'Specialist tools' : undefined} aria-expanded={toolsOpen} aria-controls={toolsId} onClick={() => setToolsOpen(value => !value)}>
+        <Layers size={19}/>{!collapsed && <><span>Specialist tools</span><ChevronDown size={14} className="specialist-chevron"/></>}
+      </button>
+      <div id={toolsId} hidden={!toolsOpen}>{navigation.filter(item => specialistHrefs.has(item.href)).map(link)}</div>
+    </div>
+    {navigation.filter(item => managementHrefs.has(item.href)).map(link)}
+  </nav>;
+}
 
 function Brand({compact = false}: {compact?: boolean}) {
   return (
     <Link
       href="/"
       className="brand"
-      aria-label={compact ? 'CloudSaver overview' : undefined}
+      aria-label="CloudSaver overview"
       style={{display: 'inline-flex', alignItems: 'center', gap: '10px', textDecoration: 'none'}}
     >
       <svg width="34" height="34" viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{flexShrink: 0}}>
@@ -86,11 +114,11 @@ function ConnectionForm({switching = false}: {switching?: boolean}) {
     {!switching && <><span className="pretitle">YOUR CLOUD. A CLEARER PICTURE.</span><h1>Connect your workspace</h1><p>Bring your cloud resources, cost evidence, and review workflows into focus.</p></>}
     {switching && <p>Connect with another authorized workspace credential. Your current workspace stays open until the new connection is verified.</p>}
     {(error||(!switching&&sessionError)) && <Notice tone="error">{error||sessionError}</Notice>}
-    <label htmlFor={switching ? 'switch-key' : 'access-key'}>Workspace access key or Entra Bearer token</label>
+    <label htmlFor={switching ? 'switch-key' : 'access-key'}>Workspace access key or identity access token</label>
     <div className="credential-input"><LockKeyhole size={17}/><input id={switching ? 'switch-key' : 'access-key'} type="password" autoComplete="off" value={credential} onChange={event => setCredential(event.target.value)} placeholder="Paste your workspace credential" required disabled={!!busy}/></div>
     <button className="button primary connection-submit" type="submit" disabled={!!busy || !credential.trim()}>{busy ? <><Loader2 className="spin" size={17}/>Verifying workspace…</> : <>Connect workspace<ArrowRight size={17}/></>}</button>
     <div className="connection-security"><ShieldCheck size={16}/><span>Your session stays signed in across reloads in this tab and signs out automatically after 30 minutes of inactivity.</span></div>
-    <details className="connection-help"><summary>Where do I get a credential?</summary><p>Use the key issued by your workspace administrator, or a delegated access token from your organization’s configured Microsoft Entra application.</p>{!switching && <p>Setting up your organization for the first time? <Link className="text-link" href="/claim">Claim your account</Link> with the onboarding key from your platform operator.</p>}</details>
+    <details className="connection-help"><summary>Where do I get a credential?</summary><p>Use the key issued by your workspace administrator, or a delegated access token from your organization’s configured Microsoft Entra or Keycloak application.</p>{!switching && <p>Setting up your organization for the first time? <Link className="text-link" href="/claim">Claim your account</Link> with the onboarding key from your platform operator.</p>}</details>
   </form>;
 }
 
@@ -190,7 +218,7 @@ export function AppShell({children}: {children: ReactNode}) {
   const active = navigation.find(item => (item.href === pathname || item.href === '/services/disks' && pathname.startsWith('/services/'))) || navigation[0];
   const scopes = [...new Set((scan?.findings || []).map(scopeOf))];
   const failures = reliability?.counts.filter(c => c.status === 'dead_letter').reduce((sum,c) => sum + c.count,0) || 0;
-  const nav = <><Brand compact={collapsed}/><nav aria-label="Primary navigation">{navigation.map(item => <div key={item.href}>{item.group && !collapsed && <div className="nav-group">{item.group}</div>}<Link href={item.href} aria-label={collapsed ? item.label : undefined} className={`nav-link ${(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'active' : ''}`} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} title={collapsed ? item.label : undefined}><item.icon size={19}/>{!collapsed && <><span>{item.label}</span>{item.href === '/resources' && !!scan?.total_items_found && <small aria-hidden="true">{new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(scan.total_items_found)}</small>}</>}</Link></div>)}</nav><div className="sidebar-bottom">{!collapsed && <div className="sidebar-safety"><ShieldCheck size={18}/><div><strong>Read-only discovery</strong><p>Every change starts with review.</p></div></div>}<button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : undefined}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span><small aria-hidden="true">v1.7.0</small></>}</button></div></>;
+  const nav = <><Brand compact={collapsed}/><WorkspaceNavigation collapsed={collapsed}/><div className="sidebar-bottom"><button className="collapse-control" onClick={() => {const value = !collapsed;setCollapsed(value);try {localStorage.setItem('cloudsaver:ui:sidebar',value ? 'collapsed' : 'expanded');} catch {}}} aria-label={collapsed ? 'Expand navigation' : 'Collapse sidebar'}>{collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse sidebar</span></>}</button></div></>;
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>
@@ -202,7 +230,7 @@ export function AppShell({children}: {children: ReactNode}) {
     <FindingDrawer/><ReviewDrawer/><CommandPalette/><ScanDialog/>
     <Dialog open={overlay === 'workspace'} onClose={() => setOverlay(null)} title="Connect another workspace"><div className="dialog-content"><ConnectionForm switching/></div></Dialog>
     <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28}/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No failed deliveries were reported at the last refresh.' : 'Open Activity to inspect operational state.'}</p></div>}<Link className="button secondary" href="/activity" onClick={() => setOverlay(null)}>Open activity<ArrowRight size={16}/></Link></div></Dialog>
-    <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><nav aria-label="Mobile navigation">{navigation.map(item => <Link key={item.href} href={item.href} aria-current={(pathname === item.href || item.href === '/services/disks' && pathname.startsWith('/services/')) ? 'page' : undefined} onClick={() => setMobileOpen(false)}><item.icon size={20}/>{item.label}</Link>)}</nav></Dialog>
+    <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><WorkspaceNavigation mobile onNavigate={() => setMobileOpen(false)}/></Dialog>
     {notice && <div className={`toast toast-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><span>{notice.tone === 'success' ? <Check size={17}/> : <Bell size={17}/>}</span><p>{notice.text}</p><button className="icon-button" aria-label="Dismiss notification" onClick={clearNotice}><X size={16}/></button></div>}
   </div>;
 }

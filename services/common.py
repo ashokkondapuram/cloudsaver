@@ -49,7 +49,7 @@ def internal_url(name, default):
     return value
 
 
-async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None, evidence_signature=None):
+async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None, evidence_signature=None, command_headers=None, preserve_response=False):
     """Only callers supply fixed routes; never proxy visitor-provided URLs."""
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5),
@@ -61,11 +61,14 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
             if client_ip.get():
                 headers[CLIENT_IP_HEADER] = client_ip.get()
             if evidence_signature:headers['X-Evidence-Signature']=evidence_signature
+            for name in ('Idempotency-Key','If-Match'):
+                if command_headers and command_headers.get(name):
+                    headers[name]=command_headers[name]
             response = await client.request(method, base + path, params=params, json=json, headers=headers)
         if response.status_code >= 400:
-            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 410, 413, 422, 429, 501, 503) else 502
+            status = response.status_code if response.status_code in (401, 402, 403, 404, 409, 410, 412, 413, 422, 428, 429, 501, 503) else 502
             detail = 'Upstream service could not complete the request'
-            if status in (401, 402, 403, 409, 410, 422, 429, 503):
+            if status in (401, 402, 403, 409, 410, 412, 422, 428, 429, 503):
                 # Internal services return sanitized, user-facing validation messages.
                 try:
                     candidate = response.json().get('detail')
@@ -78,6 +81,10 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
             raise HTTPException(status, detail, headers=extra)
         if response.is_redirect:
             raise HTTPException(502, 'Unexpected upstream redirect')
+        if preserve_response:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(response.json(),status_code=response.status_code,
+                                headers={key:response.headers[key] for key in ('ETag','Location') if key in response.headers})
         return response.json()
     except (httpx.HTTPError, ValueError):
         raise HTTPException(502, 'Upstream service unavailable or returned invalid data') from None

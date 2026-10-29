@@ -15,9 +15,12 @@ def default_frequency(tier):
 def normalize_identity(value):
     """Operator-owned bindings; tenant admins cannot point CloudSaver at another tenant's identity."""
     value = value or {}
-    if not isinstance(value, dict) or set(value) - {'azure_app_client_id', 'gcp_service_account'}:
+    if not isinstance(value, dict) or set(value) - {'azure_app_client_id', 'azure_tenant_id', 'gcp_service_account'}:
         raise ValueError('Unknown identity setting')
     result = {}
+    if value.get('azure_tenant_id'):
+        try:result['azure_tenant_id']=str(UUID(str(value['azure_tenant_id'])))
+        except ValueError:raise ValueError('Azure tenant ID must be a UUID') from None
     if value.get('azure_app_client_id'):
         try:
             result['azure_app_client_id'] = str(UUID(str(value['azure_app_client_id'])))

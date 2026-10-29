@@ -2,17 +2,17 @@ import {test,expect} from './test';
 import AxeBuilder from '@axe-core/playwright';
 import {mockWorkspace,navigate,scanId} from './workspace-fixture';
 
-test('overview uses observed data and provides provider drill-down',async({page})=>{
+test('overview explains the current evidence and links to the resource review',async({page})=>{
   const {mutations}=await mockWorkspace(page);
-  await expect(page.getByRole('heading',{name:'Finding trajectory'})).toBeVisible();
-  await expect(page.getByRole('button',{name:'Retail estimate',exact:true})).toBeDisabled();
-  await expect(page.getByText('Not estimated',{exact:true}).first()).toBeVisible();
-  await expect(page.getByRole('img',{name:'Finding count across 7 comparable snapshots'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'12 resources need a closer look',exact:true})).toBeVisible();
+  await expect(page.getByRole('region',{name:'Evidence health'})).toContainText('24 / 120 checks');
+  await expect(page.getByRole('region',{name:'Resource review queue'}).getByRole('link')).toHaveCount(4);
+  await expect(page.getByRole('heading',{name:'What you can do in each section'})).toBeVisible();
+  await expect(page.locator('.export-menu')).toHaveCount(0);
   await page.screenshot({path:test.info().outputPath('overview-desktop.png'),fullPage:true});
-  await page.locator('.distribution-legend').getByRole('link',{name:/AWS/}).click();
+  await page.getByRole('link',{name:'Review resources',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Resources',exact:true})).toBeVisible();
-  await expect(page.getByRole('button',{name:/^AWS \d+$/})).toHaveAttribute('aria-pressed','true');
-  await expect(page.locator('.resource-table tbody tr')).toHaveCount(3);
+  await expect(page.locator('.resource-table tbody tr')).toHaveCount(12);
   expect(mutations).toEqual([]);
 });
 
@@ -84,7 +84,8 @@ test('command palette, navigation shortcuts, and scoped filters retain session',
   await expect(page.locator('.resource-table tbody tr, .data-table tbody tr[aria-rowindex]')).toHaveCount(3);
   await page.keyboard.press('g');await page.keyboard.press('d');
   await expect(page.getByRole('heading',{name:'Overview',exact:true})).toBeVisible();
-  await expect(page.getByText('History uses complete scan scopes',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'3 resources need a closer look',exact:true})).toBeVisible();
+  await expect(page.getByText('Summary filtered to 1 selected scope.',{exact:true})).toBeVisible();
   const stored=await page.evaluate(()=>JSON.stringify({...localStorage}));
   expect(stored).not.toContain('test-only-browser-credential');
   await page.locator('.workspace-menu>summary').click();

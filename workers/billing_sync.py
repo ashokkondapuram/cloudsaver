@@ -34,7 +34,7 @@ def _recover_orphaned_jobs(settings):
     jobs=BillingJobs(EnterpriseStore(settings));now=datetime.now(timezone.utc).isoformat()
     for tenant in settings.tenants:
         with jobs.store.transaction(tenant['tenant_id'],write=True) as db:
-            db.execute("UPDATE billing_sync_jobs SET state='queued',lease_token=NULL,lease_until=NULL,updated_at=%s "
+            db.execute("UPDATE billing_sync_jobs SET state=CASE WHEN state='cancel_requested' THEN 'cancelled' ELSE 'queued' END,lease_token=NULL,lease_until=NULL,updated_at=%s "
                        "WHERE tenant_id=%s AND state IN ('running','cancel_requested')",(now,tenant['tenant_id']))
 
 
@@ -44,9 +44,16 @@ def run_once(settings,leader_probe=None):
     jobs=BillingJobs(EnterpriseStore(settings));count=0;now=datetime.now(timezone.utc)
     def fresh_workspace(tenant):
         require_directory_freshness(settings)
-        return settings.registry.get(tenant['tenant_id']) if settings.registry else tenant
+        from app.keycloak import current_licence
+        current=settings.registry.get(tenant['tenant_id']) if settings.registry else tenant
+        return current_licence(current) if current else None
     for tenant in settings.tenants:
         if leader_probe:leader_probe()
+        try:tenant=fresh_workspace(tenant)
+        except Exception:
+            logging.getLogger('cloudsaver.billing').warning('Workspace collection authorization unavailable')
+            continue
+        if not tenant:continue
         _auto_submit(jobs,tenant,now)
         claim=jobs.claim(tenant['tenant_id'])
         if claim:
@@ -58,6 +65,8 @@ def main():
     stop=threading.Event()
     for sig in (signal.SIGTERM,signal.SIGINT):signal.signal(sig,lambda *_:stop.set())
     settings=Settings.load()
+    from workers.health import WorkerHealth
+    health=WorkerHealth(max_age=19000).start()
     # One elected polling worker across replicas. A separate session lock is
     # released by PostgreSQL on process loss; scope commit fencing is independent.
     from contextlib import nullcontext
@@ -69,8 +78,12 @@ def main():
         except Exception:logging.getLogger('cloudsaver.billing').warning('Orphaned billing job recovery unavailable')
         while not stop.is_set():
             if lock:lock.execute('SELECT 1')  # fail-stop on leader connection loss
-            try:run_once(settings,lambda:lock.execute('SELECT 1') if lock else None)
-            except Exception:logging.getLogger('cloudsaver.billing').warning('Billing worker iteration unavailable')
+            try:
+                run_once(settings,lambda:lock.execute('SELECT 1') if lock else None);health.touch()
+            except Exception:
+                health.touch(False)
+                logging.getLogger('cloudsaver.billing').warning('Billing worker iteration unavailable')
             stop.wait(5)
+    health.close()
 
 if __name__=='__main__':main()

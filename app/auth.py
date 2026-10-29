@@ -193,11 +193,15 @@ def tenant_dependency(settings, validator=None, identity_client=None):
     from app.provider_access import access, enforce_route
     from app.runtime import client_ip, request_id
     mode = os.getenv('CLOUDSAVER_AUTH_MODE', 'workspace')
-    if mode not in ('workspace', 'entra'):
-        raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace or entra')
+    if mode not in ('workspace', 'entra', 'keycloak'):
+        raise ValueError('CLOUDSAVER_AUTH_MODE must be workspace, entra or keycloak')
     verifier = key_verifier() if mode == 'workspace' else 'local'
     own_validator = validator is None
-    validator = validator or EntraTokenValidator(EntraIdConfig(allowed_tenants={t['tenant_id'] for t in settings.tenants}))
+    if mode=='keycloak':
+        from app.keycloak import KeycloakValidator
+        validator=validator or KeycloakValidator()
+    else:
+        validator = validator or EntraTokenValidator(EntraIdConfig(allowed_tenants={t['tenant_id'] for t in settings.tenants}))
     bearer = HTTPBearer(auto_error=False)
 
     def client():
@@ -246,8 +250,11 @@ def tenant_dependency(settings, validator=None, identity_client=None):
         try:await run_in_threadpool(require_directory_freshness,settings)
         except Exception:raise HTTPException(503,'Workspace directory is not fresh enough to authorize access',headers={'Retry-After':'5'}) from None
         token = credentials.credentials
-        result = (await run_in_threadpool(entra, token) if mode=='entra' else
-                  await run_in_threadpool(workspace, token, client_ip.get(), request_id.get()))
+        if mode=='keycloak':
+            result=await run_in_threadpool(validator.workspace,token,_tenants(settings))
+        else:
+            result = (await run_in_threadpool(entra, token) if mode=='entra' else
+                      await run_in_threadpool(workspace, token, client_ip.get(), request_id.get()))
         if (result.get('plan') or {}).get('access_suspended') is True:
             if not (request.url.path.startswith('/api/v1/customer/') or request.url.path.startswith('/api/v1/billing/')
                     or request.url.path == '/api/v1/me'):
@@ -297,6 +304,8 @@ def workspace_response(workspace, mode, settings=None):
         'scope_restrictions': workspace.get('scope_restrictions'), 'customer_roles': workspace.get('customer_roles', []),
         'subject_type': workspace.get('subject_type', 'operator'), 'subject_id': workspace.get('subject_id'),
         'directory_mode': directory_mode(), 'scopes_editable': not cutover,
+        'identity_provider':workspace.get('identity_provider','entra' if os.getenv('CLOUDSAVER_AUTH_MODE')=='entra' else 'platform'),
+        'licence_expires_at':workspace.get('licence_expires_at'),
         'mode': mode, 'plan_tier': tier.tier, 'plan_name': tier.plan_name, 'billing_state': tier.billing_state,
         'max_subscriptions': tier.max_subscriptions,
         'can_export_terraform': tier.can_export_terraform,

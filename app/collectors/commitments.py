@@ -24,25 +24,26 @@ def commitment(**values):
 
 
 def _get(url, token, params=None):
+    from app.provider_retry import read_json
+    from app.cloud_http import JSONReader
     with httpx.Client(timeout=httpx.Timeout(25, connect=5), follow_redirects=False) as client:
-        with client.stream('GET', url, headers={'Authorization':'Bearer '+token}, params=params) as response:
-            response.raise_for_status()
-            raw = bytearray()
-            for chunk in response.iter_bytes():
-                raw.extend(chunk)
-                if len(raw) > 4_000_000: raise ValueError('Commitment response exceeds the limit')
-            return json.loads(raw, parse_float=Decimal)
+        return read_json(client,'GET',url,headers={'Authorization':'Bearer '+token},params=params,
+            quota_key=JSONReader.quota_key(url),max_bytes=4_000_000,parse_float=Decimal)
 
 
 def _pages(url, token, *, host, key='value', next_key='nextLink'):
-    items, page = [], url
+    from urllib.parse import urlsplit
+    items, page, seen = [], url, {url}
     for _ in range(20):
         body = _get(page, token)
         items.extend(body.get(key, []))
         if len(items) > MAX_COMMITMENTS: raise ValueError('Commitment limit exceeded')
         page = body.get(next_key)
         if not page: return items
-        if not page.startswith(host): raise ValueError('Unexpected commitment pagination host')
+        parsed=urlsplit(page)
+        if (page in seen or parsed.scheme!='https' or parsed.netloc!=urlsplit(host).netloc
+            or parsed.username or parsed.password or parsed.fragment):raise ValueError('Unexpected commitment pagination host or cursor')
+        seen.add(page)
     raise ValueError('Commitment pagination limit exceeded')
 
 

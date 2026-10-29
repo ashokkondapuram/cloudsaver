@@ -16,39 +16,6 @@ MAX_ROWS = 200000
 OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_region','athena_workgroup','athena_database','athena_table'}
 
 
-from contextlib import contextmanager
-
-
-@contextmanager
-def _azure_cost_lock(scope_id, wait_seconds=90):
-    """Serialize every Azure Cost Management call against one subscription (bulk sync and on-demand
-    per-resource fetches alike) so two callers never race for the same strict per-entity quota."""
-    import time
-    from app.config import Settings
-    try:
-        import psycopg
-    except ImportError:
-        psycopg = None
-    url = psycopg and Settings.load().database_url
-    if not url:
-        yield
-        return
-    conn = psycopg.connect(url, autocommit=True)
-    key = 'azure-cost:' + scope_id
-    try:
-        deadline = time.monotonic() + wait_seconds
-        while not conn.execute('SELECT pg_try_advisory_lock(hashtextextended(%s,0))', (key,)).fetchone()[0]:
-            if time.monotonic() > deadline:
-                raise FocusError('An Azure cost query for this subscription is already running; try again shortly', 503)
-            time.sleep(2)
-        try:
-            yield
-        finally:
-            conn.execute('SELECT pg_advisory_unlock(hashtextextended(%s,0))', (key,))
-    finally:
-        conn.close()
-
-
 NAME = r'[A-Za-z0-9_-]{1,100}'
 
 
@@ -87,30 +54,27 @@ def bindings(tenant):
     return result
 
 
-def _post(url, token, body, scope_id):
-    """Hold the per-subscription lock only for the single HTTP attempt, never across pacing or
-    retry-backoff sleeps, so a long bulk sync and a quick on-demand fetch can interleave instead of
-    one blocking the other for its whole duration."""
-    import time
-    for attempt in range(8):
-        wait = None
-        with _azure_cost_lock(scope_id, wait_seconds=30):
-            with httpx.Client(timeout=httpx.Timeout(25, connect=5), follow_redirects=False) as client:
-                with client.stream('POST', url, headers={'Authorization':'Bearer '+token}, json=body) as response:
-                    if response.status_code == 429 and attempt < 7:
-                        response.read()
-                        try: wait = min(float(response.headers.get('retry-after', 5)), 120)
-                        except ValueError: wait = 5
-                    else:
-                        response.raise_for_status()
-                        raw = bytearray()
-                        for chunk in response.iter_bytes():
-                            raw.extend(chunk)
-                            if len(raw) > 4_000_000:
-                                raise ValueError('Billing response exceeds the limit')
-                        return json.loads(raw,parse_float=Decimal)
-        time.sleep(wait)
-    raise ValueError('Billing retry budget exhausted')
+def _post(url, token, body, scope_id=None):
+    from urllib.parse import urlsplit
+    from app.provider_retry import read_json
+    parsed=urlsplit(url)
+    if parsed.scheme!='https' or parsed.username or parsed.password or parsed.fragment:
+        raise ValueError('Unexpected billing destination')
+    azure=parsed.netloc=='management.azure.com'
+    if azure:
+        scope_id=str(UUID(scope_id))
+        expected='/subscriptions/'+scope_id+'/providers/microsoft.costmanagement/query'
+        if parsed.path.lower()!=expected:raise ValueError('Unexpected billing scope')
+        key='azure:cost:'+scope_id
+        interval=float(os.getenv('CLOUDSAVER_AZURE_COST_INTERVAL_SECONDS','15'))
+    elif parsed.netloc=='bigquery.googleapis.com' and re.fullmatch(r'/bigquery/v2/projects/[a-z][a-z0-9-]{4,61}[a-z0-9]/queries',parsed.path):
+        key='gcp:bigquery:'+parsed.path.split('/')[4]
+        interval=0
+    else:raise ValueError('Unexpected billing destination')
+    with httpx.Client(follow_redirects=False) as client:
+        return read_json(client,'POST',url,headers={'Authorization':'Bearer '+token},json=body,
+            quota_key=key,interval=interval,read_only_post=True,max_bytes=4_000_000,
+            parse_float=Decimal,attempts=3 if azure else 1)
 
 
 def _token(credential):
@@ -126,21 +90,25 @@ def _token(credential):
 
 
 def _azure_query(url, credential, kind, start, end, scope_id):
-    import time
     body = dict(type=kind, timeframe='Custom',
         timePeriod={'from':start.isoformat()+'T00:00:00Z','to':(end-timedelta(days=1)).isoformat()+'T23:59:59Z'},
         dataset={'granularity':'Daily','aggregation':{'cost':{'name':'PreTaxCost','function':'Sum'}},
                  'grouping':[{'type':'Dimension','name':'ResourceId'}]})
-    rows, page = [], url
+    rows, page, seen = [], url, {url}
     for i in range(100):
-        if i: time.sleep(60)  # one page (batch of resources) per minute, matching Azure's observed per-entity quota recovery rate; lock-free, so on-demand fetches can interleave
         properties = _post(page, _token(credential), body, scope_id)['properties']
         names = [c['name'].lower() for c in properties['columns']]
         rows.extend(dict(zip(names,row)) for row in properties['rows'])
         if len(rows) > MAX_ROWS: raise ValueError('Billing row limit exceeded')
         page = properties.get('nextLink')
         if not page: return rows
-        if not page.startswith('https://management.azure.com/'): raise ValueError('Unexpected billing pagination host')
+        from urllib.parse import urlsplit
+        parsed=urlsplit(page)
+        expected='/subscriptions/'+str(UUID(scope_id))+'/providers/microsoft.costmanagement/query'
+        if (page in seen or parsed.scheme!='https' or parsed.netloc!='management.azure.com'
+            or parsed.fragment or parsed.path.lower()!=expected):
+            raise ValueError('Unexpected billing pagination host, scope or repeated cursor')
+        seen.add(page)
     raise ValueError('Billing pagination limit exceeded')
 
 
@@ -152,7 +120,6 @@ def azure_rows(binding, tenant, start, end):
         url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
-            if i: time.sleep(60)  # same per-minute pace between the two cost-kind queries, lock-free between calls
             for value in _azure_query(url, credential, kind, start, end, binding['scope_id']):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
                 totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
@@ -175,12 +142,12 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
         url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
-            if i: time.sleep(5)
             body = dict(type=kind, timeframe='Custom',
                 timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
                 dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
                          'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
             properties = _post(url, _token(credential), body, scope_id)['properties']
+            if properties.get('nextLink'):raise ValueError('Resource billing response is incomplete')
             names = [c['name'].lower() for c in properties['columns']]
             for value in (dict(zip(names, row)) for row in properties['rows']):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])

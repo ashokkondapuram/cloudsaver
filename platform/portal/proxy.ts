@@ -20,6 +20,7 @@ function contentSecurityPolicy(nonce: string) {
 
 export function proxy(request: NextRequest) {
   const {pathname} = request.nextUrl;
+  if (pathname === '/health/live' || pathname === '/health/ready') return NextResponse.next();
   if (pathname.startsWith('/api/')) return NextResponse.next();
 
   if (pathname !== '/sign-in' && !request.cookies.get(SESSION_COOKIE)) {

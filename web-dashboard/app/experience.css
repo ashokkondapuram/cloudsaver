@@ -197,66 +197,18 @@ html[data-theme=dark] {
 }
 .workspace-evidence-context > .text-link { font-size: 12px; line-height: 1.6; }
 
-/* Calm, comparable cards with a clear path into the evidence. */
-.evidence-health { margin-bottom: 24px; }
-.evidence-health-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding: 0 var(--experience-inset) 24px;
-}
-.evidence-health-grid article {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 0;
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--slate-50) 50%, var(--surface));
-}
-.evidence-health-grid article > span { color: var(--muted); font-size: 12px; font-weight: 550; }
-.evidence-health-grid strong { font-size: clamp(18px, 1.6vw, 23px); font-weight: 600; letter-spacing: -.4px; line-height: 1.4; overflow-wrap: anywhere; }
-.evidence-health-grid p { flex: 1; color: var(--muted); font-size: 12px; line-height: 1.8; }
-.evidence-health-grid :is(a, button) { margin-top: 4px; font-size: 12px; }
-.evidence-next-steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 16px var(--experience-inset);
-  border-top: 1px solid var(--border);
-}
-.evidence-next-steps a {
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--indigo-600);
-  font-size: 12px;
-  font-weight: 550;
-  line-height: 1.6;
-}
-.evidence-next-steps a:hover { background: var(--indigo-50); border-color: var(--indigo-600); }
 .resource-summary strong, .metric-card > strong { font-variant-numeric: tabular-nums; }
 
 @media (max-width: 1200px) {
   .workspace-evidence-context { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 1000px) {
-  .evidence-health-grid { grid-template-columns: 1fr; }
-  .evidence-next-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 600px) {
   .workspace-evidence-context { grid-template-columns: 1fr; gap: 10px; padding: 14px 16px; }
   .workspace-evidence-context > div { grid-template-columns: 105px minmax(0, 1fr); align-items: baseline; gap: 10px; }
   .workspace-evidence-context > .text-link { padding-top: 10px; border-top: 1px solid var(--border); }
-  .evidence-health-grid { gap: 12px; padding-bottom: 16px; }
-  .evidence-health-grid article { padding: 17px; }
-  .evidence-next-steps a { min-height: 44px; }
 }
 @media print {
-  .workspace-evidence-context, .evidence-next-steps, .rule-catalog-filters, .rule-draft-actions { display: none; }
+  .workspace-evidence-context, .rule-catalog-filters, .rule-draft-actions { display: none; }
 }
 
 /* Page/tab audit: keep every toolbar action inside its panel. */
@@ -283,3 +235,19 @@ html[data-theme=dark] {
   .workflow-steps > span { white-space: normal; }
 }
 .doc-guide-content :is(p, li, dd, dt, a) { overflow-wrap: anywhere; }
+
+/* Keep everyday tasks visible; disclose service-specific tools on demand. */
+.specialist-navigation { margin-top: 14px; }
+.specialist-toggle { width: 100%; border: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.specialist-toggle .specialist-chevron { margin-left: auto; transition: transform .15s; }
+.specialist-toggle[aria-expanded=true] .specialist-chevron { transform: rotate(180deg); }
+.specialist-toggle.specialist-active { color: var(--indigo-600); }
+.specialist-navigation > div:not([hidden]) { padding-left: 10px; border-left: 1px solid var(--border); margin-left: 20px; }
+.sidebar-collapsed .specialist-navigation > div:not([hidden]) { padding-left: 0; margin-left: 0; border-left: 0; }
+.specialist-toggle:focus-visible { outline: 2px solid var(--indigo-600); outline-offset: -2px; }
+.mobile-navigation .nav-link { justify-content: flex-start; min-height: 44px; margin: 0; padding: 12px; gap: 12px; font-size: 13px; white-space: normal; }
+.mobile-navigation .nav-link > span { display: inline; }
+.mobile-navigation .nav-link > svg { flex-shrink: 0; }
+.mobile-navigation .nav-link[aria-current=page] { background: var(--indigo-50); color: var(--indigo-600); }
+.mobile-navigation .nav-group { margin-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .specialist-toggle .specialist-chevron { transition: none; } }

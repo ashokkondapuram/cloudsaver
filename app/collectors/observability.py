@@ -260,18 +260,14 @@ class Client:
         headers = dict(self.headers, Accept='application/json')
         if self.signer:
             headers.update(self.signer(url))
+        from app.provider_retry import read_json, ProviderReadError, ProviderDeferred
         try:
-            with self.http.stream('GET', url, headers=headers) as response:
-                if response.status_code in (401, 403):
-                    raise SourceError('OBSERVABILITY_AUTH_REJECTED')
-                if not 200 <= response.status_code < 300:
-                    raise SourceError('OBSERVABILITY_QUERY_REJECTED')
-                content = bytearray()
-                for chunk in response.iter_bytes():
-                    content.extend(chunk)
-                    if len(content) > MAX_BYTES:
-                        raise SourceError('OBSERVABILITY_RESPONSE_TOO_LARGE')
-            return json.loads(content)
+            return read_json(self.http,'GET',url,headers=headers,max_bytes=MAX_BYTES,
+                quota_key='observability:'+self.tenant['tenant_id']+':'+self.host)
+        except ProviderDeferred:
+            raise SourceError('OBSERVABILITY_PROVIDER_THROTTLED') from None
+        except ProviderReadError as error:
+            raise SourceError('OBSERVABILITY_AUTH_REJECTED' if error.status_code in (401,403) else 'OBSERVABILITY_QUERY_REJECTED') from None
         except SourceError:
             raise
         except (httpx.HTTPError, ValueError):

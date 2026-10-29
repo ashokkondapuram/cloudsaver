@@ -73,7 +73,7 @@ def managed_identity_token(audience, settings=None, tenant=None):
 
 
 def azure_credential(tenant, settings=None):
-    tenant_id = _uuid(tenant['tenant_id'], 'Invalid customer tenant ID.')
+    tenant_id = _uuid((tenant.get('identity') or {}).get('azure_tenant_id') or tenant['tenant_id'], 'Invalid customer Azure tenant ID.')
     if int(tenant_id.replace('-', ''), 16) == 0:
         raise CredentialError("This workspace's ID isn't a Microsoft Entra tenant ID. Ask your platform operator to "
                               "create the workspace with the tenant that owns your subscriptions.")

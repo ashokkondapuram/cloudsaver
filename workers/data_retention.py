@@ -17,17 +17,24 @@ def run_once(settings=None):
 
 
 def main():
+    from workers.health import WorkerHealth
+    health=WorkerHealth(max_age=1200).start()
     stopped=False
     def stop(*_):
         nonlocal stopped
         stopped=True
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     while not stopped:
-        try:logging.warning('AI content retention result: %s',run_once())
-        except Exception:logging.error('AI content retention maintenance failed; operator inspection is required.')
+        try:
+            result=run_once();health.touch(result['failed_workspaces']==0)
+            logging.warning('AI content retention result: %s',result)
+        except Exception:
+            health.touch(False)
+            logging.error('AI content retention maintenance failed; operator inspection is required.')
         for _ in range(600):
             if stopped:break
             time.sleep(1)
+    health.close()
 
 
 if __name__=='__main__':main()

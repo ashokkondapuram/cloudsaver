@@ -9,6 +9,7 @@ from celery.signals import worker_shutdown
 
 from app.config import Settings
 from app.schemas import ScanSummary
+from workers import celery_health  # registers lifecycle probes without I/O at import
 
 
 def enabled(name):
@@ -18,6 +19,7 @@ def enabled(name):
 broker = os.getenv('REDIS_URL', 'redis://redis:6379/1')
 celery_app = Celery('cloudsaver_scanner', broker=broker, backend=broker)
 celery_app.conf.update(task_serializer='json', accept_content=['json'], result_serializer='json',
+                       beat_scheduler='workers.celery_health:HealthScheduler',
                        timezone='UTC', enable_utc=True, task_acks_late=True,
                        task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
                        task_time_limit=600, task_soft_time_limit=570,
@@ -111,6 +113,8 @@ def authorized_tenant(settings, repository, tenant_id, requested):
     tenant = next((t for t in settings.tenants if t['tenant_id'] == tenant_id), None)
     if tenant is None:
         raise UnauthorizedJob('Worker tenant is not configured')
+    from app.keycloak import current_licence
+    tenant=current_licence(tenant)
     from app.scan_selection import normalize,restrict,azure_ids
     try:
         requested=normalize(requested)
@@ -125,6 +129,8 @@ def authorized_tenant(settings, repository, tenant_id, requested):
 def workspace_entitlements(tenant, repository):
     """Projected platform entitlements; organizations.plan_tier only feeds the TIER_LIMITS fallback."""
     from app.entitlements import entitlements_for
+    from app.keycloak import current_licence
+    tenant=current_licence(tenant)
     if tenant.get('plan'):
         return entitlements_for(tenant)
     return entitlements_for(dict(tenant, plan_tier=repository.plan_tier(tenant['tenant_id'])))
@@ -237,6 +243,9 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             coverage_manifest=coverage_manifest(inventory, findings, outcomes),
         )).model_dump()
         heartbeat.ensure_owned()
+        if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':
+            # Recheck the current configured scope and licence before publishing evidence.
+            authorized_tenant(settings,repository,tenant_id,subscriptions)
         repository.complete_job(tenant_id, job_id, scan, subscriptions, token=token, notification_targets=notification_targets)
     except TerminalJob:
         raise

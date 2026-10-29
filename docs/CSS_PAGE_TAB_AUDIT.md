@@ -2,6 +2,8 @@
 
 Date: 2026-10-27. Audited working tree based on `19856e4`, preserving the preceding UI improvements. The release manifest identifies the delivered source bytes.
 
+This records the earlier audit delivered in `d2a2f7b`. The subsequent [Overview page redesign](UI_UX_IMPLEMENTATION.md#overview-page-redesign), based on `2937c30`, has separate scoped verification; the 90-state matrix below was not rerun for that increment.
+
 ## Outcome and method
 
 Checked all 17 customer page route families and all 12 platform portal page route families. Dynamic coverage includes all eight service destinations, all three allowed setup documents, customer/workspace detail views, and both redirect routes. The checklist below records 66 customer states and 24 portal states, including every implemented native tab group, resource/history drawers, and selected connector/processor form variants.

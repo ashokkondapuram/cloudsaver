@@ -141,6 +141,7 @@ def test_service_and_optimization_views_use_owned_observations(evidence):
 
 
 def test_keyless_billing_readers_bind_exact_scopes_and_report_real_granularity(monkeypatch):
+    monkeypatch.setattr('time.sleep',lambda _:None)
     from types import SimpleNamespace
     from datetime import date
     from app.collectors.billing_sync import azure_rows,aws_rows,gcp_rows

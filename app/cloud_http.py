@@ -1,6 +1,8 @@
 """Bounded read-only JSON transport; redirects and partial provider results fail."""
 import json
 import httpx
+from urllib.parse import urlsplit
+from app.provider_retry import read_json, ProviderReadError, ProviderDeferred
 from app.scanner import ScanError
 
 
@@ -22,23 +24,31 @@ class JSONReader:
             from google.auth.transport.requests import Request
             self.credentials.before_request(Request(), 'GET', url, headers)
         try:
-            with self.client.stream('GET', url, params=params, headers=headers) as response:
-                if not 200 <= response.status_code < 300:
-                    raise ScanError('Cloud inventory source rejected the read request')
-                content = bytearray()
-                for chunk in response.iter_bytes():
-                    content.extend(chunk)
-                    if len(content) > 8_000_000:
-                        raise ScanError('Cloud inventory response exceeds the page limit')
-            result = json.loads(content)
+            result = read_json(self.client,'GET',url,params=params,headers=headers,quota_key=self.quota_key(url))
             if not isinstance(result, dict):
                 raise ScanError('Cloud inventory returned an invalid object')
             return result
-        except (httpx.HTTPError, ValueError, TypeError):
+        except ProviderDeferred as deferred:
+            error=ScanError('Cloud collection is deferred by the provider quota')
+            error.retry_after=deferred.retry_after
+            raise error from None
+        except (httpx.HTTPError, ValueError, TypeError, ProviderReadError):
             raise ScanError('Cloud inventory source is unavailable or malformed') from None
 
     def close(self):
         self.client.close()
+
+    @staticmethod
+    def quota_key(url):
+        parsed=urlsplit(url)
+        parts=parsed.path.lower().split('/')
+        scope='global'
+        for kind in ('subscriptions','projects'):
+            if kind in parts and len(parts)>parts.index(kind)+1:
+                scope=kind+':'+parts[parts.index(kind)+1]
+                break
+        # Other registered endpoints share a host budget; conservative, not per token.
+        return parsed.netloc.lower()+':'+scope
 
     def post_read(self,url,body):
         # Google's log search is a read operation exposed as POST. Keep this
@@ -49,13 +59,7 @@ class JSONReader:
             from google.auth.transport.requests import Request
             self.credentials.before_request(Request(),'POST',url,headers)
         if self.token:headers['Authorization']='Bearer '+self.token
-        with self.client.stream('POST',url,json=body,headers=headers) as response:
-            if response.status_code!=200:raise ScanError('Cloud audit reader rejected the query')
-            content=bytearray()
-            for chunk in response.iter_bytes():
-                content.extend(chunk)
-                if len(content)>8_000_000:raise ScanError('Cloud audit page bound exceeded')
-        value=json.loads(content)
+        value=read_json(self.client,'POST',url,json=body,headers=headers,quota_key=self.quota_key(url),read_only_post=True)
         if not isinstance(value,dict) or value.get('error'):raise ScanError('Invalid cloud audit response')
         return value
 

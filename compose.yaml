@@ -15,6 +15,10 @@ x-environment: &environment
   CLOUDSAVER_DATABASE_URL: postgresql://cloudsaver_app:${CLOUDSAVER_DB_PASSWORD:?Set URL-safe CLOUDSAVER_DB_PASSWORD in .env}@postgres:5432/cloudsaver
   SCANNER_SERVICE_URL: http://scanner-service:8002
   CLOUDSAVER_AUTH_MODE: ${CLOUDSAVER_AUTH_MODE:-workspace}
+  CLOUDSAVER_KEYCLOAK_BINDINGS: ${CLOUDSAVER_KEYCLOAK_BINDINGS:-[]}
+  CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY: ${CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY:-}
+  CLOUDSAVER_PROVIDER_REDIS_URL: redis://redis:6379/1
+  CLOUDSAVER_AZURE_COST_INTERVAL_SECONDS: ${CLOUDSAVER_AZURE_COST_INTERVAL_SECONDS:-15}
   CLOUDSAVER_ENTRA_AUDIENCE: ${CLOUDSAVER_ENTRA_AUDIENCE:-}
   CLOUDSAVER_ENTRA_ACCESS_POLICY: ${CLOUDSAVER_ENTRA_ACCESS_POLICY:-}
   CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS: ${CLOUDSAVER_DIRECTORY_MAX_LAG_SECONDS:-30}
@@ -42,6 +46,7 @@ x-environment: &environment
   CLOUDSAVER_IDENTITY_URL: ${CLOUDSAVER_IDENTITY_URL:-http://identity-service:8005}
   CLOUDSAVER_IDENTITY_CACHE_SECONDS: ${CLOUDSAVER_IDENTITY_CACHE_SECONDS:-15}
   CLOUDSAVER_ENVIRONMENT: ${CLOUDSAVER_ENVIRONMENT:-development}
+  CLOUDSAVER_ENGINEERING_CURSOR_KEY: ${CLOUDSAVER_ENGINEERING_CURSOR_KEY:-}
   CLOUDSAVER_REGIONAL_PRICE_CATALOG: ${CLOUDSAVER_REGIONAL_PRICE_CATALOG:-[]}
   CLOUDSAVER_LIVE_EVIDENCE_ENABLED: ${CLOUDSAVER_LIVE_EVIDENCE_ENABLED:-false}
   CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES: ${CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES:-25}
@@ -177,7 +182,12 @@ services:
       CLOUDSAVER_GOVERNANCE_KEY_PRIMARY: ${CLOUDSAVER_GOVERNANCE_KEY_PRIMARY:-}
     depends_on:
       migrate: {condition: service_completed_successfully}
-    healthcheck: {disable: true}
+    healthcheck: &worker-health
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/health/ready',timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
   agent-gateway:
     <<: *service
     networks: [default, platform-link]
@@ -229,6 +239,11 @@ services:
       no_proxy: localhost,127.0.0.1,::1,agent-gateway
     depends_on:
       agent-gateway: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8099/health/ready',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
   web-dashboard:
     image: cloudsaver-web-dashboard:1.3.0
     build:
@@ -242,13 +257,20 @@ services:
       no_proxy: *gateway_no_proxy
     depends_on:
       api-gateway: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health/ready',{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
   data-retention-worker:
     <<: *service
+    healthcheck: *worker-health
     command: [python, -m, workers.data_retention]
     depends_on:
       migrate: {condition: service_completed_successfully}
   billing-sync-worker:
     <<: *service
+    healthcheck: *worker-health
     user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}
     command: [python, -m, workers.billing_sync]
     stop_grace_period: 300s
@@ -260,6 +282,7 @@ services:
       migrate: {condition: service_completed_successfully}
   observability-worker:
     <<: *service
+    healthcheck: *worker-health
     profiles: [scheduled]
     command: [python, -m, workers.observability_sync]
     stop_grace_period: 60s
@@ -269,6 +292,7 @@ services:
       migrate: {condition: service_completed_successfully}
   scan-worker:
     <<: *service
+    healthcheck: *worker-health
     user: ${CLOUDSAVER_AZURE_CACHE_USER:-10001:10001}
     profiles: [scheduled]
     command: [celery, -A, workers.tasks:celery_app, worker, --loglevel=WARNING, --concurrency=1]
@@ -281,6 +305,7 @@ services:
       redis: {condition: service_healthy}
   delivery-dispatcher:
     <<: *service
+    healthcheck: *worker-health
     profiles: [scheduled, delivery]
     restart: on-failure
     stop_grace_period: 45s
@@ -291,6 +316,7 @@ services:
       redis: {condition: service_healthy}
   scan-scheduler:
     <<: *service
+    healthcheck: *worker-health
     profiles: [scheduled]
     command: [celery, -A, workers.tasks:celery_app, beat, --loglevel=WARNING, --schedule=/tmp/celerybeat-schedule]
     environment: *worker-environment

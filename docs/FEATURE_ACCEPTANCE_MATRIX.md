@@ -20,7 +20,7 @@ Do not describe an area as fully complete if only level 2 is established. A feat
 | Platform portal and subscription administration | Platform Python tests, portal financial unit tests, type checks and production build. | Actual operator login, secret configuration, customer onboarding and billing-provider reconciliation. |
 | Inventory and multi-cloud scans | Collector, scan, job, scope, rule and PostgreSQL tests. Partial or missing evidence remains explicit. | Authorized Azure/AWS/GCP accounts; discovery completeness, pagination, IAM and source freshness for each sold service. |
 | Resource exploration and ownership | Customer browser journeys and resource API tests; current explicit ownership and versioned decisions. | Customer mapping accuracy and representative large estates. |
-| Workload assessments | Read-only grouping using authorized saved resources and explicit application/environment ownership; helper/browser tests. | Complete dependency discovery and persistent cross-resource improvement plans are separate roadmap work. |
+| Workload assessments and engineering reviews | Existing saved grouping plus tenant-scoped persistent workloads, resource evidence membership, immutable Azure review versions and activity; see [the implementation record](ENGINEERING_INCREMENT.md). | Complete dependencies, cross-resource plan conflicts, trusted IaC approval/apply and real technical/financial outcomes remain separate gates. |
 | Service analysis | API and browser checks; incomplete response payloads produce an evidence error rather than a page crash. | Real service telemetry and provider coverage. |
 | Five-pillar resource assessment | Versioned evidence, freshness, scope and missing-data tests. | Customer-specific operational requirements and control acceptance; an observed setting is not compliance certification. |
 | Analysis-rule administration | Core/platform rule catalog, scope, override and preview tests. | Approved provider/service rule catalog, policy floors and customer acceptance. |
@@ -51,7 +51,7 @@ The feature branch adds eight database tables and domain helpers. Hardening make
 - Runtime startup verifies forced RLS on every new table.
 - Populated-history downgrades refuse and restore forced RLS.
 
-These modules are not registered as control-plane API routes, durable orchestration or customer planning screens. They do not provide a complete topology collector, real commitment eligibility allocator, trusted GitHub check service, new destructive action adapter, automatic approval or verified financial outcome. Do not expose them by trusting request-supplied evidence or authority flags.
+The engineering namespace now reuses the plan/version tables for a bounded review-only API and customer planning screen. The other scenario modules are not exposed as authorized orchestration. They do not provide a complete topology collector, real commitment eligibility allocator, trusted GitHub check service, new destructive action adapter, automatic approval or verified financial outcome. Do not expose them by trusting request-supplied evidence or authority flags. [Keycloak and collection changes](KEYCLOAK_AND_COLLECTION.md) have explicit local-test and deployment boundaries.
 
 ## Incomplete roadmap capabilities
 

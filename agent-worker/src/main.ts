@@ -3,6 +3,7 @@ import {boundedRequest} from './http.ts';
 import {runCode} from './runtime.ts';
 import {loadConnectors} from './contracts.ts';
 import type {Assignment, Connector} from './contracts.ts';
+import {startHealth} from './health.ts';
 
 const base = new URL(process.env.CLOUDSAVER_AGENT_GATEWAY_URL || 'http://agent-gateway:8006');
 if (!['http:','https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash || base.pathname!=='/') throw new Error('Invalid gateway origin');
@@ -13,13 +14,15 @@ const tenants: string[] = JSON.parse(process.env.CLOUDSAVER_AGENT_TENANT_IDS || 
 const local: Connector[] = loadConnectors(process.env.CLOUDSAVER_AGENT_CONNECTORS || '[]');
 if (!Array.isArray(tenants) || !tenants.length || tenants.length>100 || tenants.some(t=>!/^[a-fA-F0-9-]{36}$/.test(t))) throw new Error('Explicit tenant assignments are required');
 if (!Array.isArray(local) || local.length>100) throw new Error('Invalid local connector grant');
+const health = startHealth();
 const gateway = async (path: string, body: unknown) => {
   const r = await boundedRequest(base.origin+path,{method:'POST',headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify(body)});
   if (r.status!==200) throw new Error('Agent gateway refused the operation');
+  health.touch();
   return r.body;
 };
 let stop = false;
-process.on('SIGTERM',()=>{stop=true;}); process.on('SIGINT',()=>{stop=true;});
+process.on('SIGTERM',()=>{stop=true;health.stop();}); process.on('SIGINT',()=>{stop=true;health.stop();});
 console.log(JSON.stringify({event:'agent_worker_started',runtime:'typescript-runCode',tenants:tenants.length}));
 while (!stop) {
   for (const tenant_id of tenants) {
@@ -46,7 +49,8 @@ while (!stop) {
         await gateway(prefix+'/fail',lease).catch(()=>{});
         console.log(JSON.stringify({event:'assignment_stopped',task_id:a.task.id,automatic_retry:false}));
       } finally {clearInterval(timer);}
-    } catch {console.log(JSON.stringify({event:'gateway_unavailable_or_assignment_refused'}));}
+    } catch {health.touch(false);console.log(JSON.stringify({event:'gateway_unavailable_or_assignment_refused'}));}
   }
   if (!stop) await new Promise(resolve=>setTimeout(resolve,3000));
 }
+health.close();

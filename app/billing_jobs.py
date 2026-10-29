@@ -55,7 +55,7 @@ class BillingJobs:
         with self.store.transaction(tenant_id,write=True) as db:
             if db.postgres:db.execute('SELECT pg_advisory_xact_lock(hashtextextended(%s,0))',('billing-submit:'+tenant_id,))
             suffix=' FOR UPDATE SKIP LOCKED' if db.postgres else ''
-            row=db.execute("SELECT id,payload,created_at,state FROM billing_sync_jobs WHERE tenant_id=%s AND (state='queued' OR (state IN ('running','cancel_requested') AND lease_until<%s)) ORDER BY created_at LIMIT 1"+suffix,(tenant_id,now.isoformat())).fetchone()
+            row=db.execute("SELECT id,payload,created_at,state FROM billing_sync_jobs WHERE tenant_id=%s AND ((state='queued' AND (lease_until IS NULL OR lease_until<%s)) OR (state IN ('running','cancel_requested') AND lease_until<%s)) ORDER BY created_at LIMIT 1"+suffix,(tenant_id,now.isoformat(),now.isoformat())).fetchone()
             if not row:return None
             if row[3]=='cancel_requested' or datetime.fromisoformat(str(row[2]).replace('Z','+00:00'))<now-timedelta(hours=6):
                 state='cancelled' if row[3]=='cancel_requested' else 'expired'
@@ -74,18 +74,24 @@ class BillingJobs:
         from app.focus import FocusRepository
         from datetime import date
         import re,os
+        from app.provider_retry import ProviderDeferred
         tid=tenant['tenant_id'];p=claim['payload'];binding=p['bindings'][p['scope_index']]
         try:
+            from app.keycloak import current_licence
+            tenant=current_licence(tenant)
             if binding not in bindings(tenant) or os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true')!='true' or (tenant.get('plan') or {}).get('access_suspended'):
                 raise ValueError('Billing grant was revoked')
             rows,grain,warnings=(readers or READERS)[binding['provider']](binding,tenant,date.fromisoformat(p['period_start']),date.fromisoformat(p['period_end']))
             if len(rows)>MAX_ROWS:raise ValueError('Bounded result limit exceeded')
             result=dict(provider=binding['provider'],scope_id=binding['scope_id'],status='completed',granularity=grain,warnings=warnings,coverage_verified=False)
+        except ProviderDeferred as deferred:
+            if self.defer(tid,claim,deferred.retry_after):return
+            rows=None;result=dict(provider=binding['provider'],scope_id=binding['scope_id'],status='failed',error_code='BILLING_RETRY_BUDGET_EXHAUSTED',correlation_id=claim['id'])
         except Exception:
             rows=None;result=dict(provider=binding['provider'],scope_id=binding['scope_id'],status='failed',error_code='BILLING_SOURCE_UNAVAILABLE_OR_INVALID',correlation_id=claim['id'])
         snapshot=None
         selected=commitment_readers if commitment_readers is not None else (None if readers else commitment_reader.READERS)
-        if selected and binding['provider'] in selected and os.getenv('CLOUDSAVER_COMMITMENT_SYNC','true')=='true':
+        if rows is not None and selected and binding['provider'] in selected and os.getenv('CLOUDSAVER_COMMITMENT_SYNC','true')=='true':
             try:
                 items,coverage,notes=selected[binding['provider']](binding,tenant,date.fromisoformat(p['period_start']),date.fromisoformat(p['period_end']))
                 snapshot=('completed',dict(items=items,coverage=coverage or {},warnings=notes,summary=commitment_reader.summarize(items),
@@ -124,6 +130,23 @@ class BillingJobs:
                     db.execute('RELEASE SAVEPOINT billing_import')
                     result.update(status='failed',error_code='BILLING_IMPORT_UNCERTAIN_OR_INVALID',correlation_id=claim['id'])
             p['scope_results'].append(result);p['scope_index']+=1
+            p.pop('next_retry_at',None);p.pop('last_error_code',None);p.pop('scope_deferrals',None)
             if p['scope_index']<len(p['bindings']):state='queued'
             else:state='completed' if all(r['status']=='completed' for r in p['scope_results']) else 'partial' if any(r['status']=='completed' for r in p['scope_results']) else 'failed'
             db.execute('UPDATE billing_sync_jobs SET state=%s,payload=%s,updated_at=%s,lease_until=NULL,lease_token=NULL WHERE tenant_id=%s AND id=%s',(state,db.json(p),datetime.now(timezone.utc).isoformat(),tid,claim['id']))
+
+    def defer(self,tenant_id,claim,seconds):
+        """Keep the exact unfinished scope; a cooldown never commits partial billing lines."""
+        p=dict(claim['payload']);count=p.get('scope_deferrals',0)+1
+        if count>5:return False
+        now=datetime.now(timezone.utc);due=now+timedelta(seconds=seconds)
+        p.update(scope_deferrals=count,next_retry_at=due.isoformat(),last_error_code='BILLING_PROVIDER_THROTTLED')
+        with self.store.transaction(tenant_id,write=True) as db:
+            suffix=' FOR UPDATE' if db.postgres else ''
+            current=db.execute('SELECT state,lease_token,lease_until FROM billing_sync_jobs WHERE tenant_id=%s AND id=%s'+suffix,(tenant_id,claim['id'])).fetchone()
+            if not current or str(current[1])!=claim['token'] or datetime.fromisoformat(str(current[2]).replace('Z','+00:00'))<=now:
+                raise WorkflowConflict('Billing lease was lost')
+            state='cancelled' if current[0]=='cancel_requested' else 'queued'
+            db.execute('UPDATE billing_sync_jobs SET state=%s,payload=%s,updated_at=%s,lease_until=%s,lease_token=NULL WHERE tenant_id=%s AND id=%s',
+                (state,db.json(p),now.isoformat(),due.isoformat(),tenant_id,claim['id']))
+        return True

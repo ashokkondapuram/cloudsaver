@@ -110,8 +110,8 @@ def install(app, settings, *, redis_required=False, targets=()):
             raise ValueError('CORS origins must be exact HTTPS origins or local HTTP origins')
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=False,
-                           allow_methods=['GET', 'POST', 'PUT', 'PATCH'], allow_headers=['Authorization', 'Content-Type', 'X-Request-ID'],
-                           expose_headers=['X-Request-ID', 'Retry-After', 'Location'])
+                           allow_methods=['GET', 'POST', 'PUT', 'PATCH'], allow_headers=['Authorization', 'Content-Type', 'X-Request-ID','Idempotency-Key','If-Match'],
+                           expose_headers=['X-Request-ID', 'Retry-After', 'Location','ETag'])
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request, exc):
@@ -182,6 +182,11 @@ def install(app, settings, *, redis_required=False, targets=()):
         checks['directory_projection']=directory_probe
     app.state.readiness_checks = checks
 
+    @app.get('/health/live', include_in_schema=False)
+    async def liveness():
+        return {'status':'alive'}
+
+    @app.get('/health/ready', include_in_schema=False)
     @app.get('/readyz', include_in_schema=False)
     async def readiness():
         async def check(name, probe):

@@ -62,6 +62,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     from app.focus import FocusRepository
     from app.finops_api import create_router as finops_router
     evidence_store=EnterpriseStore(settings)
+    from app.engineering.api import create_router as engineering_router
+    api.include_router(engineering_router(evidence_store,current_tenant))
     from app.governance_api import create_router as governance_workflow_router
     api.include_router(governance_workflow_router(store,evidence_store,current_tenant))
     from app.outcome_api import create_router as outcome_router
@@ -137,6 +139,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
         from app.cloud_scope import configured_providers
         return {'providers': configured_providers(tenant),
                 'mode': settings.mode, 'execution': 'read_only_synchronous',
+                'collection_policy': {'read_retry_attempts':3,'read_budget_seconds':30,
+                    'quota_coordination':'redis' if os.getenv('CLOUDSAVER_PROVIDER_REDIS_URL') or os.getenv('REDIS_URL') else 'development_process_only',
+                    'billing_retry_state':'queued','provider_freshness_guaranteed':False,
+                    'missing_data':'unknown','sandbox_acceptance':'not_established_by_source_presence'},
                 'kubernetes_window_days': 14, 'live_cost_support': 'exact Azure meters where available; other providers unknown'}
 
     @api.get('/api/v1/trends')

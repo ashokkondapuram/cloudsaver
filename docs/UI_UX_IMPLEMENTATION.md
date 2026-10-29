@@ -98,3 +98,27 @@ Local screenshots and build/verification logs are under `/workspace/artifacts/cl
 ## Complete page and tab audit
 
 The subsequent [page-by-page CSS audit](CSS_PAGE_TAB_AUDIT.md) expands coverage to all explicit customer/portal route families and native tab groups: 90 states, 900 layout samples, and 180 contrast samples. It records the additional fixes, final results, and local-fixture boundaries separately from the earlier functional and styling passes.
+
+## Overview page redesign
+
+Based on `2937c30`, this increment focuses on the customer Overview and shared navigation. The portal and other page contents are outside this increment.
+
+Overview now answers three questions: what evidence is available, what needs review, and where to go next. A context-sensitive next step handles first use, viewers, historical observations, incomplete scans, loading, errors, and completed evidence. Three metrics summarize resources, review candidates and evidence gaps within the selected scopes. Missing data stays unknown; a loaded empty inventory is distinct from a failed read. Retry reloads saved inventory without starting a scan or billing sync.
+
+The review queue shows up to three resources by priority. Six section cards explain Resources, Workload assessments, Cost allocation, Risk & compliance, Automation & GitOps, and Savings & investigations. Copy distinguishes scan evidence from billing windows, recommendations from authorization, and estimates from verified financial outcomes.
+
+Charts, the commitment ceiling, the Overview export menu, repeated workflow links, and duplicated sidebar safety/version text were removed from this page's presentation. Snapshot export remains on Resources and Cost allocation; no backend routes or authorization controls were removed. Overview does not request trend data or financial summaries.
+
+Navigation shows nine everyday destinations. Services, Kubernetes, Optimization evidence and Agent worker are available through an accessible Specialist tools disclosure and the existing command palette. Direct specialist routes reopen the group and retain the active-page indicator. Desktop, collapsed and mobile navigation share destinations; mobile text styling is independent of the existing automatic compact-sidebar breakpoint. Permanent accessible names cover icon-only navigation, branding and collapse controls.
+
+Overview styles use a component-scoped CSS module. Obsolete global evidence-panel styles were removed. Root README, dependencies, provider behavior, database schemas and APIs are unchanged.
+
+
+Verification for this increment:
+
+- Customer production build passed, including TypeScript validation.
+- **38 browser checks passed** across `overview`, `ui`, `console-experience`, `improvement-workflows`, and `lean` suites. Seven new Overview checks cover section guidance, first-use admin/viewer states, unavailable/empty evidence, saved-inventory retry, historical snapshots, specialist navigation and responsive accessibility.
+- Overview passed automated WCAG-tagged accessibility checks and document-width checks at 320, 390, 768, 1024 and 1440 pixels in both themes. The expanded mobile specialist menu was also checked. These are local Chromium fixtures, not a manual accessibility certification or live-provider acceptance.
+- Existing scope filters, rule-draft protection, resource drawers, viewer restrictions, explicit scans, GitOps review, billing-status recovery and keyboard navigation passed in those suites.
+- Local final screenshots and logs are saved under `/workspace/artifacts/cloudsaver-overview`. Initial runs caught mobile label hiding and a version-label mismatch; both were fixed before the final passing run.
+- Release manifest and whitespace checks passed. No push or deployment was performed for this increment.

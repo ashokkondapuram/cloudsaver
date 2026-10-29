@@ -20,15 +20,18 @@ class Credential:
 
 def test_azure_merges_actual_and_amortized_cost_across_pages(monkeypatch):
     calls=[]
+    delays=[]
+    monkeypatch.setattr('time.sleep',delays.append)
     def post(url,token,body,scope_id=None):
         calls.append((url,body['type']))
         rows={'ActualCost':[[20261001,'/sub/r1','USD','12.5']],'AmortizedCost':[[20261001,'/sub/r1','USD','8.25']]}[body['type']]
-        nxt='https://management.azure.com/next' if url.endswith('2023-11-01') else None
+        nxt=f'https://management.azure.com/subscriptions/{SUB}/providers/Microsoft.CostManagement/query?api-version=2023-11-01&skiptoken=next' if url.endswith('2023-11-01') else None
         return {'properties':{'columns':[{'name':'UsageDate'},{'name':'ResourceId'},{'name':'Currency'},{'name':'PreTaxCost'}],'rows':rows,'nextLink':nxt}}
     monkeypatch.setattr(billing_sync,'_post',post)
     monkeypatch.setattr('app.cloud_identity.azure_credential',lambda tenant:Credential())
     rows,granularity,_=billing_sync.azure_rows(dict(provider='azure',scope_id=SUB),workspace(),START,END)
     assert granularity=='resource' and len(calls)==4
+    assert delays==[]
     assert rows==[dict(day=date(2026,10,1),resource_id='/sub/r1',currency='USD',billed='25.0',effective='16.50',category='Usage')]
 
 

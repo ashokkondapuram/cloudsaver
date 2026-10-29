@@ -34,8 +34,10 @@ def collect(evidence,plane,fn):
         value=fn()
         evidence.setdefault('live_sources',{})[plane]='collected'
         return value
-    except Exception:
+    except Exception as error:
         evidence.setdefault('live_sources',{})[plane]='unavailable_or_incomplete'
+        if getattr(error,'retry_after',None):
+            evidence.setdefault('collection_delays',{})[plane]={'reason':'provider_throttled','retry_after_seconds':error.retry_after}
         return None
 
 def enrich_metrics(evidence,values,now):

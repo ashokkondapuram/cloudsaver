@@ -56,6 +56,8 @@ def run_once(settings=None):
 
 
 def main():
+    from workers.health import WorkerHealth
+    health=WorkerHealth().start()
     stopped = False
 
     def stop(*_):
@@ -66,8 +68,10 @@ def main():
     signal.signal(signal.SIGINT, stop)
     while not stopped:
         try:
-            logging.warning("Governance monitor: %s", run_once())
+            result=run_once();health.touch(result['failed_workspaces']==0)
+            logging.warning("Governance monitor: %s", result)
         except Exception:
+            health.touch(False)
             logging.error(
                 "Governance monitor unavailable; operator inspection required"
             )
@@ -75,6 +79,7 @@ def main():
             if stopped:
                 break
             time.sleep(1)
+    health.close()
 
 
 if __name__ == "__main__":

@@ -37,6 +37,8 @@ export type Scan = {
 };
 
 export type Workspace = {
+  identity_provider?: 'platform' | 'entra' | 'keycloak';
+  licence_expires_at?: string | null;
   name: string;
   tenant_id: string;
   subscription_ids: string[];
@@ -148,7 +150,7 @@ export type Entitlements = {
   can_dispatch_automated_alerts: boolean;
   can_use_ai_advisory?: boolean;
   retention_days: number;
-  entitlements_source: 'platform' | 'fallback';
+  entitlements_source: 'platform' | 'fallback' | 'keycloak';
   settings_version: number;
   plan_change_allowed: boolean;
 };

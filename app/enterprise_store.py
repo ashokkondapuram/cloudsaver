@@ -17,7 +17,8 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
 
 CONTROL_PLANE_TABLES = ('cp_financial_scenarios','cp_action_assessments','cp_plans','cp_plan_versions',
                        'cp_plan_approvals','cp_gitops_deliveries','cp_gitops_checks','cp_commitment_reminders')
-TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES
+from app.engineering.schema import TABLES as ENGINEERING_TABLES, sqlite_schema as engineering_sqlite
+TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES+tuple(ENGINEERING_TABLES)
 
 
 class Connection:
@@ -48,7 +49,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0026_control_plane before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0027_engineering_workloads before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -240,6 +241,7 @@ class EnterpriseStore:
 
             with self.transaction(str(UUID(int=0)),write=True) as db:
                 db.db.executescript(GOVERNANCE_SQLITE)
+                db.db.executescript(engineering_sqlite())
 
     @contextmanager
     def transaction(self, tenant_id, *, write=False):
@@ -254,6 +256,7 @@ class EnterpriseStore:
                 yield Connection(db,True)
         else:
             db=sqlite3.connect(self.path,timeout=10)
+            db.execute('PRAGMA foreign_keys=ON')
             try:
                 db.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
                 yield Connection(db,False)

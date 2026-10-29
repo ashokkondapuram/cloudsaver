@@ -213,7 +213,7 @@ def entitlements_for(tenant) -> TierEntitlements:
             tier=plan['code'], plan_name=plan['name'], **plan['entitlements'], billing_state=plan['billing_state'],
             current_period_end=plan['current_period_end'], grace_ends_at=plan['grace_ends_at'],
             subscription_plan_name=plan['subscription_plan_name'], manage_billing_url=plan['manage_billing_url'],
-            entitlements_version=plan['entitlements_version'], source='platform')
+            entitlements_version=plan['entitlements_version'], source='keycloak' if tenant.get('identity_provider')=='keycloak' else 'platform')
     result = fallback_entitlements((tenant or {}).get('plan_tier') or PlanTier.STARTER.value)
     tenant_id = (tenant or {}).get('tenant_id')
     with _warned_lock:
