@@ -16,7 +16,22 @@ This document records automated verification of the scan → rule evaluation →
 | **Assessment API** | Service summary, resource assessment, AI selection (`tests/test_assessment_api.py`, `tests/test_resource_assessment.py`) |
 | **Rules preview API** | Effective rules + preview re-evaluates last scan (`tests/test_service_analysis_api.py`) |
 | **FinOps autopilot** | Playbook list + planner steps (`tests/test_finops_autopilot_planner.py`); rightsizing rules mapped to playbooks in integrity tests |
+| **Agent workflow routing** | Every catalog `rule_id` maps to a primary review/agent channel (`app/agent_workflow_routing.py`, `tests/test_agent_workflow_routing.py`) |
+| **Engineering review plans** | Workload/member/plan API + readiness gates (`tests/test_engineering.py`); `execution_enabled=False` |
 | **Platform outbox / ingress** | Reliability regressions (`tests/test_platform_outbox_lease.py`, `tests/test_drift_ingress_and_ast_db.py`) |
+
+## Agent workflow channels (after `condition_detected`)
+
+| Channel | When | Agent / operator steps |
+|---------|------|------------------------|
+| `finops_autopilot_resize` | Six rightsizing rules with resize playbooks | `resource.inspect` → `compute.resize`; optional `gitops.terraform.sync` (`rightsize_sku`) |
+| `engineering_review_plan` | Azure VM rightsize or unattached disk pilot | Workload plan + readiness checks; `execution_enabled=False` |
+| `kubernetes_patch_preview` | Container CPU/memory overrequest | Patch preview API → strategic-merge YAML + kubectl dry-run |
+| `remediation_bash_review` | Legacy orphan disk/IP/NIC/NSG | Interactive bash download |
+| `remediation_terraform_import` | Import-only AWS/GCP/Azure selections | Terraform import blocks (no apply) |
+| `manual_assessment_only` | All other catalog rules | Assessment and manual review; AI agent plans stay bounded to connector catalog |
+
+Registry: `route_for_rule()` in `app/agent_workflow_routing.py`.
 
 ## Per-resource analysis patterns (by design)
 
@@ -44,7 +59,9 @@ python3 -m pytest -q \
   tests/test_assessment_api.py \
   tests/test_resource_assessment.py \
   tests/test_service_analysis_api.py \
-  tests/test_finops_autopilot_planner.py
+  tests/test_finops_autopilot_planner.py \
+  tests/test_agent_workflow_routing.py \
+  tests/test_engineering.py
 
 # Full backend unit suite (excludes disposable Postgres)
 python3 -m pytest -q tests --ignore=tests/test_postgres.py

@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "de22748c5730141e0b202f25f81367704a56ece385164c5ecc9189d04609c0b8",
+  "inventory_sha256": "e94a1d51e114a3e048884e7e8ac56b9a1c5acf058f6eea8fa69949d287d9dc9e",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1328,6 +1328,11 @@
       "path": "docs/FINANCIAL_OUTCOMES.md",
       "sha256": "5d2ab08d87ef0ad6ed96340c77e669a7d288235938f4bd4f4e5dd2424fcf4529",
       "bytes": 17961
+    },
+    {
+      "path": "docs/FINOPS_ANALYSIS_VERIFICATION.md",
+      "sha256": "eb434497ecc2e5cc22cbfbc8ac12c610bb079f5b71eac4863f919f64d1a992c9",
+      "bytes": 5841
     },
     {
       "path": "docs/GITOPS.md",
@@ -3173,6 +3178,11 @@
       "path": "tests/test_export_billing.py",
       "sha256": "853881d8fcb585478447f6ac0429880e94697a4bfca2583fce5388cf7f2b7c02",
       "bytes": 3196
+    },
+    {
+      "path": "tests/test_finops_analysis_integrity.py",
+      "sha256": "a063e50d3898498cfa2db26c339492b903f5b472a4617a4a7b23a452deb2fb5b",
+      "bytes": 5529
     },
     {
       "path": "tests/test_finops_autopilot_planner.py",
