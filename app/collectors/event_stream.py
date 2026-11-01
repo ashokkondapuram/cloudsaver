@@ -241,11 +241,19 @@ class EventStreamConsumer:
     def resource_hash(canonical_resource_id: str) -> str:
         return hashlib.sha256(canonical_resource_id.lower().encode()).hexdigest()[:16]
 
-    def subscribe_eventbridge(self) -> None:
-        raise NotImplementedError("AWS EventBridge subscription is not wired in v1.7.x")
+    def subscribe_eventbridge(self, *, account_id: str, region: str = "us-east-1") -> dict[str, Any]:
+        from app.drift.cloud_event_subscriptions import ensure_aws_eventbridge_subscription
 
-    def subscribe_eventgrid(self) -> None:
-        raise NotImplementedError("Azure Event Grid subscription is not wired in v1.7.x")
+        return ensure_aws_eventbridge_subscription(account_id=account_id, region=region)
+
+    def subscribe_eventgrid(self, *, subscription_id: str, token_provider) -> dict[str, Any]:
+        from app.drift.cloud_event_subscriptions import ensure_azure_eventgrid_subscription
+
+        return ensure_azure_eventgrid_subscription(
+            subscription_id=subscription_id,
+            tenant_id="",
+            token_provider=token_provider,
+        )
 
     def subscribe_pubsub(self) -> None:
-        raise NotImplementedError("GCP Pub/Sub subscription is not wired in v1.7.x")
+        raise NotImplementedError("GCP Pub/Sub subscription wiring is not implemented in this release")

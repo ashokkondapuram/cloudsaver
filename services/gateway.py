@@ -641,6 +641,18 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def gitops_ast_sync(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/gitops/ast/sync', request, authorization)
 
+    @app.post('/api/v1/gitops/ast/index-repositories', status_code=202)
+    async def gitops_ast_index_repositories(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/gitops/ast/index-repositories', request, authorization)
+
+    @app.post('/api/v1/drift/cloud-events/subscriptions/ensure', status_code=202)
+    async def drift_subscriptions_ensure(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/drift/cloud-events/subscriptions/ensure', request, authorization)
+
+    @app.post('/api/v1/semantic/embeddings/backfill-vectors', status_code=202)
+    async def semantic_embeddings_backfill(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/semantic/embeddings/backfill-vectors', request, authorization)
+
     @app.post('/api/v1/drift/cloud-events/ingest', status_code=202)
     async def drift_cloud_events_ingest(request: Request):
         from app.gitops_api import bounded_json

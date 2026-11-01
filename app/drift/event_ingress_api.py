@@ -32,10 +32,14 @@ def create_router(settings, evidence_store):
         if not _webhook_secret_ok(request):
             raise HTTPException(401, "Invalid or missing drift webhook secret")
         raw = await bounded_json(request)
-        if not isinstance(raw, dict) or "provider" not in raw or "events" not in raw:
+        if isinstance(raw, dict) and raw.get("detail-type") and "events" not in raw:
+            provider = "aws"
+            events = [raw]
+        elif not isinstance(raw, dict) or "provider" not in raw or "events" not in raw:
             raise HTTPException(422, "Provide provider and events array")
-        provider = str(raw["provider"])
-        events = raw["events"]
+        else:
+            provider = str(raw["provider"])
+            events = raw["events"]
         if not isinstance(events, list) or not events:
             raise HTTPException(422, "events must be a non-empty array")
 
@@ -43,9 +47,16 @@ def create_router(settings, evidence_store):
             stream = consumer()
             outbox = PlatformOutboxStore(evidence_store)
             queued = []
+            validation_responses = []
             for item in events[:100]:
                 if not isinstance(item, dict):
                     raise ValueError("Each event must be an object")
+                if provider == "azure" and item.get("eventType") == "Microsoft.EventGrid.SubscriptionValidationEvent":
+                    data = item.get("data") or {}
+                    code = data.get("validationCode") if isinstance(data, dict) else None
+                    if code:
+                        validation_responses.append(dict(validationResponse=code))
+                    continue
                 if provider == "azure":
                     signal = stream.normalize_eventgrid(item)
                 elif provider == "aws":
@@ -55,7 +66,10 @@ def create_router(settings, evidence_store):
                 else:
                     raise ValueError("Unsupported provider")
                 queued.append(stream.enqueue_drift_inspect(outbox, signal))
-            return dict(accepted=len(queued), intents=queued)
+            result = dict(accepted=len(queued), intents=queued)
+            if validation_responses:
+                result["validation"] = validation_responses[0]
+            return result
 
         try:
             return await run_in_threadpool(process)

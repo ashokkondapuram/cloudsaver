@@ -117,3 +117,20 @@ Per-resource resize knowledge lives in `app/finops_resize_playbooks.py` (Azure V
 ```
 
 Worker implementation: `agent-worker/src/connectors.ts` (Azure), `agent-worker/src/multicloud.ts` (AWS/GCP). Tests: `tests/test_finops_autopilot_planner.py`.
+
+## 8. GitHub App AST repository indexer
+
+When `CLOUDSAVER_GITOPS_AST_INDEX_FROM_GITHUB=true`, `POST /api/v1/gitops/ast/index-repositories` uses the GitHub App to resolve each target’s `base_branch` SHA, list `.tf` files, parse Terraform resource blocks (`app/gitops_terraform_ast_indexer.py`), and persist mappings into `gitops_ast_*` tables (line ranges + `indexed_block` at commit). Env JSON sync remains on `POST /api/v1/gitops/ast/sync`.
+
+## 9. Semantic embedding pgvector backfill
+
+`SemanticEmbeddingsStore.upsert` copies jsonb embeddings into `embedding_vector` when migration **0032** is applied. `POST /api/v1/semantic/embeddings/backfill-vectors` (requires `CLOUDSAVER_SEMANTIC_EMBEDDINGS_PIPELINE=true`) backfills rows where `embedding_vector IS NULL`.
+
+## 10. Drift Event Grid / EventBridge wiring
+
+Set `CLOUDSAVER_DRIFT_INGEST_URL` to the public gateway URL for `POST /api/v1/drift/cloud-events/ingest` and `CLOUDSAVER_DRIFT_WEBHOOK_SECRET`. With `CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING=true`, `POST /api/v1/drift/cloud-events/subscriptions/ensure` provisions:
+
+- **AWS:** EventBridge rule + API destination + connection (header `X-CloudSaver-Drift-Webhook-Secret`; requires `CLOUDSAVER_DRIFT_EVENTBRIDGE_ROLE_ARN`)
+- **Azure:** Subscription-scoped Event Grid webhook for `Microsoft.Resources.ResourceWriteSuccess` (ingress handles `SubscriptionValidationEvent`)
+
+Ingress also accepts a raw EventBridge envelope (single event body) for API destination delivery.

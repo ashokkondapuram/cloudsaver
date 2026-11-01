@@ -570,3 +570,88 @@ def fetch_repository_text_file(
             return response.text
 
     raise GitOpsFailure("Unsupported VCS provider")
+
+
+def _github_api_client(config, transport=None):
+    import jwt
+
+    key = os.getenv("CLOUDSAVER_GITHUB_APP_PRIVATE_KEY")
+    if not key:
+        raise GitOpsUnavailable("GitHub App is not configured")
+    now = int(time.time())
+    app_token = jwt.encode(dict(iat=now - 60, exp=now + 540, iss=config.app_id), key, algorithm="RS256")
+    return httpx.Client(
+        base_url="https://api.github.com",
+        timeout=httpx.Timeout(30, connect=5),
+        follow_redirects=False,
+        transport=transport,
+    ), app_token
+
+
+def _github_request(client, method, api_path, token, *, allowed=(200, 201)):
+    response = client.request(
+        method,
+        api_path,
+        headers={
+            "Authorization": "Bearer " + token,
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    if response.status_code not in allowed:
+        raise GitOpsFailure("GitHub rejected API request")
+    return response.json() if response.content else None
+
+
+def github_installation_token(target: dict[str, Any], config, *, transport=None) -> tuple[httpx.Client, str, str]:
+    client, app_token = _github_api_client(config, transport=transport)
+    access = _github_request(
+        client,
+        "POST",
+        f"/app/installations/{target['installation_id']}/access_tokens",
+        app_token,
+    )
+    repo = "/repos/" + target["repository"]
+    return client, access["token"], repo
+
+
+def github_resolve_branch_sha(target: dict[str, Any], config, *, branch: str | None = None, transport=None) -> str:
+    from urllib.parse import quote
+
+    branch = branch or target["base_branch"]
+    client, token, repo = github_installation_token(target, config, transport=transport)
+    try:
+        ref = _github_request(client, "GET", repo + "/git/ref/heads/" + quote(branch, safe=""), token)
+        return str(ref["object"]["sha"])
+    finally:
+        client.close()
+
+
+def github_list_terraform_paths(
+    target: dict[str, Any],
+    config,
+    ref: str,
+    *,
+    transport=None,
+    limit: int = 200,
+) -> list[str]:
+    from urllib.parse import quote
+
+    client, token, repo = github_installation_token(target, config, transport=transport)
+    try:
+        tree = _github_request(client, "GET", repo + "/git/trees/" + quote(ref, safe="") + "?recursive=1", token)
+        paths: list[str] = []
+        for item in tree.get("tree") or []:
+            if item.get("type") != "blob":
+                continue
+            path = str(item.get("path") or "")
+            if not path.endswith(".tf"):
+                continue
+            if "/.terraform/" in path or path.startswith(".terraform/"):
+                continue
+            paths.append(path)
+            if len(paths) >= limit:
+                break
+        return sorted(paths)
+    finally:
+        client.close()

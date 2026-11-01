@@ -319,4 +319,24 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         service = GitOpsAstSyncService(EnterpriseStore(settings))
         return await run_in_threadpool(service.sync_env_index, tenant["tenant_id"], targets)
 
+    @router.post("/api/v1/gitops/ast/index-repositories", status_code=202)
+    async def ast_index_repositories(tenant=Depends(current_tenant)):
+        from app.enterprise_store import EnterpriseStore
+        from app.gitops_ast_sync import GitOpsAstSyncService
+
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        if os.getenv("CLOUDSAVER_GITOPS_AST_INDEX_FROM_GITHUB", "false").lower() != "true":
+            raise HTTPException(503, "GitHub AST repository indexing is disabled in this environment")
+        targets = tuple(row for row in config.targets if row["tenant_id"] == tenant["tenant_id"])
+        if not targets:
+            raise HTTPException(422, "Configure at least one GitOps target before AST indexing")
+        service = GitOpsAstSyncService(EnterpriseStore(settings))
+        return await run_in_threadpool(
+            service.index_github_repositories,
+            tenant["tenant_id"],
+            targets,
+            config=config,
+            tenant_row=tenant,
+        )
+
     return router

@@ -105,6 +105,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     api.include_router(gitops_router(settings, store, current_tenant, config=gitops_config, client=gitops_client))
     from app.drift.event_ingress_api import create_router as drift_ingress_router
     api.include_router(drift_ingress_router(settings, evidence_store))
+    from app.drift.drift_ops_api import create_drift_subscriptions_router, create_semantic_router
+
+    api.include_router(create_drift_subscriptions_router(settings, current_tenant))
+    api.include_router(create_semantic_router(settings, evidence_store, current_tenant))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
