@@ -104,3 +104,44 @@ def fetch_aws_operational(signal: dict[str, Any], tenant: dict[str, Any]) -> dic
         tags={tag["Key"]: tag["Value"] for tag in volume.get("Tags") or []},
         source="aws_ebs_live",
     )
+
+
+def _parse_gcp_compute_resource(canonical: str) -> tuple[str, str, str, str] | None:
+    """Return project, zone, kind, name for compute.googleapis.com resource names."""
+    import re
+
+    match = re.fullmatch(
+        r"//compute\.googleapis\.com/projects/([^/]+)/(?:zones|regions)/([^/]+)/(instances|disks)/([^/]+)",
+        canonical,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group(1), match.group(2), match.group(3), match.group(4)
+    return None
+
+
+def fetch_gcp_operational(signal: dict[str, Any], tenant: dict[str, Any]) -> dict[str, Any]:
+    from app.cloud_http import JSONReader
+    from app.cloud_identity import CredentialError, gcp_credentials
+
+    canonical = signal["canonical_resource_id"]
+    parsed = _parse_gcp_compute_resource(canonical)
+    if not parsed:
+        return dict(source="gcp_live_unsupported_arn", status=signal.get("status"), labels=signal.get("labels") or {})
+    project, zone, kind, name = parsed
+    projects = tenant.get("gcp_projects") or []
+    binding = next((row for row in projects if str(row.get("project_id")).lower() == project.lower()), None)
+    if not binding:
+        raise CredentialError("GCP project is not configured for this workspace")
+    source = dict(service_account=binding.get("service_account"), project_id=project)
+    reader = JSONReader(credentials=gcp_credentials(source, tenant=tenant))
+    try:
+        url = f"https://compute.googleapis.com/compute/v1/projects/{project}/zones/{zone}/{kind}/{name}"
+        body = reader.get(url)
+    finally:
+        reader.close()
+    labels = body.get("labels") or {}
+    if kind == "instances":
+        machine = str(body.get("machineType") or "").rsplit("/", 1)[-1]
+        return dict(status=body.get("status"), machine_type=machine, labels=labels, source="gcp_compute_live")
+    return dict(status=body.get("status"), disk_size_gb=body.get("sizeGb"), labels=labels, source="gcp_disk_live")

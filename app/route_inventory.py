@@ -210,6 +210,8 @@ ROUTES = {
     ('GET', '/api/v1/gitops/resource-mapping'): 'scoped_read',
     ('POST', '/api/v1/gitops/pull-requests'): 'scan_write',
     ('POST', '/api/v1/gitops/pre-merge/evaluate'): 'scan_write',
+    ('POST', '/api/v1/gitops/ast/sync'): 'full_scope',
+    ('POST', '/api/v1/drift/cloud-events/ingest'): 'public',
     ('GET', '/api/v1/finops/saas-connectors'): 'scoped_read',
     ('POST', '/api/v1/finops/saas-focus/import'): 'full_scope',
     ('POST', '/api/v1/finops/ebpf-flows/ingest'): 'full_scope',

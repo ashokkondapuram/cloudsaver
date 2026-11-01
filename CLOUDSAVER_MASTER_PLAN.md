@@ -10,6 +10,7 @@ See sections below for safety invariants, service topology, phased delivery, and
 | `0029_v2_drift_baselines_gitops_ast` | Baselines, drift events, GitOps AST tables |
 | `0030_v3_saas_focus_and_ebpf_flows` | SaaS FOCUS rows, eBPF flow costs |
 | `0031_v3_greenops_and_merkle_audit` | Carbon metrics, Merkle audit chain |
+| `0032_v3_semantic_embeddings` | Semantic embeddings (`jsonb` + optional `pgvector` HNSW) |
 
 RLS uses `tenant_id` + `app.current_tenant_id` (workspace UUID equals tenant UUID in app code).
 

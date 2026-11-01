@@ -7,6 +7,7 @@ def drift_dispatch_kwargs(store, tenant_id: str, settings=None) -> dict:
     from app.config import Settings
     from app.drift.baseline_store import BaselineStore
     from app.drift.live_readers import reader_for_signal
+    from app.gitops_ast_mapper import GitOpsAstMapper
 
     settings = settings or Settings.load()
     tenant = next((row for row in settings.tenants if row["tenant_id"] == tenant_id), None)
@@ -19,6 +20,7 @@ def drift_dispatch_kwargs(store, tenant_id: str, settings=None) -> dict:
         agent_repo=agent_repo,
         tenant_loader=lambda workspace_id: tenant if workspace_id == tenant_id else {},
         live_reader=lambda signal: reader_for_signal(signal, tenant=tenant)(signal),
+        mapper=GitOpsAstMapper.for_tenant(store, tenant_id),
     )
 
 

@@ -28,7 +28,7 @@ def reader_for_provider(
         if provider == "aws":
             return lambda signal: _aws_live(signal, tenant)
         if provider == "gcp":
-            return _gcp_live
+            return lambda signal: _gcp_live(signal, tenant)
     if provider == "azure":
         return _azure_reader
     if provider == "aws":
@@ -67,8 +67,16 @@ def _aws_live(signal: dict[str, Any], tenant: dict[str, Any]) -> dict[str, Any]:
         return dict(source="aws_live_error", State=signal.get("State"), tags=signal.get("tags") or {})
 
 
-def _gcp_live(signal: dict[str, Any]) -> dict[str, Any]:
-    return _gcp_reader(signal)
+def _gcp_live(signal: dict[str, Any], tenant: dict[str, Any]) -> dict[str, Any]:
+    from app.cloud_identity import CredentialError
+    from app.drift.operational_fetch import fetch_gcp_operational
+
+    try:
+        return fetch_gcp_operational(signal, tenant)
+    except CredentialError:
+        return _gcp_reader(signal)
+    except Exception:
+        return dict(source="gcp_live_error", labels=signal.get("labels") or {})
 
 
 def _azure_reader(signal: dict[str, Any]) -> dict[str, Any]:

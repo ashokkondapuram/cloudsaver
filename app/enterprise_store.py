@@ -22,7 +22,8 @@ from app.drift.schema import INDEXES as DRIFT_OUTBOX_INDEXES, TABLES as DRIFT_OU
 from app.drift.v2_schema import INDEXES as DRIFT_V2_INDEXES, TABLES as DRIFT_V2_TABLES, sqlite_schema as drift_v2_sqlite
 from app.v3_finops_network_schema import INDEXES as V3_FINOPS_INDEXES, TABLES as V3_FINOPS_TABLES, sqlite_schema as v3_finops_sqlite
 from app.v3_greenops_audit_schema import INDEXES as V3_GREENOPS_INDEXES, TABLES as V3_GREENOPS_TABLES, sqlite_schema as v3_greenops_sqlite
-TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES+tuple(ENGINEERING_TABLES)+tuple(DRIFT_OUTBOX_TABLES)+tuple(DRIFT_V2_TABLES)+tuple(V3_FINOPS_TABLES)+tuple(V3_GREENOPS_TABLES)
+from app.v3_semantic_schema import INDEXES as V3_SEMANTIC_INDEXES, TABLES as V3_SEMANTIC_TABLES, sqlite_schema as v3_semantic_sqlite
+TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES+tuple(ENGINEERING_TABLES)+tuple(DRIFT_OUTBOX_TABLES)+tuple(DRIFT_V2_TABLES)+tuple(V3_FINOPS_TABLES)+tuple(V3_GREENOPS_TABLES)+tuple(V3_SEMANTIC_TABLES)
 
 
 class Connection:
@@ -53,7 +54,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0031_v3_greenops_and_merkle_audit before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0032_v3_semantic_embeddings before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -310,6 +311,7 @@ class EnterpriseStore:
                 db.db.executescript(drift_v2_sqlite())
                 db.db.executescript(v3_finops_sqlite())
                 db.db.executescript(v3_greenops_sqlite())
+                db.db.executescript(v3_semantic_sqlite())
 
     @contextmanager
     def transaction(self, tenant_id, *, write=False):

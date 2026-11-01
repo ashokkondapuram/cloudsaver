@@ -178,9 +178,10 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
 
     @router.get('/api/v1/gitops/resource-mapping')
     def resource_mapping(resource_id: str = Query(..., min_length=1, max_length=2048), tenant=Depends(current_tenant)):
-        from app.gitops_ast_mapper import GitOpsAstMapper
         from app.cloud_scope import validate_finding_scope
         from app.data_scope import resource_visible
+        from app.enterprise_store import EnterpriseStore
+        from app.gitops_ast_mapper import GitOpsAstMapper
         scan = next(iter(store.list(tenant['tenant_id'], 50)), None)
         rows = (scan or {}).get('inventory') or (scan or {}).get('findings') or []
         def matches(row):
@@ -189,12 +190,14 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         owned = next((row for row in rows if matches(row)), None)
         if owned is None:
             raise HTTPException(404, 'Resource mapping not found')
+        persistence = EnterpriseStore(settings)
+        mapper = GitOpsAstMapper.for_tenant(persistence, tenant["tenant_id"])
         try:
             validate_finding_scope(owned, tenant)
             provider = owned.get('cloud_provider', 'azure')
             if not resource_visible(tenant, provider, owned.get('scope_id') or owned.get('subscription_id')):
                 raise ValueError('Resource is outside the current scope')
-            mapping = GitOpsAstMapper().lookup(owned['resource_id'])
+            mapping = mapper.lookup(owned['resource_id'])
             repositories = {repository_label(row) for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
             if mapping.repository not in repositories:
                 raise ValueError('Repository is not granted')
@@ -235,12 +238,14 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         owned = next((row for row in rows if matches(row)), None)
         if owned is None:
             raise HTTPException(404, 'Resource not found for GitOps remediation')
+        persistence = EnterpriseStore(settings)
+        mapper = GitOpsAstMapper.for_tenant(persistence, tenant['tenant_id'])
         try:
             validate_finding_scope(owned, tenant)
             provider = owned.get('cloud_provider', 'azure')
             if not resource_visible(tenant, provider, owned.get('scope_id') or owned.get('subscription_id')):
                 raise ValueError('Resource is outside the current scope')
-            mapping = GitOpsAstMapper().lookup(owned['resource_id']).model_dump()
+            mapping = mapper.lookup(owned["resource_id"]).model_dump()
             if not mapping.get('start_line') or not mapping.get('indexed_commit_sha'):
                 raise ValueError('AST mapping is incomplete; reindex required')
             repositories = {repository_label(row) for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
@@ -301,5 +306,17 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         except (TypeError, ValueError) as error:
             raise HTTPException(422, str(error)) from None
         return dict(scorecard=score, comment=webhook_comment_body(score))
+
+    @router.post("/api/v1/gitops/ast/sync", status_code=202)
+    async def ast_sync(tenant=Depends(current_tenant)):
+        from app.enterprise_store import EnterpriseStore
+        from app.gitops_ast_sync import GitOpsAstSyncService
+
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        targets = tuple(row for row in config.targets if row["tenant_id"] == tenant["tenant_id"])
+        if not targets:
+            raise HTTPException(422, "Configure at least one GitOps target before AST sync")
+        service = GitOpsAstSyncService(EnterpriseStore(settings))
+        return await run_in_threadpool(service.sync_env_index, tenant["tenant_id"], targets)
 
     return router

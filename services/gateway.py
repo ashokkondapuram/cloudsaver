@@ -629,6 +629,24 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def gitops_pre_merge_evaluate(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/gitops/pre-merge/evaluate', request, authorization)
 
+    @app.post('/api/v1/gitops/ast/sync', status_code=202)
+    async def gitops_ast_sync(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/gitops/ast/sync', request, authorization)
+
+    @app.post('/api/v1/drift/cloud-events/ingest', status_code=202)
+    async def drift_cloud_events_ingest(request: Request):
+        from app.gitops_api import bounded_json
+        secret = request.headers.get('X-CloudSaver-Drift-Webhook-Secret')
+        return await upstream(
+            'POST',
+            targets['scanner'],
+            '/api/v1/drift/cloud-events/ingest',
+            '',
+            json=await bounded_json(request),
+            transport=transport,
+            command_headers={'X-CloudSaver-Drift-Webhook-Secret': secret or ''},
+        )
+
 
     @app.post('/api/v1/policies/terraform/evaluate')
     async def terraform_policy(request:Request,row=Depends(allowed),authorization:str=Header()):

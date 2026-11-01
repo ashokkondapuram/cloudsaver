@@ -43,6 +43,16 @@ class GitOpsAstMapper:
             raise ValueError("CLOUDSAVER_GITOPS_AST_INDEX must be a JSON object")
         return data
 
+    @classmethod
+    def for_tenant(cls, store, tenant_id: str):
+        from app.gitops_ast_db import load_index_from_db
+
+        env = cls._load_index()
+        db_index = load_index_from_db(store, tenant_id) if store is not None else {}
+        merged = dict(db_index)
+        merged.update(env)
+        return cls(merged)
+
     def lookup(self, resource_id: str) -> ResourceMapping:
         if not resource_id or len(resource_id) > 2048:
             raise ValueError("resource_id must be 1–2048 characters")

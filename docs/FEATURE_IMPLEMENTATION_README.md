@@ -73,6 +73,8 @@ AST index entries use `repository` as the provider-specific label (`owner/repo`,
 | Leases | `REDIS_URL` |
 | Drift live reads | `CLOUDSAVER_DRIFT_LIVE_READERS=true` (ARM/EC2 metadata via workspace credentials) |
 | Outbox dispatch tick | `CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH=true` (Celery beat → `workers.tasks.dispatch_platform_outbox_all`) |
+| Drift webhook ingress | `CLOUDSAVER_DRIFT_WEBHOOK_SECRET` + `POST /api/v1/drift/cloud-events/ingest` |
+| AST DB sync | `POST /api/v1/gitops/ast/sync` persists `CLOUDSAVER_GITOPS_AST_INDEX` into `gitops_*` tables |
 | GitHub | `CLOUDSAVER_GITHUB_APP_*`, `CLOUDSAVER_GITOPS_PUBLISH` |
 | Azure DevOps / GitLab / Bitbucket | `CLOUDSAVER_AZDO_PAT`, `CLOUDSAVER_GITLAB_TOKEN`, `CLOUDSAVER_BITBUCKET_TOKEN` (as needed per target) |
 
