@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from datetime import timedelta
+import json
 
 import pytest
 
@@ -78,7 +79,8 @@ def test_scoped_inventory_removes_dependencies_to_unseen_resource_nodes():
             'coverage_manifest': {'private': 'must not be retained'}}
     scoped = filter_scan(scan, {'azure'}, scopes={'azure': {'s'}})
     assert len(scoped['inventory']) == 1 and scoped['inventory'][0]['dependency_refs'] == []
-    assert scoped['coverage_manifest'] is None
+    assert scoped['coverage_manifest']['schema_version'] == '2'
+    assert 'private' not in json.dumps(scoped['coverage_manifest'])
 
 
 def test_scoped_scan_with_only_allowed_rows_still_hides_unobserved_private_edges():
@@ -87,7 +89,8 @@ def test_scoped_scan_with_only_allowed_rows_still_hides_unobserved_private_edges
     scan = {'cloud_providers': ['azure'], 'findings': [], 'inventory': [vm], 'coverage_manifest': {'failed_scopes': ['private']}}
     scoped = filter_scan(scan, {'azure'}, scopes={'azure': {'s'}})
     assert scoped['inventory'][0]['dependency_refs'] == []
-    assert scoped['coverage_manifest'] is None
+    assert scoped['coverage_manifest']['clean_baseline'] is True
+    assert scoped['coverage_manifest']['failed_scopes'] == []
     assert filter_scan(scan, {'azure'}, strict=True, scopes={'azure': {'s'}}) is None
 
 
@@ -100,6 +103,13 @@ def test_canonical_deduplication_and_per_service_coverage_preserve_unknown_evide
     assert manifest['by_provider_service'][0]['service'] == 'storage'
     assert manifest['total']['discovered_count'] == manifest['total']['insufficient_evidence_count'] == 1
     assert manifest['total']['evaluated_count'] == 0
+    assert manifest['clean_baseline'] is True and manifest['partial'] is False
+
+
+def test_coverage_manifest_marks_partial_when_scope_inventory_incomplete():
+    manifest = coverage_manifest([], [], (), scope_results=[dict(provider='azure', scope_id='s', supported_inventory_complete=False)])
+    assert manifest['partial'] is True and manifest['clean_baseline'] is False
+    assert manifest['failed_scopes'][0]['scope_id'] == 's'
 
 
 def test_a_broken_rule_evaluation_does_not_become_a_pass():

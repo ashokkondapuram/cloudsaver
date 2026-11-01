@@ -173,6 +173,7 @@ class JobRepository:
             db.execute('INSERT INTO public.scans (id,tenant_id,timestamp,payload) VALUES (%s,%s,%s,%s) '
                        'ON CONFLICT (id) DO NOTHING',
                        (scan['scan_id'], tenant_id, scan['timestamp'], Jsonb(scan)))
+            from app.waste_finding_evidence import waste_finding_evidence
             for finding in scan['findings']:
                 if finding.get('cloud_provider','azure')!='azure':
                     db.execute('INSERT INTO cloud_findings(id,tenant_id,scan_id,cloud_provider,scope_id,resource_id,rule_id,payload,observed_at,opportunity_group_id,slo_burn_rate) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO NOTHING',
@@ -186,7 +187,7 @@ class JobRepository:
                            (finding_id, tenant_id, finding['subscription_id'], finding['resource_id'],
                             finding['resource_name'], finding['resource_type'], finding['resource_group'],
                             finding['rule_id'], finding['severity'], finding['details'],
-                            Jsonb({'scan_id': scan['scan_id'], 'mode': scan['mode']}),
+                            Jsonb(waste_finding_evidence(finding, scan_id=scan['scan_id'], mode=scan['mode'])),
                             finding['estimated_monthly_waste_usd'], scan['timestamp'], scan['scan_id']))
             db.execute("UPDATE public.scan_jobs SET status='completed',scan_id=%s,error_code=NULL,updated_at=now() "
                        'WHERE id=%s AND tenant_id=%s', (scan['scan_id'], job_id, tenant_id))

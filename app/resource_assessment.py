@@ -94,7 +94,7 @@ def merge(key, findings, *, observed_at=None, now=None):
 
 def inventory_observation(obs):
     """Normalize a saved inventory row into a finding-shaped dict (no waste rule)."""
-    return dict(
+    result = dict(
         cloud_provider=obs.get('cloud_provider', 'azure'),
         resource_id=obs['resource_id'],
         resource_name=obs.get('resource_name', ''),
@@ -108,6 +108,10 @@ def inventory_observation(obs):
         evidence=obs.get('evidence') or {},
         estimated_monthly_waste_usd=None,
     )
+    for key in ('reconciliation_status', 'data_sources', 'collector_version', 'evidence_schema_version'):
+        if obs.get(key) is not None:
+            result[key] = obs[key]
+    return result
 
 
 def merge_inventory(key, obs, *, observed_at=None, now=None):
@@ -144,11 +148,10 @@ def merge_inventory(key, obs, *, observed_at=None, now=None):
 def assessments(scan, *, now=None):
     merged = {key: merge(key, items, observed_at=scan.get('timestamp'), now=now) for key, items in group(scan['findings']).items()}
     for obs in scan.get('inventory') or []:
-        pseudo = inventory_observation(obs)
-        key = resource_key(pseudo)
+        key = resource_key(inventory_observation(obs))
         if key in merged:
             continue
-        merged[key] = merge_inventory(key, pseudo, observed_at=scan.get('timestamp'), now=now)
+        merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now)
     return merged
 
 
@@ -202,14 +205,22 @@ def history(scans, key):
     entries = []
     for scan in scans[:HISTORY_SCANS]:
         items = [f for f in scan.get('findings', []) if resource_key(f) == key]
-        if not items:
-            entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=False))
+        if items:
+            merged, _ = merge(key, items, observed_at=scan.get('timestamp'))
+            entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=True,
+                                review_priority=merged['review_priority'], risk_level=merged['risk_level'],
+                                rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},
+                                evidence_digest=merged['evidence_digest'], retail_estimate_usd=merged['retail_estimate_usd']))
             continue
-        merged, _ = merge(key, items, observed_at=scan.get('timestamp'))
-        entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=True,
-                            review_priority=merged['review_priority'], risk_level=merged['risk_level'],
-                            rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},
-                            evidence_digest=merged['evidence_digest'], retail_estimate_usd=merged['retail_estimate_usd']))
+        inventory_rows = [obs for obs in scan.get('inventory') or [] if resource_key(inventory_observation(obs)) == key]
+        if inventory_rows:
+            merged, _ = merge_inventory(key, inventory_rows[0], observed_at=scan.get('timestamp'))
+            entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=True,
+                                review_priority=merged['review_priority'], risk_level=merged['risk_level'],
+                                rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},
+                                evidence_digest=merged['evidence_digest'], retail_estimate_usd=merged['retail_estimate_usd']))
+            continue
+        entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=False))
     for newer, older in zip(entries, entries[1:]):
         newer['changes'] = changes(older, newer)
     if entries:

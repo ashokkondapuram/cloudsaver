@@ -169,6 +169,18 @@ def test_history_reports_changes_across_scans():
     assert changes(dict(present=False), dict(present=True)) == ['appeared']
 
 
+def test_history_includes_inventory_only_resources():
+    row = disk('disk-inv')
+    key = resource_key(row)
+    scans = [
+        dict(scan_id='s2', timestamp='2026-10-22T02:00:00+00:00', findings=[], inventory=[dict(row, evidence=dict(OBSERVED))]),
+        dict(scan_id='s1', timestamp='2026-10-22T01:00:00+00:00', findings=[row]),
+    ]
+    entries = history(scans, key)
+    assert entries[0]['present'] and entries[0]['scan_id'] == 's2' and entries[0]['rule_ids'] == []
+    assert entries[1]['present'] and entries[1]['rule_ids']
+
+
 @pytest.mark.parametrize("prefix", ["", " ", "\t", "\n"])
 def test_csv_report_escapes_formulas(prefix):
     item = dict(provider='azure', scope_id=SUB, resource_name=prefix+'=HYPERLINK("x")', resource_type='disk', resource_group='rg',

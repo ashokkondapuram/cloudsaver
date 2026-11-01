@@ -126,6 +126,15 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
     realizable = opportunity_totals(in_scope, realized=True)
     inventory_in_scope = [dict(row, dependency_refs=narrowed_dependencies(row)) if 'dependency_refs' in row else row for row in inventory_in_scope]
     visible_scopes={(row.get('cloud_provider','azure'),row.get('scope_id') or row.get('subscription_id')) for row in inventory_in_scope}
+    scope_results_in_scope=[row for row in scan.get('scope_results',[]) if row.get('provider') in allowed
+                       and finding_in_scope({'cloud_provider':row.get('provider'),'scope_id':row.get('scope_id'),'subscription_id':row.get('scope_id')},scopes)]
+    from app.inventory import coverage, coverage_manifest
+    prior_manifest = scan.get('coverage_manifest') or {}
+    failed_scopes = [row for row in prior_manifest.get('failed_scopes', []) if isinstance(row, dict) and finding_in_scope(
+        {'cloud_provider': row.get('provider'), 'scope_id': row.get('scope_id'), 'subscription_id': row.get('scope_id')}, scopes)]
+    manifest = coverage_manifest(inventory_in_scope, in_scope, evaluations_in_scope, scope_results=scope_results_in_scope,
+                                 failed_scopes=failed_scopes)
+    cov = coverage(inventory_in_scope, in_scope, evaluations_in_scope)
     return dict(
         scan, findings=in_scope, inventory=inventory_in_scope, total_items_found=len(inventory_in_scope) if inventory else len(in_scope),
         cloud_providers=sorted(p for p in (scan.get('cloud_providers') or ['azure']) if p in allowed),
@@ -133,11 +142,10 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
         total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
         realizable_monthly_savings_usd=realizable['total_monthly_opportunity_usd'],
         opportunity_summary=opportunity,
-        coverage=None, coverage_manifest=None, rule_evaluations=evaluations_in_scope,
+        coverage=cov, coverage_manifest=manifest, rule_evaluations=evaluations_in_scope,
         source_ledger=[source for source in scan.get('source_ledger', [])
                        if (source.get('provider'),source.get('scope_id')) in visible_scopes],
-        scope_results=[row for row in scan.get('scope_results',[]) if row.get('provider') in allowed
-                       and finding_in_scope({'cloud_provider':row.get('provider'),'scope_id':row.get('scope_id'),'subscription_id':row.get('scope_id')},scopes)],
+        scope_results=scope_results_in_scope,
         subscriptions_scanned_scope='filtered_count_unavailable',
         provider_filtered=True, scope_filtered=bool(scopes))
 

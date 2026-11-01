@@ -286,6 +286,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             opportunity=opportunity_totals(enriched_findings)
             total_waste=opportunity['total_monthly_opportunity_usd']
             realizable_savings=opportunity_totals(enriched_findings,realized=True)['total_monthly_opportunity_usd']
+            scope_results = completed_scopes(tenant, providers or ['azure'], source_ledger) if providers or scanner is None else []
             result = dict(
                 scan_id=str(uuid4()),
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -300,14 +301,14 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 findings=enriched_findings,
                 inventory=inventory,
                 source_ledger=source_ledger,
-                scope_results=completed_scopes(tenant,providers or ['azure'],source_ledger) if providers or scanner is None else [],
+                scope_results=scope_results,
                 opportunity_summary=opportunity,
                 rule_evaluations=evaluations,
                 rule_manifest={'version': rule_version, 'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None,
                                'workspace_version': (rule_policy or {}).get('version'), 'policies': policies,
                                'policy_source': 'identity' if rule_ids is not None else 'local_catalog'},
                 coverage=coverage(inventory, enriched_findings, evaluations),
-                coverage_manifest=coverage_manifest(inventory, enriched_findings, evaluations),
+                coverage_manifest=coverage_manifest(inventory, enriched_findings, evaluations, scope_results=scope_results),
             )
             # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
             if hasattr(ScanSummary, 'model_validate'):

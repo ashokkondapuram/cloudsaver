@@ -234,19 +234,20 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         from app.cloud_scope import validate_finding_scope
         for finding in findings:validate_finding_scope(finding,tenant)
         opportunity = opportunity_totals(findings)
+        scope_results = completed_scopes(tenant, selected_providers, source_ledger) if scanner is None else []
         scan = ScanSummary.model_validate(dict(
             scan_id=str(uuid5(UUID(job_id), 'scan')), timestamp=datetime.now(timezone.utc).isoformat(),
             mode=settings.mode, status='completed', subscriptions_scanned=len(azure_ids(subscriptions)),
             total_items_found=len(inventory) if inventory else len(findings), findings=findings, inventory=inventory,
             cloud_providers=selected_providers, source_ledger=source_ledger,
-            scope_results=completed_scopes(tenant,selected_providers,source_ledger) if scanner is None else [],
+            scope_results=scope_results,
             scope_fingerprint=scope_fingerprint(tenant, selected_providers),
             total_monthly_waste_usd=opportunity['total_monthly_opportunity_usd'],
             opportunity_summary=opportunity, rule_evaluations=outcomes,
             rule_manifest={'version': VERSION, 'policies': policies, 'workspace_version': (policy or {}).get('version'),
                            'enabled_rule_ids': sorted(rule_ids) if rule_ids is not None else None},
             coverage=coverage(inventory, findings, outcomes),
-            coverage_manifest=coverage_manifest(inventory, findings, outcomes),
+            coverage_manifest=coverage_manifest(inventory, findings, outcomes, scope_results=scope_results),
         )).model_dump()
         heartbeat.ensure_owned()
         if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':

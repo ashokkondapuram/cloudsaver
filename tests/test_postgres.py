@@ -170,7 +170,7 @@ def test_findings_are_atomic_linked_and_not_duplicated(tenants):
     with psycopg.connect(app) as db:
         context(db, a['tenant_id'])
         row = db.execute('SELECT scan_id, estimated_monthly_waste_usd, evidence FROM waste_findings').fetchone()
-        assert str(row[0]) == sa['scan_id'] and row[1] is None and row[2] == {'mode': 'azure'}
+        assert str(row[0]) == sa['scan_id'] and row[1] is None and row[2] == {'mode': 'azure', 'scan_id': sa['scan_id']}
         with pytest.raises(errors.ForeignKeyViolation):
             db.execute('UPDATE waste_findings SET scan_id=%s', (sb['scan_id'],))
     broken = scan(a)

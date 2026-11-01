@@ -111,6 +111,7 @@ class PostgresStore:
         if scan['status'] != 'completed' or len(counted) != scan['total_items_found']:
             raise ValueError('Only complete scan results can be stored')
         from app.cloud_scope import validate_finding_scope
+        from app.waste_finding_evidence import waste_finding_evidence
         for finding in scan['findings']:
             validate_finding_scope(finding, workspace)
         with self.connection(tenant_id) as db:
@@ -135,7 +136,7 @@ class PostgresStore:
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s{audit_values})''',
                     [(uuid4(), tenant_id, f['subscription_id'], scan['scan_id'], f['resource_id'],
                       f['resource_name'], f['resource_type'], f['resource_group'], f['rule_id'],
-                      f['severity'], f['details'], Jsonb({'mode': scan['mode']}),
+                      f['severity'], f['details'], Jsonb(waste_finding_evidence(f, scan_id=scan['scan_id'], mode=scan['mode'])),
                       f['estimated_monthly_waste_usd'], scan['timestamp'],*(_analysis_audit(f) if self.has_analysis_audit else ())) for f in scan['findings']
                      if f.get('cloud_provider', 'azure') == 'azure'])
                 cursor.executemany(f'''INSERT INTO public.cloud_findings

@@ -31,14 +31,21 @@ def coverage(inventory, findings, evaluations=()):
                 count_semantics='resource sets may overlap across different rule outcomes')
 
 
-def coverage_manifest(inventory, findings, evaluations=()):
+def coverage_manifest(inventory, findings, evaluations=(), *, scope_results=(), failed_scopes=()):
     from app.assessment import category
     keys = sorted({(r.get('cloud_provider', 'azure'), r.get('service') or category(r)) for r in inventory})
     groups = []
     for provider, service in keys:
         rows = [r for r in inventory if r.get('cloud_provider', 'azure') == provider and (r.get('service') or category(r)) == service]
-        ids = {r['resource_id'] for r in rows}
-        matches = lambda values: [r for r in values if r.get('cloud_provider', 'azure') == provider and r['resource_id'] in ids]
+        ids = {r['resource_id'] for r in rows if r.get('resource_id')}
+        matches = lambda values: [r for r in values if r.get('cloud_provider', 'azure') == provider and r.get('resource_id') in ids]
         groups.append(dict(provider=provider, service=service, **coverage(rows, matches(findings), matches(evaluations))))
+    failed = list(failed_scopes)
+    if not failed:
+        failed = [dict(provider=r['provider'], scope_id=r['scope_id'], error_category='incomplete_inventory',
+                       message='Supported inventory collection is incomplete for this scope.')
+                  for r in scope_results if r.get('supported_inventory_complete') is False]
+    partial = bool(failed)
+    clean_baseline = not partial
     return dict(schema_version='2', total=coverage(inventory, findings, evaluations), by_provider_service=groups,
-                failed_scopes=[], partial=False, clean_baseline=True)
+                failed_scopes=failed, partial=partial, clean_baseline=clean_baseline)

@@ -8,15 +8,16 @@ def test_inventory_only_scan_is_narrowed_even_without_findings():
         'coverage': {'discovered_count': 2}}
     result = filter_scan(scan, {'azure'}, scopes={'azure': {'a'}})
     assert [r['resource_id'] for r in result['inventory']] == ['allowed']
-    assert result['coverage'] is None
+    assert result['coverage']['discovered_count'] == 1
+    assert result['coverage_manifest']['total']['discovered_count'] == 1
     assert len(scan['inventory']) == 2
 
 
 def test_provider_filter_applies_to_inventory_and_rule_evaluations():
     scan = {'cloud_providers': ['azure', 'aws'], 'findings': [],
-            'inventory': [{'cloud_provider': 'aws', 'scope_id': 'a'},
-                          {'cloud_provider': 'azure', 'subscription_id': 'private'}],
-            'rule_evaluations': [{'cloud_provider': 'azure', 'resource_id': 'private'}]}
+            'inventory': [{'cloud_provider': 'aws', 'scope_id': 'a', 'resource_id': 'vol-a'},
+                          {'cloud_provider': 'azure', 'subscription_id': 'private', 'resource_id': 'disk-private'}],
+            'rule_evaluations': [{'cloud_provider': 'azure', 'resource_id': 'disk-private'}]}
     result = filter_scan(scan, {'aws'})
     assert len(result['inventory']) == 1 and result['inventory'][0]['cloud_provider'] == 'aws'
     assert result['rule_evaluations'] == []
