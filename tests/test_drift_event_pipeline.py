@@ -142,10 +142,13 @@ class MemoryOutbox:
         self.completed = []
         self.released = []
 
+    def renew_lease(self, *args, **kwargs):
+        return None
+
     def complete(self, tenant_id, intent_id, *, lease_owner=None, lease_fence=None, **kwargs):
         self.completed.append((tenant_id, intent_id, lease_owner, lease_fence))
 
-    def fail(self, tenant_id, intent_id, code, *, lease_owner=None, lease_fence=None):
+    def fail(self, tenant_id, intent_id, code, *, lease_owner=None, lease_fence=None, recoverable=False):
         raise AssertionError(code)
 
     def release_to_pending(self, tenant_id, intent_id, lease_owner, lease_fence):

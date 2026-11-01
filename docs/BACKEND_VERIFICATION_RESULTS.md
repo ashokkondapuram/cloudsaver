@@ -6,7 +6,7 @@ See remediation commits on `main` after this import for blocker fixes (pgvector 
 
 ## Verdict
 
-**Blockers 1–5 addressed in source** (pgvector image, lease expiry on complete, legacy reclaim, event identity, ingress atomicity). Re-run disposable PostgreSQL suites and full release gates before a production-ready claim.
+**Blockers 1–5 and dispatch/worker risks above addressed in source.** Re-run disposable PostgreSQL suites and full release gates before a production-ready claim.
 
 ## Executed checks
 
@@ -32,4 +32,13 @@ See remediation commits on `main` after this import for blocker fixes (pgvector 
 | 4 | Event identity collision | `drift_idempotency_key` includes `event_timestamp_utc` |
 | 5 | Ingress partial commit | Validate full batch, then `enqueue_batch` in one transaction per tenant |
 
-Regression tests: `tests/test_platform_outbox_lease.py`, `tests/test_drift_event_pipeline.py`, `tests/test_drift_ingress_and_ast_db.py`.
+Regression tests: `tests/test_platform_outbox_lease.py`, `tests/test_drift_event_pipeline.py`, `tests/test_drift_ingress_and_ast_db.py`, `tests/test_outbox_dispatch.py`.
+
+## Additional dispatch and worker risks (remediated)
+
+| Risk | Remediation |
+|---|---|
+| GitOps side effects before lease fence | `require_lease` before external PR execute; `complete` before remediation status update |
+| Batch claims share one expiry | Per-row `lease_until` at claim time; `renew_lease` when worker starts |
+| No recoverable retry path | `fail(..., recoverable=True)` requeues to `pending` until `MAX_OUTBOX_ATTEMPTS` |
+| One intent/tenant exception aborts batch | Per-intent try/except in drift/GitOps dispatch; per-tenant try/except in `dispatch_all_tenant_outboxes` |

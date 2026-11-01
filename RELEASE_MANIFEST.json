@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "4771a3cdbabc5180f2ea8964dbe0944856a8b5caa4fcd9ee1ce9583e0bf5f552",
+  "inventory_sha256": "431b949730ff6886073eac88aafc2c4643e313914007cd1d58020b677eec1d54",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -576,8 +576,8 @@
     },
     {
       "path": "app/drift/outbox_store.py",
-      "sha256": "01272912bf935896992da5c9df64326de38932afa814500f03ef2d30f99633b9",
-      "bytes": 12503
+      "sha256": "ccf4a5b581da96eca321bdc9e2b495400dfb865f2201f028aa59e62e4c6c7ac1",
+      "bytes": 15720
     },
     {
       "path": "app/drift/schema.py",
@@ -1248,6 +1248,11 @@
       "path": "docs/BACKEND_RELIABILITY_GUIDE.md",
       "sha256": "07d60423386c10f6d4a26e5fd50f0d95f6f40370bdd1cd66c9e23ae7127aad4e",
       "bytes": 22369
+    },
+    {
+      "path": "docs/BACKEND_VERIFICATION_RESULTS.md",
+      "sha256": "1025cb72354ba01d0d125a2d97fb64f173228b710e8c083d2107c2e003d255d2",
+      "bytes": 3536
     },
     {
       "path": "docs/CLIENT_MANAGED_USERS_AND_KEYS.md",
@@ -3106,8 +3111,8 @@
     },
     {
       "path": "tests/test_drift_event_pipeline.py",
-      "sha256": "fb2b0c7462a0534630002a984aa155da12099b5a4cd6e403b04c00e67de29cee",
-      "bytes": 7547
+      "sha256": "545a7eb534f556a74527a2e64ae4c2a1292f248c26a8422e09aa5ab973497eda",
+      "bytes": 7631
     },
     {
       "path": "tests/test_drift_ingress_and_ast_db.py",
@@ -3306,8 +3311,8 @@
     },
     {
       "path": "tests/test_platform_outbox_lease.py",
-      "sha256": "264c7d692c8ad7a03a93d67e8a152f6dbb9b1c8c0f2179879edc01c3e0ad61de",
-      "bytes": 6776
+      "sha256": "2829fb9ff1304d733df3724ed34d86dcc852d2c3043a30d62fd2f2a0014edf82",
+      "bytes": 9526
     },
     {
       "path": "tests/test_postgres.py",
@@ -4111,8 +4116,8 @@
     },
     {
       "path": "workers/delivery_worker.py",
-      "sha256": "2920a8f5c4affde707868ccec6f64c373f0f3ed1ab0d111489e9a2111627b620",
-      "bytes": 3814
+      "sha256": "8ca2d2aaaa9fc7a096fe787e1b893f16a549c4d7ad221b9068a9a25b25d4c1ae",
+      "bytes": 4319
     },
     {
       "path": "workers/dispatcher.py",
@@ -4121,8 +4126,8 @@
     },
     {
       "path": "workers/event_drift_worker.py",
-      "sha256": "6b1b5d22a2dc2e4d84e04d24a386b03cf521a177ad365b202b0437db6c945e94",
-      "bytes": 4715
+      "sha256": "4d59b5f0291a43a396bfa92bc038996a5787ceb122b808f8004fa55955a75cec",
+      "bytes": 5029
     },
     {
       "path": "workers/governance_monitor.py",
@@ -4151,8 +4156,8 @@
     },
     {
       "path": "workers/outbox_dispatcher.py",
-      "sha256": "53d0e8acb4fd70adb9c37c2592f528ee52a20fb9b6d6adbdaac2fd71af3f8f1a",
-      "bytes": 2333
+      "sha256": "dcecabc636a0f8fda13a2144d705f92e95f448c57efd9dc8f67771017056336a",
+      "bytes": 2475
     },
     {
       "path": "workers/storage.py",

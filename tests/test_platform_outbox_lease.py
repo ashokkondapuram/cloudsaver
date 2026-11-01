@@ -189,3 +189,74 @@ def test_legacy_leased_null_expiry_is_reclaimed(tmp_path):
     reclaimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-new")
     assert len(reclaimed) == 1 and reclaimed[0]["id"] == intent_id
     assert reclaimed[0]["lease_fence"] >= 2
+
+
+def test_sequential_claims_assign_fresh_lease_until(tmp_path):
+    store = _store(tmp_path)
+    outbox = PlatformOutboxStore(store)
+    keys = [hashlib.sha256(f"intent-{i}".encode()).hexdigest() for i in range(2)]
+    for key in keys:
+        outbox.enqueue(
+            TENANT,
+            OUTBOX_KIND_DRIFT,
+            key,
+            dict(workspace_id=TENANT, canonical_resource_id=f"/subscriptions/x/providers/microsoft.compute/virtualmachines/{key[:4]}"),
+        )
+    claimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker", limit=2, lease_seconds=60)
+    assert len(claimed) == 2
+    with store.transaction(TENANT) as db:
+        rows = db.execute(
+            "SELECT lease_until FROM platform_outbox_intents WHERE tenant_id=%s ORDER BY created_at,id",
+            (TENANT,),
+        ).fetchall()
+    assert rows[0][0] != rows[1][0]
+
+
+def test_fail_recoverable_requeues_pending(tmp_path):
+    store = _store(tmp_path)
+    outbox = PlatformOutboxStore(store)
+    key = hashlib.sha256(b"retry-me").hexdigest()
+    intent_id, _ = outbox.enqueue(
+        TENANT,
+        OUTBOX_KIND_DRIFT,
+        key,
+        dict(workspace_id=TENANT, canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/r"),
+    )
+    claimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-a")
+    item = claimed[0]
+    outbox.fail(
+        TENANT,
+        intent_id,
+        "transient_read",
+        lease_owner=item["lease_owner"],
+        lease_fence=item["lease_fence"],
+        recoverable=True,
+    )
+    with store.transaction(TENANT) as db:
+        row = db.execute(
+            "SELECT status,attempts FROM platform_outbox_intents WHERE tenant_id=%s AND id=%s",
+            (TENANT, intent_id),
+        ).fetchone()
+    assert row == ("pending", 1)
+
+
+def test_require_lease_rejects_expired_without_side_effects(tmp_path):
+    store = _store(tmp_path)
+    outbox = PlatformOutboxStore(store)
+    key = hashlib.sha256(b"require-lease").hexdigest()
+    intent_id, _ = outbox.enqueue(
+        TENANT,
+        OUTBOX_KIND_DRIFT,
+        key,
+        dict(workspace_id=TENANT, canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/z"),
+    )
+    claimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-a")
+    item = claimed[0]
+    expired = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    with store.transaction(TENANT, write=True) as db:
+        db.execute(
+            "UPDATE platform_outbox_intents SET lease_until=%s WHERE tenant_id=%s AND id=%s",
+            (expired, TENANT, intent_id),
+        )
+    with pytest.raises(OutboxConflict):
+        outbox.require_lease(TENANT, intent_id, item["lease_owner"], item["lease_fence"])

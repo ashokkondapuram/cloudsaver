@@ -52,7 +52,11 @@ def dispatch_all_tenant_outboxes(store, settings=None, *, transport=None) -> dic
     for tenant in settings.tenants:
         if tenant.get("active") is False:
             continue
-        summary[tenant["tenant_id"]] = dispatch_platform_outbox(
-            store, tenant["tenant_id"], transport=transport, settings=settings
-        )
+        tenant_id = tenant["tenant_id"]
+        try:
+            summary[tenant_id] = dispatch_platform_outbox(
+                store, tenant_id, transport=transport, settings=settings
+            )
+        except Exception as exc:
+            summary[tenant_id] = dict(error=type(exc).__name__)
     return summary

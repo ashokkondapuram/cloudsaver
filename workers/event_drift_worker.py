@@ -43,6 +43,7 @@ def process_drift_intent(
         )
         return dict(skipped=True, reason="lease_busy")
     try:
+        outbox.renew_lease(workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"])
         baseline_row = None
         if baseline_store is not None:
             baseline_row = baseline_store.get_baseline(workspace_id, payload["canonical_resource_id"])
@@ -102,6 +103,7 @@ def process_drift_intent(
             "inspect_failed",
             lease_owner=intent["lease_owner"],
             lease_fence=intent["lease_fence"],
+            recoverable=True,
         )
         raise
     finally:
@@ -111,4 +113,10 @@ def process_drift_intent(
 def dispatch_pending_drift(outbox: PlatformOutboxStore, tenant_id: str, **kwargs) -> list[dict]:
     worker_id = secrets.token_hex(16)
     intents = outbox.claim_pending(tenant_id, "DRIFT_INSPECT_RESOURCE", owner=worker_id)
-    return [process_drift_intent(item, outbox=outbox, **kwargs) for item in intents]
+    results = []
+    for item in intents:
+        try:
+            results.append(process_drift_intent(item, outbox=outbox, **kwargs))
+        except Exception as exc:
+            results.append(dict(intent_id=item["id"], error=type(exc).__name__))
+    return results

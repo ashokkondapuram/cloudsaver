@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import secrets
 
-from app.drift.outbox_store import PlatformOutboxStore
+from app.drift.outbox_store import OutboxConflict, PlatformOutboxStore
 from app.gitops_remediation_flow import GitOpsPullRequestExecutor, build_remediation_package
 from app.gitops_ast_mapper import GitOpsAstMapper
 from workers.named_lease import NamedRedisLease, gitops_pr_lease_key
@@ -34,6 +34,7 @@ def process_gitops_pr_intent(
         return dict(skipped=True, reason="gitops_pr_lease_busy")
     request_id = payload["remediation_request_id"]
     try:
+        outbox.renew_lease(workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"])
         mapping = (mapper or GitOpsAstMapper()).lookup(payload["canonical_resource_id"]).model_dump()
         target = config.target(workspace_id, payload["target_id"])
         live_file = file_loader(target, mapping)
@@ -52,24 +53,25 @@ def process_gitops_pr_intent(
             branch_suffix=payload.get("branch_suffix") or "remediation",
         )
         file_sha = payload["base_file_sha"]
+        outbox.require_lease(workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"])
         result = github_executor.execute(target, package, file_sha=file_sha)
-        remediation_store.update_status(workspace_id, request_id, "OPEN", result=result)
         outbox.complete(
             workspace_id,
             intent["id"],
             lease_owner=intent["lease_owner"],
             lease_fence=intent["lease_fence"],
         )
+        remediation_store.update_status(workspace_id, request_id, "OPEN", result=result)
         return result
     except ValueError as exc:
         if str(exc) == "REPO_DRIFT_REINDEX_REQUIRED":
-            remediation_store.update_status(workspace_id, request_id, "REPO_DRIFT_REINDEX_REQUIRED")
             outbox.complete(
                 workspace_id,
                 intent["id"],
                 lease_owner=intent["lease_owner"],
                 lease_fence=intent["lease_fence"],
             )
+            remediation_store.update_status(workspace_id, request_id, "REPO_DRIFT_REINDEX_REQUIRED")
             return dict(status="REPO_DRIFT_REINDEX_REQUIRED")
         outbox.fail(
             workspace_id,
@@ -77,17 +79,21 @@ def process_gitops_pr_intent(
             "package_invalid",
             lease_owner=intent["lease_owner"],
             lease_fence=intent["lease_fence"],
+            recoverable=False,
         )
         raise
+    except OutboxConflict:
+        raise
     except Exception:
-        remediation_store.update_status(workspace_id, request_id, "UNCERTAIN")
         outbox.fail(
             workspace_id,
             intent["id"],
             "vcs_uncertain",
             lease_owner=intent["lease_owner"],
             lease_fence=intent["lease_fence"],
+            recoverable=True,
         )
+        remediation_store.update_status(workspace_id, request_id, "UNCERTAIN")
         raise
     finally:
         lease.release(lease_key, token)
@@ -96,4 +102,10 @@ def process_gitops_pr_intent(
 def dispatch_gitops_pr(outbox: PlatformOutboxStore, tenant_id: str, **kwargs) -> list[dict]:
     worker_id = secrets.token_hex(16)
     intents = outbox.claim_pending(tenant_id, "GITOPS_CREATE_PR", owner=worker_id)
-    return [process_gitops_pr_intent(item, outbox=outbox, **kwargs) for item in intents]
+    results = []
+    for item in intents:
+        try:
+            results.append(process_gitops_pr_intent(item, outbox=outbox, **kwargs))
+        except Exception as exc:
+            results.append(dict(intent_id=item["id"], error=type(exc).__name__))
+    return results
