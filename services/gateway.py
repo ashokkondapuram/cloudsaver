@@ -607,6 +607,11 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         return await post_json('/api/v1/gitops/requests',request,authorization)
 
 
+    @app.post('/api/v1/gitops/pull-requests', status_code=202)
+    async def gitops_pull_requests(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/gitops/pull-requests', request, authorization)
+
+
     @app.post('/api/v1/policies/terraform/evaluate')
     async def terraform_policy(request:Request,row=Depends(allowed),authorization:str=Header()):
         return await post_json('/api/v1/policies/terraform/evaluate',request,authorization)

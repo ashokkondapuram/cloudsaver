@@ -208,6 +208,7 @@ ROUTES = {
     ('GET', '/api/v1/gitops/requests'): 'scoped_read',
     ('GET', '/api/v1/gitops/requests/{request_id}'): 'scoped_read',
     ('GET', '/api/v1/gitops/resource-mapping'): 'scoped_read',
+    ('POST', '/api/v1/gitops/pull-requests'): 'scan_write',
 }
 
 

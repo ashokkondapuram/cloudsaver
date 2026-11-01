@@ -9,7 +9,7 @@ from tests.test_services import configuration,Limiter,KEY
 
 
 @pytest.mark.parametrize('path',[
-    '/api/v1/gitops/preview','/api/v1/gitops/requests','/api/v1/policies/terraform/evaluate',
+    '/api/v1/gitops/preview','/api/v1/gitops/requests','/api/v1/gitops/pull-requests','/api/v1/policies/terraform/evaluate',
     '/api/v1/scans/44444444-4444-4444-8444-444444444444/analysis/resource',
     '/api/v1/scans/44444444-4444-4444-8444-444444444444/ai-risk-evaluation'])
 def test_gateway_post_contract_preserves_destination_body_auth_and_correlation(tmp_path,path):
@@ -24,7 +24,7 @@ def test_gateway_post_contract_preserves_destination_body_auth_and_correlation(t
         return httpx.Response(200,json={'forwarded':True})
     api=TestClient(create_app(configuration(tmp_path),Limiter(),httpx.MockTransport(core)))
     r=api.post(path,json=body,headers={'Authorization':'Bearer '+KEY,'X-Request-ID':rid})
-    assert r.status_code in (200,201),r.text
+    assert r.status_code in (200, 201, 202), r.text
     assert r.json()=={'forwarded':True} and len(seen)==1
 
 
@@ -39,7 +39,7 @@ def test_billing_summary_get_never_synchronizes_or_writes(tmp_path,monkeypatch):
     monkeypatch.setattr(billing_sync,'sync_workspace_billing',forbidden)
     api=TestClient(core(settings))
     for _ in range(3):
-        r=api.get('/api/v1/finops/summary',headers={'Authorization':'Bearer '+KEY})
+        r=api.get('/api/v1/finops/summary?start=2026-10-01&end=2026-10-22&currency=USD',headers={'Authorization':'Bearer '+KEY})
         assert r.status_code==200,r.text
     store=EnterpriseStore(settings)
     with store.transaction(TID) as db:

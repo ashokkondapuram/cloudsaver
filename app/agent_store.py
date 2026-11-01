@@ -225,6 +225,8 @@ class AgentRepository:
                 approval = p.get('approval') or {}
                 if task['state'] != 'running' or moment(approval.get('expires_at')) is None or moment(approval['expires_at']) <= self.clock():
                     raise AgentConflict('Approval expired or task was cancelled; no new action is permitted.')
+                if p.get('permit_status') == 'ABORTED_STATE_DRIFT':
+                    raise AgentConflict('Live resource drift aborted this permit; no write is permitted.')
                 if moment(p.get('data_retention_expires_at')) and moment(p['data_retention_expires_at'])<=self.clock():raise AgentConflict('Task data expired; no new action is permitted.')
                 validate_plan(p['plan'],task,catalog)
                 if program_hash(task,p['plan'],catalog) != plan_hash: raise AgentConflict('Connector configuration changed; approval is invalid.')

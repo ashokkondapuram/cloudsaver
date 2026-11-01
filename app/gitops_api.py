@@ -24,6 +24,16 @@ class PublishRequest(ReviewRequest):
     idempotency_key: str = Field(min_length=16,max_length=128,pattern=r'^[A-Za-z0-9_-]+$')
 
 
+class PullRequestRemediation(BaseModel):
+    canonical_resource_id: str = Field(min_length=1, max_length=2048)
+    target_id: str = Field(pattern=r'^[a-z][a-z0-9_-]{0,39}$')
+    attribute: str = Field(min_length=1, max_length=80, pattern=r'^[A-Za-z0-9_.]+$')
+    new_value_token: str = Field(min_length=1, max_length=120)
+    base_file_sha: str = Field(min_length=40, max_length=40, pattern=r'^[0-9a-f]{40}$')
+    branch_suffix: str | None = Field(default=None, max_length=80, pattern=r'^[a-z0-9-]+$')
+    model_config = ConfigDict(extra='forbid')
+
+
 async def bounded_json(request):
     raw = bytearray()
     async for chunk in request.stream():
@@ -188,5 +198,79 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         except ValidationError:
             raise HTTPException(422,'Provide review selection and a 16–128 character idempotency key') from None
         return await run_in_threadpool(publish_request,payload,tenant)
+
+    def queue_pull_request(payload: PullRequestRemediation, tenant):
+        from app.drift.outbox_store import (
+            GitOpsRemediationStore,
+            gitops_pr_idempotency_key,
+            new_request_id,
+        )
+        from app.enterprise_store import EnterpriseStore
+        from app.gitops_ast_mapper import GitOpsAstMapper
+        from app.cloud_scope import validate_finding_scope
+        from app.data_scope import resource_visible
+
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        enforce_terraform_export(tenant)
+        scan = next(iter(store.list(tenant['tenant_id'], 50)), None)
+        rows = (scan or {}).get('inventory') or (scan or {}).get('findings') or []
+
+        def matches(row):
+            candidate = row.get('resource_id', '')
+            rid = payload.canonical_resource_id
+            return candidate.lower() == rid.lower() if row.get('cloud_provider', 'azure') == 'azure' else candidate == rid
+
+        owned = next((row for row in rows if matches(row)), None)
+        if owned is None:
+            raise HTTPException(404, 'Resource not found for GitOps remediation')
+        try:
+            validate_finding_scope(owned, tenant)
+            provider = owned.get('cloud_provider', 'azure')
+            if not resource_visible(tenant, provider, owned.get('scope_id') or owned.get('subscription_id')):
+                raise ValueError('Resource is outside the current scope')
+            mapping = GitOpsAstMapper().lookup(owned['resource_id']).model_dump()
+            if not mapping.get('start_line') or not mapping.get('indexed_commit_sha'):
+                raise ValueError('AST mapping is incomplete; reindex required')
+            repositories = {row['repository'] for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
+            if mapping['repository'] not in repositories:
+                raise ValueError('Repository is not granted')
+            config.target(tenant['tenant_id'], payload.target_id)
+        except (ValueError, KeyError):
+            raise HTTPException(404, 'Resource mapping not found or not granted') from None
+
+        diff_key = f"{payload.attribute}={payload.new_value_token}"
+        idem = gitops_pr_idempotency_key(
+            tenant['tenant_id'],
+            payload.canonical_resource_id,
+            diff_key,
+            mapping['indexed_commit_sha'],
+        )
+        request_id = new_request_id(tenant['tenant_id'], idem)
+        body = dict(
+            canonical_resource_id=payload.canonical_resource_id.lower()
+            if owned.get('cloud_provider', 'azure') == 'azure'
+            else payload.canonical_resource_id,
+            target_id=payload.target_id,
+            attribute=payload.attribute,
+            new_value_token=payload.new_value_token,
+            base_file_sha=payload.base_file_sha,
+            branch_suffix=payload.branch_suffix,
+            mapping=mapping,
+        )
+        persistence = EnterpriseStore(settings)
+        queued = GitOpsRemediationStore(persistence).queue_with_outbox(
+            tenant['tenant_id'],
+            dict(id=request_id, idempotency_key=idem, canonical_resource_id=body['canonical_resource_id'], payload=body),
+        )
+        return queued
+
+    @router.post('/api/v1/gitops/pull-requests', status_code=202)
+    async def pull_requests(request: Request, tenant=Depends(current_tenant)):
+        raw = await bounded_json(request)
+        try:
+            payload = PullRequestRemediation.model_validate(raw)
+        except ValidationError:
+            raise HTTPException(422, 'Provide resource, target, attribute patch, and base file SHA') from None
+        return await run_in_threadpool(queue_pull_request, payload, tenant)
 
     return router

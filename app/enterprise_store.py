@@ -18,7 +18,8 @@ TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focu
 CONTROL_PLANE_TABLES = ('cp_financial_scenarios','cp_action_assessments','cp_plans','cp_plan_versions',
                        'cp_plan_approvals','cp_gitops_deliveries','cp_gitops_checks','cp_commitment_reminders')
 from app.engineering.schema import TABLES as ENGINEERING_TABLES, sqlite_schema as engineering_sqlite
-TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES+tuple(ENGINEERING_TABLES)
+from app.drift.schema import TABLES as DRIFT_TABLES, sqlite_schema as drift_sqlite
+TABLES=TABLES+GOVERNANCE_TABLES+CONTROL_PLANE_TABLES+tuple(ENGINEERING_TABLES)+tuple(DRIFT_TABLES)
 
 
 class Connection:
@@ -49,7 +50,7 @@ class EnterpriseStore:
                 for table in TABLES:
                     flags=db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=to_regclass(%s)',('public.'+table,)).fetchone()
                     if flags != (True,True):
-                        raise ValueError(f'Apply forced-RLS migrations through 0027_engineering_workloads before startup ({table})')
+                        raise ValueError(f'Apply forced-RLS migrations through 0028_drift_gitops_outbox before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
         else:
@@ -302,6 +303,7 @@ class EnterpriseStore:
             with self.transaction(str(UUID(int=0)),write=True) as db:
                 db.db.executescript(GOVERNANCE_SQLITE)
                 db.db.executescript(engineering_sqlite())
+                db.db.executescript(drift_sqlite())
 
     @contextmanager
     def transaction(self, tenant_id, *, write=False):

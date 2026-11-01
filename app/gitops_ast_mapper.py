@@ -12,6 +12,10 @@ class ResourceMapping(BaseModel):
     repository: str
     file_path: str
     iac_kind: str
+    address: str | None = None
+    start_line: int | None = Field(default=None, ge=1)
+    end_line: int | None = Field(default=None, ge=1)
+    indexed_commit_sha: str | None = Field(default=None, min_length=7, max_length=40)
     model_config = ConfigDict(extra="forbid")
 
 
