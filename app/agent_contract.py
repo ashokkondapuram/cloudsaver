@@ -22,8 +22,8 @@ WRITE_OPERATIONS=set().union(*ALLOWED_OPERATIONS_BY_KIND.values())-READ_OPERATIO
 
 
 EXPECTED_STATE_FIELDS={
-    'azure_arm':{'diskState':str,'powerState':str,'numberOfSites':int,'vm_size':str},
-    'aws_sdk':{'State':str,'DBInstanceStatus':str,'instance_type':str},'gcp_rest':{'status':str,'state':str,'machine_type':str},
+    'azure_arm':{'diskState':str,'powerState':str,'numberOfSites':int,'vm_size':str,'sku_name':str,'disk_size_gb':int},
+    'aws_sdk':{'State':str,'DBInstanceStatus':str,'instance_type':str,'instance_class':str},'gcp_rest':{'status':str,'state':str,'machine_type':str},
     'k8s_api':{'generation':int,'replicas':int}}
 
 def expected_state(resource):
@@ -32,9 +32,12 @@ def expected_state(resource):
     if provider=='azure':
         pairs=[('diskState','disk_state'),('powerState','power_state'),('numberOfSites','hosted_app_count')]
         if 'virtualmachines' in kind and isinstance(e.get('vm_size'),str):pairs.append(('vm_size','vm_size'))
+        if 'serverfarms' in kind and isinstance(e.get('sku_name'),str):pairs.append(('sku_name','sku_name'))
+        if 'disks' in kind and isinstance(e.get('disk_size_gb'),int):pairs.append(('disk_size_gb','disk_size_gb'))
     elif provider=='aws':
         pairs=[('DBInstanceStatus','power_state')] if ':rds:' in kind else [('State','disk_state' if kind.endswith(':volume') else 'power_state')]
         if ':instance' in kind and isinstance(e.get('instance_type'),str):pairs.append(('instance_type','instance_type'))
+        if ':rds:' in kind and isinstance(e.get('instance_class'),str):pairs.append(('instance_class','instance_class'))
     elif provider=='gcp':
         pairs=[('status','disk_state' if kind.endswith('/disk') else 'state')]
         if '/instance' in kind and isinstance(e.get('machine_type'),str):pairs.append(('machine_type','machine_type'))
@@ -164,6 +167,7 @@ def validate_plan(value, task, catalog):
     inspected = set()
     writes = 0
     cloud_change=None
+    resize_target=None
     sync_count=0
     for step in plan['steps']:
         c = selected.get(step['connector_id'])
@@ -179,10 +183,28 @@ def validate_plan(value, task, catalog):
         if step['operation']=='gitops.terraform.sync':
             from app.gitops import GitOpsConfig
             if not GitOpsConfig.load().enabled:raise ValueError('Paired execution requires publishing to be configured before cloud execution')
-            if (sync_count or cloud_change is None or writes!=1 or step is not plan['steps'][-1]
-                    or args!=dict(target_id=c.target_id,patch_mode='tags_sync',attributes=cloud_change)):
-                raise ValueError('Repository synchronization must follow and match the one approved metadata merge')
-            sync_count+=1
+            mode = args.get('patch_mode')
+            if mode == 'tags_sync':
+                if (sync_count or cloud_change is None or writes!=1 or step is not plan['steps'][-1]
+                        or args!=dict(target_id=c.target_id,patch_mode='tags_sync',attributes=cloud_change)):
+                    raise ValueError('Repository synchronization must follow and match the one approved metadata merge')
+                sync_count+=1
+            elif mode == 'rightsize_sku':
+                attrs = args.get('attributes') or {}
+                if (
+                    sync_count
+                    or resize_target is None
+                    or writes != 1
+                    or step is not plan['steps'][-1]
+                    or args.get('target_id') != c.target_id
+                    or attrs.get('target_size') != resize_target
+                    or not isinstance(attrs.get('terraform_attribute'), str)
+                    or not re.fullmatch(r'[A-Za-z0-9_.-]{1,40}', attrs['terraform_attribute'])
+                ):
+                    raise ValueError('Repository SKU sync must follow the one approved resize')
+                sync_count += 1
+            else:
+                raise ValueError('Unsupported GitOps patch mode')
         elif step['operation'] in READ_OPERATIONS:
             if set(args)-{'expected_state'}:raise ValueError('Inspection accepts only bounded expected state')
             expected=args.get('expected_state',{})
@@ -219,6 +241,7 @@ def validate_plan(value, task, catalog):
             if args.get('restore_power') is not True:
                 raise ValueError('restore_power must be true for FinOps resize')
             writes += 1
+            resize_target = target
         else:
             if set(args) != {'body'} or not isinstance(args['body'], dict) or len(canonical(args).encode()) > 4000:
                 raise ValueError('HTTP action requires a bounded explicit JSON body')

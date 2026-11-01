@@ -48,7 +48,7 @@ export function validateStepData(step:Step,c:Connector):void {
       /-----BEGIN [A-Z ]*PRIVATE KEY-----|\bbearer\s+\S{8,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.|(?:AccountKey|SharedAccessSignature|client_secret|api[_ -]?key|password)\s*[:=]\s*\S+|[?&]sig=[A-Za-z0-9%+/=]{8,}|\bsk-[A-Za-z0-9_-]{16,}/i.test(encoded))throw new Error('Sensitive action data');
   if(readOperations.has(step.operation)){
     if(Object.keys(args).some(k=>k!=='expected_state'))throw new Error('Only expected state is accepted');
-    const bounds:Record<string,Record<string,string>>={azure_arm:{diskState:'string',powerState:'string',numberOfSites:'number',vm_size:'string'},aws_sdk:{State:'string',DBInstanceStatus:'string',instance_type:'string'},gcp_rest:{status:'string',state:'string',machine_type:'string'},k8s_api:{generation:'number',replicas:'number'}};
+    const bounds:Record<string,Record<string,string>>={azure_arm:{diskState:'string',powerState:'string',numberOfSites:'number',vm_size:'string',sku_name:'string',disk_size_gb:'number'},aws_sdk:{State:'string',DBInstanceStatus:'string',instance_type:'string',instance_class:'string'},gcp_rest:{status:'string',state:'string',machine_type:'string'},k8s_api:{generation:'number',replicas:'number'}};
     const expected=args.expected_state??{};
     if(!expected||typeof expected!=='object'||Array.isArray(expected)||Object.keys(expected).length>3)throw new Error('Invalid expected state');
     for(const [key,value] of Object.entries(expected)){
@@ -57,8 +57,19 @@ export function validateStepData(step:Step,c:Connector):void {
     return;
   }
   if(step.operation==='gitops.terraform.sync'){
-    if(Object.keys(args).sort().join(',')!=='attributes,patch_mode,target_id'||args.target_id!==c.target_id||args.patch_mode!=='tags_sync'||!args.attributes||typeof args.attributes!=='object'||Array.isArray(args.attributes))throw new Error('Invalid paired metadata arguments');
-    return;
+    const keys=Object.keys(args).sort().join(',');
+    if(keys!=='attributes,patch_mode,target_id'||args.target_id!==c.target_id||!args.attributes||typeof args.attributes!=='object'||Array.isArray(args.attributes))throw new Error('Invalid paired GitOps arguments');
+    if(args.patch_mode==='tags_sync'){
+      const attrs=args.attributes as Record<string,unknown>;
+      if(Object.keys(attrs).length!==1||!['tags','labels','annotations'].includes(Object.keys(attrs)[0]!))throw new Error('Invalid metadata sync attributes');
+      return;
+    }
+    if(args.patch_mode==='rightsize_sku'){
+      const attrs=args.attributes as Record<string,unknown>;
+      if(Object.keys(attrs).sort().join(',')!=='target_size,terraform_attribute'||typeof attrs.target_size!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(String(attrs.target_size))||typeof attrs.terraform_attribute!=='string'||!/^[A-Za-z0-9_.-]{1,40}$/.test(String(attrs.terraform_attribute)))throw new Error('Invalid rightsize GitOps attributes');
+      return;
+    }
+    throw new Error('Invalid GitOps patch mode');
   }
   if(step.operation==='compute.resize'){
     if(Object.keys(args).sort().join(',')!=='restore_power,target_size'||typeof args.target_size!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(args.target_size)||args.restore_power!==true)throw new Error('Invalid resize arguments');

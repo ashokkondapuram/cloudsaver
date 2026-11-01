@@ -20,6 +20,8 @@ class AutopilotResizeRequest(BaseModel):
     request_key: UUID
     target_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,59}$")
     auto_execute: bool = False
+    sync_iac: bool = False
+    gitops_target_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,59}$")
     model_config = ConfigDict(extra="forbid")
 
 
@@ -47,7 +49,7 @@ def create_router(settings, scan_store, evidence_store, current_tenant):
             from app.agent_contract import connectors, supports_resource
             from app.agent_store import AgentRepository
             from app.finops_autopilot_planner import build_resize_agent_plan
-            from app.finops_resize_playbooks import candidate_size_from_resource, pick_resize_connector, resolve_playbook
+            from app.finops_resize_playbooks import candidate_size_from_resource, pick_gitops_connector, pick_resize_connector, resolve_playbook
             from app.data_governance import DataGovernor, sanitize
 
             snapshot = scan_store.get(tenant["tenant_id"], str(request_body.scan_id))
@@ -80,11 +82,20 @@ def create_router(settings, scan_store, evidence_store, current_tenant):
                 raise ValueError("Connector must allow compute.resize for autopilot execution")
             if not supports_resource(connector, resource["resource_id"]):
                 raise ValueError("Connector does not support this resource")
+            gitops_connector = None
+            connector_ids = [connector.id]
+            if request_body.sync_iac:
+                if not request_body.gitops_target_id:
+                    raise ValueError("gitops_target_id is required when sync_iac is true")
+                gitops_connector = pick_gitops_connector(catalog, tenant["tenant_id"], request_body.gitops_target_id)
+                connector_ids.append(gitops_connector.id)
             plan = build_resize_agent_plan(
                 resource=resource,
                 connector_id=connector.id,
                 target_size=target_size,
                 finops_action=book["finops_action"],
+                gitops_connector_id=gitops_connector.id if gitops_connector else None,
+                gitops_target_id=request_body.gitops_target_id if gitops_connector else None,
             )
             sanitize({"instruction": plan["summary"]}, purpose="agent_planning")
             governor = DataGovernor(evidence_store)
@@ -100,7 +111,7 @@ def create_router(settings, scan_store, evidence_store, current_tenant):
                     request_key=str(request_body.request_key),
                     intent=plan["summary"],
                     target_id=request_body.target_id,
-                    connector_ids=[connector.id],
+                    connector_ids=connector_ids,
                     _retention_days=policy["response_retention_days"],
                 ),
             )
@@ -122,6 +133,8 @@ def create_router(settings, scan_store, evidence_store, current_tenant):
                 state=installed["state"],
                 steps=len(plan["steps"]),
                 auto_execute=request_body.auto_execute,
+                sync_iac=request_body.sync_iac,
+                requires_human_approval=installed["state"] == "awaiting_approval",
             )
 
         try:

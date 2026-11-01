@@ -15,6 +15,25 @@ def test_playbooks_cover_three_clouds():
     items = list_playbooks()
     providers = {row["cloud_provider"] for row in items}
     assert providers == {"azure", "aws", "gcp"}
+    assert len(items) >= 6
+
+
+def test_build_plan_with_gitops_iac_step():
+    resource = dict(
+        cloud_provider="azure",
+        resource_type="Microsoft.Compute/virtualMachines",
+        resource_id=f"/subscriptions/{SUB}/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm",
+        evidence=dict(power_state="PowerState/running", vm_size="Standard_D8s_v5"),
+    )
+    plan = build_resize_agent_plan(
+        resource=resource,
+        connector_id="azure-compute",
+        target_size="Standard_D4s_v5",
+        gitops_connector_id="repo-sync",
+        gitops_target_id="infra",
+    )
+    assert len(plan["steps"]) == 3
+    assert plan["steps"][2]["arguments"]["patch_mode"] == "rightsize_sku"
 
 
 def test_build_azure_resize_plan():

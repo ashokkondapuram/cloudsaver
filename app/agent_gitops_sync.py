@@ -17,6 +17,7 @@ TERRAFORM_RESOURCE_MAP = {
     'microsoft.network/publicipaddresses':'azurerm_public_ip','microsoft.network/networkinterfaces':'azurerm_network_interface',
     'microsoft.network/networksecuritygroups':'azurerm_network_security_group','microsoft.network/applicationgateways':'azurerm_application_gateway',
     'microsoft.web/serverfarms':'azurerm_service_plan','microsoft.storage/storageaccounts':'azurerm_storage_account',
+    'microsoft.compute/virtualmachines':'azurerm_linux_virtual_machine',
     'aws:ec2:volume':'aws_ebs_volume','aws:ec2:instance':'aws_instance','aws:rds:dbinstance':'aws_db_instance',
     'aws:ec2:eip':'aws_eip','aws:ec2:natgateway':'aws_nat_gateway','aws:elasticloadbalancing:loadbalancer':'aws_lb',
     'aws:dynamodb:table':'aws_dynamodb_table','aws:lambda:function':'aws_lambda_function','aws:s3:bucket':'aws_s3_bucket',
@@ -34,8 +35,32 @@ def generate_synchronized_terraform_patch(scan_record, resource_id, action_spec,
     validate_finding_scope(found,tenant)
     kind=TERRAFORM_RESOURCE_MAP.get(found['resource_type'].lower())
     if not kind: raise ValueError('This resource type has no reviewed Terraform mapping')
-    if action_spec.get('patch_mode')!='tags_sync':
-        raise ValueError('Only approved tag/label/annotation synchronization is executable; SKU/deletion changes require a separate reviewed adapter')
+    patch_mode = action_spec.get('patch_mode')
+    if patch_mode == 'rightsize_sku':
+        attrs = action_spec.get('attributes') or {}
+        target_size = attrs.get('target_size')
+        tf_attr = attrs.get('terraform_attribute')
+        if not isinstance(target_size, str) or not isinstance(tf_attr, str):
+            raise ValueError('Right-size GitOps sync requires target_size and terraform_attribute')
+        label='review_'+hashlib.sha256(resource_id.encode()).hexdigest()[:16]
+        value = target_size if tf_attr == 'disk_size_gb' else f'"{target_size}"'
+        if tf_attr == 'disk_size_gb':
+            fragment={'resource':{kind:{label:{tf_attr:int(target_size)}}}}
+        else:
+            fragment={'resource':{kind:{label:{tf_attr:value if isinstance(value,str) and value.startswith('"') else f'"{target_size}"'}}}}
+        return dict(
+            resource_type=kind,
+            resource_address=kind+'.'+label,
+            hcl=json.dumps(fragment,indent=2,sort_keys=True)+'\n',
+            format='terraform-json-review-fragment',
+            patch_mode='rightsize_sku',
+            target_size=target_size,
+            terraform_attribute=tf_attr,
+            requires_repository_integration=True,
+            warning='Merge this SKU/size into the indexed Terraform block after cloud resize; AST-mapped PR is preferred.',
+        )
+    if patch_mode!='tags_sync':
+        raise ValueError('Only approved tag/label/annotation synchronization or rightsize_sku is executable')
     attributes=action_spec['attributes']
     if not isinstance(attributes,dict) or len(attributes)!=1 or next(iter(attributes)) not in ('tags','labels','annotations'):
         raise ValueError('A single exact approved metadata merge is required')
@@ -62,6 +87,37 @@ def journal_evidence(content):
     return {k:content[k] for k in fields if k in content}
 
 
+def build_rightsize_ast_publish_package(task, tenant, step, config, catalog, store):
+    from app.gitops_ast_mapper import GitOpsAstMapper
+    from app.gitops_remediation_flow import build_remediation_package
+    from app.gitops_remediation_loaders import default_file_loader
+
+    args = step['arguments']
+    attrs = args.get('attributes') or {}
+    target_size = str(attrs.get('target_size'))
+    tf_attr = str(attrs.get('terraform_attribute'))
+    mapping = GitOpsAstMapper.for_tenant(store, tenant['tenant_id']).lookup(task['resource_id']).model_dump()
+    connector = next(c for c in catalog if c.id == step['connector_id'])
+    target = config.target(tenant['tenant_id'], args.get('target_id') or connector.target_id)
+    live_file = default_file_loader(config)(target, mapping)
+    indexed_block = mapping.get('indexed_block') or ''
+    if not indexed_block:
+        start, end = mapping.get('start_line'), mapping.get('end_line')
+        if start and end:
+            lines = live_file.splitlines(keepends=True)
+            indexed_block = ''.join(lines[int(start) - 1 : int(end)])
+    token = target_size if tf_attr == 'disk_size_gb' else f'"{target_size}"'
+    package = build_remediation_package(
+        mapping,
+        attribute=tf_attr,
+        new_token=token,
+        indexed_block=indexed_block,
+        live_file=live_file,
+        branch_suffix='finops-rightsize',
+    )
+    return package, target, mapping
+
+
 def build_synchronized_agent_gitops_bundle(task, tenant, scan, config, catalog, *, publish=False, store=None, client=None):
     if task['tenant_id']!=tenant['tenant_id'] or task['scan_id']!=scan['scan_id']:
         raise ValueError('Task and scan ownership do not match')
@@ -73,7 +129,22 @@ def build_synchronized_agent_gitops_bundle(task, tenant, scan, config, catalog, 
     index,step=sync_steps[0]
     connector=next(c for c in catalog if c.id==step['connector_id'])
     target=config.target(tenant['tenant_id'],connector.target_id)
-    artifact=generate_synchronized_terraform_patch(scan,task['resource_id'],step['arguments'],tenant)
+    patch_mode = step['arguments'].get('patch_mode')
+    if patch_mode == 'rightsize_sku':
+        if store is None:
+            raise ValueError('AST store is required for rightsize_sku GitOps sync')
+        package, target, mapping = build_rightsize_ast_publish_package(task, tenant, step, config, catalog, store)
+        artifact = dict(
+            format='terraform-ast-patch',
+            file_path=package['file_path'],
+            patch_mode='rightsize_sku',
+            target_size=step['arguments']['attributes']['target_size'],
+            terraform_attribute=step['arguments']['attributes']['terraform_attribute'],
+            address=mapping.get('address'),
+        )
+    else:
+        artifact=generate_synchronized_terraform_patch(scan,task['resource_id'],step['arguments'],tenant)
+        package = None
     evidence=[]
     if publish:
         approval=payload.get('approval') or {}
@@ -90,7 +161,7 @@ def build_synchronized_agent_gitops_bundle(task, tenant, scan, config, catalog, 
             evidence.append(value)
         if not config.enabled: raise ValueError('GitHub publishing is disabled')
     policy=dict(decision='review_required',projection_only=True,automatic_apply=False,
-                reasons=['Repository CI must produce and verify the real Terraform plan; the approved runtime metadata merge is the only modeled mutation.'])
+                reasons=['Repository CI must produce and verify the real Terraform plan; the approved runtime mutation is the only modeled cloud change.'])
     content=dict(agent_task_id=task['id'],plan_hash=expected,step_evidence_digest=digest(evidence) if evidence else None,
                  target_id=target['target_id'],repository=target['repository'],artifact=artifact,policy=policy,
                  parity_verified=False,state='awaiting_repository_review' if publish else 'preview')
@@ -101,7 +172,21 @@ def build_synchronized_agent_gitops_bundle(task, tenant, scan, config, catalog, 
     key=digest([task['id'],expected,target])
     run=workflows.begin(tenant['tenant_id'],'agent_gitops_syncs',key,journal_evidence(content),once=True)
     review_id=str(UUID(fingerprint[:32]));branch='cloudsaver/agent-'+fingerprint[:24]
-    package=dict(review_id=review_id,scan_id=task['scan_id'],target_id=target['target_id'],repository=target['repository'],
+    if patch_mode == 'rightsize_sku' and package is not None:
+        publish_package=dict(
+            review_id=review_id,
+            scan_id=task['scan_id'],
+            target_id=target['target_id'],
+            repository=target['repository'],
+            branch=package['branch'],
+            fingerprint=fingerprint,
+            title=package['title'],
+            body=package['body'] + f'\n\n<!-- cloudsaver-review:{review_id} -->',
+            files={package['file_path']: package['patched_content']},
+            draft=True,
+        )
+    else:
+        publish_package=dict(review_id=review_id,scan_id=task['scan_id'],target_id=target['target_id'],repository=target['repository'],
         branch=branch,fingerprint=fingerprint,title='Review approved agent metadata synchronization',
         body=f'Agent task `{task["id"]}`. Approved plan `{expected}`. Evidence `{content["step_evidence_digest"]}`.\n\n'
              'Review fragment only: integrate with existing IaC and verify CI before merge. Runtime/IaC parity is not yet verified.\n\n'
@@ -109,7 +194,7 @@ def build_synchronized_agent_gitops_bundle(task, tenant, scan, config, catalog, 
         files={f'cloudsaver/agent-reviews/{task["id"]}/metadata.tf.json':artifact['hcl'],
                f'cloudsaver/agent-reviews/{task["id"]}/evidence.json':json.dumps(content,indent=2,sort_keys=True)})
     try:
-        result=(client or GitHubApp(config.app_id)).publish(target,package)
+        result=(client or GitHubApp(config.app_id)).publish(target,publish_package)
         if result.get('state')!='open':raise GitOpsFailure('Repository review is no longer open')
     except Exception:
         content.update(state='needs_reconciliation',automatic_retry=False)

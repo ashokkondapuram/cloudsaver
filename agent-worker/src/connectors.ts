@@ -52,7 +52,8 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
       if(metadata.status!==200||resource?.id?.toLowerCase()!==task.resource_id.toLowerCase()||!resource.properties)return {status:'failed',code:'LIVE_RESOURCE_INSPECTION_FAILED'};
       const properties=resource.properties;
       const power=((properties.instanceView as {statuses?:{code:string}[]}|undefined)?.statuses||[]).find(v=>v.code.startsWith('PowerState/'))?.code;
-      const live={diskState:properties.diskState,powerState:power,numberOfSites:properties.numberOfSites,vm_size:(properties.hardwareProfile as {vmSize?:string}|undefined)?.vmSize};
+      const sku=(properties.sku as {name?:string,size?:string,tier?:string}|undefined);
+      const live={diskState:properties.diskState,powerState:power,numberOfSites:properties.numberOfSites,vm_size:(properties.hardwareProfile as {vmSize?:string}|undefined)?.vmSize,sku_name:sku?.name,disk_size_gb:properties.diskSizeGB as number|undefined};
       const stateKey=task.id+':'+connector.id;
       const currentState=hash({id:resource.id,location:resource.location,managedBy:resource.managedBy,properties});
       if(!write){if(!stateMatches(step,live))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};states.set(stateKey,currentState);}
@@ -79,8 +80,8 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
         }
       }
       if(step.operation==='compute.resize'){
-        if(kind!=='microsoft.compute/virtualmachines')return {status:'failed',code:'RESIZE_SCOPE_UNSUPPORTED'};
         const targetSize=String(step.arguments.target_size);
+        if(kind==='microsoft.compute/virtualmachines'){
         const wasRunning=power==='PowerState/running';
         if(wasRunning){
           const dealloc=await boundedRequest('https://management.azure.com'+task.resource_id+'/deallocate?api-version=2024-03-01',{method:'POST',headers},options.request);
@@ -96,6 +97,25 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
         const size=((verify.body as {properties?:{hardwareProfile?:{vmSize?:string}}}|null)?.properties?.hardwareProfile?.vmSize)||'';
         const ok=verify.status===200&&size===targetSize;
         return {status:ok?'succeeded':'uncertain',code:ok?'AZURE_RESIZE_VERIFIED':'AZURE_RESIZE_RECONCILE',evidence_digest:hash({vm_size:size})};
+        }
+        if(kind==='microsoft.web/serverfarms'){
+          const tier=sku?.tier||'PremiumV2';
+          const patch=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version='+version,{method:'PATCH',headers,body:JSON.stringify({properties:{sku:{name:targetSize,tier,size:targetSize}}})},options.request);
+          if(![200,202].includes(patch.status))return {status:'uncertain',code:'AZURE_PLAN_RESIZE_UNCERTAIN',http_status:patch.status};
+          const verify=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version='+version,{headers},options.request);
+          const observed=((verify.body as {properties?:{sku?:{name?:string}}}|null)?.properties?.sku?.name)||'';
+          const ok=verify.status===200&&observed===targetSize;
+          return {status:ok?'succeeded':'uncertain',code:ok?'AZURE_PLAN_RESIZE_VERIFIED':'AZURE_PLAN_RESIZE_RECONCILE',evidence_digest:hash({sku_name:observed})};
+        }
+        if(kind==='microsoft.compute/disks'){
+          const patch=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version='+version,{method:'PATCH',headers,body:JSON.stringify({properties:{diskSizeGB:Number(targetSize)}})},options.request);
+          if(![200,202].includes(patch.status))return {status:'uncertain',code:'AZURE_DISK_RESIZE_UNCERTAIN',http_status:patch.status};
+          const verify=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version='+version,{headers},options.request);
+          const observed=(verify.body as {properties?:{diskSizeGB?:number}}|null)?.properties?.diskSizeGB;
+          const ok=verify.status===200&&String(observed)===targetSize;
+          return {status:ok?'succeeded':'uncertain',code:ok?'AZURE_DISK_RESIZE_VERIFIED':'AZURE_DISK_RESIZE_RECONCILE',evidence_digest:hash({disk_size_gb:observed})};
+        }
+        return {status:'failed',code:'RESIZE_SCOPE_UNSUPPORTED'};
       }
       if (!write) {inspected.set(task.id+':'+connector.id,hash(prior)); return {status:'succeeded',code:'LIVE_TAGS_INSPECTED',evidence_digest:hash(prior)};}
       const tags = step.arguments.tags;

@@ -118,6 +118,12 @@ Per-resource resize knowledge lives in `app/finops_resize_playbooks.py` (Azure V
 
 Worker implementation: `agent-worker/src/connectors.ts` (Azure), `agent-worker/src/multicloud.ts` (AWS/GCP). Tests: `tests/test_finops_autopilot_planner.py`.
 
+**Playbooks (6):** Azure VM, App Service plan, managed disk; AWS EC2 and RDS; GCE instance. Each maps a Terraform attribute for optional IaC sync.
+
+**IaC after cloud resize:** set `sync_iac: true` and `gitops_target_id` on `POST /api/v1/finops/autopilot/resize` to append `gitops.terraform.sync` with `patch_mode: rightsize_sku` (AST-mapped PR via `app/agent_gitops_sync.py`).
+
+**Human approval:** tasks stay `awaiting_approval` unless both `auto_execute: true` on the request and `CLOUDSAVER_FINOPS_AUTOPILOT_AUTO_APPROVE=true` in the environment.
+
 ## 8. GitHub App AST repository indexer
 
 When `CLOUDSAVER_GITOPS_AST_INDEX_FROM_GITHUB=true`, `POST /api/v1/gitops/ast/index-repositories` uses the GitHub App to resolve each target’s `base_branch` SHA, list `.tf` files, parse Terraform resource blocks (`app/gitops_terraform_ast_indexer.py`), and persist mappings into `gitops_ast_*` tables (line ranges + `indexed_block` at commit). Env JSON sync remains on `POST /api/v1/gitops/ast/sync`.

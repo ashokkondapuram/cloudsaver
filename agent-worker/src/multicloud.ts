@@ -49,9 +49,17 @@ export function multicloudExecutor(options:NativeOptions={}){
         const tags=await clients.rds.send(new rds.ListTagsForResourceCommand({ResourceName:task.resource_id}));return {...data.DBInstances[0],Tags:tags.TagList||[]};
       };
       const current=await inspect();const digest=hash(current);
-        if(!write&&!stateMatches(step,{State:typeof current.State==='string'?current.State:current.State?.Name,DBInstanceStatus:current.DBInstanceStatus,instance_type:current.InstanceType}))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};
+        const inspectState=arn[7]?{DBInstanceStatus:current.DBInstanceStatus,instance_class:current.DBInstanceClass}:{State:typeof current.State==='string'?current.State:current.State?.Name,DBInstanceStatus:current.DBInstanceStatus,instance_type:current.InstanceType};
+        if(!write&&!stateMatches(step,inspectState))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};
       if(!write){inspections.set(key,{digest});return {status:'succeeded',code:'AWS_RESOURCE_INSPECTED',evidence_digest:digest};}
       if(inspections.get(key)!.digest!==digest)return {status:'failed',code:'LIVE_STATE_CHANGED'};
+      if(step.operation==='compute.resize'&&arn[7]){
+        const targetClass=String(step.arguments.target_size);
+        await clients.rds.send(new rds.ModifyDBInstanceCommand({DBInstanceIdentifier:arn[7],DBInstanceClass:targetClass,ApplyImmediately:true}));
+        const after=await inspect();
+        const verified=after.DBInstanceClass===targetClass;
+        return {status:verified?'succeeded':'uncertain',code:verified?'AWS_RDS_RESIZE_VERIFIED':'AWS_RDS_RESIZE_RECONCILE',evidence_digest:hash({instance_class:after.DBInstanceClass})};
+      }
       if(step.operation==='compute.resize'&&arn[6]){
         const targetType=String(step.arguments.target_size);
         const stateName=typeof current.State==='string'?current.State:current.State?.Name;

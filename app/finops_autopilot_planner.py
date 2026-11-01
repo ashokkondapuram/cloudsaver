@@ -13,6 +13,8 @@ def build_resize_agent_plan(
     connector_id: str,
     target_size: str,
     finops_action: str | None = None,
+    gitops_connector_id: str | None = None,
+    gitops_target_id: str | None = None,
 ) -> dict[str, Any]:
     book = resolve_playbook(
         cloud_provider=resource.get("cloud_provider", "azure"),
@@ -53,6 +55,24 @@ def build_resize_agent_plan(
             rollback="Restore prior SKU manually using provider console or IaC; snapshot not automatic",
         ),
     ]
+    if gitops_connector_id and gitops_target_id:
+        steps.append(
+            dict(
+                connector_id=gitops_connector_id,
+                operation="gitops.terraform.sync",
+                arguments=dict(
+                    target_id=gitops_target_id,
+                    patch_mode="rightsize_sku",
+                    attributes=dict(
+                        target_size=target_size,
+                        terraform_attribute=book["terraform_attribute"],
+                    ),
+                ),
+                purpose="Open a repository PR updating Terraform SKU to match approved cloud resize",
+                verification="Verify draft PR patches the indexed AST block attribute only",
+                rollback="Close PR without merge; cloud resize already applied",
+            )
+        )
     return dict(
         summary=book["summary_template"].format(target_size=target_size),
         steps=steps,
