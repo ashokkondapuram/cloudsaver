@@ -56,7 +56,7 @@ Baselines in `resource_state_baselines`; normalized Azure/AWS/GCP events; `DRIFT
 
 ### 4.2 GitOps AST & surgical PRs
 
-AST sync (`gitops_ast_sync`), Crossplane indexer, three-tier correlation, multi-VCS PR delivery, pre-merge scorecard API.
+AST sync (`gitops_ast_sync`), GitHub App repository AST indexer (`gitops_github_ast_indexer`), Crossplane indexer, three-tier correlation, multi-VCS PR delivery, pre-merge scorecard API.
 
 ### 4.3–4.6 GPU, K8s NAP, commitments, unit economics, Azure AI + pgvector
 
