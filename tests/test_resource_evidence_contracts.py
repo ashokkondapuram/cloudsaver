@@ -28,7 +28,15 @@ def test_contract_reports_gap_reason_without_replacing_missing_intervals():
 @pytest.mark.parametrize('created_at', [None, NOW-timedelta(days=10), NOW+timedelta(days=1)])
 def test_resource_age_must_cover_the_whole_observation_window(created_at):
     result = evaluate_series(metric(), TimeSeriesEvidenceContract('cpu'), now=NOW, resource_created_at=created_at)
-    assert result.gap_reason == 'resource_age_unverified_or_too_short' and not result.is_sufficient
+    assert result.gap_reason == 'resource_age_unverified_or_too_short'
+
+
+def test_evaluate_series_rejects_overflowing_integer_sample():
+    values = metric(1)
+    values['points'][0]['value'] = int('9' * 400)
+    result = evaluate_series(values, TimeSeriesEvidenceContract('cpu'), now=NOW, resource_created_at=NOW - timedelta(days=40))
+    assert result.gap_reason == 'invalid_duplicate_or_unaligned_sample'
+    assert result.observed_value is None and result.is_sufficient is False
 
 
 def test_peak_contract_cannot_silently_substitute_an_average():

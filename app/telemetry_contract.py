@@ -44,6 +44,19 @@ class TimeSeriesEvaluationResult:
     coverage_ratio: float
 
 
+def _finite_sample_value(value):
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        try:
+            return math.isfinite(float(value))
+        except OverflowError:
+            return False
+    if isinstance(value, float):
+        return math.isfinite(value)
+    return False
+
+
 def evaluate_series(values, contract, *, now=None, resource_created_at=None, require_resource_age=True):
     now = now or datetime.now(timezone.utc)
     expected = contract.window_days * 1440 // contract.interval_minutes
@@ -72,7 +85,7 @@ def evaluate_series(values, contract, *, now=None, resource_created_at=None, req
             return result('invalid_sample')
         at, value = moment(point.get('at')), point.get('value')
         if (not at or not start < at <= end or (at - start).total_seconds() % (contract.interval_minutes * 60)
-                or at in parsed or type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+                or at in parsed or not _finite_sample_value(value) or value < 0):
             return result('invalid_duplicate_or_unaligned_sample')
         parsed[at] = value
     times = [start, *sorted(parsed), end]

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -125,12 +125,16 @@ class FakeLease:
 class MemoryOutbox:
     def __init__(self):
         self.completed = []
+        self.released = []
 
-    def complete(self, tenant_id, intent_id, **kwargs):
-        self.completed.append((tenant_id, intent_id))
+    def complete(self, tenant_id, intent_id, *, lease_owner=None, lease_fence=None, **kwargs):
+        self.completed.append((tenant_id, intent_id, lease_owner, lease_fence))
 
-    def fail(self, tenant_id, intent_id, code):
+    def fail(self, tenant_id, intent_id, code, *, lease_owner=None, lease_fence=None):
         raise AssertionError(code)
+
+    def release_to_pending(self, tenant_id, intent_id, lease_owner, lease_fence):
+        self.released.append((tenant_id, intent_id, lease_owner, lease_fence))
 
 
 def test_drift_worker_skips_when_lease_busy():
@@ -138,6 +142,8 @@ def test_drift_worker_skips_when_lease_busy():
     outbox = MemoryOutbox()
     intent = dict(
         id=str(uuid4()),
+        lease_owner="worker-a",
+        lease_fence=1,
         payload=dict(
             workspace_id=TENANT,
             canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/a",
@@ -150,6 +156,7 @@ def test_drift_worker_skips_when_lease_busy():
     result = process_drift_intent(intent, outbox=outbox, lease=lease, live_reader=lambda s: {"vm_size": "x"})
     assert result["skipped"] is True
     assert outbox.completed == []
+    assert outbox.released == [(TENANT, intent["id"], "worker-a", 1)]
 
 
 def test_drift_worker_completes_outbox_on_match():
@@ -157,6 +164,8 @@ def test_drift_worker_completes_outbox_on_match():
     outbox = MemoryOutbox()
     intent = dict(
         id=str(uuid4()),
+        lease_owner="worker-a",
+        lease_fence=2,
         payload=dict(
             workspace_id=TENANT,
             canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/a",
@@ -170,4 +179,60 @@ def test_drift_worker_completes_outbox_on_match():
         live_reader=lambda _s: {"vm_size": "Standard_D4s_v5"},
     )
     assert result["drifted"] is False
-    assert outbox.completed == [(TENANT, intent["id"])]
+    assert outbox.completed == [(TENANT, intent["id"], "worker-a", 2)]
+
+
+def test_platform_outbox_lease_recovery_and_fencing(tmp_path):
+    import hashlib
+
+    from app.config import Settings
+    from app.enterprise_store import EnterpriseStore
+    from app.drift.outbox_store import OUTBOX_KIND_DRIFT, OutboxConflict, PlatformOutboxStore
+
+    settings = Settings(
+        "azure",
+        str(tmp_path / "outbox.sqlite3"),
+        (
+            dict(
+                tenant_id=TENANT,
+                name="t",
+                subscription_ids=[SUB],
+                api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
+            ),
+        ),
+    )
+    store = EnterpriseStore(settings)
+    outbox = PlatformOutboxStore(store)
+    key = hashlib.sha256(b"drift-intent").hexdigest()
+    intent_id, status = outbox.enqueue(
+        TENANT,
+        OUTBOX_KIND_DRIFT,
+        key,
+        dict(workspace_id=TENANT, canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/a"),
+    )
+    assert status == "pending"
+    first = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-one")
+    assert len(first) == 1 and first[0]["id"] == intent_id
+    stale = first[0]
+    expired = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+    with store.transaction(TENANT, write=True) as db:
+        db.execute(
+            "UPDATE platform_outbox_intents SET lease_until=%s WHERE tenant_id=%s AND id=%s",
+            (expired, TENANT, intent_id),
+        )
+    reclaimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-two")
+    assert len(reclaimed) == 1
+    assert reclaimed[0]["lease_fence"] > stale["lease_fence"]
+    with pytest.raises(OutboxConflict):
+        outbox.complete(
+            TENANT,
+            intent_id,
+            lease_owner=stale["lease_owner"],
+            lease_fence=stale["lease_fence"],
+        )
+    outbox.complete(
+        TENANT,
+        intent_id,
+        lease_owner=reclaimed[0]["lease_owner"],
+        lease_fence=reclaimed[0]["lease_fence"],
+    )

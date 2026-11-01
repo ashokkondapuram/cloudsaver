@@ -28,6 +28,9 @@ def process_gitops_pr_intent(
     lease_key = gitops_pr_lease_key(intent["idempotency_key"])
     lease = lease or NamedRedisLease(os.getenv("REDIS_URL", "redis://redis:6379/1"), ttl=120)
     if not lease.acquire(lease_key, token):
+        outbox.release_to_pending(
+            workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"]
+        )
         return dict(skipped=True, reason="gitops_pr_lease_busy")
     request_id = payload["remediation_request_id"]
     try:
@@ -51,23 +54,46 @@ def process_gitops_pr_intent(
         file_sha = payload["base_file_sha"]
         result = github_executor.execute(target, package, file_sha=file_sha)
         remediation_store.update_status(workspace_id, request_id, "OPEN", result=result)
-        outbox.complete(workspace_id, intent["id"])
+        outbox.complete(
+            workspace_id,
+            intent["id"],
+            lease_owner=intent["lease_owner"],
+            lease_fence=intent["lease_fence"],
+        )
         return result
     except ValueError as exc:
         if str(exc) == "REPO_DRIFT_REINDEX_REQUIRED":
             remediation_store.update_status(workspace_id, request_id, "REPO_DRIFT_REINDEX_REQUIRED")
-            outbox.complete(workspace_id, intent["id"])
+            outbox.complete(
+                workspace_id,
+                intent["id"],
+                lease_owner=intent["lease_owner"],
+                lease_fence=intent["lease_fence"],
+            )
             return dict(status="REPO_DRIFT_REINDEX_REQUIRED")
-        outbox.fail(workspace_id, intent["id"], "package_invalid")
+        outbox.fail(
+            workspace_id,
+            intent["id"],
+            "package_invalid",
+            lease_owner=intent["lease_owner"],
+            lease_fence=intent["lease_fence"],
+        )
         raise
     except Exception:
         remediation_store.update_status(workspace_id, request_id, "UNCERTAIN")
-        outbox.fail(workspace_id, intent["id"], "vcs_uncertain")
+        outbox.fail(
+            workspace_id,
+            intent["id"],
+            "vcs_uncertain",
+            lease_owner=intent["lease_owner"],
+            lease_fence=intent["lease_fence"],
+        )
         raise
     finally:
         lease.release(lease_key, token)
 
 
 def dispatch_gitops_pr(outbox: PlatformOutboxStore, tenant_id: str, **kwargs) -> list[dict]:
-    intents = outbox.claim_pending(tenant_id, "GITOPS_CREATE_PR")
+    worker_id = secrets.token_hex(16)
+    intents = outbox.claim_pending(tenant_id, "GITOPS_CREATE_PR", owner=worker_id)
     return [process_gitops_pr_intent(item, outbox=outbox, **kwargs) for item in intents]

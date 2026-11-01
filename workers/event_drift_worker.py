@@ -38,6 +38,9 @@ def process_drift_intent(
     key = drift_inspect_lease_key(workspace_id, resource_hash)
     lease = lease or NamedRedisLease(os.getenv("REDIS_URL", "redis://redis:6379/1"), ttl=30)
     if not lease.acquire(key, token):
+        outbox.release_to_pending(
+            workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"]
+        )
         return dict(skipped=True, reason="lease_busy")
     try:
         baseline_row = None
@@ -85,15 +88,27 @@ def process_drift_intent(
             except KeyError:
                 pass
             actions["gitops"] = stage_gitops_drift_flag(mapping)
-        outbox.complete(workspace_id, intent["id"])
+        outbox.complete(
+            workspace_id,
+            intent["id"],
+            lease_owner=intent["lease_owner"],
+            lease_fence=intent["lease_fence"],
+        )
         return actions
     except Exception:
-        outbox.fail(workspace_id, intent["id"], "inspect_failed")
+        outbox.fail(
+            workspace_id,
+            intent["id"],
+            "inspect_failed",
+            lease_owner=intent["lease_owner"],
+            lease_fence=intent["lease_fence"],
+        )
         raise
     finally:
         lease.release(key, token)
 
 
 def dispatch_pending_drift(outbox: PlatformOutboxStore, tenant_id: str, **kwargs) -> list[dict]:
-    intents = outbox.claim_pending(tenant_id, "DRIFT_INSPECT_RESOURCE")
+    worker_id = secrets.token_hex(16)
+    intents = outbox.claim_pending(tenant_id, "DRIFT_INSPECT_RESOURCE", owner=worker_id)
     return [process_drift_intent(item, outbox=outbox, **kwargs) for item in intents]

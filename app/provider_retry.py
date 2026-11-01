@@ -116,6 +116,29 @@ def shared_budget():
     return _budget(os.getenv('CLOUDSAVER_PROVIDER_REDIS_URL') or os.getenv('REDIS_URL', ''), os.getenv('CLOUDSAVER_ENVIRONMENT') == 'production')
 
 
+def _finite_parsed_float(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ProviderReadError('Provider returned a non-finite JSON number')
+    return value
+
+
+def _reject_json_constant(_name):
+    raise ProviderReadError('Provider returned an invalid JSON constant')
+
+
+def _reject_non_finite_numbers(value):
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ProviderReadError('Provider returned a non-finite JSON number')
+        return value
+    if isinstance(value, dict):
+        return {key: _reject_non_finite_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_reject_non_finite_numbers(item) for item in value]
+    return value
+
+
 def read_json(client, method, url, *, quota_key, interval=0, deadline_seconds=30,
               attempts=3, max_bytes=8_000_000, read_only_post=False, budget=None,
               clock=time.monotonic, sleep=time.sleep, jitter=random.uniform, parse_float=float, **kwargs):
@@ -155,7 +178,15 @@ def read_json(client, method, url, *, quota_key, interval=0, deadline_seconds=30
                         if len(raw) > max_bytes or clock() >= deadline:
                             raise ProviderReadError('Provider response exceeded its size or time budget')
                     try:
-                        result = json.loads(raw, parse_float=parse_float)
+                        if parse_float is float:
+                            result = json.loads(
+                                raw,
+                                parse_float=_finite_parsed_float,
+                                parse_constant=_reject_json_constant,
+                            )
+                        else:
+                            result = json.loads(raw, parse_float=parse_float, parse_constant=_reject_json_constant)
+                            result = _reject_non_finite_numbers(result)
                     except (ValueError, TypeError):
                         raise ProviderReadError('Provider returned an invalid JSON response') from None
                     if not isinstance(result, dict):

@@ -1,11 +1,15 @@
 """Transactional outbox for drift inspection and GitOps PR delivery."""
-from datetime import datetime, timezone
+from __future__ import annotations
+
+import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from app.enterprise_store import decode
 
 OUTBOX_KIND_DRIFT = "DRIFT_INSPECT_RESOURCE"
 OUTBOX_KIND_GITOPS_PR = "GITOPS_CREATE_PR"
+DEFAULT_LEASE_SECONDS = 120
 
 
 class OutboxConflict(ValueError):
@@ -38,21 +42,34 @@ class PlatformOutboxStore:
             )
         return intent_id, "pending"
 
-    def claim_pending(self, tenant_id, kind, limit=10):
+    def _reclaim_expired(self, db, tenant_id, kind, now_iso):
+        db.execute(
+            """UPDATE platform_outbox_intents SET status='pending',lease_owner=NULL,lease_until=NULL,updated_at=%s
+               WHERE tenant_id=%s AND kind=%s AND status='leased' AND lease_until IS NOT NULL AND lease_until<%s""",
+            (now_iso, tenant_id, kind, now_iso),
+        )
+
+    def claim_pending(self, tenant_id, kind, limit=10, *, owner=None, lease_seconds=DEFAULT_LEASE_SECONDS):
+        owner = owner or secrets.token_hex(16)
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        until_iso = (now + timedelta(seconds=lease_seconds)).isoformat()
         with self.store.transaction(tenant_id, write=True) as db:
+            self._reclaim_expired(db, tenant_id, kind, now_iso)
             rows = db.execute(
-                """SELECT id,kind,idempotency_key,payload,attempts FROM platform_outbox_intents
+                """SELECT id,kind,idempotency_key,payload,attempts,lease_fence FROM platform_outbox_intents
                    WHERE tenant_id=%s AND kind=%s AND status='pending'
                    ORDER BY created_at,id LIMIT %s""",
                 (tenant_id, kind, limit),
             ).fetchall()
             claimed = []
-            now = datetime.now(timezone.utc).isoformat()
             for row in rows:
+                next_fence = int(row[5]) + 1
                 changed = db.execute(
-                    """UPDATE platform_outbox_intents SET status='leased',updated_at=%s
+                    """UPDATE platform_outbox_intents SET status='leased',lease_owner=%s,lease_fence=%s,
+                       lease_until=%s,updated_at=%s
                        WHERE tenant_id=%s AND id=%s AND status='pending'""",
-                    (now, tenant_id, str(row[0])),
+                    (owner, next_fence, until_iso, now_iso, tenant_id, str(row[0])),
                 ).rowcount
                 if changed == 1:
                     claimed.append(
@@ -62,28 +79,66 @@ class PlatformOutboxStore:
                             idempotency_key=row[2],
                             payload=decode(row[3]),
                             attempts=row[4],
+                            lease_owner=owner,
+                            lease_fence=next_fence,
                         )
                     )
             return claimed
 
-    def complete(self, tenant_id, intent_id, *, result_payload=None):
-        now = datetime.now(timezone.utc).isoformat()
-        with self.store.transaction(tenant_id, write=True) as db:
-            db.execute(
-                """UPDATE platform_outbox_intents SET status='completed',updated_at=%s
-                   WHERE tenant_id=%s AND id=%s AND status='leased'""",
-                (now, tenant_id, intent_id),
-            )
+    def _leased_update(self, db, tenant_id, intent_id, *, lease_owner, lease_fence, set_clause, params):
+        if not lease_owner or lease_fence is None:
+            raise ValueError("lease_owner and lease_fence are required")
+        return db.execute(
+            f"""UPDATE platform_outbox_intents SET {set_clause}
+                WHERE tenant_id=%s AND id=%s AND status='leased'
+                AND lease_owner=%s AND lease_fence=%s""",
+            (*params, tenant_id, intent_id, lease_owner, lease_fence),
+        ).rowcount
 
-    def fail(self, tenant_id, intent_id, error_code):
+    def release_to_pending(self, tenant_id, intent_id, lease_owner, lease_fence):
         now = datetime.now(timezone.utc).isoformat()
         with self.store.transaction(tenant_id, write=True) as db:
-            db.execute(
-                """UPDATE platform_outbox_intents SET status='failed',last_error=%s,
-                   attempts=attempts+1,updated_at=%s
-                   WHERE tenant_id=%s AND id=%s AND status='leased'""",
-                (error_code[:120], now, tenant_id, intent_id),
+            changed = self._leased_update(
+                db,
+                tenant_id,
+                intent_id,
+                lease_owner=lease_owner,
+                lease_fence=lease_fence,
+                set_clause="status='pending',lease_owner=NULL,lease_until=NULL,updated_at=%s",
+                params=(now,),
             )
+        if changed != 1:
+            raise OutboxConflict("Outbox lease no longer valid")
+
+    def complete(self, tenant_id, intent_id, *, lease_owner, lease_fence, result_payload=None):
+        now = datetime.now(timezone.utc).isoformat()
+        with self.store.transaction(tenant_id, write=True) as db:
+            changed = self._leased_update(
+                db,
+                tenant_id,
+                intent_id,
+                lease_owner=lease_owner,
+                lease_fence=lease_fence,
+                set_clause="status='completed',lease_owner=NULL,lease_until=NULL,updated_at=%s",
+                params=(now,),
+            )
+        if changed != 1:
+            raise OutboxConflict("Outbox lease no longer valid")
+
+    def fail(self, tenant_id, intent_id, error_code, *, lease_owner, lease_fence):
+        now = datetime.now(timezone.utc).isoformat()
+        with self.store.transaction(tenant_id, write=True) as db:
+            changed = self._leased_update(
+                db,
+                tenant_id,
+                intent_id,
+                lease_owner=lease_owner,
+                lease_fence=lease_fence,
+                set_clause="status='failed',last_error=%s,attempts=attempts+1,lease_owner=NULL,lease_until=NULL,updated_at=%s",
+                params=(error_code[:120], now),
+            )
+        if changed != 1:
+            raise OutboxConflict("Outbox lease no longer valid")
 
 
 class GitOpsRemediationStore:

@@ -1,10 +1,11 @@
 """Read-only Azure Monitor, Activity Log and operational guard evidence."""
 from datetime import datetime,timedelta,timezone
 from urllib.parse import urlsplit
+from app.collectors.azure_endpoint import ARM_ROOT, validate_arm_https_url
 from app.collectors.live_common import window,series,collect,enrich_metrics,transition
 from app.telemetry_contract import moment
 
-ARM='https://management.azure.com'
+ARM=ARM_ROOT
 METRICS={
  'microsoft.compute/virtualmachines':{'cpu_percent':'Percentage CPU','memory_free_bytes':'Available Memory Bytes','disk_iops':'Disk Read Operations/Sec','network_bytes':'Network In Total','burst_credits':'CPU Credits Remaining'},
  'microsoft.compute/disks':{'iops':'Composite Disk Read Operations/sec','throughput':'Composite Disk Read Bytes/sec','burst_credits':'Disk Paid Burst IO Percentage'},
@@ -28,8 +29,8 @@ def pages(reader,url,params=None):
         yield from values
         token=data.get('nextLink')
         if not token:return
-        parsed=urlsplit(token)
-        if token in seen or parsed.scheme!='https' or parsed.netloc!='management.azure.com' or not parsed.path.lower().startswith(scope+'/'):raise ValueError('Invalid Azure continuation')
+        if token in seen:raise ValueError('Invalid Azure continuation')
+        validate_arm_https_url(token, scope_path_lower=scope)
         seen.add(token);url,params=token,None
     raise ValueError('Azure page bound exceeded')
 

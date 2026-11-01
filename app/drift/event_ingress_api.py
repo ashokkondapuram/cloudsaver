@@ -14,6 +14,8 @@ from app.drift.workspace_resolver import workspace_resolver_for_settings
 from app.collectors.event_stream import EventStreamConsumer
 from app.gitops_api import bounded_json
 
+MAX_INGRESS_EVENTS = 100
+
 
 def _webhook_secret_ok(request: Request, raw: dict | None = None) -> bool:
     expected = os.getenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET") or ""
@@ -44,6 +46,8 @@ def _parse_ingress_payload(raw: dict) -> tuple[str, list]:
     events = raw["events"]
     if not isinstance(events, list) or not events:
         raise ValueError("events must be a non-empty array")
+    if len(events) > MAX_INGRESS_EVENTS:
+        raise ValueError(f"At most {MAX_INGRESS_EVENTS} events per request")
     return provider, events
 
 
@@ -70,7 +74,7 @@ def create_router(settings, evidence_store):
             outbox = PlatformOutboxStore(evidence_store)
             queued = []
             validation_responses = []
-            for item in events[:100]:
+            for item in events:
                 if not isinstance(item, dict):
                     raise ValueError("Each event must be an object")
                 if provider == "azure" and item.get("eventType") == "Microsoft.EventGrid.SubscriptionValidationEvent":

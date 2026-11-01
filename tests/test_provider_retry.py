@@ -61,6 +61,18 @@ def test_response_bounds_and_invalid_json():
             with pytest.raises(ProviderReadError):read_json(client,'GET','https://example.test',quota_key='x',budget=LocalBudget(),max_bytes=20)
 
 
+@pytest.mark.parametrize('content',[
+    b'{"value":NaN}',
+    b'{"value":Infinity}',
+    b'{"nested":{"x":NaN}}',
+    b'{"value":1e9999}',
+])
+def test_read_json_rejects_non_finite_numbers(content):
+    with httpx.Client(transport=httpx.MockTransport(lambda _:httpx.Response(200,content=content))) as client:
+        with pytest.raises(ProviderReadError):
+            read_json(client,'GET','https://example.test',quota_key='x',budget=LocalBudget())
+
+
 def test_production_cannot_fall_back_to_process_local_coordination(monkeypatch):
     from app.provider_retry import shared_budget
     monkeypatch.delenv('REDIS_URL',raising=False);monkeypatch.setenv('CLOUDSAVER_ENVIRONMENT','production')
