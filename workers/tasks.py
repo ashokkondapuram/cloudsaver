@@ -41,6 +41,12 @@ if not 10 <= ai_tick <= 3600:
 if enabled('CLOUDSAVER_AI_ENABLED'):
     celery_app.conf.beat_schedule['process-ai-batches'] = {
         'task': 'workers.tasks.process_ai_batches', 'schedule': float(ai_tick), 'options': {'expires': ai_tick}}
+if enabled('CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH'):
+    celery_app.conf.beat_schedule['dispatch-platform-outbox'] = {
+        'task': 'workers.tasks.dispatch_platform_outbox_all',
+        'schedule': float(tick),
+        'options': {'expires': tick},
+    }
 
 
 class JobBusy(RuntimeError):
@@ -387,3 +393,22 @@ def process_ai_batches():
             client.close()
         except Exception:
             pass
+
+
+@celery_app.task(name='workers.tasks.dispatch_platform_outbox_all')
+def dispatch_platform_outbox_all():
+    """Claim drift and GitOps outbox intents for every active workspace."""
+    if not enabled('CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH'):
+        return {'tenants': 0, 'enabled': False}
+    from app.enterprise_store import EnterpriseStore
+    from workers.outbox_dispatcher import dispatch_all_tenant_outboxes
+
+    settings = Settings.load()
+    store = EnterpriseStore(settings)
+    summary = dispatch_all_tenant_outboxes(store, settings=settings)
+    drift_count = sum(len(item.get('drift') or []) for item in summary.values())
+    gitops_count = sum(
+        len(item.get('gitops') or []) if isinstance(item.get('gitops'), list) else 0
+        for item in summary.values()
+    )
+    return dict(tenants=len(summary), drift_intents=drift_count, gitops_intents=gitops_count, enabled=True)

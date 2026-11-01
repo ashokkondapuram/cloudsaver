@@ -140,6 +140,7 @@ def create_router(repository, current_tenant):
     @router.post('/ebpf-flows/ingest', status_code=202)
     async def ingest_ebpf_flows(request: Request, tenant=Depends(finance)):
         from app.collectors_ebpf_flow import normalize_flow_record
+        from app.v3_finops_store import V3FinOpsStore
 
         raw = await bounded_json(request)
         if not isinstance(raw, dict) or "records" not in raw or not isinstance(raw["records"], list):
@@ -148,7 +149,31 @@ def create_router(repository, current_tenant):
             normalized = [normalize_flow_record(item) for item in raw["records"][:500]]
         except (ValueError, KeyError, TypeError) as error:
             raise HTTPException(422, str(error)) from None
-        return dict(accepted=len(normalized), advisory_only=True)
+        persisted = await run_in_threadpool(
+            V3FinOpsStore(repository.store).insert_ebpf_flows, tenant["tenant_id"], normalized
+        )
+        return dict(accepted=len(normalized), **persisted)
+
+    @router.post('/saas-focus/import', status_code=201)
+    async def import_saas_focus(request: Request, tenant=Depends(finance)):
+        from app.finops_saas_focus_connectors import normalize_focus_record
+        from app.v3_finops_store import V3FinOpsStore
+
+        raw = await bounded_json(request)
+        if not isinstance(raw, dict) or "provider" not in raw or "records" not in raw:
+            raise HTTPException(422, "Provide provider and records array")
+        provider = str(raw["provider"])
+        records = raw["records"]
+        if not isinstance(records, list):
+            raise HTTPException(422, "records must be an array")
+        try:
+            normalized = [normalize_focus_record(provider, item) for item in records[:500]]
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(422, str(error)) from None
+        persisted = await run_in_threadpool(
+            V3FinOpsStore(repository.store).insert_saas_focus_records, tenant["tenant_id"], normalized
+        )
+        return dict(accepted=len(normalized), **persisted)
 
     @router.get('/spot-arbitrage/preview')
     def spot_arbitrage_preview(

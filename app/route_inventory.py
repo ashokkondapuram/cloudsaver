@@ -211,7 +211,8 @@ ROUTES = {
     ('POST', '/api/v1/gitops/pull-requests'): 'scan_write',
     ('POST', '/api/v1/gitops/pre-merge/evaluate'): 'scan_write',
     ('GET', '/api/v1/finops/saas-connectors'): 'scoped_read',
-    ('POST', '/api/v1/finops/ebpf-flows/ingest'): 'scan_write',
+    ('POST', '/api/v1/finops/saas-focus/import'): 'full_scope',
+    ('POST', '/api/v1/finops/ebpf-flows/ingest'): 'full_scope',
     ('GET', '/api/v1/finops/spot-arbitrage/preview'): 'scoped_read',
 }
 

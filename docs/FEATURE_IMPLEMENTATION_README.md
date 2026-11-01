@@ -71,6 +71,8 @@ AST index entries use `repository` as the provider-specific label (`owner/repo`,
 | AST index | `CLOUDSAVER_GITOPS_AST_INDEX` JSON |
 | Outbox | PostgreSQL `platform_outbox_intents`, `gitops_remediation_requests` (migration `0028`) |
 | Leases | `REDIS_URL` |
+| Drift live reads | `CLOUDSAVER_DRIFT_LIVE_READERS=true` (ARM/EC2 metadata via workspace credentials) |
+| Outbox dispatch tick | `CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH=true` (Celery beat → `workers.tasks.dispatch_platform_outbox_all`) |
 | GitHub | `CLOUDSAVER_GITHUB_APP_*`, `CLOUDSAVER_GITOPS_PUBLISH` |
 | Azure DevOps / GitLab / Bitbucket | `CLOUDSAVER_AZDO_PAT`, `CLOUDSAVER_GITLAB_TOKEN`, `CLOUDSAVER_BITBUCKET_TOKEN` (as needed per target) |
 

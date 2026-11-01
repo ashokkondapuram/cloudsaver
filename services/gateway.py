@@ -465,6 +465,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def finops_ebpf_flow_ingest(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/finops/ebpf-flows/ingest', request, authorization)
 
+    @app.post('/api/v1/finops/saas-focus/import', status_code=201)
+    async def finops_saas_focus_import(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/finops/saas-focus/import', request, authorization)
+
     @app.get('/api/v1/finops/spot-arbitrage/preview')
     async def finops_spot_arbitrage_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/finops/spot-arbitrage/preview', authorization, dict(request.query_params))

@@ -19,7 +19,7 @@ RLS uses `tenant_id` + `app.current_tenant_id` (workspace UUID equals tenant UUI
 |---|---|---|
 | **1** Drift firewall & GitOps | `event_stream`, `event_drift_worker`, `drift_manager`, `baseline_store`, `live_readers`, `gitops_vcs`, `delivery_worker`, `outbox_dispatcher`, `gitops_remediation_loaders`, `pre_mutation_drift_guard.ts` | **Scaffold + tests**; live ARM/EC2 readers stubbed; outbox dispatcher wires VCS file fetch when publish enabled |
 | **2** GPU / AI / commitments / K8s | `scanner_ai_gpu`, `ai_workload_optimizer`, `autopilot_commitments`, `k8s_karpenter_sync`, `unit_economics` API | **Production math & validation**; no live DCGM bus |
-| **3** eBPF / SaaS FOCUS / pre-merge | `collectors_ebpf_flow`, `finops_saas_focus_connectors`, `gitops_pre_merge_firewall`, APIs | **Scaffold + ingest preview** |
+| **3** eBPF / SaaS FOCUS / pre-merge | `collectors_ebpf_flow`, `finops_saas_focus_connectors`, `gitops_pre_merge_firewall`, APIs + `v3_finops_store` persistence | **Ingest persists to 0030 tables** |
 | **4** GreenOps / arbitrage / Merkle | `scanner_greenops`, `finops_spot_arbitrage`, `governance_ephemeral_reaper`, `governance_merkle_audit` | **Scaffold + tests** |
 
 Detailed Activity Log → GitOps wiring: `docs/FEATURE_IMPLEMENTATION_README.md`.
