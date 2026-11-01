@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from app.drift.baseline_store import baseline_hash
+
 LiveReader = Callable[[dict[str, Any]], dict[str, Any]]
 
 
@@ -12,6 +14,26 @@ class DriftInspectionResult:
         self.live = live
         self.baseline = baseline
         self.reasons = reasons
+
+
+def live_state_hash(live: dict[str, Any]) -> str:
+    return baseline_hash(live)
+
+
+def compare_all_operational_keys(baseline: dict[str, Any], live: dict[str, Any]) -> DriftInspectionResult:
+    keys = sorted(set(baseline) | set(live))
+    reasons = []
+    drifted_fields = {}
+    for key in keys:
+        if baseline.get(key) != live.get(key):
+            reasons.append(f"{key}_mismatch")
+            drifted_fields[key] = dict(baseline=baseline.get(key), live=live.get(key))
+    return DriftInspectionResult(
+        drifted=bool(reasons),
+        live=live,
+        baseline=baseline,
+        reasons=reasons,
+    )
 
 
 def compare_operational_state(
@@ -38,8 +60,11 @@ def inspect_resource(
     *,
     baseline: dict[str, Any],
     live_reader: LiveReader,
+    zero_tolerance: bool = True,
 ) -> DriftInspectionResult:
     live = live_reader(signal)
+    if zero_tolerance and baseline:
+        return compare_all_operational_keys(baseline, live)
     return compare_operational_state(baseline, live)
 
 

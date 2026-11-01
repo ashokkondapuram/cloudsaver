@@ -20,6 +20,7 @@ class CloudDriftSignal(BaseModel):
     operation: str
     actor_principal: str
     event_timestamp_utc: str
+    correlation_id: str = ""
     model_config = ConfigDict(extra="forbid")
 
 
@@ -102,6 +103,7 @@ class EventStreamConsumer:
             )
         operation = str(data.get("operationName") or auth.get("action") or envelope.get("eventType") or "unknown")
         timestamp = str(envelope.get("eventTime") or datetime.now(timezone.utc).isoformat())
+        correlation = str(data.get("correlationId") or envelope.get("id") or "")
         return CloudDriftSignal(
             workspace_id=workspace_id,
             provider="azure",
@@ -110,6 +112,7 @@ class EventStreamConsumer:
             operation=operation,
             actor_principal=actor,
             event_timestamp_utc=timestamp,
+            correlation_id=correlation,
         )
 
     def normalize_eventgrid_batch(self, batch: list[dict[str, Any]]) -> list[CloudDriftSignal]:
@@ -121,6 +124,11 @@ class EventStreamConsumer:
         detail = envelope.get("detail") or {}
         if not isinstance(detail, dict):
             raise ValueError("EventBridge detail must be an object")
+        if detail.get("errorCode"):
+            raise ValueError("AWS API call failed; drift inspect skipped")
+        operation = str(detail.get("eventName") or envelope.get("detail-type") or "unknown")
+        if re.match(r"^(Describe|List|Get|Head|BatchGet)[A-Z]", operation):
+            raise ValueError("Read-only AWS API call ignored")
         account = str(envelope.get("account") or detail.get("recipientAccountId") or "")
         if not re.fullmatch(r"[0-9]{12}", account):
             raise ValueError("AWS account id missing from envelope")
@@ -135,8 +143,8 @@ class EventStreamConsumer:
             canonical = f"aws:{detail.get('eventSource','unknown')}:{detail.get('eventName','unknown')}:{account}"
         identity = detail.get("userIdentity") or {}
         actor = str(identity.get("arn") or identity.get("userName") or "unknown") if isinstance(identity, dict) else "unknown"
-        operation = str(detail.get("eventName") or envelope.get("detail-type") or "unknown")
         timestamp = str(envelope.get("time") or datetime.now(timezone.utc).isoformat())
+        correlation = str(detail.get("requestID") or envelope.get("id") or "")
         return CloudDriftSignal(
             workspace_id=workspace_id,
             provider="aws",
@@ -145,6 +153,44 @@ class EventStreamConsumer:
             operation=operation,
             actor_principal=actor,
             event_timestamp_utc=timestamp,
+            correlation_id=correlation,
+        )
+
+    def normalize_gcp_audit(self, envelope: dict[str, Any]) -> CloudDriftSignal:
+        proto = envelope.get("protoPayload") or envelope.get("data", {}).get("protoPayload") or {}
+        if not isinstance(proto, dict):
+            raise ValueError("GCP audit protoPayload must be an object")
+        resource = envelope.get("resource") or {}
+        labels = resource.get("labels") if isinstance(resource, dict) else {}
+        project = ""
+        if isinstance(labels, dict):
+            project = str(labels.get("project_id") or labels.get("project") or "")
+        if not project:
+            project = str(envelope.get("projectId") or envelope.get("project_id") or "")
+        if not project:
+            raise ValueError("GCP project id missing")
+        workspace_id = self.resolve_workspace("gcp", project)
+        if not workspace_id:
+            raise ValueError("No workspace owns GCP project")
+        method = str(proto.get("methodName") or "unknown")
+        resource_name = str(
+            (proto.get("resourceName") if proto.get("resourceName") else None)
+            or envelope.get("resourceName")
+            or f"//cloudresourcemanager.googleapis.com/projects/{project}"
+        )
+        auth = proto.get("authenticationInfo") or {}
+        actor = str(auth.get("principalEmail") or "unknown") if isinstance(auth, dict) else "unknown"
+        timestamp = str(envelope.get("timestamp") or datetime.now(timezone.utc).isoformat())
+        correlation = str(envelope.get("insertId") or envelope.get("id") or "")
+        return CloudDriftSignal(
+            workspace_id=workspace_id,
+            provider="gcp",
+            account_or_subscription_id=project,
+            canonical_resource_id=resource_name.lower(),
+            operation=method,
+            actor_principal=actor,
+            event_timestamp_utc=timestamp,
+            correlation_id=correlation,
         )
 
     def parse_eventbridge(self, envelope: dict[str, Any]) -> dict[str, Any]:

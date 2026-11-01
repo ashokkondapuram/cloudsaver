@@ -1,6 +1,7 @@
 import {stripTypeScriptTypes} from 'node:module';
 import {checkAssignment} from './contracts.ts';
 import type {Assignment, Connector, Outcome, Step, Task} from './contracts.ts';
+import {assertExpectedStatePresent, assertPermitNotDriftAborted} from './runtime/pre_mutation_drift_guard.ts';
 
 type Gateway = (path: string, body: unknown) => Promise<unknown>;
 type Execute = (task: Task, connector: Connector, step: Step, index: number) => Promise<Outcome>;
@@ -8,6 +9,7 @@ type Execute = (task: Task, connector: Connector, step: Step, index: number) => 
 export async function runCode(assignment: Assignment, local: Connector[], gateway: Gateway, execute: Execute): Promise<void> {
   checkAssignment(assignment,local);
   const {task,lease_token} = assignment; const plan = task.payload.plan; let cursor = 0;
+  assertPermitNotDriftAborted(task);
   const identity = {tenant_id:task.tenant_id,lease_token,plan_hash:task.payload.plan_hash};
   const prefix = '/internal/v1/agent/tasks/'+task.id;
   // Only the deterministic compiler's byte-for-byte program is imported. This is not a general code sandbox.
@@ -17,6 +19,7 @@ export async function runCode(assignment: Assignment, local: Connector[], gatewa
     const permit = await gateway(prefix+`/steps/${index}/start`,identity) as {permitted?:boolean;index?:number;plan_hash?:string;outcome?:Outcome};
     if (!permit.permitted || permit.index!==index || permit.plan_hash!==task.payload.plan_hash) throw new Error('Gateway did not issue this step permit');
     const step = plan.steps[index]; const connector = local.find(c=>c.id===step.connector_id)!;
+    assertExpectedStatePresent(task, !['resource.inspect','workload.inspect'].includes(step.operation));
     let outcome: Outcome;
     try {
       if(step.operation==='gitops.terraform.sync'){

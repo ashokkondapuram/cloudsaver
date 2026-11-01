@@ -178,9 +178,10 @@ def drift_idempotency_key(signal: dict) -> str:
     material = json.dumps(
         dict(
             workspace_id=signal["workspace_id"],
+            provider=signal.get("provider"),
             canonical_resource_id=signal["canonical_resource_id"],
             operation=signal["operation"],
-            event_timestamp_utc=signal["event_timestamp_utc"],
+            correlation_id=signal.get("correlation_id") or "",
         ),
         sort_keys=True,
         separators=(",", ":"),
