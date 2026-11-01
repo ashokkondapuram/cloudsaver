@@ -2,7 +2,7 @@
 
 A scan reads your configured Azure subscriptions, AWS accounts, GCP projects and Kubernetes clusters with read-only credentials, builds a canonical inventory, evaluates every in-scope resource against a versioned rule catalog, and saves one immutable scan result with findings, rule outcomes, coverage and evidence provenance. Scans never receive cloud identifiers, roles, URLs or tokens from the request: you only choose which configured providers to include. Costs are attributed only from exact price evidence, so a finding without verified pricing keeps an unknown savings value instead of an estimate.
 
-Last reviewed: Oct 25, 2026.
+**Last reviewed:** Nov 2026 (`main` @ `39def45`). Scope completeness and `coverage_manifest.partial` / `clean_baseline` derive from billable collector types ([app/billable_resources.py](../../app/billable_resources.py), [app/scan_scope_manifest.py](../../app/scan_scope_manifest.py)). Scoped workspace keys recompute coverage for the visible inventory subset ([app/provider_access.py](../../app/provider_access.py)).
 
 ## Where to find it
 

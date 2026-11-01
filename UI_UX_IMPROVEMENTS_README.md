@@ -1,5 +1,7 @@
 # CloudSaver UI/UX Improvements — Review README
 
+> **Shipped product docs (Nov 2026):** Customer console behavior is documented in the [main README](README.md), [UI/UX implementation record](docs/UI_UX_IMPLEMENTATION.md), and [feature guides](docs/features/README.md) (`main` @ `39def45`). This file remains the proposed backlog below.
+
 Status: proposed design and implementation backlog. Documentation only.
 
 Implementation update: the subsequent build request is tracked in [UI/UX implementation and local verification](docs/UI_UX_IMPLEMENTATION.md). That record distinguishes delivered improvements from the remaining roadmap below.

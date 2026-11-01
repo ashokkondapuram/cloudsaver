@@ -2,7 +2,7 @@
 
 Optional DaemonSet design for socket-level egress telemetry without paid VPC flow-log ingestion.
 
-This directory documents the contract only. No kernel module or eBPF program ships in v1.7.x.
+This directory documents the contract only. No kernel module or eBPF program ships in v1.7.x. See the [V2.0 architectural roadmap](../V2_0_ARCHITECTURAL_ROADMAP.md) and [main README](../../README.md) for current release scope.
 
 ## Intended deployment
 

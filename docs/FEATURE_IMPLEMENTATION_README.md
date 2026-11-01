@@ -1,5 +1,7 @@
 # Activity Log Drift Pipeline & GitHub App PR Wiring
 
+> **Current tree:** Drift ingress, outbox workers, and GitOps AST modules are described here and in [FEATURE_IMPLEMENTATION_README](docs/FEATURE_IMPLEMENTATION_README.md). Production boundaries and v2 scaffolds: [features/v2-scaffolds.md](docs/features/v2-scaffolds.md) and [main README](README.md) (`main` @ `39def45`).
+
 This document describes the v2 control-plane drift path from cloud Activity Log / CloudTrail events through live verification, agent permit fencing, and GitOps remediation pull requests.
 
 ## 1. Cloud activity payloads → `CloudDriftSignal`

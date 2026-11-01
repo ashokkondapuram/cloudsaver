@@ -1,5 +1,7 @@
 # Keycloak deployment
 
+Development and pilot Keycloak for CloudSaver human sign-in. For the full v1.7 stack (dashboard, platform portal, workers), start from the [root README](../../README.md) and `./start.sh`.
+
 This is a single-node HTTPS deployment with a dedicated PostgreSQL database and persistent volume. It is a development/pilot starting point, not a highly available production installation. Keycloak and PostgreSQL have readiness probes; native Keycloak liveness is `/health/live` on internal management port 9000. Only HTTPS port 8443 is published, on loopback by default. Do not expose the management port or database.
 
 ## Prepare and start

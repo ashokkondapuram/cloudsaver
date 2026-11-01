@@ -1,5 +1,7 @@
 # Source: https://docs.google.com/document/d/1oYrx3weFUJMQiB-e8JA-bJoC4uRd0OHUtnlT1er_zOQ
 
+> **Shipped product docs (Nov 2026):** See the [main README](../README.md) and [feature guide index](features/README.md) (`main` @ `39def45`). This file is the original improvement blueprint from baseline commit `6e0de85`; use feature guides for delivered behavior.
+
 # Revision: AHj4eMSaExbG94PZvYEE-Z8uMEKj4xy1iKCP4u4KDw4iS_7NZTvwg0ex-uoziaRm1aoT76xekG7i0O3RFaJkeNkhAoaGF2jVbczOU5mRNfM
 
 CloudSaver & Platform Portal: Comprehensive Code & Feature Improvement Guide

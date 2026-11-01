@@ -1,5 +1,7 @@
 # Source snapshot
 
+> **Shipped product docs (Nov 2026):** See the [main README](../README.md) and [feature guide index](features/README.md) (`main` @ `39def45`). This file is the original improvement blueprint from baseline commit `6e0de85`.
+
 Source: https://docs.google.com/document/d/11i_KWMhkr0u1Ug1N0ZR2D_kQC_-A_FCwEURUfT2WmWE
 Revision: AHj4eMQWpLDQZNTix4OjYK__hMNjD1yuqxEEV_7G9g6MBOBvcT3bGli2QutX-AGjRWimCgo18f_qu_0siv9b3-k86XMn03W82TYhHe5rQ5E
 

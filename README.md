@@ -13,18 +13,20 @@ Open the dashboard at `http://127.0.0.1:3000`, platform portal at `http://127.0.
 This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
 
 
-v1.7.0 adds workload assessments (application and environment roll-ups of five-pillar evidence), alongside keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md). Existing restored workflows and deployment fixes remain available.
+**Latest (main @ `39def45`, Nov 2026):**
 
-**Latest:** automatic billing sync now reads amortized and per-resource costs from each provider's cost management APIs, plus reservations, savings plans and committed use discounts. Azure imports actual and amortized cost per resource. AWS can read per-resource costs from a CUR 2.0 table through Athena. Google Cloud can read the detailed billing export. Commitment inventory, utilization, coverage, unused cost and upcoming expiry appear in the new Commitments panel on Cost allocation. Every provider call is read-only. See [Cost allocation and billing](docs/features/cost-allocation-and-billing.md).
+- **Resource data pipeline:** Scan storage persists full finding evidence on normalized `waste_findings` rows (`app/waste_finding_evidence.py`). Inventory-only resources use canonical observation rows for five-pillar assessment and scan history. Scoped workspace keys recompute `coverage` / `coverage_manifest` for the visible subset; `partial` and `clean_baseline` reflect incomplete supported inventory, not hard-coded optimism.
+- **Billable resource catalog:** 36 FinOps families across Azure, AWS, GCP and Kubernetes define metered SKUs; free topology types (NIC, NSG, subnets, and similar) are listed explicitly. `GET /api/v1/resources/billable-catalog` returns the catalog; resource lists default to **`cost_scope=billable`** (use `cost_scope=all` for every inventory row).
+- **Billing sync:** Automatic read-only imports from each provider's cost APIs (amortized and per-resource where configured), plus reservation / savings plan / committed-use snapshots in the Commitments panel. See [Cost allocation and billing](docs/features/cost-allocation-and-billing.md).
+- **FinOps & control plane (scaffolds and wiring vary):** Unit-economics preview, GitOps AST resource mapping, drift ingress stubs, GPU validation helpers, and commitment ladder modules — see [V2 scaffolds](docs/features/v2-scaffolds.md) for production boundaries.
 
-
-CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change.
-
-For product positioning, the pre-merge GitOps firewall narrative, and the five category-defining differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md). For the forward-looking v2.0 engineering roadmap, see [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md). Recent v2 **scaffolds** (no production wiring yet) include GPU metric validation (`app/scanner_ai_gpu.py`), commitment ladder planning (`app/autopilot_commitments.py`), Karpenter `NodePool` drafts (`app/k8s_karpenter_sync.py`), AI workload tier math (`app/ai_workload_optimizer.py`), event-stream parse stubs (`app/collectors/event_stream.py`), unit-economics preview (`GET /api/v1/finops/unit-economics/preview`), and GitOps AST index lookups (`GET /api/v1/gitops/resource-mapping`).
+v1.7.0 adds workload assessments (application and environment roll-ups of five-pillar evidence), alongside keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md).
 
 Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI, GitOps history, governance/outcomes reads, and related list endpoints; results are filtered to the key's providers and scope grants. Tenant-wide administration routes remain `full_scope`.
 
-This revision restores the implemented features available at commit `673c20a8069c6c08d223440361a24e170b55bf83` alongside newer multi-cloud analysis, Kubernetes, agent execution and governance improvements. Findings, reviewed CLI/Terraform exports, GitOps, allocation, activity, printable reports and platform resource-access/publication controls are available again. The current database-recovery fixes and two-setting Docker Desktop developer setup remain. See the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md).
+For restoration notes after older snapshots, see the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md). The dashboard, multi-cloud analysis, Kubernetes federation, agent execution and governance paths described in the [feature guide index](docs/features/README.md) reflect the current tree unless a guide marks a boundary explicitly.
+
+CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change. For product positioning and differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md) and the [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md).
 
 ## Offline license access
 
@@ -56,7 +58,7 @@ Every feature has its own detailed guide covering the dashboard workflow, backen
 | View | Purpose |
 | --- | --- |
 | `/` | Deduplicated review opportunities, protection counts, scan trends, billing evidence and an hourly commitment ceiling when complete evidence exists |
-| `/resources` | Unified per-resource workspace: inventory filters, merged five-pillar evidence, billing columns, scan deltas, CSV export, AI review, decisions, review code, and agent handoff (`/findings` redirects here) |
+| `/resources` | Unified per-resource workspace: billable-first inventory (`cost_scope=billable`), filters, merged five-pillar evidence, billing columns, scan deltas, CSV export, AI review, decisions, review code, and agent handoff (`/findings` redirects here) |
 | `/workloads` | Application and environment roll-up of five-pillar resource evidence; ownership mapping and non-executable review steps |
 | `/resources/report` | Printable resource assessment report from a completed live observation |
 | `/services/[service]` | Service-specific analysis matrices (for example disks, compute, databases) |
@@ -318,7 +320,7 @@ docker compose --profile agentic up -d agent-worker
 
 ## Evidence, pricing and billing
 
-The catalog covers 36 resource families across Azure, AWS, GCP and Kubernetes. Rule enablement and threshold delegation stay under platform policy, with customer preview/save in Settings. A catalog entry does not prove every API permission, pricing input or telemetry series is available.
+The catalog covers 36 resource families across Azure, AWS, GCP and Kubernetes. **Billable vs free** types are defined in [app/billable_resources.py](app/billable_resources.py) and exposed at `GET /api/v1/resources/billable-catalog`. Scope completeness checks use billable collector types only (free NIC/NSG-style objects are documented but not treated as primary cost rows). Rule enablement and threshold delegation stay under platform policy, with customer preview/save in Settings. A catalog entry does not prove every API permission, pricing input or telemetry series is available.
 
 ```dotenv
 CLOUDSAVER_LIVE_EVIDENCE_ENABLED=true

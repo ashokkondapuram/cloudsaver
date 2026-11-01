@@ -1,5 +1,7 @@
 # Source snapshot
 
+> **Shipped product docs (Nov 2026):** See the [main README](../README.md), [Resource analysis implementation](RESOURCE_ANALYSIS_FOUNDRY_IMPLEMENTATION.md), and [feature guide index](features/README.md) (`main` @ `39def45`). This file is the original improvement blueprint from baseline commit `6e0de85`.
+
 Source: https://docs.google.com/document/d/19Ttsj8kI2HpvO7OsrXF8DzE6dB3NuBSQfVqcWFnkiHU
 
 CloudSaver & Platform Portal: Comprehensive Code, Resource Analysis & Multi-Cloud AI Foundry Improvement Guide
