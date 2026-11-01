@@ -83,9 +83,10 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         from app.focus import FocusRepository
         return FocusRepository(evidence_store).attach(tenant, scan)
 
-    def inventory(scan, tenant):
+    def inventory(scan, tenant, *, cost_scope='billable'):
         merged = assessments(scan)
         from app.resource_assessment import lifecycle
+        from app.billable_resources import include_in_cost_workspace
         previous=next((s for s in store.list(tenant['tenant_id'],100) if s['status']=='completed' and s.get('data_origin')!='legacy_synthetic' and s['scan_id']!=scan['scan_id'] and s['timestamp']<scan['timestamp'] and s.get('scope_fingerprint') and s.get('scope_fingerprint')==scan.get('scope_fingerprint')),None)
         deltas,comparison=lifecycle(merged,previous)
         scan['_lifecycle_comparison']=comparison
@@ -93,10 +94,17 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         results = repo.results(tenant['tenant_id'], keys)
         states = repo.item_states(tenant['tenant_id'], scan['scan_id'])
         decisions = repo.latest_decisions(tenant['tenant_id'], keys)
+        inventory_by_key = {}
+        for obs in scan.get('inventory') or []:
+            pseudo = inventory_observation(obs)
+            inventory_by_key[resource_key(pseudo)] = obs
         items = []
         for key, (assessment, _) in merged.items():
-            items.append(dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
-                              decision=decision_state(assessment, decisions.get(key))))
+            row_item = dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
+                              decision=decision_state(assessment, decisions.get(key)))
+            if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=inventory_by_key.get(key)):
+                continue
+            items.append(row_item)
         order = {'critical': 0, 'high': 1, 'evidence_required': 2}
         items.sort(key=lambda i: (order[i['review_priority']], -(i['retail_estimate_usd'] or 0), i['resource_name'], i['resource_key']))
         return merged, items
@@ -126,15 +134,21 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         ai_risk=Query(None, pattern=r'^(low|medium|high|critical|none)$'),
         decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'))
 
+    @router.get('/resources/billable-catalog')
+    def billable_catalog_route(tenant=Depends(current_tenant)):
+        from app.billable_resources import billable_catalog
+        return billable_catalog()
+
     @router.get('/scans/{scan_id}/resources')
     def resources(scan_id: UUID, provider: str | None = filter_params['provider'],
                   service_category: str | None = filter_params['service_category'],
                   review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
                   ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
+                  cost_scope: str = Query('billable', pattern=r'^(billable|all)$'),
                   q: str | None = Query(None, max_length=200), limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0),
                   tenant=Depends(current_tenant)):
         scan = owned(scan_id, tenant)
-        _, items = inventory(scan, tenant)
+        _, items = inventory(scan, tenant, cost_scope=cost_scope)
         selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q)
         return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summary(items),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
                     total=len(selected), items=selected[offset:offset + limit])
@@ -144,9 +158,10 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                service_category: str | None = filter_params['service_category'],
                review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
                ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
-               q: str | None = Query(None, max_length=200), tenant=Depends(current_tenant)):
+               q: str | None = Query(None, max_length=200),
+               cost_scope: str = Query('billable', pattern=r'^(billable|all)$'), tenant=Depends(current_tenant)):
         scan = owned(scan_id, tenant)
-        _, items = inventory(scan, tenant)
+        _, items = inventory(scan, tenant, cost_scope=cost_scope)
         selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q)
         return dict(filename=f"cloudsaver-resources-{scan['scan_id']}.csv", rows=len(selected), content=csv_report(selected))
 

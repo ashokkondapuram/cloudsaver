@@ -1,10 +1,7 @@
 """Explicit successful inventory scope contracts, including scopes that returned zero resources."""
-TYPES={
-    'azure':['microsoft.compute/disks','microsoft.compute/virtualmachines','microsoft.network/publicipaddresses',
-             'microsoft.web/serverfarms','microsoft.network/networkinterfaces','microsoft.network/networksecuritygroups','microsoft.network/applicationgateways'],
-    'aws':['aws:ec2:volume','aws:ec2:elastic-ip','aws:rds:db'],
-    'gcp':['compute.googleapis.com/Disk','compute.googleapis.com/Address','sqladmin.googleapis.com/Instance'],
-}
+from app.billable_resources import billable_types
+
+TYPES = {provider: billable_types(provider) for provider in ('azure', 'aws', 'gcp')}
 
 
 def completed_scopes(tenant,providers,source_ledger):
