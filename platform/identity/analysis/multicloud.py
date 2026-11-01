@@ -30,7 +30,7 @@ FAMILIES = (
  ('gcp','bigquery','database',('bigquery.googleapis.com/Reservation',),('GCP_BIGQUERY_SLOT_AUTOSCALE_AND_STORAGE',)),
  ('gcp','cloudrun-memorystore','application',('run.googleapis.com/Service','redis.googleapis.com/Instance'),('GCP_CLOUDRUN_MIN_INSTANCE_AND_MEMORYSTORE',)),
  ('gcp','vertex-ai','ai',('aiplatform.googleapis.com/Endpoint',),('GCP_VERTEX_AI_IDLE_ENDPOINT_AND_REPLICA_FLOOR',)),
- ('kubernetes','deployments','compute',('kubernetes.io/Container','kubernetes.io/Deployment','kubernetes.io/ReplicaSet'),('K8S_CONTAINER_CPU_OVERREQUEST','K8S_CONTAINER_MEMORY_OVERREQUEST')),
+ ('kubernetes','deployments','compute',('kubernetes.io/Container','kubernetes.io/Deployment','kubernetes.io/ReplicaSet'),('K8S_CONTAINER_CPU_OVERREQUEST','K8S_CONTAINER_MEMORY_OVERREQUEST','K8S_CONTAINER_UNDERPROVISIONED_RISK')),
  ('kubernetes','statefulsets','compute',('kubernetes.io/StatefulSet',),('K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE',)),
  ('kubernetes','daemonsets','compute',('kubernetes.io/DaemonSet',),('K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX',)),
  ('kubernetes','jobs','application',('kubernetes.io/CronJob','kubernetes.io/Job'),('K8S_ABANDONED_WORKLOAD_OR_NAMESPACE',)),

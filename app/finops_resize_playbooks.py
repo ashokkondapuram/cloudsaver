@@ -61,7 +61,7 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
     "aws.rds.rightsize": {
         "finops_action": "aws.rds.rightsize",
         "cloud_provider": "aws",
-        "resource_type": "aws:rds:dbinstance",
+        "resource_type": "aws:rds:db",
         "connector_kind": "aws_sdk",
         "size_field": "instance_class",
         "terraform_attribute": "instance_class",

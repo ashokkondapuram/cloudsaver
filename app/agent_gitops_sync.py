@@ -18,7 +18,7 @@ TERRAFORM_RESOURCE_MAP = {
     'microsoft.network/networksecuritygroups':'azurerm_network_security_group','microsoft.network/applicationgateways':'azurerm_application_gateway',
     'microsoft.web/serverfarms':'azurerm_service_plan','microsoft.storage/storageaccounts':'azurerm_storage_account',
     'microsoft.compute/virtualmachines':'azurerm_linux_virtual_machine',
-    'aws:ec2:volume':'aws_ebs_volume','aws:ec2:instance':'aws_instance','aws:rds:dbinstance':'aws_db_instance',
+    'aws:ec2:volume':'aws_ebs_volume','aws:ec2:instance':'aws_instance','aws:rds:db':'aws_db_instance','aws:rds:dbinstance':'aws_db_instance',
     'aws:ec2:eip':'aws_eip','aws:ec2:natgateway':'aws_nat_gateway','aws:elasticloadbalancing:loadbalancer':'aws_lb',
     'aws:dynamodb:table':'aws_dynamodb_table','aws:lambda:function':'aws_lambda_function','aws:s3:bucket':'aws_s3_bucket',
     'compute.googleapis.com/disk':'google_compute_disk','compute.googleapis.com/instance':'google_compute_instance',

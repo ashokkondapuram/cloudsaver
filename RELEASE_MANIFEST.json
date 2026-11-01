@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "431b949730ff6886073eac88aafc2c4643e313914007cd1d58020b677eec1d54",
+  "inventory_sha256": "de22748c5730141e0b202f25f81367704a56ece385164c5ecc9189d04609c0b8",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -231,8 +231,8 @@
     },
     {
       "path": "app/agent_gitops_sync.py",
-      "sha256": "d14d18fea60f3bb67843d6b0aff12ce0d0177859380e1ca41c327665d4054fc8",
-      "bytes": 12950
+      "sha256": "a40d9e0d08331d1d3a6dc98ac8b88422add9ce4b9800b1748da03dc7414ccb7a",
+      "bytes": 12981
     },
     {
       "path": "app/agent_planner.py",
@@ -666,8 +666,8 @@
     },
     {
       "path": "app/finops_resize_playbooks.py",
-      "sha256": "c64426ce41fa9676521ddbd9e333a8e89938ed7a6a6e9a12e236c7b6f926d781",
-      "bytes": 6624
+      "sha256": "75350ccff89bc556d3a661ac2995ee4097797a601fbe3ab26d2e06100c945303",
+      "bytes": 6616
     },
     {
       "path": "app/finops_saas_focus_connectors.py",
@@ -1001,8 +1001,8 @@
     },
     {
       "path": "app/resource_catalog.py",
-      "sha256": "9107bcd33efd08f188d1294f5cdf48bf6b501aa29d864eb4b141cffaa5a23978",
-      "bytes": 6706
+      "sha256": "0e6495993cf469a94c02cf66e5cb83edf4062781eee5e0f462ecf36bc43e9053",
+      "bytes": 6744
     },
     {
       "path": "app/resource_store.py",
@@ -1921,8 +1921,8 @@
     },
     {
       "path": "platform/identity/analysis/multicloud.py",
-      "sha256": "9107bcd33efd08f188d1294f5cdf48bf6b501aa29d864eb4b141cffaa5a23978",
-      "bytes": 6706
+      "sha256": "0e6495993cf469a94c02cf66e5cb83edf4062781eee5e0f462ecf36bc43e9053",
+      "bytes": 6744
     },
     {
       "path": "platform/identity/analysis/seed.py",
@@ -3283,6 +3283,11 @@
       "path": "tests/test_opportunity_groups.py",
       "sha256": "23d848287f557b0fec842a6229d80fd1519a32d86eb5580cf0b30ed188310b11",
       "bytes": 1086
+    },
+    {
+      "path": "tests/test_outbox_dispatch.py",
+      "sha256": "5d3e7d24691943cc580b323a9b362ac40725d060be64b19dc7476730ce516afd",
+      "bytes": 1435
     },
     {
       "path": "tests/test_outbox_lease.py",
