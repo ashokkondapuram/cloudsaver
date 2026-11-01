@@ -71,8 +71,8 @@ AST index entries use `repository` as the provider-specific label (`owner/repo`,
 | Component | Env / table |
 |-----------|-------------|
 | AST index | `CLOUDSAVER_GITOPS_AST_INDEX` JSON |
-| Outbox | PostgreSQL `platform_outbox_intents`, `gitops_remediation_requests` (migration `0028`) |
-| Leases | `REDIS_URL` |
+| Outbox | PostgreSQL `platform_outbox_intents`, `gitops_remediation_requests` (migrations `0028`, lease columns `0033`) |
+| Leases | Redis burst dedupe (`REDIS_URL`) plus DB `lease_owner` / `lease_fence` / `lease_until` on outbox rows |
 | Drift live reads | `CLOUDSAVER_DRIFT_LIVE_READERS=true` (ARM/EC2 metadata via workspace credentials) |
 | Outbox dispatch tick | `CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH=true` (Celery beat → `workers.tasks.dispatch_platform_outbox_all`) |
 | Drift webhook ingress | `CLOUDSAVER_DRIFT_WEBHOOK_SECRET` + `POST /api/v1/drift/cloud-events/ingest` |
@@ -83,6 +83,8 @@ AST index entries use `repository` as the provider-specific label (`owner/repo`,
 ## 6. Tests
 
 - `tests/test_drift_event_pipeline.py` — normalization, outbox idempotency, worker lease skip, AST patch, PR package guardrails.
+- `tests/test_platform_outbox_lease.py` — platform outbox fencing, expired reclaim, Redis-skip release for GitOps intents.
+- `docs/BACKEND_RELIABILITY_GUIDE.md` — prioritized backend reliability findings and verification plan.
 
 ## 7. FinOps resize autopilot (hands-free agent execution)
 

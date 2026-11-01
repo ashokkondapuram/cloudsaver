@@ -198,22 +198,24 @@ python -m pytest -q \
   tests/test_resource_evidence_contracts.py \
   tests/test_route_inventory.py \
   tests/test_billing_jobs.py \
-  tests/test_outbox_lease.py \
+  tests/test_platform_outbox_lease.py \
+  tests/test_drift_event_pipeline.py \
+  tests/test_drift_ingress_and_ast_db.py \
   tests/test_worker_health.py \
   tests/test_keycloak.py \
   tests/test_offline_license_security.py
 ```
 
-Inspect fixture/environment requirements before running integration tests. `tests/test_postgres.py` contains real-role/RLS, pooled-context, migration and worker-fencing cases; `tests/test_control_plane_postgres.py` covers control-plane persistence. `tests/test_provider_retry.py` includes a disposable-Redis case requiring `CLOUDSAVER_TEST_REDIS_URL`. Existing older outbox tests do not automatically validate the newer platform drift outbox.
+Inspect fixture/environment requirements before running integration tests. `tests/test_postgres.py` contains real-role/RLS, pooled-context, migration and worker-fencing cases; `tests/test_control_plane_postgres.py` covers control-plane persistence. `tests/test_provider_retry.py` includes a disposable-Redis case requiring `CLOUDSAVER_TEST_REDIS_URL`. Legacy `tests/test_outbox_lease.py` covers the older scan notification outbox in `database/outbox`; platform drift/GitOps leases are covered by `tests/test_platform_outbox_lease.py`.
 
 Add regression cases for every confirmed finding. Then execute real PostgreSQL/Redis tests, service-level API tests and bounded load/fault tests. Finally run authorized provider sandbox acceptance for each enabled operation and endpoint profile. Record skipped tests and unavailable dependencies explicitly.
 
 ## 13. Delivery sequence and definition of done
 
-1. Snapshot baseline contracts and reproduce confirmed findings.
-2. Fix metadata isolation and ingress acknowledgement loss.
-3. Add drift outbox lease recovery, fencing and contention recovery.
-4. Harden numeric/provider parsing and telemetry failure contracts.
+1. Snapshot baseline contracts and reproduce confirmed findings. **Done** for the prioritized table in this guide.
+2. Fix metadata isolation and ingress acknowledgement loss. **Done** (`filter_scan`, drift ingress batch cap).
+3. Add drift outbox lease recovery, fencing and contention recovery. **Done** (migration `0033`, `tests/test_platform_outbox_lease.py`).
+4. Harden numeric/provider parsing and telemetry failure contracts. **Done** (`read_json`, `evaluate_series`).
 5. Audit every domain query, API and export for tenant/provider scope.
 6. Validate billing precision, revisions and completeness semantics.
 7. Exercise migrations, health, load and restore procedures.

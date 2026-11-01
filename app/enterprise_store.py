@@ -57,6 +57,12 @@ class EnterpriseStore:
                         raise ValueError(f'Apply forced-RLS migrations through 0032_v3_semantic_embeddings before startup ({table})')
                 if not db.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ai_data_holds' AND column_name='released_at'").fetchone():
                     raise ValueError('Apply migration 0019_multicloud_governance_and_pillars before AI startup')
+                if db.execute("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='platform_outbox_intents'").fetchone():
+                    if not db.execute(
+                        "SELECT 1 FROM information_schema.columns WHERE table_schema='public' "
+                        "AND table_name='platform_outbox_intents' AND column_name='lease_owner'"
+                    ).fetchone():
+                        raise ValueError('Apply migration 0033_platform_outbox_lease before drift outbox dispatch')
         else:
             Path(self.path).parent.mkdir(parents=True,exist_ok=True)
             with self.transaction(str(UUID(int=0))) as db:
@@ -308,6 +314,21 @@ class EnterpriseStore:
                 db.db.executescript(GOVERNANCE_SQLITE)
                 db.db.executescript(engineering_sqlite())
                 db.db.executescript(drift_outbox_sqlite())
+                if db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='platform_outbox_intents'"
+                ).fetchone():
+                    present = {
+                        row[1]
+                        for row in db.execute("PRAGMA table_info(platform_outbox_intents)").fetchall()
+                    }
+                    if "lease_owner" not in present:
+                        db.execute("ALTER TABLE platform_outbox_intents ADD COLUMN lease_owner TEXT")
+                    if "lease_fence" not in present:
+                        db.execute(
+                            "ALTER TABLE platform_outbox_intents ADD COLUMN lease_fence INTEGER NOT NULL DEFAULT 0"
+                        )
+                    if "lease_until" not in present:
+                        db.execute("ALTER TABLE platform_outbox_intents ADD COLUMN lease_until TEXT")
                 db.db.executescript(drift_v2_sqlite())
                 db.db.executescript(v3_finops_sqlite())
                 db.db.executescript(v3_greenops_sqlite())
