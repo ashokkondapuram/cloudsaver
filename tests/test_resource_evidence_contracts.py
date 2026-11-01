@@ -112,6 +112,22 @@ def test_coverage_manifest_marks_partial_when_scope_inventory_incomplete():
     assert manifest['failed_scopes'][0]['scope_id'] == 's'
 
 
+def test_provider_restricted_scan_drops_foreign_failed_scopes():
+    scan = dict(
+        cloud_providers=['azure', 'aws'],
+        findings=[],
+        inventory=[dict(cloud_provider='aws', scope_id='123456789012', subscription_id='123456789012', resource_id='vol-a')],
+        coverage_manifest=dict(
+            failed_scopes=[dict(provider='azure', scope_id='azure-sub', error_category='read_failed', message='test')],
+            partial=True,
+            clean_baseline=False,
+        ),
+    )
+    scoped = filter_scan(scan, {'aws'})
+    assert scoped['coverage_manifest']['failed_scopes'] == []
+    assert scoped['coverage_manifest']['partial'] is False
+
+
 def test_a_broken_rule_evaluation_does_not_become_a_pass():
     disk = node('disk', 'microsoft.compute/disks', evidence={'disk_state': 'Unattached'})
     outcomes = evaluate_inventory([disk], policies={RULES[0][0]: {'parameters': {'minimum_days': True}}}, observed_at=NOW, now=NOW)

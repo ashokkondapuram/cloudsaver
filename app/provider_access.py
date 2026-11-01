@@ -130,7 +130,9 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
                        and finding_in_scope({'cloud_provider':row.get('provider'),'scope_id':row.get('scope_id'),'subscription_id':row.get('scope_id')},scopes)]
     from app.inventory import coverage, coverage_manifest
     prior_manifest = scan.get('coverage_manifest') or {}
-    failed_scopes = [row for row in prior_manifest.get('failed_scopes', []) if isinstance(row, dict) and finding_in_scope(
+    failed_scopes = [row for row in prior_manifest.get('failed_scopes', []) if isinstance(row, dict)
+                     and row.get('provider') in allowed
+                     and finding_in_scope(
         {'cloud_provider': row.get('provider'), 'scope_id': row.get('scope_id'), 'subscription_id': row.get('scope_id')}, scopes)]
     manifest = coverage_manifest(inventory_in_scope, in_scope, evaluations_in_scope, scope_results=scope_results_in_scope,
                                  failed_scopes=failed_scopes)
