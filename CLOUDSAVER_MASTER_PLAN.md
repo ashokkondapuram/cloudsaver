@@ -65,6 +65,7 @@ See module docstrings; pgvector embeddings planned as follow-on migration when e
 ## 4. v3.0 pillars
 
 - SaaS FOCUS 1.1 mesh (`finops_saas_focus_connectors`)
+- FinOps VM resize autopilot (`finops_resize_playbooks`, `finops_autopilot_*`, agent `compute.resize`)
 - eBPF network attribution (`collectors_ebpf_flow`, `ebpf-flow-exporter/`)
 - Pre-merge CI firewall (`gitops_pre_merge_firewall`)
 - Sixth pillar GreenOps (`scanner_greenops`)
