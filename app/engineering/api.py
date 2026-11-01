@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from pydantic import ValidationError
 from app.auth import Role, require_workspace_role
 from app.gitops_api import bounded_json
+from app.engineering.actions import ACTIONS, downtime_class
 from app.engineering.contracts import WorkloadCreate, WorkloadUpdate, MemberCreate, PlanCreate, PlanRevision
-from app.engineering.readiness import POLICY, RULES
+from app.engineering.readiness import POLICY
 from app.engineering import responses as out
 from app.engineering.repository import Engineering, EngineeringError, scopes
 
@@ -50,7 +51,8 @@ def create_router(evidence_store, current_tenant):
     def capabilities(tenant=Depends(current_tenant)):
         return dict(schema_version=1,stage='local_review',execution_enabled=False,policy=POLICY,
                     scopes=[dict(provider='azure',scope_id=s) for s in scopes(tenant)],
-                    actions=[dict(id=k,rule_id=v,rule_version='1',mode='review_only',sandbox_verified=False) for k,v in RULES.items()],
+                    actions=[dict(id=k,rule_id=v['rule_id'],rule_version='1',mode='review_only',
+                                  downtime_class=downtime_class(k),sandbox_verified=False) for k,v in ACTIONS.items()],
                     limits=dict(workloads=1000,members_per_workload=1000,plans_per_workload=1000,versions_per_plan=1000),
                     acceptance_required=['native_api_permissions','resource_incarnation','historical_guest_memory','application_slo',
                                          'terraform_state_ownership','protected_pipeline_attestation','independent_approval','billing_reconciliation'])

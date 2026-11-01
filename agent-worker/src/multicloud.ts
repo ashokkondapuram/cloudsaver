@@ -62,13 +62,14 @@ export function multicloudExecutor(options:NativeOptions={}){
       }
       if(step.operation==='compute.resize'&&arn[6]){
         const targetType=String(step.arguments.target_size);
+        const zeroDowntime=step.arguments.resize_mode==='zero_downtime';
         const stateName=typeof current.State==='string'?current.State:current.State?.Name;
         const wasRunning=stateName==='running';
-        if(wasRunning){
+        if(wasRunning&&!zeroDowntime){
           await clients.ec2.send(new sdk.StopInstancesCommand({InstanceIds:[arn[6]]}));
         }
         await clients.ec2.send(new sdk.ModifyInstanceAttributeCommand({InstanceId:arn[6],InstanceType:{Value:targetType}}));
-        if(wasRunning&&step.arguments.restore_power===true){
+        if(wasRunning&&!zeroDowntime&&step.arguments.restore_power===true){
           await clients.ec2.send(new sdk.StartInstancesCommand({InstanceIds:[arn[6]]}));
         }
         const after=await inspect();
@@ -107,14 +108,15 @@ export function multicloudExecutor(options:NativeOptions={}){
       if(inspections.get(key)!.digest!==digest||!fingerprint)return {status:'failed',code:'LIVE_STATE_CHANGED'};
       if(step.operation==='compute.resize'&&m[1]==='compute'&&m[5]==='instances'){
         const target=String(step.arguments.target_size);
+        const zeroDowntime=step.arguments.resize_mode==='zero_downtime';
         const wasRunning=current.status==='RUNNING';
-        if(wasRunning){
+        if(wasRunning&&!zeroDowntime){
           const stop=await boundedRequest(url+'/stop',{method:'POST',headers},options.request);
           if(![200,201,202].includes(stop.status))return {status:'uncertain',code:'GCP_STOP_UNCERTAIN',http_status:stop.status};
         }
         const resize=await boundedRequest(url+'/setMachineType',{method:'POST',headers,body:JSON.stringify({machineType:target})},options.request);
-        if(![200,201,202].includes(resize.status))return {status:'uncertain',code:'GCP_RESIZE_UNCERTAIN',http_status:resize.status};
-        if(wasRunning&&step.arguments.restore_power===true){
+        if(![200,201,202].includes(resize.status))return zeroDowntime?{status:'failed',code:'ZERO_DOWNTIME_RESIZE_UNAVAILABLE',http_status:resize.status}:{status:'uncertain',code:'GCP_RESIZE_UNCERTAIN',http_status:resize.status};
+        if(wasRunning&&!zeroDowntime&&step.arguments.restore_power===true){
           const start=await boundedRequest(url+'/start',{method:'POST',headers},options.request);
           if(![200,201,202].includes(start.status))return {status:'uncertain',code:'GCP_START_UNCERTAIN',http_status:start.status};
         }

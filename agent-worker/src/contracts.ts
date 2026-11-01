@@ -71,10 +71,16 @@ export function validateStepData(step:Step,c:Connector):void {
     }
     throw new Error('Invalid GitOps patch mode');
   }
-  if(step.operation==='compute.resize'){
-    if(Object.keys(args).sort().join(',')!=='restore_power,target_size'||typeof args.target_size!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(args.target_size)||args.restore_power!==true)throw new Error('Invalid resize arguments');
-    return;
-  }
+      if(step.operation==='compute.resize'){
+        const keys=Object.keys(args).sort().join(',');
+        const mode=args.resize_mode==='zero_downtime'?'zero_downtime':'maintenance_window';
+        if(mode==='zero_downtime'){
+          if(keys!=='resize_mode,restore_power,target_size'&&keys!=='resize_mode,target_size')throw new Error('Invalid resize arguments');
+          if(args.restore_power===true)throw new Error('Invalid resize arguments');
+        }else if(keys!=='restore_power,target_size'||args.restore_power!==true)throw new Error('Invalid resize arguments');
+        if(typeof args.target_size!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(args.target_size))throw new Error('Invalid resize arguments');
+        return;
+      }
   if(step.operation.endsWith('snapshot.create')){
     if(Object.keys(args).sort().join(',')!=='retention_days,snapshot_name_prefix'||typeof args.snapshot_name_prefix!=='string'||!/^[a-z][a-z0-9-]{0,39}$/.test(args.snapshot_name_prefix)||!Number.isInteger(args.retention_days)||Number(args.retention_days)<7||Number(args.retention_days)>90)throw new Error('Invalid safety snapshot');
     return;

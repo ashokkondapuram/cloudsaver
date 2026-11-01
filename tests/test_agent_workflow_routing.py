@@ -40,6 +40,9 @@ def test_engineering_capabilities_actions_align_with_readiness():
     for action, rule_code in RULES.items():
         assert action in ("azure.vm.rightsize", "azure.disk.review")
         assert rule_code.startswith("CS-AZ-")
+        route = route_for_rule("AZURE_VM_RIGHTSIZING_UTILIZATION" if action == "azure.vm.rightsize" else "AZURE_DISK_UNATTACHED_RETENTION")
+        if route.engineering_action == action:
+            assert route.zero_downtime is True
 
 
 @pytest.mark.parametrize("rule_id,finops_action", list(FINOPS_RULE_TO_ACTION.items()))

@@ -81,15 +81,16 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
       }
       if(step.operation==='compute.resize'){
         const targetSize=String(step.arguments.target_size);
+        const zeroDowntime=step.arguments.resize_mode==='zero_downtime';
         if(kind==='microsoft.compute/virtualmachines'){
         const wasRunning=power==='PowerState/running';
-        if(wasRunning){
+        if(wasRunning&&!zeroDowntime){
           const dealloc=await boundedRequest('https://management.azure.com'+task.resource_id+'/deallocate?api-version=2024-03-01',{method:'POST',headers},options.request);
           if(![200,202].includes(dealloc.status))return {status:'uncertain',code:'AZURE_DEALLOCATE_UNCERTAIN',http_status:dealloc.status};
         }
         const patch=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version=2024-03-01',{method:'PATCH',headers,body:JSON.stringify({properties:{hardwareProfile:{vmSize:targetSize}}})},options.request);
-        if(![200,202].includes(patch.status))return {status:'uncertain',code:'AZURE_RESIZE_UNCERTAIN',http_status:patch.status};
-        if(wasRunning&&step.arguments.restore_power===true){
+        if(![200,202].includes(patch.status))return zeroDowntime?{status:'failed',code:'ZERO_DOWNTIME_RESIZE_UNAVAILABLE',http_status:patch.status}:{status:'uncertain',code:'AZURE_RESIZE_UNCERTAIN',http_status:patch.status};
+        if(wasRunning&&!zeroDowntime&&step.arguments.restore_power===true){
           const start=await boundedRequest('https://management.azure.com'+task.resource_id+'/start?api-version=2024-03-01',{method:'POST',headers},options.request);
           if(![200,202].includes(start.status))return {status:'uncertain',code:'AZURE_START_UNCERTAIN',http_status:start.status};
         }

@@ -144,7 +144,7 @@ def render_code(plan):
 
 
 def validate_plan(value, task, catalog):
-    allowed = {'summary', 'steps', 'finops_action', 'target_size'}
+    allowed = {'summary', 'steps', 'finops_action', 'target_size', 'engineering_action', 'resize_mode'}
     unknown = set(value) - allowed
     if unknown:
         raise ValueError('Unsupported plan fields')
@@ -233,13 +233,23 @@ def validate_plan(value, task, catalog):
                 raise ValueError('Safety snapshots require prior inspection, a bounded prefix and 7–90 day retention')
             writes+=1
         elif step['operation'] == 'compute.resize':
-            if c.id not in inspected or set(args) != {'target_size', 'restore_power'}:
+            allowed_resize = {'target_size', 'restore_power', 'resize_mode'}
+            if c.id not in inspected or set(args) - allowed_resize:
                 raise ValueError('Resize requires prior inspection and explicit target_size')
             target = args['target_size']
             if not isinstance(target, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', target):
                 raise ValueError('Invalid target_size')
-            if args.get('restore_power') is not True:
-                raise ValueError('restore_power must be true for FinOps resize')
+            mode = args.get('resize_mode', 'maintenance_window')
+            if mode not in ('maintenance_window', 'zero_downtime'):
+                raise ValueError('Invalid resize_mode')
+            restore = args.get('restore_power')
+            if mode == 'zero_downtime':
+                if restore is True:
+                    raise ValueError('zero_downtime resize cannot set restore_power')
+                if restore not in (False, None):
+                    raise ValueError('Invalid restore_power for zero_downtime resize')
+            elif restore is not True:
+                raise ValueError('restore_power must be true for maintenance_window resize')
             writes += 1
             resize_target = target
         else:

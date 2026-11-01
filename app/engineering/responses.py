@@ -67,6 +67,9 @@ class Check(Record):
     window_end:str|None=None
     aggregation_method:str|None=None
     source_resolution_seconds:int|None=None
+    downtime_policy:str|None=None
+    action:str|None=None
+    resize_mode:str|None=None
 
 
 class FinancialOutcome(Record):
@@ -149,6 +152,7 @@ class Policy(Record):
     maximum_gap_minutes:int
     maximum_observation_age_hours:int
     execution_enabled:Literal[False]
+    downtime_policy:Literal['zero_downtime']
 
 
 class Scope(Record):
@@ -161,6 +165,7 @@ class Action(Record):
     rule_id:str
     rule_version:str
     mode:Literal['review_only']
+    downtime_class:Literal['zero_downtime']
     sandbox_verified:Literal[False]
 
 

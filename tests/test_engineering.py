@@ -68,6 +68,7 @@ def test_complete_review_and_version_history(engineering):
     assert plan['state']=='evidence_required' and plan['execution_enabled'] is False
     readiness=plan['parameters']['readiness']
     assert readiness['financial_outcome']['reconciled_benefit'] is None
+    assert any(c['code']=='ZERO_DOWNTIME_POLICY' for c in readiness['checks'])
     assert next(c for c in readiness['checks'] if c['code']=='MEMORY_PERCENT_HISTORY')['status']=='unknown'
     with s.db.transaction(s.tenant['tenant_id']) as db:
         assert db.execute('SELECT count(*) FROM engineering_outbox').fetchone()[0]==3

@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "e94a1d51e114a3e048884e7e8ac56b9a1c5acf058f6eea8fa69949d287d9dc9e",
+  "inventory_sha256": "44371cc4f0fceb0146e1375da120ab54edab3450e2e259d7a0db56d559b5e7a4",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -141,13 +141,13 @@
     },
     {
       "path": "agent-worker/src/connectors.ts",
-      "sha256": "c8a4cd034ad84093e056648faae7900c7f46c485983d1640047a0a1327dc2551",
-      "bytes": 13748
+      "sha256": "45205a4de2ba6daf5d0980b291301e31f9599bdcbe0704d21548266b635f7bfe",
+      "bytes": 13947
     },
     {
       "path": "agent-worker/src/contracts.ts",
-      "sha256": "de0397616a9f434c2cba66dbd64b77adce6583d6e3065e357e0b6908328285f2",
-      "bytes": 11278
+      "sha256": "a4fc12ad393b74b11c128f9834e3e7382b28aaa9975bfa634a4f6f0b290f0fa5",
+      "bytes": 11731
     },
     {
       "path": "agent-worker/src/health.ts",
@@ -166,8 +166,8 @@
     },
     {
       "path": "agent-worker/src/multicloud.ts",
-      "sha256": "77f72b76987814958a40ae585be5192aa3d85096497ea1c4aba94d837b6ea723",
-      "bytes": 17106
+      "sha256": "b11f30facee9621d883277ae870ade89888ecb566961534ee22ce47e5919c82c",
+      "bytes": 17409
     },
     {
       "path": "agent-worker/src/runtime.ts",
@@ -226,8 +226,8 @@
     },
     {
       "path": "app/agent_contract.py",
-      "sha256": "b28e8230b05502f9733da758f62a8d0735122f4d060e8a656851848634d8bde5",
-      "bytes": 18951
+      "sha256": "e2d551414fd9ea34170c3c686fd0405aab32f4645c11712d08a3eadc8e6119be",
+      "bytes": 19577
     },
     {
       "path": "app/agent_gitops_sync.py",
@@ -243,6 +243,11 @@
       "path": "app/agent_store.py",
       "sha256": "1a0dc4f6ea664eaa2106c40cb801f3e2acf2066748d317567a880ca12753022b",
       "bytes": 20641
+    },
+    {
+      "path": "app/agent_workflow_routing.py",
+      "sha256": "39b547c0cac2f6774b27dbeb3b4d8c6deaf2e3cf280aefddbe03c31ca6e4a7c5",
+      "bytes": 4967
     },
     {
       "path": "app/ai_advisory.py",
@@ -606,8 +611,8 @@
     },
     {
       "path": "app/engineering/api.py",
-      "sha256": "8d9f36d7469dd2b9a1a00782c4ced4ab31ff87c0eb9500514112ea8fe8377c36",
-      "bytes": 6850
+      "sha256": "9667e0a7cff193f98ea65960466c4723d1f10892c8fb63e48b5f80f3194a54fb",
+      "bytes": 6984
     },
     {
       "path": "app/engineering/contracts.py",
@@ -621,8 +626,8 @@
     },
     {
       "path": "app/engineering/readiness.py",
-      "sha256": "49225b4312f0745e9e7f82bdecef9299058d9d92eb598294acef02f0443ea5eb",
-      "bytes": 7154
+      "sha256": "9c682de5306fce4c51ef75cc5883346ac720b6cb3d0411a054b275d340621696",
+      "bytes": 8008
     },
     {
       "path": "app/engineering/repository.py",
@@ -631,8 +636,8 @@
     },
     {
       "path": "app/engineering/responses.py",
-      "sha256": "3829d94553f1d9ec6602c666d0c4c20a5cfe9ce4acffea950aa23691e7107fba",
-      "bytes": 3771
+      "sha256": "2552110abd0fd218f815b871db7715dd28e713ffd79d14693b47cfa1b7e9a8d1",
+      "bytes": 3949
     },
     {
       "path": "app/engineering/schema.py",
@@ -1291,8 +1296,8 @@
     },
     {
       "path": "docs/ENGINEERING_INCREMENT.md",
-      "sha256": "e8c37e9592eb9939a853c0e5140026949a50e76354800e8d06e7004996c68860",
-      "bytes": 9419
+      "sha256": "3e9f66c7ac0e4f36131e09081f7091257cdcb2960b2d213dc501a2637ce1199b",
+      "bytes": 9666
     },
     {
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
@@ -2995,6 +3000,11 @@
       "bytes": 16853
     },
     {
+      "path": "tests/test_agent_workflow_routing.py",
+      "sha256": "e1e0d3bddcc1dc7551ca5905692da486db59e715c7869b44bf9d5a4dd27b437f",
+      "bytes": 7130
+    },
+    {
       "path": "tests/test_ai_advisory.py",
       "sha256": "d10e18558436934508a7e651ef78a22a184ff64f900d82f186ee1fc788cfcb5f",
       "bytes": 14364
@@ -3141,8 +3151,8 @@
     },
     {
       "path": "tests/test_engineering.py",
-      "sha256": "4bb02858a51c7b875dc0a05e50b162e2b32773fc90242fd45bf506dd4ca9300e",
-      "bytes": 13182
+      "sha256": "d9eac964704264d8027557ec8e4e8f3ceecd5e938e0d71907176285c731e8fd5",
+      "bytes": 13261
     },
     {
       "path": "tests/test_engineering_migration.py",

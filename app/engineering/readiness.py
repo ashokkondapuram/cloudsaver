@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 import hashlib
 from pathlib import Path
 from app.control_plane.plans import digest
+from app.engineering.actions import ACTIONS
 from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series, moment
 
 POLICY = {'id':'engineering-azure-pilot', 'version':1, 'minimum_days':14, 'minimum_coverage':.95,
-          'maximum_gap_minutes':60, 'maximum_observation_age_hours':24, 'execution_enabled':False}
-RULES = {'azure.vm.rightsize':'CS-AZ-VM-RIGHTSIZING', 'azure.disk.review':'CS-AZ-DISK-UNATTACHED'}
+          'maximum_gap_minutes':60, 'maximum_observation_age_hours':24, 'execution_enabled':False,
+          'downtime_policy':'zero_downtime'}
+RULES = {action_id: meta['rule_id'] for action_id, meta in ACTIONS.items()}
 EVALUATOR_DIGEST = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 
 
@@ -49,12 +51,18 @@ def evaluate(resource, scan, workload, *, action, candidate_sku=None, now=None, 
     kind = resource.get('resource_type','').lower()
     expected = 'microsoft.compute/virtualmachines' if action == 'azure.vm.rightsize' else 'microsoft.compute/disks'
     check('APPLICABILITY', 'pass' if resource.get('cloud_provider','azure')=='azure' and kind==expected else 'not_applicable', 'The pilot action is limited to its exact Azure resource type.')
+    check('ZERO_DOWNTIME_POLICY', 'pass', 'Engineering actions are limited to zero-downtime review and execution profiles; deallocate/stop resize cycles are out of scope.',
+          'policy', downtime_policy=POLICY['downtime_policy'], action=action)
     if action == 'azure.vm.rightsize':
         for name in ('cpu_percent','memory_percent'):
             checks.append(dict(code=name.upper()+'_HISTORY', **metric_gate(evidence,name,now)))
         check('CANDIDATE_COMPATIBILITY','unknown', 'SKU architecture, quotas, availability, capacity, licensing and dependencies need authoritative verification.',
               'unverified_candidate', candidate_sku=candidate_sku)
+        check('ZERO_DOWNTIME_METHOD', 'unknown',
+              'Live resize without deallocate/stop must be verified for this SKU pair, or use scale-out replacement outside this pilot.',
+              'execution_profile', resize_mode='zero_downtime')
     else:
+        check('ZERO_DOWNTIME_METHOD', 'pass', 'Disk review collects evidence only; no compute power transition is requested.', 'execution_profile')
         check('ATTACHMENT_HISTORY','unknown', 'Unattached state today does not prove sustained disuse or deletion eligibility.')
         check('RESTORE_VERIFICATION','unknown','A configured snapshot or backup is not proof of a tested restore.')
     check('IAC_OWNERSHIP','unknown', 'A registered mapping is a declaration until state ownership and competing states are verified.',
@@ -74,4 +82,5 @@ def evaluate(resource, scan, workload, *, action, candidate_sku=None, now=None, 
                 next_steps=['Collect missing historical and workload evidence.', 'Verify IaC ownership and the resource incarnation.',
                             'Prepare a customer-reviewed Terraform change in the registered repository.',
                             'Use independent approval and a protected pipeline before any apply.',
+                            'When execution is authorized, use zero-downtime resize (no deallocate/stop) or scale-out replacement only.',
                             'Verify application/infrastructure outcomes and reconcile billing separately.'])
