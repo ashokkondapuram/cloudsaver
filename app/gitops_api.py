@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from app.auth import Role, require_workspace_role
 from app.entitlements import enforce_terraform_export
 from app.gitops import GitHubApp, GitOpsConfig, GitOpsFailure, GitOpsUnavailable, build_review
+from app.gitops_vcs import repository_label
 from app.gitops_store import ReviewConflict, ReviewRepository
 from app.plan_policy import MAX_BYTES, InvalidPlan, PlanPolicy, evaluate_plan, load_json
 
@@ -97,8 +98,19 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
 
     @router.get('/api/v1/gitops/targets')
     def targets(tenant=Depends(current_tenant)):
-        return dict(publishing_enabled=config.enabled,targets=[{k:t[k] for k in ('target_id','repository','base_branch')}
-                    for t in config.targets if t['tenant_id']==tenant['tenant_id']])
+        rows = []
+        for t in config.targets:
+            if t['tenant_id'] != tenant['tenant_id']:
+                continue
+            rows.append(
+                dict(
+                    target_id=t['target_id'],
+                    vcs_provider=t.get('vcs_provider', 'github'),
+                    repository=repository_label(t),
+                    base_branch=t['base_branch'],
+                )
+            )
+        return dict(publishing_enabled=config.enabled, targets=rows)
 
     @router.get('/api/v1/gitops/syncs')
     def linked_history(tenant=Depends(current_tenant)):
@@ -183,7 +195,7 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
             if not resource_visible(tenant, provider, owned.get('scope_id') or owned.get('subscription_id')):
                 raise ValueError('Resource is outside the current scope')
             mapping = GitOpsAstMapper().lookup(owned['resource_id'])
-            repositories = {row['repository'] for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
+            repositories = {repository_label(row) for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
             if mapping.repository not in repositories:
                 raise ValueError('Repository is not granted')
             return mapping
@@ -231,7 +243,7 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
             mapping = GitOpsAstMapper().lookup(owned['resource_id']).model_dump()
             if not mapping.get('start_line') or not mapping.get('indexed_commit_sha'):
                 raise ValueError('AST mapping is incomplete; reindex required')
-            repositories = {row['repository'] for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
+            repositories = {repository_label(row) for row in config.targets if row['tenant_id'] == tenant['tenant_id']}
             if mapping['repository'] not in repositories:
                 raise ValueError('Repository is not granted')
             config.target(tenant['tenant_id'], payload.target_id)

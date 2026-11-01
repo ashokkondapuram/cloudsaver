@@ -34,28 +34,20 @@ class GitOpsConfig:
         seen = set()
         normalized = []
         for target in targets:
-            if not isinstance(target,dict) or set(target) != {'target_id','tenant_id','repository','repository_id','base_branch','installation_id'}:
-                raise ValueError('GitOps targets require explicit repository and installation bindings')
-            row = dict(target,tenant_id=str(UUID(target['tenant_id'])))
-            if not re.fullmatch(r'[a-z][a-z0-9_-]{0,39}',row['target_id']) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}/[A-Za-z0-9_.-]{1,100}',row['repository']):
-                raise ValueError('Invalid GitOps target/repository name')
-            if row['repository'].split('/')[1] in ('.','..'):
-                raise ValueError('Invalid GitOps repository path')
-            branch = row['base_branch']
-            if not isinstance(branch,str) or not re.fullmatch(r'[A-Za-z0-9_-][A-Za-z0-9_./-]{0,119}',branch) or any(x in branch for x in ('..','//','@{')) or branch.endswith(('/','.','.lock')):
-                raise ValueError('Invalid GitOps base branch')
-            if any(type(row[k]) is not int or not 1<=row[k]<2**53 for k in ('repository_id','installation_id')):
-                raise ValueError('Numeric repository and installation IDs are required')
-            key = row['tenant_id'],row['target_id']
+            from app.gitops_vcs import normalize_gitops_target
+
+            row = normalize_gitops_target(target)
+            key = row["tenant_id"], row["target_id"]
             if key in seen:
-                raise ValueError('Duplicate GitOps target')
+                raise ValueError("Duplicate GitOps target")
             seen.add(key)
             normalized.append(row)
-        app_id = os.getenv('CLOUDSAVER_GITHUB_APP_ID','')
-        enabled = os.getenv('CLOUDSAVER_GITOPS_PUBLISH','false') == 'true'
-        if enabled and (not app_id.isdigit() or not os.getenv('CLOUDSAVER_GITHUB_APP_PRIVATE_KEY')):
-            raise ValueError('GitHub App configuration is required before enabling publishing')
-        return cls(tuple(normalized),enabled,app_id)
+        app_id = os.getenv("CLOUDSAVER_GITHUB_APP_ID", "")
+        enabled = os.getenv("CLOUDSAVER_GITOPS_PUBLISH", "false") == "true"
+        from app.gitops_vcs import validate_publish_credentials
+
+        validate_publish_credentials(tuple(normalized), enabled=enabled, app_id=app_id)
+        return cls(tuple(normalized), enabled, app_id)
 
     def target(self,tenant_id,target_id):
         target = next((t for t in self.targets if t['tenant_id']==tenant_id and t['target_id']==target_id),None)

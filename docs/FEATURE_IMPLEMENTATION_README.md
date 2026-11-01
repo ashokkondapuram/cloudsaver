@@ -51,9 +51,20 @@ Human-reviewed request from `/automation` → core API (`app/gitops_api.py`):
 1. Redis lock `gitops:pr:{idempotency_key}`.
 2. Verifies live Git file block still matches indexed AST snapshot (`app/gitops/ast_hcl_indexer.py`); otherwise `REPO_DRIFT_REINDEX_REQUIRED`.
 3. Surgical attribute patch inside the line range.
-4. GitHub App flow (`app/gitops_remediation_flow.py`): installation token → create branch (idempotent 422) → `PUT /contents` with base blob SHA → open draft PR with five-pillar + FOCUS body.
+4. GitHub App / Azure DevOps / GitLab / Bitbucket flow (`app/gitops_vcs.py` + `app/gitops_remediation_flow.py`): provider-specific branch, commit, and pull/merge request creation with shared AST patching and repo-block verification.
 
-## 4. Operations
+## 4. Supported version-control providers
+
+| Provider | `vcs_provider` | Target binding | Credential |
+|----------|----------------|----------------|------------|
+| GitHub | `github` (default) | `repository`, `repository_id`, `installation_id` | GitHub App (`CLOUDSAVER_GITHUB_APP_*`) |
+| Azure DevOps | `azure_devops` | `organization`, `project`, `repository`, `repository_id` | `CLOUDSAVER_AZDO_PAT` |
+| GitLab | `gitlab` | `project_path`, `project_id`, optional `gitlab_host` | `CLOUDSAVER_GITLAB_TOKEN` |
+| Bitbucket Cloud | `bitbucket` | `workspace`, `repository_slug`, `repository_id` | `CLOUDSAVER_BITBUCKET_TOKEN` |
+
+AST index entries use `repository` as the provider-specific label (`owner/repo`, `org/project/repo`, GitLab `group/project`, or `workspace/slug`). Optional `vcs_provider` on the mapping must match the selected target.
+
+## 5. Operations
 
 | Component | Env / table |
 |-----------|-------------|
@@ -61,7 +72,8 @@ Human-reviewed request from `/automation` → core API (`app/gitops_api.py`):
 | Outbox | PostgreSQL `platform_outbox_intents`, `gitops_remediation_requests` (migration `0028`) |
 | Leases | `REDIS_URL` |
 | GitHub | `CLOUDSAVER_GITHUB_APP_*`, `CLOUDSAVER_GITOPS_PUBLISH` |
+| Azure DevOps / GitLab / Bitbucket | `CLOUDSAVER_AZDO_PAT`, `CLOUDSAVER_GITLAB_TOKEN`, `CLOUDSAVER_BITBUCKET_TOKEN` (as needed per target) |
 
-## 5. Tests
+## 6. Tests
 
 - `tests/test_drift_event_pipeline.py` — normalization, outbox idempotency, worker lease skip, AST patch, PR package guardrails.

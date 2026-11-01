@@ -56,7 +56,7 @@ def process_gitops_pr_intent(
         raise
     except Exception:
         remediation_store.update_status(workspace_id, request_id, "UNCERTAIN")
-        outbox.fail(workspace_id, intent["id"], "github_uncertain")
+        outbox.fail(workspace_id, intent["id"], "vcs_uncertain")
         raise
     finally:
         lease.release(lease_key, token)

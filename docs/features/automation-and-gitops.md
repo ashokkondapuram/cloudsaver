@@ -132,7 +132,7 @@ GitOps targets are bound to a workspace by the operator. A target that belongs t
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `CLOUDSAVER_GITOPS_TARGETS` | JSON array (at most 100) of targets with exactly `target_id`, `tenant_id`, `repository` (`owner/name`), `repository_id`, `base_branch` and `installation_id` | `[]` |
+| `CLOUDSAVER_GITOPS_TARGETS` | JSON array (at most 100) of targets. **GitHub** (default): `target_id`, `tenant_id`, `repository` (`owner/name`), `repository_id`, `base_branch`, `installation_id`. **Azure DevOps**: add `"vcs_provider":"azure_devops"`, `organization`, `project`, `repository`, `repository_id` (repo GUID). **GitLab** / **Bitbucket**: see `docs/FEATURE_IMPLEMENTATION_README.md`. | `[]` |
 | `CLOUDSAVER_GITOPS_PUBLISH` | Set to `true` to enable draft pull request publishing | `false` |
 | `CLOUDSAVER_GITHUB_APP_ID` | Numeric GitHub App ID; required when publishing is enabled | Unset |
 | `CLOUDSAVER_GITHUB_APP_PRIVATE_KEY` | GitHub App private key used to sign app tokens; required when publishing is enabled. Store it in a secrets manager. | Unset |

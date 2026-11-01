@@ -12,6 +12,7 @@ class ResourceMapping(BaseModel):
     repository: str
     file_path: str
     iac_kind: str
+    vcs_provider: str | None = Field(default=None, pattern=r'^(github|azure_devops|gitlab|bitbucket)$')
     address: str | None = None
     start_line: int | None = Field(default=None, ge=1)
     end_line: int | None = Field(default=None, ge=1)
