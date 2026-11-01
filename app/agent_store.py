@@ -215,6 +215,36 @@ class AgentRepository:
                 connector_bindings=[binding(c) for c in catalog if c.id in {s['connector_id'] for s in p['plan']['steps']}])
             return self.public(self._save(db,task,'awaiting_approval','ai_plan_drafted','worker:'+worker['id'],dict(plan_hash=p['plan_hash'],step_count=len(p['plan']['steps']))))
 
+    def install_finops_plan(self, tenant, task_id, plan, catalog, *, auto_approve=False, approve_minutes=60):
+        from app.agent_contract import binding, program_hash, validate_plan
+
+        with self.store.transaction(tenant['tenant_id'], write=True) as db:
+            task = self._owned(db, tenant, task_id)
+            if not task or task['state'] != 'draft_queued':
+                raise AgentConflict('Task must be queued for FinOps plan installation')
+            payload = task['payload']
+            finops_meta = {key: plan[key] for key in ('finops_action', 'target_size') if key in plan}
+            payload['plan'] = validate_plan(plan, task, catalog)
+            payload.update(finops_meta)
+            payload['plan_hash'] = program_hash(task, payload['plan'], catalog)
+            payload['steps'] = [{'state': 'pending'} for _ in payload['plan']['steps']]
+            payload['connector_bindings'] = [
+                binding(item) for item in catalog if item.id in {step['connector_id'] for step in payload['plan']['steps']}
+            ]
+            if auto_approve:
+                payload['approval'] = dict(
+                    actor='finops_autopilot',
+                    plan_hash=payload['plan_hash'],
+                    approved_at=self.clock().isoformat(),
+                    expires_at=(self.clock() + timedelta(minutes=approve_minutes)).isoformat(),
+                )
+                state, action = 'approved', 'finops_autopilot_approved'
+            else:
+                state, action = 'awaiting_approval', 'finops_plan_installed'
+            return self.public(
+                self._save(db, task, state, action, actor(tenant), dict(plan_hash=payload['plan_hash'], auto_approve=auto_approve))
+            )
+
     def step(self, tenant, task_id, worker, token, index, action, plan_hash, outcome, catalog):
         with self.store.transaction(tenant['tenant_id'],write=True) as db:
             task = self._leased(db,tenant,task_id,worker,token); p = task['payload']

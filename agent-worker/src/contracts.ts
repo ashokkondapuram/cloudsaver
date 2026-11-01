@@ -4,7 +4,7 @@ export type Connector = {
   target_id?:string; target_binding?:Record<string,unknown>;
   region?: string | null; role_arn?: string | null; service_account?: string | null;
 };
-export type Step = {connector_id: string; operation: 'resource.inspect' | 'workload.inspect' | 'tags.merge' | 'labels.merge' | 'annotations.merge' | 'snapshot.create' | 'ebs.snapshot.create' | 'disk.snapshot.create' | 'gitops.terraform.sync' | 'action.submit';
+export type Step = {connector_id: string; operation: 'resource.inspect' | 'workload.inspect' | 'tags.merge' | 'labels.merge' | 'annotations.merge' | 'snapshot.create' | 'ebs.snapshot.create' | 'disk.snapshot.create' | 'gitops.terraform.sync' | 'action.submit' | 'compute.resize';
   arguments: Record<string, unknown>; purpose: string; verification: string; rollback: string};
 export type Plan = {summary: string; steps: Step[]};
 export type Outcome = {status: 'succeeded' | 'failed' | 'uncertain'; code: string; http_status?: number; evidence_digest?: string};
@@ -37,8 +37,8 @@ export function loadConnectors(raw: string): Connector[] {
 }
 
 export const readOperations=new Set(['resource.inspect','workload.inspect']);
-export const allowedOperations:Record<Connector['kind'],string[]>={azure_arm:['resource.inspect','tags.merge','snapshot.create'],aws_sdk:['resource.inspect','tags.merge','ebs.snapshot.create'],
-  gcp_rest:['resource.inspect','labels.merge','disk.snapshot.create'],k8s_api:['workload.inspect','annotations.merge'],gitops_terraform:['gitops.terraform.sync'],http_json:[]};
+export const allowedOperations:Record<Connector['kind'],string[]>={azure_arm:['resource.inspect','tags.merge','snapshot.create','compute.resize'],aws_sdk:['resource.inspect','tags.merge','ebs.snapshot.create','compute.resize'],
+  gcp_rest:['resource.inspect','labels.merge','disk.snapshot.create','compute.resize'],k8s_api:['workload.inspect','annotations.merge'],gitops_terraform:['gitops.terraform.sync'],http_json:[]};
 export function validateStepData(step:Step,c:Connector):void {
   if(!allowedOperations[c.kind]?.includes(step.operation))throw new Error('Unsupported connector operation');
   const args=step.arguments;
@@ -48,7 +48,7 @@ export function validateStepData(step:Step,c:Connector):void {
       /-----BEGIN [A-Z ]*PRIVATE KEY-----|\bbearer\s+\S{8,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.|(?:AccountKey|SharedAccessSignature|client_secret|api[_ -]?key|password)\s*[:=]\s*\S+|[?&]sig=[A-Za-z0-9%+/=]{8,}|\bsk-[A-Za-z0-9_-]{16,}/i.test(encoded))throw new Error('Sensitive action data');
   if(readOperations.has(step.operation)){
     if(Object.keys(args).some(k=>k!=='expected_state'))throw new Error('Only expected state is accepted');
-    const bounds:Record<string,Record<string,string>>={azure_arm:{diskState:'string',powerState:'string',numberOfSites:'number'},aws_sdk:{State:'string',DBInstanceStatus:'string'},gcp_rest:{status:'string',state:'string'},k8s_api:{generation:'number',replicas:'number'}};
+    const bounds:Record<string,Record<string,string>>={azure_arm:{diskState:'string',powerState:'string',numberOfSites:'number',vm_size:'string'},aws_sdk:{State:'string',DBInstanceStatus:'string',instance_type:'string'},gcp_rest:{status:'string',state:'string',machine_type:'string'},k8s_api:{generation:'number',replicas:'number'}};
     const expected=args.expected_state??{};
     if(!expected||typeof expected!=='object'||Array.isArray(expected)||Object.keys(expected).length>3)throw new Error('Invalid expected state');
     for(const [key,value] of Object.entries(expected)){
@@ -58,6 +58,10 @@ export function validateStepData(step:Step,c:Connector):void {
   }
   if(step.operation==='gitops.terraform.sync'){
     if(Object.keys(args).sort().join(',')!=='attributes,patch_mode,target_id'||args.target_id!==c.target_id||args.patch_mode!=='tags_sync'||!args.attributes||typeof args.attributes!=='object'||Array.isArray(args.attributes))throw new Error('Invalid paired metadata arguments');
+    return;
+  }
+  if(step.operation==='compute.resize'){
+    if(Object.keys(args).sort().join(',')!=='restore_power,target_size'||typeof args.target_size!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(args.target_size)||args.restore_power!==true)throw new Error('Invalid resize arguments');
     return;
   }
   if(step.operation.endsWith('snapshot.create')){

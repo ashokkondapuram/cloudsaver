@@ -31,7 +31,7 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
       if (connector.kind === 'http_json') return {status:'failed',code:'EXTERNAL_ACTION_DATA_PROHIBITED'};
       try{validateStepData(step,connector);}catch{return {status:'failed',code:'INVALID_ACTION_ARGUMENTS'};}
       if(connector.kind!=='azure_arm')return await native(task,connector,step);
-      if (connector.provider !== 'azure' || !['resource.inspect','tags.merge','snapshot.create'].includes(step.operation) ||
+      if (connector.provider !== 'azure' || !['resource.inspect','tags.merge','snapshot.create','compute.resize'].includes(step.operation) ||
           task.resource_id.split('/').some(s=>s==='.'||s==='..') ||
           !/^\/subscriptions\/[a-fA-F0-9-]{36}\/resourceGroups\/[A-Za-z0-9_.()-]+\/providers\/[A-Za-z0-9.]+(?:\/[A-Za-z0-9_.()-]+){2,}$/i.test(task.resource_id) ||
           task.resource_id.split('/')[2].toLowerCase() !== connector.scope_id.toLowerCase()) return {status:'failed',code:'INVALID_ARM_SCOPE'};
@@ -52,7 +52,7 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
       if(metadata.status!==200||resource?.id?.toLowerCase()!==task.resource_id.toLowerCase()||!resource.properties)return {status:'failed',code:'LIVE_RESOURCE_INSPECTION_FAILED'};
       const properties=resource.properties;
       const power=((properties.instanceView as {statuses?:{code:string}[]}|undefined)?.statuses||[]).find(v=>v.code.startsWith('PowerState/'))?.code;
-      const live={diskState:properties.diskState,powerState:power,numberOfSites:properties.numberOfSites};
+      const live={diskState:properties.diskState,powerState:power,numberOfSites:properties.numberOfSites,vm_size:(properties.hardwareProfile as {vmSize?:string}|undefined)?.vmSize};
       const stateKey=task.id+':'+connector.id;
       const currentState=hash({id:resource.id,location:resource.location,managedBy:resource.managedBy,properties});
       if(!write){if(!stateMatches(step,live))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};states.set(stateKey,currentState);}
@@ -77,6 +77,25 @@ export function connectorExecutor(options: NativeOptions & {token?: Token} = {})
           const verified=check.status===200&&snap?.properties?.provisioningState==='Succeeded'&&snap.properties.creationData?.sourceResourceId?.toLowerCase()===task.resource_id.toLowerCase();
           return {status:verified?'succeeded':'uncertain',code:verified?'AZURE_SNAPSHOT_VERIFIED':'AZURE_SNAPSHOT_SUBMITTED_RECONCILE',evidence_digest:hash({status:snap?.properties?.provisioningState})};
         }
+      }
+      if(step.operation==='compute.resize'){
+        if(kind!=='microsoft.compute/virtualmachines')return {status:'failed',code:'RESIZE_SCOPE_UNSUPPORTED'};
+        const targetSize=String(step.arguments.target_size);
+        const wasRunning=power==='PowerState/running';
+        if(wasRunning){
+          const dealloc=await boundedRequest('https://management.azure.com'+task.resource_id+'/deallocate?api-version=2024-03-01',{method:'POST',headers},options.request);
+          if(![200,202].includes(dealloc.status))return {status:'uncertain',code:'AZURE_DEALLOCATE_UNCERTAIN',http_status:dealloc.status};
+        }
+        const patch=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version=2024-03-01',{method:'PATCH',headers,body:JSON.stringify({properties:{hardwareProfile:{vmSize:targetSize}}})},options.request);
+        if(![200,202].includes(patch.status))return {status:'uncertain',code:'AZURE_RESIZE_UNCERTAIN',http_status:patch.status};
+        if(wasRunning&&step.arguments.restore_power===true){
+          const start=await boundedRequest('https://management.azure.com'+task.resource_id+'/start?api-version=2024-03-01',{method:'POST',headers},options.request);
+          if(![200,202].includes(start.status))return {status:'uncertain',code:'AZURE_START_UNCERTAIN',http_status:start.status};
+        }
+        const verify=await boundedRequest('https://management.azure.com'+task.resource_id+'?api-version=2024-03-01',{headers},options.request);
+        const size=((verify.body as {properties?:{hardwareProfile?:{vmSize?:string}}}|null)?.properties?.hardwareProfile?.vmSize)||'';
+        const ok=verify.status===200&&size===targetSize;
+        return {status:ok?'succeeded':'uncertain',code:ok?'AZURE_RESIZE_VERIFIED':'AZURE_RESIZE_RECONCILE',evidence_digest:hash({vm_size:size})};
       }
       if (!write) {inspected.set(task.id+':'+connector.id,hash(prior)); return {status:'succeeded',code:'LIVE_TAGS_INSPECTED',evidence_digest:hash(prior)};}
       const tags = step.arguments.tags;

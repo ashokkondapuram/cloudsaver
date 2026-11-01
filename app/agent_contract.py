@@ -14,24 +14,30 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
 
 ALLOWED_OPERATIONS_BY_KIND={
-    'azure_arm':{'resource.inspect','tags.merge','snapshot.create'},'aws_sdk':{'resource.inspect','tags.merge','ebs.snapshot.create'},
-    'gcp_rest':{'resource.inspect','labels.merge','disk.snapshot.create'},'k8s_api':{'workload.inspect','annotations.merge'},
+    'azure_arm':{'resource.inspect','tags.merge','snapshot.create','compute.resize'},'aws_sdk':{'resource.inspect','tags.merge','ebs.snapshot.create','compute.resize'},
+    'gcp_rest':{'resource.inspect','labels.merge','disk.snapshot.create','compute.resize'},'k8s_api':{'workload.inspect','annotations.merge'},
     'gitops_terraform':{'gitops.terraform.sync'},'http_json':{'action.submit'}}
 READ_OPERATIONS={'resource.inspect','workload.inspect'}
 WRITE_OPERATIONS=set().union(*ALLOWED_OPERATIONS_BY_KIND.values())-READ_OPERATIONS
 
 
 EXPECTED_STATE_FIELDS={
-    'azure_arm':{'diskState':str,'powerState':str,'numberOfSites':int},
-    'aws_sdk':{'State':str,'DBInstanceStatus':str},'gcp_rest':{'status':str,'state':str},
+    'azure_arm':{'diskState':str,'powerState':str,'numberOfSites':int,'vm_size':str},
+    'aws_sdk':{'State':str,'DBInstanceStatus':str,'instance_type':str},'gcp_rest':{'status':str,'state':str,'machine_type':str},
     'k8s_api':{'generation':int,'replicas':int}}
 
 def expected_state(resource):
     e=resource.get('evidence') or {};provider=resource.get('cloud_provider','azure');kind=resource.get('resource_type','').lower()
     pairs=[]
-    if provider=='azure':pairs=[('diskState','disk_state'),('powerState','power_state'),('numberOfSites','hosted_app_count')]
-    elif provider=='aws':pairs=[('DBInstanceStatus','power_state')] if ':rds:' in kind else [('State','disk_state' if kind.endswith(':volume') else 'power_state')]
-    elif provider=='gcp':pairs=[('status','disk_state' if kind.endswith('/disk') else 'state')]
+    if provider=='azure':
+        pairs=[('diskState','disk_state'),('powerState','power_state'),('numberOfSites','hosted_app_count')]
+        if 'virtualmachines' in kind and isinstance(e.get('vm_size'),str):pairs.append(('vm_size','vm_size'))
+    elif provider=='aws':
+        pairs=[('DBInstanceStatus','power_state')] if ':rds:' in kind else [('State','disk_state' if kind.endswith(':volume') else 'power_state')]
+        if ':instance' in kind and isinstance(e.get('instance_type'),str):pairs.append(('instance_type','instance_type'))
+    elif provider=='gcp':
+        pairs=[('status','disk_state' if kind.endswith('/disk') else 'state')]
+        if '/instance' in kind and isinstance(e.get('machine_type'),str):pairs.append(('machine_type','machine_type'))
     elif provider=='kubernetes':pairs=[('generation','generation'),('replicas','desired_replicas')]
     return {target:e[source] for target,source in pairs if type(e.get(source)) in (str,int) and not isinstance(e.get(source),bool)}
 
@@ -95,7 +101,7 @@ def connectors():
 
 class Step(Strict):
     connector_id: str = Field(pattern=r'^[a-z][a-z0-9-]{0,59}$')
-    operation: Literal['resource.inspect', 'workload.inspect', 'tags.merge', 'labels.merge', 'annotations.merge', 'snapshot.create', 'ebs.snapshot.create', 'disk.snapshot.create', 'gitops.terraform.sync', 'action.submit']
+    operation: Literal['resource.inspect', 'workload.inspect', 'tags.merge', 'labels.merge', 'annotations.merge', 'snapshot.create', 'ebs.snapshot.create', 'disk.snapshot.create', 'gitops.terraform.sync', 'action.submit', 'compute.resize']
     arguments: dict = Field(default_factory=dict)
     purpose: str = Field(min_length=1, max_length=500)
     verification: str = Field(min_length=1, max_length=500)
@@ -135,7 +141,11 @@ def render_code(plan):
 
 
 def validate_plan(value, task, catalog):
-    plan = Plan.model_validate(value).model_dump()
+    allowed = {'summary', 'steps', 'finops_action', 'target_size'}
+    unknown = set(value) - allowed
+    if unknown:
+        raise ValueError('Unsupported plan fields')
+    plan = Plan.model_validate({key: value[key] for key in ('summary', 'steps')}).model_dump()
     selected = {c.id: c for c in catalog if c.id in task['payload']['connector_ids']}
     paired=[c for c in selected.values() if c.kind=='gitops_terraform']
     if len(paired)>1:raise ValueError('A task can bind only one repository target')
@@ -200,6 +210,15 @@ def validate_plan(value, task, catalog):
             if c.id not in inspected or set(args)!={'snapshot_name_prefix','retention_days'} or not isinstance(args['snapshot_name_prefix'],str) or not re.fullmatch(r'[a-z][a-z0-9-]{0,39}',args['snapshot_name_prefix']) or type(args['retention_days']) is not int or not 7<=args['retention_days']<=90:
                 raise ValueError('Safety snapshots require prior inspection, a bounded prefix and 7–90 day retention')
             writes+=1
+        elif step['operation'] == 'compute.resize':
+            if c.id not in inspected or set(args) != {'target_size', 'restore_power'}:
+                raise ValueError('Resize requires prior inspection and explicit target_size')
+            target = args['target_size']
+            if not isinstance(target, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,80}', target):
+                raise ValueError('Invalid target_size')
+            if args.get('restore_power') is not True:
+                raise ValueError('restore_power must be true for FinOps resize')
+            writes += 1
         else:
             if set(args) != {'body'} or not isinstance(args['body'], dict) or len(canonical(args).encode()) > 4000:
                 raise ValueError('HTTP action requires a bounded explicit JSON body')
@@ -217,6 +236,7 @@ def binding(c):
 def program_hash(task, plan, catalog):
     selected = {s['connector_id'] for s in plan['steps']}
     paired=any(s['operation']=='gitops.terraform.sync' for s in plan['steps'])
-    return digest(dict(schema=5 if paired else 4,data_governance_contract=2, task_id=task['id'], tenant_id=task['tenant_id'], provider=task['provider'],
+    resize=any(s['operation']=='compute.resize' for s in plan['steps'])
+    return digest(dict(schema=6 if resize else (5 if paired else 4),data_governance_contract=2, task_id=task['id'], tenant_id=task['tenant_id'], provider=task['provider'],
         scope_id=task['scope_id'], resource_id=task['resource_id'], plan=plan, code=render_code(plan),
         connectors=[binding(c) for c in sorted(catalog, key=lambda c: c.id) if c.id in selected]))

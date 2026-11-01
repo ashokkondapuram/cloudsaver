@@ -81,3 +81,39 @@ AST index entries use `repository` as the provider-specific label (`owner/repo`,
 ## 6. Tests
 
 - `tests/test_drift_event_pipeline.py` — normalization, outbox idempotency, worker lease skip, AST patch, PR package guardrails.
+
+## 7. FinOps resize autopilot (hands-free agent execution)
+
+Per-resource resize knowledge lives in `app/finops_resize_playbooks.py` (Azure VM, AWS EC2, GCE instance). The autopilot API builds a **deterministic** two-step agent program (no LLM drafting):
+
+1. `resource.inspect` with bounded `expected_state` (power/state + current SKU)
+2. `compute.resize` with `target_size` and `restore_power: true` (deallocate/stop → resize → start when needed)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/finops/autopilot/playbooks` | List supported `finops_action`, resource types, and agent step sequence |
+| `POST /api/v1/finops/autopilot/resize` | Create agent task, install plan via `install_finops_plan`, optional auto-approve |
+
+**Environment**
+
+| Variable | Purpose |
+|----------|---------|
+| `CLOUDSAVER_FINOPS_AUTOPILOT=true` | Enable autopilot API |
+| `CLOUDSAVER_FINOPS_AUTOPILOT_AUTO_APPROVE=true` | With `auto_execute: true`, skip human approval (`state=approved`) |
+| `CLOUDSAVER_AGENT_ENABLED=true` | Required when `auto_execute` is true |
+| `CLOUDSAVER_AGENT_CONNECTORS` | Each compute connector must include `compute.resize` for its cloud kind |
+
+**Example request** (connector omitted → first matching connector with `compute.resize`):
+
+```json
+{
+  "scan_id": "00000000-0000-4000-8000-000000000001",
+  "resource_id": "/subscriptions/{sub}/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1",
+  "request_key": "00000000-0000-4000-8000-000000000002",
+  "target_id": "finops-resize-vm1",
+  "target_size": "Standard_D4s_v5",
+  "auto_execute": true
+}
+```
+
+Worker implementation: `agent-worker/src/connectors.ts` (Azure), `agent-worker/src/multicloud.ts` (AWS/GCP). Tests: `tests/test_finops_autopilot_planner.py`.

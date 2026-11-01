@@ -49,9 +49,24 @@ export function multicloudExecutor(options:NativeOptions={}){
         const tags=await clients.rds.send(new rds.ListTagsForResourceCommand({ResourceName:task.resource_id}));return {...data.DBInstances[0],Tags:tags.TagList||[]};
       };
       const current=await inspect();const digest=hash(current);
-      if(!write&&!stateMatches(step,{State:typeof current.State==='string'?current.State:current.State?.Name,DBInstanceStatus:current.DBInstanceStatus}))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};
+        if(!write&&!stateMatches(step,{State:typeof current.State==='string'?current.State:current.State?.Name,DBInstanceStatus:current.DBInstanceStatus,instance_type:current.InstanceType}))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};
       if(!write){inspections.set(key,{digest});return {status:'succeeded',code:'AWS_RESOURCE_INSPECTED',evidence_digest:digest};}
       if(inspections.get(key)!.digest!==digest)return {status:'failed',code:'LIVE_STATE_CHANGED'};
+      if(step.operation==='compute.resize'&&arn[6]){
+        const targetType=String(step.arguments.target_size);
+        const stateName=typeof current.State==='string'?current.State:current.State?.Name;
+        const wasRunning=stateName==='running';
+        if(wasRunning){
+          await clients.ec2.send(new sdk.StopInstancesCommand({InstanceIds:[arn[6]]}));
+        }
+        await clients.ec2.send(new sdk.ModifyInstanceAttributeCommand({InstanceId:arn[6],InstanceType:{Value:targetType}}));
+        if(wasRunning&&step.arguments.restore_power===true){
+          await clients.ec2.send(new sdk.StartInstancesCommand({InstanceIds:[arn[6]]}));
+        }
+        const after=await inspect();
+        const verified=after.InstanceType===targetType;
+        return {status:verified?'succeeded':'uncertain',code:verified?'AWS_RESIZE_VERIFIED':'AWS_RESIZE_RECONCILE',evidence_digest:hash({instance_type:after.InstanceType})};
+      }
       if(step.operation==='tags.merge'){
         const tags=metadata(step.arguments,'tags');const Tags=Object.entries(tags).map(([Key,Value])=>({Key,Value}));
         if(arn[7])await clients.rds.send(new rds.AddTagsToResourceCommand({ResourceName:task.resource_id,Tags}));
@@ -77,11 +92,28 @@ export function multicloudExecutor(options:NativeOptions={}){
       const token=await (options.gcpToken||googleToken)(c);const root=m[1]==='compute'?'https://compute.googleapis.com/compute/v1/':'https://sqladmin.googleapis.com/sql/v1beta4/';
       const url=root+task.resource_id.split('.com/')[1];const headers={Authorization:'Bearer '+token,'Content-Type':'application/json'};
       const read=async()=>{const r=await boundedRequest(url,{headers},options.request);const body=record(r.body);if(r.status!==200||!body)throw new Error('Inspection unavailable');return body;};
-      const current=await read();if(!write&&!stateMatches(step,{status:current.status,state:current.state}))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};const labels=m[1]==='compute'?current.labels||{}:current.settings?.userLabels||{};
+      const current=await read();if(!write&&!stateMatches(step,{status:current.status,state:current.state,machine_type:String(current.machineType||'').split('/').pop()}))return {status:'failed',code:'LIVE_RESOURCE_STATE_DRIFTED'};const labels=m[1]==='compute'?current.labels||{}:current.settings?.userLabels||{};
       const fingerprint=m[1]==='compute'?current.labelFingerprint:String(current.settings?.settingsVersion??'');
       const digest=hash({labels,fingerprint,id:current.id||current.name});
       if(!write){inspections.set(key,{digest,fingerprint});return {status:'succeeded',code:'GCP_RESOURCE_INSPECTED',evidence_digest:digest};}
       if(inspections.get(key)!.digest!==digest||!fingerprint)return {status:'failed',code:'LIVE_STATE_CHANGED'};
+      if(step.operation==='compute.resize'&&m[1]==='compute'&&m[5]==='instances'){
+        const target=String(step.arguments.target_size);
+        const wasRunning=current.status==='RUNNING';
+        if(wasRunning){
+          const stop=await boundedRequest(url+'/stop',{method:'POST',headers},options.request);
+          if(![200,201,202].includes(stop.status))return {status:'uncertain',code:'GCP_STOP_UNCERTAIN',http_status:stop.status};
+        }
+        const resize=await boundedRequest(url+'/setMachineType',{method:'POST',headers,body:JSON.stringify({machineType:target})},options.request);
+        if(![200,201,202].includes(resize.status))return {status:'uncertain',code:'GCP_RESIZE_UNCERTAIN',http_status:resize.status};
+        if(wasRunning&&step.arguments.restore_power===true){
+          const start=await boundedRequest(url+'/start',{method:'POST',headers},options.request);
+          if(![200,201,202].includes(start.status))return {status:'uncertain',code:'GCP_START_UNCERTAIN',http_status:start.status};
+        }
+        const after=await read();const observed=String(after.machineType||'').split('/').pop();
+        const verified=observed===target;
+        return {status:verified?'succeeded':'uncertain',code:verified?'GCP_RESIZE_VERIFIED':'GCP_RESIZE_RECONCILE',evidence_digest:hash({machine_type:observed})};
+      }
       if(step.operation==='labels.merge'){
         const merged={...labels,...metadata(step.arguments,'labels')};
         const body=m[1]==='compute'?{labels:merged,labelFingerprint:fingerprint}:{settings:{settingsVersion:current.settings.settingsVersion,userLabels:merged}};

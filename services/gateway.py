@@ -473,6 +473,14 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def finops_spot_arbitrage_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/finops/spot-arbitrage/preview', authorization, dict(request.query_params))
 
+    @app.get('/api/v1/finops/autopilot/playbooks')
+    async def finops_autopilot_playbooks(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/finops/autopilot/playbooks', authorization)
+
+    @app.post('/api/v1/finops/autopilot/resize', status_code=202)
+    async def finops_autopilot_resize(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/finops/autopilot/resize', request, authorization)
+
 
     resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'q', 'limit', 'offset')
     resource_key = Path(pattern=r'^[a-f0-9]{64}$')
