@@ -71,7 +71,7 @@ x-environment: &environment
   no_proxy: *internal_no_proxy
 
 x-service: &service
-  image: cloudsaver-python:1.7.0
+  image: cloudsaver-python:1.8.0
   build:
     context: .
     dockerfile: Dockerfile.services

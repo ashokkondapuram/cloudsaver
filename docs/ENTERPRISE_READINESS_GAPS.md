@@ -1,6 +1,6 @@
 # Enterprise readiness remediation and launch gates
 
-Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.7.0 upgrade runbook](releases/1.7.0-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
+Review baseline: [`bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5`](https://github.com/ashokkondapuram/cloudsaver/tree/bcbb0b211fc2bf35957c6bd1973d5ffebb8887c5), 2026-10-25. This companion preserves the existing README and its feature history. The [v1.8.0 upgrade runbook](releases/1.8.0-UPGRADE.md) supersedes historical upgrade commands. The supplied review was static; the validation described below is additional, bounded engineering evidence.
 
 **Release decision remains NO-GO for a general enterprise production launch.** Source remediation does not provide independent penetration testing, cloud IAM approval, invoice reconciliation, HA/load acceptance, recovery measurements, contractual privacy review, repository-administration enforcement or named human sign-offs. No such evidence is manufactured here.
 

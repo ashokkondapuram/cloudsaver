@@ -1,6 +1,6 @@
 {
-  "version": "1.7.0",
-  "inventory_sha256": "8163546e7c6918a7f03215958efa5281885323e6818d5c4387746e0c2159e140",
+  "version": "1.8.0",
+  "inventory_sha256": "42336d0178066a1cab3f0d5fd872b748b12b035a8ee1df013504971d301ef241",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -91,8 +91,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "35c4218a337b6790c78d8ddfd08036b2d88c5124324410bf873f123fd049072a",
-      "bytes": 33252
+      "sha256": "4fe98421fe605b3d13c89ee14bb06c429e7b33d5ee3299d77f82539ee59026d6",
+      "bytes": 33766
     },
     {
       "path": "ROADMAP.md",
@@ -866,7 +866,7 @@
     },
     {
       "path": "app/main.py",
-      "sha256": "0809f2d7fd67c646003466f195e2e599134c8e46d02117966d87ff57b2919942",
+      "sha256": "e3e6c7626efcdad5e3e97dabe7270c08e91bff93b114abd7d4aeca8c6f20dcaf",
       "bytes": 21818
     },
     {
@@ -1151,7 +1151,7 @@
     },
     {
       "path": "compose.yaml",
-      "sha256": "d4633178054a9bded95f953451428aaf292f18728824f98cb0bd56682620b947",
+      "sha256": "da58bf4f5f98694f6b65892c4a95d37f489e802fa4f5112c6c1dc1f6b5d48d7f",
       "bytes": 16860
     },
     {
@@ -1236,8 +1236,8 @@
     },
     {
       "path": "docs/ARCHITECTURAL_IMPROVEMENTS.md",
-      "sha256": "ed04c478c11a1c3c0e48448459145e24f10a2a6df53bde49300fb5676d64dbaa",
-      "bytes": 11069
+      "sha256": "99ebbba6f647c7946015384a213443ed1bc4ca8bf4a00e0362b3a6ceee00dfba",
+      "bytes": 11095
     },
     {
       "path": "docs/ASSESSMENT_AI.md",
@@ -1291,7 +1291,7 @@
     },
     {
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
-      "sha256": "18c015f93d0e1222f3979fea531e1fce32956718e8b5ead783d56ffd4e0fdf6a",
+      "sha256": "e3dda7753abd1d228eaa4ac036e3873f642d5091bc06faa328c61d6ba8f62848",
       "bytes": 15469
     },
     {
@@ -1406,8 +1406,8 @@
     },
     {
       "path": "docs/RISK_AND_COMPLIANCE.md",
-      "sha256": "c98b8632bab7b874acf7c83c1f041b193b865ca64761c6b0e68dbc65c6ca7f88",
-      "bytes": 22068
+      "sha256": "50deb1b5516727da04aa1eafa1c0a5e459c88cad6d38b9350ec6de4d6b9b3c14",
+      "bytes": 22180
     },
     {
       "path": "docs/TEST_REPORT_v0.1.0.md",
@@ -1491,7 +1491,7 @@
     },
     {
       "path": "docs/drive-v0.4.0/README.md",
-      "sha256": "1e2122ba6593923aa24cdabd37bd1b10f5a6fc9e598c987ca385cfa7991fdbad",
+      "sha256": "404f1c5ffc5cbc0613b5e864784d0e152e48691adbd6557835e2703b883985c5",
       "bytes": 17815
     },
     {
@@ -1611,13 +1611,13 @@
     },
     {
       "path": "docs/releases/1.6.0-UPGRADE.md",
-      "sha256": "4a7ff6862732e2efd8ae0937730bbf909adc7868916fa5472abf79bf85beaa83",
+      "sha256": "be24d77420936855c3f85b946c61847e31e4b7aa697731054fa6afe2b1e52174",
       "bytes": 6606
     },
     {
       "path": "docs/releases/1.7.0-UPGRADE.md",
-      "sha256": "5922891604952b1fff923315611185059f4ea59c5f31c8d0e7b80dd02c6ec885",
-      "bytes": 8289
+      "sha256": "b7f805f4f9cc18ab285ef8f991978102ad8d277437249e9979e7e72926f63088",
+      "bytes": 8444
     },
     {
       "path": "docs/superpowers/plans/2026-10-27-control-plane-plan-lifecycle.md",
@@ -2786,7 +2786,7 @@
     },
     {
       "path": "scripts/release_manifest.py",
-      "sha256": "c5bdd9361427bc700a9da2c8fd0f455e1d80b8b40370abf1744dc2ec15c4838e",
+      "sha256": "c39841f5f966c7e4f9eb37d68df4663911a3c855e24160d01cba19d8ab29b03b",
       "bytes": 1849
     },
     {
@@ -2816,7 +2816,7 @@
     },
     {
       "path": "scripts/start_stack.py",
-      "sha256": "02cff974d97e1fb9457949e35ea9a59e29cffe8e0d8a380f0f489d836e9ce50a",
+      "sha256": "eb851bc581c4b17b3334b4ebf30713c318a72b4dac67b9229434f124ad510667",
       "bytes": 19122
     },
     {
@@ -2856,7 +2856,7 @@
     },
     {
       "path": "services/common.py",
-      "sha256": "8bfc6f22eff0385295f6c0aa665c3f14c910139b15684f83ea4b178328a0a5a3",
+      "sha256": "1a13ef7db9224821c0ba7e3440b3ccbaef6f9ed4ff7c0ee5d8bcf8eac1f5edf6",
       "bytes": 4322
     },
     {
@@ -3298,6 +3298,11 @@
       "path": "tests/test_platform_database_bootstrap.py",
       "sha256": "6d9eac1f3ae9b7f67c2f909a285f270d188fdc0941363b82f5edb1d15a43085e",
       "bytes": 7620
+    },
+    {
+      "path": "tests/test_platform_outbox_lease.py",
+      "sha256": "356895f81b0d4049e6fcf80826f9aa4d80a16a0cac62d90a32930b60738e66ca",
+      "bytes": 4859
     },
     {
       "path": "tests/test_postgres.py",
@@ -4046,12 +4051,12 @@
     },
     {
       "path": "web-dashboard/package-lock.json",
-      "sha256": "8b755abe9ebb958f51534b622c61bdc2e3e4e37334458a7c109c089b41c6ddfa",
+      "sha256": "a8971e5bf65daba9c4d7f9ff751d7864215f4d3759fda3ced6df99116fab7659",
       "bytes": 139211
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "2e121e13fae8b8042eb6485f7a23be2e6d4cfd57a54f224d5beb22c282180a90",
+      "sha256": "0efcd7bc67178ab3a80d126f481f89188b51921c8e3b4e3ac3f3cad01dcb4c75",
       "bytes": 1100
     },
     {
