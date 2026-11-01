@@ -36,7 +36,7 @@ def dispatch_platform_outbox(store, tenant_id: str, *, transport=None, settings=
         tenant_id,
         **drift_dispatch_kwargs(store, tenant_id, settings=settings),
     )
-    gitops_kwargs = gitops_delivery_kwargs(store, transport=transport)
+    gitops_kwargs = gitops_delivery_kwargs(store, tenant_id, transport=transport)
     if gitops_kwargs is None:
         gitops = dict(skipped=True, reason="gitops_publish_disabled")
     else:

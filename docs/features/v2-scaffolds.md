@@ -70,17 +70,18 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Inputs and outputs**:
   - `InMemoryEventBuffer(capacity=1000)`: `push(event)` requires a mapping with `source` and adds `received_at`; `drain()` returns and clears events. Capacity must be positive; the oldest events are dropped when full.
   - `EventStreamConsumer.parse_eventbridge`, `parse_eventgrid` and `parse_pubsub` normalize envelopes to `{source, provider, action, resource_id, raw}`.
-  - `subscribe_eventbridge`, `subscribe_eventgrid` and `subscribe_pubsub` raise `NotImplementedError` ("… subscription is not wired in v1.7.x").
-- **To make it production-ready**: authenticated, tenant-bound subscriptions for AWS EventBridge, Azure Event Grid and GCP Pub/Sub; a durable queue instead of the in-memory buffer; scope validation of each resource ID; and a worker that triggers targeted rescans.
+  - `EventStreamConsumer.subscribe_eventbridge` / `subscribe_eventgrid` provision webhooks when `CLOUDSAVER_DRIFT_INGEST_URL` and related env are set (`app/drift/cloud_event_subscriptions.py`); `subscribe_pubsub` is still unimplemented.
+  - `POST /api/v1/drift/cloud-events/subscriptions/ensure` (tenant admin, `CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING=true`) wires AWS EventBridge and Azure Event Grid to the ingest URL.
+- **Remaining**: GCP Pub/Sub subscription wiring; durable queue instead of in-memory buffer only in tests.
 
 ### GitOps resource index
 
 - **Purpose**: map a cloud resource to the repository file that manages it, and preview an IaC change.
-- **Current state**: a read-only lookup from a static index, plus a placeholder patch preview.
-- **Inputs**: the index comes from `CLOUDSAVER_GITOPS_AST_INDEX`, a JSON object keyed by cloud resource ID. Each entry has `repository`, `file_path` and `iac_kind`. `lookup(resource_id)` accepts 1 to 2,048 characters.
+- **Current state**: env JSON index, PostgreSQL `gitops_ast_*` tables (migration 0029), optional GitHub App repository indexer at branch commit SHA, and drift/GitOps workers that merge DB + env via `GitOpsAstMapper.for_tenant`.
+- **Inputs**: static `CLOUDSAVER_GITOPS_AST_INDEX` and/or `POST /api/v1/gitops/ast/index-repositories` when `CLOUDSAVER_GITOPS_AST_INDEX_FROM_GITHUB=true`. Env-only rows sync with `POST /api/v1/gitops/ast/sync`.
 - **Outputs**: `ResourceMapping` with `cloud_resource_id`, `repository`, `file_path` and `iac_kind`. `patch_preview(mapping, change)` returns a placeholder Terraform or OpenTofu `import` block for those kinds and raises `NotImplementedError` for any other kind (for example Bicep). `change` isn't used.
-- **Limitation**: the configured index is deployment-wide, but the API enforces owned observation, cloud scope and workspace repository grants before disclosing an entry. No code builds the index from repositories.
-- **To make it production-ready**: a tenant-scoped index built by parsing your repositories, real diffs generated from the requested change, support for more IaC kinds, and integration with the existing GitOps review routes.
+- **Limitation**: Terraform AST inference requires name/resource_group (Azure) or explicit ids; not all resource types are inferred automatically.
+- **To make it production-ready**: real diffs from approved changes, more IaC kinds (Bicep/Crossplane already partially scaffolded), and CI reindex on merge.
 
 ### Unit economics preview
 

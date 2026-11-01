@@ -17,7 +17,7 @@ class ResourceMapping(BaseModel):
     start_line: int | None = Field(default=None, ge=1)
     end_line: int | None = Field(default=None, ge=1)
     indexed_commit_sha: str | None = Field(default=None, min_length=7, max_length=40)
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
 
 class PatchPreview(BaseModel):
@@ -59,7 +59,9 @@ class GitOpsAstMapper:
         entry = self._index.get(resource_id)
         if not entry:
             raise KeyError("mapping not found")
-        return ResourceMapping(cloud_resource_id=resource_id, **entry)
+        allowed = set(ResourceMapping.model_fields)
+        filtered = {key: value for key, value in entry.items() if key in allowed and key != "cloud_resource_id"}
+        return ResourceMapping(cloud_resource_id=resource_id, **filtered)
 
     def patch_preview(self, mapping: ResourceMapping, change: dict[str, Any]) -> PatchPreview:
         kind = mapping.iac_kind.lower()

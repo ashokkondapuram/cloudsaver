@@ -20,6 +20,7 @@ def process_gitops_pr_intent(
     file_loader,
     indexed_block_loader,
     lease: NamedRedisLease | None = None,
+    mapper: GitOpsAstMapper | None = None,
 ) -> dict:
     payload = intent["payload"]
     workspace_id = payload["workspace_id"]
@@ -30,7 +31,7 @@ def process_gitops_pr_intent(
         return dict(skipped=True, reason="gitops_pr_lease_busy")
     request_id = payload["remediation_request_id"]
     try:
-        mapping = GitOpsAstMapper().lookup(payload["canonical_resource_id"]).model_dump()
+        mapping = (mapper or GitOpsAstMapper()).lookup(payload["canonical_resource_id"]).model_dump()
         target = config.target(workspace_id, payload["target_id"])
         live_file = file_loader(target, mapping)
         block_mapping = (

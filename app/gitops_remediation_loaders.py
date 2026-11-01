@@ -28,9 +28,10 @@ def default_file_loader(config, *, transport=None):
     return load
 
 
-def gitops_delivery_kwargs(store, *, transport=None) -> dict | None:
+def gitops_delivery_kwargs(store, tenant_id: str, *, transport=None) -> dict | None:
     from app.drift.outbox_store import GitOpsRemediationStore
     from app.gitops import GitOpsConfig
+    from app.gitops_ast_mapper import GitOpsAstMapper
     from app.gitops_remediation_flow import GitOpsPullRequestExecutor
 
     try:
@@ -45,4 +46,5 @@ def gitops_delivery_kwargs(store, *, transport=None) -> dict | None:
         config=config,
         file_loader=default_file_loader(config, transport=transport),
         indexed_block_loader=default_indexed_block_loader(),
+        mapper=GitOpsAstMapper.for_tenant(store, tenant_id),
     )

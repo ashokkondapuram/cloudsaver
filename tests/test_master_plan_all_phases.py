@@ -124,5 +124,6 @@ def test_gitops_delivery_kwargs_none_when_publish_disabled(monkeypatch):
 
     monkeypatch.delenv("CLOUDSAVER_GITOPS_PUBLISH", raising=False)
     monkeypatch.setenv("CLOUDSAVER_GITOPS_TARGETS", "[]")
-    assert gitops_delivery_kwargs(object()) is None
+    tenant_id = "00000000-0000-4000-8000-000000000000"
+    assert gitops_delivery_kwargs(object(), tenant_id) is None
 
