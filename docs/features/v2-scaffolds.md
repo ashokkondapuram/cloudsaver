@@ -70,9 +70,9 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Inputs and outputs**:
   - `InMemoryEventBuffer(capacity=1000)`: `push(event)` requires a mapping with `source` and adds `received_at`; `drain()` returns and clears events. Capacity must be positive; the oldest events are dropped when full.
   - `EventStreamConsumer.parse_eventbridge`, `parse_eventgrid` and `parse_pubsub` normalize envelopes to `{source, provider, action, resource_id, raw}`.
-  - `EventStreamConsumer.subscribe_eventbridge` / `subscribe_eventgrid` provision webhooks when `CLOUDSAVER_DRIFT_INGEST_URL` and related env are set (`app/drift/cloud_event_subscriptions.py`); `subscribe_pubsub` is still unimplemented.
+  - `EventStreamConsumer.subscribe_eventbridge` / `subscribe_eventgrid` / `subscribe_pubsub` provision webhooks when `CLOUDSAVER_DRIFT_INGEST_URL` and related env are set (`app/drift/cloud_event_subscriptions.py`); GCP uses Pub/Sub push + Logging sink.
   - `POST /api/v1/drift/cloud-events/subscriptions/ensure` (tenant admin, `CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING=true`) wires AWS EventBridge and Azure Event Grid to the ingest URL.
-- **Remaining**: GCP Pub/Sub subscription wiring; durable queue instead of in-memory buffer only in tests.
+- **Remaining**: durable queue instead of in-memory buffer only in tests.
 
 ### GitOps resource index
 

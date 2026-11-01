@@ -255,5 +255,7 @@ class EventStreamConsumer:
             token_provider=token_provider,
         )
 
-    def subscribe_pubsub(self) -> None:
-        raise NotImplementedError("GCP Pub/Sub subscription wiring is not implemented in this release")
+    def subscribe_pubsub(self, *, project_id: str, token_provider) -> dict[str, Any]:
+        from app.drift.cloud_event_subscriptions import ensure_gcp_pubsub_subscription
+
+        return ensure_gcp_pubsub_subscription(project_id=project_id, token_provider=token_provider)

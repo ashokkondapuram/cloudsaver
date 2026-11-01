@@ -43,3 +43,17 @@ def test_subscribe_hooks_delegate_to_provisioner(monkeypatch):
     monkeypatch.setattr(subs, "_aws_events_client", lambda region, factory=None: FakeEvents())
     wired = consumer.subscribe_eventbridge(account_id="123456789012")
     assert wired["provider"] == "aws"
+
+
+def test_subscribe_pubsub_delegates(monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_INGEST_URL", "https://cloudsaver.example/api/v1/drift/cloud-events/ingest")
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "x" * 32)
+
+    def fake_ensure(**kwargs):
+        return dict(provider="gcp", project_id=kwargs["project_id"])
+
+    import app.drift.cloud_event_subscriptions as subs
+
+    monkeypatch.setattr(subs, "ensure_gcp_pubsub_subscription", fake_ensure)
+    wired = EventStreamConsumer().subscribe_pubsub(project_id="example-project", token_provider=lambda: "t")
+    assert wired["provider"] == "gcp"

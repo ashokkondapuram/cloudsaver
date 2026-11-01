@@ -138,5 +138,8 @@ Set `CLOUDSAVER_DRIFT_INGEST_URL` to the public gateway URL for `POST /api/v1/dr
 
 - **AWS:** EventBridge rule + API destination + connection (header `X-CloudSaver-Drift-Webhook-Secret`; requires `CLOUDSAVER_DRIFT_EVENTBRIDGE_ROLE_ARN`)
 - **Azure:** Subscription-scoped Event Grid webhook for `Microsoft.Resources.ResourceWriteSuccess` (ingress handles `SubscriptionValidationEvent`)
+- **GCP:** Pub/Sub topic + push subscription + Cloud Logging sink for Compute Admin Activity (push message attributes carry `webhook_secret`; grant `roles/pubsub.publisher` on the topic to the sink writer service account)
 
-Ingress also accepts a raw EventBridge envelope (single event body) for API destination delivery.
+Ingress also accepts a raw EventBridge envelope (single event body) and **Pub/Sub push** bodies (`message.data` base64 audit log).
+
+Operator checklist: [docs/DRIFT_PRODUCTION_ENABLEMENT.md](../DRIFT_PRODUCTION_ENABLEMENT.md).

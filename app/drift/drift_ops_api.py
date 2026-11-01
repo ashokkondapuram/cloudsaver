@@ -33,7 +33,16 @@ def create_drift_subscriptions_router(settings, current_tenant):
                     settings=settings,
                     tenant=tenant,
                 )
-            return ensure_workspace_subscriptions(tenant, azure_token=azure_token)
+            gcp_token = None
+            if tenant.get("gcp_projects"):
+                from app.cloud_identity import managed_identity_token
+
+                gcp_token = lambda: managed_identity_token(
+                    "https://www.googleapis.com/auth/cloud-platform",
+                    settings=settings,
+                    tenant=tenant,
+                )
+            return ensure_workspace_subscriptions(tenant, azure_token=azure_token, gcp_token=gcp_token)
 
         try:
             return await run_in_threadpool(run)

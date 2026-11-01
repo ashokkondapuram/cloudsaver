@@ -1,7 +1,9 @@
 """Authenticated and webhook drift cloud-event ingress."""
 from __future__ import annotations
 
+import base64
 import hmac
+import json
 import os
 
 from fastapi import APIRouter, HTTPException, Request
@@ -13,12 +15,36 @@ from app.collectors.event_stream import EventStreamConsumer
 from app.gitops_api import bounded_json
 
 
-def _webhook_secret_ok(request: Request) -> bool:
+def _webhook_secret_ok(request: Request, raw: dict | None = None) -> bool:
     expected = os.getenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET") or ""
     if not expected:
         return False
     provided = request.headers.get("X-CloudSaver-Drift-Webhook-Secret") or ""
-    return hmac.compare_digest(provided, expected)
+    if provided and hmac.compare_digest(provided, expected):
+        return True
+    if isinstance(raw, dict):
+        attrs = (raw.get("message") or {}).get("attributes") or {}
+        pushed = attrs.get("webhook_secret") or ""
+        if pushed and hmac.compare_digest(pushed, expected):
+            return True
+    return False
+
+
+def _parse_ingress_payload(raw: dict) -> tuple[str, list]:
+    if isinstance(raw.get("message"), dict) and raw["message"].get("data"):
+        payload = json.loads(base64.b64decode(str(raw["message"]["data"])))
+        if not isinstance(payload, dict):
+            raise ValueError("Pub/Sub audit payload must be an object")
+        return "gcp", [payload]
+    if raw.get("detail-type") and "events" not in raw:
+        return "aws", [raw]
+    if "provider" not in raw or "events" not in raw:
+        raise ValueError("Provide provider and events array")
+    provider = str(raw["provider"])
+    events = raw["events"]
+    if not isinstance(events, list) or not events:
+        raise ValueError("events must be a non-empty array")
+    return provider, events
 
 
 def create_router(settings, evidence_store):
@@ -29,19 +55,15 @@ def create_router(settings, evidence_store):
 
     @router.post("/api/v1/drift/cloud-events/ingest", status_code=202)
     async def ingest_cloud_events(request: Request):
-        if not _webhook_secret_ok(request):
-            raise HTTPException(401, "Invalid or missing drift webhook secret")
         raw = await bounded_json(request)
-        if isinstance(raw, dict) and raw.get("detail-type") and "events" not in raw:
-            provider = "aws"
-            events = [raw]
-        elif not isinstance(raw, dict) or "provider" not in raw or "events" not in raw:
-            raise HTTPException(422, "Provide provider and events array")
-        else:
-            provider = str(raw["provider"])
-            events = raw["events"]
-        if not isinstance(events, list) or not events:
-            raise HTTPException(422, "events must be a non-empty array")
+        if not isinstance(raw, dict):
+            raise HTTPException(422, "Invalid JSON body")
+        if not _webhook_secret_ok(request, raw):
+            raise HTTPException(401, "Invalid or missing drift webhook secret")
+        try:
+            provider, events = _parse_ingress_payload(raw)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
 
         def process():
             stream = consumer()
