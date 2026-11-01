@@ -79,6 +79,21 @@ def test_drift_idempotency_is_stable():
     assert drift_idempotency_key(signal) == drift_idempotency_key(signal)
 
 
+def test_drift_idempotency_includes_event_timestamp():
+    base = dict(
+        workspace_id=TENANT,
+        provider="azure",
+        account_or_subscription_id=SUB,
+        canonical_resource_id="/subscriptions/x/resourcegroups/rg/providers/microsoft.compute/virtualmachines/vm",
+        operation="write",
+        actor_principal="actor",
+        correlation_id="",
+    )
+    first = drift_idempotency_key({**base, "event_timestamp_utc": "2026-10-30T22:14:05.192Z"})
+    second = drift_idempotency_key({**base, "event_timestamp_utc": "2026-10-30T22:15:05.192Z"})
+    assert first != second
+
+
 def test_compare_operational_state_detects_vm_size_drift():
     result = compare_operational_state({"vm_size": "Standard_D8s_v5"}, {"vm_size": "Standard_D4s_v5"})
     assert result.drifted and "vm_size_mismatch" in result.reasons

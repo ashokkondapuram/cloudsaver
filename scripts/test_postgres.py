@@ -37,7 +37,7 @@ def main():
         settings.chmod(0o600)
         try:
             docker('run', '-d', '--name', name, '--env-file', str(settings),
-                   '--tmpfs', '/var/lib/postgresql/data', '-p', '127.0.0.1::5432', 'postgres:16-alpine')
+                   '--tmpfs', '/var/lib/postgresql/data', '-p', '127.0.0.1::5432', 'pgvector/pgvector:pg16')
             started.append(name)
             docker('run', '-d', '--name', redis_name, '-p', '127.0.0.1::6379', 'redis:7-alpine')
             started.append(redis_name)

@@ -126,3 +126,35 @@ def test_drift_webhook_rejects_oversized_event_batch(tmp_path, monkeypatch):
         json={"provider": "azure", "events": [AZURE_EVENT] * 101},
     )
     assert response.status_code == 422
+
+
+def test_drift_webhook_rejects_invalid_event_without_enqueueing_valid(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret")
+    settings = Settings(
+        "azure",
+        str(tmp_path / "drift.sqlite3"),
+        (
+            dict(
+                tenant_id=TENANT,
+                name="t",
+                subscription_ids=[SUB],
+                api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
+            ),
+        ),
+    )
+    client = TestClient(create_app(settings, scanner=lambda _: []))
+    response = client.post(
+        "/api/v1/drift/cloud-events/ingest",
+        headers={"X-CloudSaver-Drift-Webhook-Secret": "test-secret"},
+        json={"provider": "azure", "events": [AZURE_EVENT, 42]},
+    )
+    assert response.status_code == 422
+    from app.enterprise_store import EnterpriseStore
+
+    store = EnterpriseStore(settings)
+    with store.transaction(TENANT) as db:
+        count = db.execute(
+            "SELECT COUNT(*) FROM platform_outbox_intents WHERE tenant_id=%s",
+            (TENANT,),
+        ).fetchone()[0]
+    assert count == 0

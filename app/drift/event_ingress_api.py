@@ -5,11 +5,12 @@ import base64
 import hmac
 import json
 import os
+from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
-from app.drift.outbox_store import PlatformOutboxStore
+from app.drift.outbox_store import OUTBOX_KIND_DRIFT, PlatformOutboxStore, drift_idempotency_key
 from app.drift.workspace_resolver import workspace_resolver_for_settings
 from app.collectors.event_stream import EventStreamConsumer
 from app.gitops_api import bounded_json
@@ -51,6 +52,32 @@ def _parse_ingress_payload(raw: dict) -> tuple[str, list]:
     return provider, events
 
 
+def _normalize_batch(stream: EventStreamConsumer, provider: str, events: list):
+    validation_responses = []
+    by_tenant: dict[str, list] = defaultdict(list)
+    for item in events:
+        if not isinstance(item, dict):
+            raise ValueError("Each event must be an object")
+        if provider == "azure" and item.get("eventType") == "Microsoft.EventGrid.SubscriptionValidationEvent":
+            data = item.get("data") or {}
+            code = data.get("validationCode") if isinstance(data, dict) else None
+            if code:
+                validation_responses.append(dict(validationResponse=code))
+            continue
+        if provider == "azure":
+            signal = stream.normalize_eventgrid(item)
+        elif provider == "aws":
+            signal = stream.normalize_eventbridge(item)
+        elif provider == "gcp":
+            signal = stream.normalize_gcp_audit(item)
+        else:
+            raise ValueError("Unsupported provider")
+        payload = signal.model_dump()
+        key = drift_idempotency_key(payload)
+        by_tenant[signal.workspace_id].append((OUTBOX_KIND_DRIFT, key, payload))
+    return validation_responses, by_tenant
+
+
 def create_router(settings, evidence_store):
     router = APIRouter(tags=["Drift ingress"])
 
@@ -71,27 +98,11 @@ def create_router(settings, evidence_store):
 
         def process():
             stream = consumer()
+            validation_responses, by_tenant = _normalize_batch(stream, provider, events)
             outbox = PlatformOutboxStore(evidence_store)
             queued = []
-            validation_responses = []
-            for item in events:
-                if not isinstance(item, dict):
-                    raise ValueError("Each event must be an object")
-                if provider == "azure" and item.get("eventType") == "Microsoft.EventGrid.SubscriptionValidationEvent":
-                    data = item.get("data") or {}
-                    code = data.get("validationCode") if isinstance(data, dict) else None
-                    if code:
-                        validation_responses.append(dict(validationResponse=code))
-                    continue
-                if provider == "azure":
-                    signal = stream.normalize_eventgrid(item)
-                elif provider == "aws":
-                    signal = stream.normalize_eventbridge(item)
-                elif provider == "gcp":
-                    signal = stream.normalize_gcp_audit(item)
-                else:
-                    raise ValueError("Unsupported provider")
-                queued.append(stream.enqueue_drift_inspect(outbox, signal))
+            for tenant_id, rows in by_tenant.items():
+                queued.extend(outbox.enqueue_batch(tenant_id, rows))
             result = dict(accepted=len(queued), intents=queued)
             if validation_responses:
                 result["validation"] = validation_responses[0]

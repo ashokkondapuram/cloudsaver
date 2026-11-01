@@ -141,3 +141,51 @@ def test_gitops_worker_releases_db_claim_when_redis_busy():
     )
     assert result["skipped"] is True
     assert outbox.released == [(TENANT, intent["id"], "worker-x", 3)]
+
+
+def test_expired_lease_cannot_complete_before_reclaim(tmp_path):
+    store = _store(tmp_path)
+    outbox = PlatformOutboxStore(store)
+    key = hashlib.sha256(b"expired-complete").hexdigest()
+    intent_id, _ = outbox.enqueue(
+        TENANT,
+        OUTBOX_KIND_DRIFT,
+        key,
+        dict(workspace_id=TENANT, canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/x"),
+    )
+    claimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-one")
+    stale = claimed[0]
+    expired = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+    with store.transaction(TENANT, write=True) as db:
+        db.execute(
+            "UPDATE platform_outbox_intents SET lease_until=%s WHERE tenant_id=%s AND id=%s",
+            (expired, TENANT, intent_id),
+        )
+    with pytest.raises(OutboxConflict):
+        outbox.complete(
+            TENANT,
+            intent_id,
+            lease_owner=stale["lease_owner"],
+            lease_fence=stale["lease_fence"],
+        )
+
+
+def test_legacy_leased_null_expiry_is_reclaimed(tmp_path):
+    store = _store(tmp_path)
+    outbox = PlatformOutboxStore(store)
+    key = hashlib.sha256(b"legacy-lease").hexdigest()
+    intent_id, _ = outbox.enqueue(
+        TENANT,
+        OUTBOX_KIND_DRIFT,
+        key,
+        dict(workspace_id=TENANT, canonical_resource_id="/subscriptions/x/providers/microsoft.compute/virtualmachines/y"),
+    )
+    with store.transaction(TENANT, write=True) as db:
+        db.execute(
+            """UPDATE platform_outbox_intents SET status='leased',lease_owner='legacy-worker',
+               lease_fence=1,lease_until=NULL WHERE tenant_id=%s AND id=%s""",
+            (TENANT, intent_id),
+        )
+    reclaimed = outbox.claim_pending(TENANT, OUTBOX_KIND_DRIFT, owner="worker-new")
+    assert len(reclaimed) == 1 and reclaimed[0]["id"] == intent_id
+    assert reclaimed[0]["lease_fence"] >= 2

@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "e42534468402a6a95b0510b7591f8ea00c7f15c8705432b2b283d1c2daa0aca5",
+  "inventory_sha256": "4771a3cdbabc5180f2ea8964dbe0944856a8b5caa4fcd9ee1ce9583e0bf5f552",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -561,8 +561,8 @@
     },
     {
       "path": "app/drift/event_ingress_api.py",
-      "sha256": "6221691c935cf55cc422348f769ce81061d0b61f57ffbcd2ca1805dc32d7f50e",
-      "bytes": 4289
+      "sha256": "8a8c6866220675bc4bb031594f07794ebf4896fd3a151cb49ce6198bd7dda0cb",
+      "bytes": 4699
     },
     {
       "path": "app/drift/live_readers.py",
@@ -576,8 +576,8 @@
     },
     {
       "path": "app/drift/outbox_store.py",
-      "sha256": "27e501aad3bbfaaf8d35ef8534e2a861b38d34eca0811e68b7a584318dfc3018",
-      "bytes": 10703
+      "sha256": "01272912bf935896992da5c9df64326de38932afa814500f03ef2d30f99633b9",
+      "bytes": 12503
     },
     {
       "path": "app/drift/schema.py",
@@ -1166,8 +1166,8 @@
     },
     {
       "path": "database/Dockerfile",
-      "sha256": "71d81eaa25502b181595ab2fd608c2bb54bc5886a9fc921e0c718bc3273e9391",
-      "bytes": 326
+      "sha256": "adeb8428751dcff78740180e75f775c41d99c127f8863e077582e75636f6159f",
+      "bytes": 330
     },
     {
       "path": "database/bootstrap.py",
@@ -2831,8 +2831,8 @@
     },
     {
       "path": "scripts/test_postgres.py",
-      "sha256": "ff6133f0b3235c1356ab318da4b547e02bdf301afd03040bcd840464f721d285",
-      "bytes": 3545
+      "sha256": "0519dab2d43b848807db1466df673701ef5f07dab6e47d95ca2c1dc45efd00f6",
+      "bytes": 3549
     },
     {
       "path": "scripts/test_postgres_network.sh",
@@ -3106,13 +3106,13 @@
     },
     {
       "path": "tests/test_drift_event_pipeline.py",
-      "sha256": "b6511c94fb5e4c85ef1355cc2e605a93f4ae5d606f006af63b829b4cd0f763b1",
-      "bytes": 6952
+      "sha256": "fb2b0c7462a0534630002a984aa155da12099b5a4cd6e403b04c00e67de29cee",
+      "bytes": 7547
     },
     {
       "path": "tests/test_drift_ingress_and_ast_db.py",
-      "sha256": "894c383302d02939057f8e4642fc240fc5880bcb16221d6f44c35afe30f041b9",
-      "bytes": 4005
+      "sha256": "8218f02812a9dc51f3089c095f748467325f13ffaddf912ec10b9d7d85b4b26f",
+      "bytes": 5118
     },
     {
       "path": "tests/test_drift_operational_fetch.py",
@@ -3306,8 +3306,8 @@
     },
     {
       "path": "tests/test_platform_outbox_lease.py",
-      "sha256": "356895f81b0d4049e6fcf80826f9aa4d80a16a0cac62d90a32930b60738e66ca",
-      "bytes": 4859
+      "sha256": "264c7d692c8ad7a03a93d67e8a152f6dbb9b1c8c0f2179879edc01c3e0ad61de",
+      "bytes": 6776
     },
     {
       "path": "tests/test_postgres.py",
