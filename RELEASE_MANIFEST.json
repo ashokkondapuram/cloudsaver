@@ -1,6 +1,6 @@
 {
   "version": "1.8.0",
-  "inventory_sha256": "42336d0178066a1cab3f0d5fd872b748b12b035a8ee1df013504971d301ef241",
+  "inventory_sha256": "e42534468402a6a95b0510b7591f8ea00c7f15c8705432b2b283d1c2daa0aca5",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -91,8 +91,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "4fe98421fe605b3d13c89ee14bb06c429e7b33d5ee3299d77f82539ee59026d6",
-      "bytes": 33766
+      "sha256": "f3213f08915ae94d62097ca36c567a9d9791dac3b6b05d3018541b80ec575e7e",
+      "bytes": 33771
     },
     {
       "path": "ROADMAP.md",
@@ -1618,6 +1618,11 @@
       "path": "docs/releases/1.7.0-UPGRADE.md",
       "sha256": "b7f805f4f9cc18ab285ef8f991978102ad8d277437249e9979e7e72926f63088",
       "bytes": 8444
+    },
+    {
+      "path": "docs/releases/1.8.0-UPGRADE.md",
+      "sha256": "2500b423995193d9309a4ddca677ba56379a59d813d575e0aa9b3a4d66b2d73d",
+      "bytes": 2598
     },
     {
       "path": "docs/superpowers/plans/2026-10-27-control-plane-plan-lifecycle.md",

@@ -13,7 +13,7 @@ Open the dashboard at `http://127.0.0.1:3000`, platform portal at `http://127.0.
 This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
 
 
-**Latest (main @ `PLACEHOLDER`, Nov 2026):**
+**Latest (release 1.8.0 @ `a1bd0d6`, Nov 2026):**
 
 - **Backend reliability (1.8.0):** Prioritized fixes for scoped scan metadata, drift ingress batch limits, fenced platform outbox leases (migration `0033`), provider JSON numeric safety, and telemetry overflow handling. See [Backend reliability guide](docs/BACKEND_RELIABILITY_GUIDE.md) and [1.8.0 upgrade runbook](docs/releases/1.8.0-UPGRADE.md).
 - **Resource data pipeline:** Scan storage persists full finding evidence on normalized `waste_findings` rows (`app/waste_finding_evidence.py`). Inventory-only resources use canonical observation rows for five-pillar assessment and scan history. Scoped workspace keys recompute `coverage` / `coverage_manifest` for the visible subset; `partial` and `clean_baseline` reflect incomplete supported inventory, not hard-coded optimism.
