@@ -209,6 +209,10 @@ ROUTES = {
     ('GET', '/api/v1/gitops/requests/{request_id}'): 'scoped_read',
     ('GET', '/api/v1/gitops/resource-mapping'): 'scoped_read',
     ('POST', '/api/v1/gitops/pull-requests'): 'scan_write',
+    ('POST', '/api/v1/gitops/pre-merge/evaluate'): 'scan_write',
+    ('GET', '/api/v1/finops/saas-connectors'): 'scoped_read',
+    ('POST', '/api/v1/finops/ebpf-flows/ingest'): 'scan_write',
+    ('GET', '/api/v1/finops/spot-arbitrage/preview'): 'scoped_read',
 }
 
 

@@ -32,8 +32,13 @@ def process_gitops_pr_intent(
     try:
         mapping = GitOpsAstMapper().lookup(payload["canonical_resource_id"]).model_dump()
         target = config.target(workspace_id, payload["target_id"])
-        live_file = file_loader(target, mapping["file_path"])
-        indexed_block = indexed_block_loader(mapping)
+        live_file = file_loader(target, mapping)
+        block_mapping = (
+            dict(mapping, _live_file=live_file)
+            if not mapping.get("indexed_block") and mapping.get("start_line")
+            else mapping
+        )
+        indexed_block = indexed_block_loader(block_mapping)
         package = build_remediation_package(
             mapping,
             attribute=payload["attribute"],

@@ -285,4 +285,21 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
             raise HTTPException(422, 'Provide resource, target, attribute patch, and base file SHA') from None
         return await run_in_threadpool(queue_pull_request, payload, tenant)
 
+    @router.post('/api/v1/gitops/pre-merge/evaluate')
+    async def pre_merge_evaluate(request: Request, tenant=Depends(current_tenant)):
+        from app.gitops_pre_merge_firewall import score_pull_request, webhook_comment_body
+
+        require_workspace_role(tenant, Role.TENANT_ADMIN)
+        raw = await bounded_json(request)
+        if not isinstance(raw, dict):
+            raise HTTPException(422, "Invalid pre-merge payload")
+        try:
+            score = score_pull_request(
+                plan_json=raw.get("plan"),
+                files_changed=list(raw.get("files_changed") or []),
+            )
+        except (TypeError, ValueError) as error:
+            raise HTTPException(422, str(error)) from None
+        return dict(scorecard=score, comment=webhook_comment_body(score))
+
     return router

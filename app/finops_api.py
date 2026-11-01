@@ -131,4 +131,41 @@ def create_router(repository, current_tenant):
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
 
+    @router.get('/saas-connectors')
+    def saas_connectors(tenant=Depends(finance)):
+        from app.finops_saas_focus_connectors import connector_capabilities
+
+        return dict(items=connector_capabilities())
+
+    @router.post('/ebpf-flows/ingest', status_code=202)
+    async def ingest_ebpf_flows(request: Request, tenant=Depends(finance)):
+        from app.collectors_ebpf_flow import normalize_flow_record
+
+        raw = await bounded_json(request)
+        if not isinstance(raw, dict) or "records" not in raw or not isinstance(raw["records"], list):
+            raise HTTPException(422, "Provide records array")
+        try:
+            normalized = [normalize_flow_record(item) for item in raw["records"][:500]]
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(422, str(error)) from None
+        return dict(accepted=len(normalized), advisory_only=True)
+
+    @router.get('/spot-arbitrage/preview')
+    def spot_arbitrage_preview(
+        unused_commitment_usd_hr: str = Query(..., max_length=32),
+        spot_interruption_score: str = Query(..., max_length=32),
+        on_demand_usd_hr: str = Query(..., max_length=32),
+        tenant=Depends(finance),
+    ):
+        from app.finops_spot_arbitrage import arbitrage_node_pool_capacity
+
+        try:
+            return arbitrage_node_pool_capacity(
+                unused_commitment_usd_hr=unused_commitment_usd_hr,
+                spot_interruption_score=spot_interruption_score,
+                on_demand_usd_hr=on_demand_usd_hr,
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+
     return router

@@ -1,88 +1,84 @@
 # CloudSaver Master Architecture & Execution Plan (v1.7 → v2.0 → v3.0)
 
-This document is the code-free master plan for productionizing CloudSaver v2.0/v3.0 modules. It aligns engineering phases, safety invariants, service topology, and schema evolution.
+See sections below for safety invariants, service topology, phased delivery, and competitive positioning.
 
-## Repository migration truth (Alembic)
+## Alembic chain (repository truth)
 
-The narrative below references logical migration names `0025_v2_*`, `0026_v3_*`, and `0027_v3_*`. **This repository’s applied chain differs** because v1.7 migrations already occupy those revision numbers:
+| Revision | Purpose |
+|---|---|
+| `0028_drift_gitops_outbox` | `platform_outbox_intents`, `gitops_remediation_requests` |
+| `0029_v2_drift_baselines_gitops_ast` | Baselines, drift events, GitOps AST tables |
+| `0030_v3_saas_focus_and_ebpf_flows` | SaaS FOCUS rows, eBPF flow costs |
+| `0031_v3_greenops_and_merkle_audit` | Carbon metrics, Merkle audit chain |
 
-| Master plan label | Repository revision | Status |
+RLS uses `tenant_id` + `app.current_tenant_id` (workspace UUID equals tenant UUID in app code).
+
+## Implementation status (automation snapshot)
+
+| Phase | Modules | Status |
 |---|---|---|
-| v2 drift + GitOps outbox | `0028_drift_gitops_outbox` | `platform_outbox_intents`, `gitops_remediation_requests` |
-| v2 baselines + AST tables | `0029_v2_drift_baselines_gitops_ast` | `resource_state_baselines`, `cloud_drift_events`, `gitops_*` AST tables |
-| v3 SaaS FOCUS + eBPF | `0030_v3_saas_focus_and_ebpf_flows` | planned |
-| v3 GreenOps + Merkle audit | `0031_v3_greenops_and_merkle_audit` | planned |
+| **1** Drift firewall & GitOps | `event_stream`, `event_drift_worker`, `drift_manager`, `baseline_store`, `live_readers`, `gitops_vcs`, `delivery_worker`, `outbox_dispatcher`, `gitops_remediation_loaders`, `pre_mutation_drift_guard.ts` | **Scaffold + tests**; live ARM/EC2 readers stubbed; outbox dispatcher wires VCS file fetch when publish enabled |
+| **2** GPU / AI / commitments / K8s | `scanner_ai_gpu`, `ai_workload_optimizer`, `autopilot_commitments`, `k8s_karpenter_sync`, `unit_economics` API | **Production math & validation**; no live DCGM bus |
+| **3** eBPF / SaaS FOCUS / pre-merge | `collectors_ebpf_flow`, `finops_saas_focus_connectors`, `gitops_pre_merge_firewall`, APIs | **Scaffold + ingest preview** |
+| **4** GreenOps / arbitrage / Merkle | `scanner_greenops`, `finops_spot_arbitrage`, `governance_ephemeral_reaper`, `governance_merkle_audit` | **Scaffold + tests** |
 
-RLS uses `tenant_id` with `app.current_tenant_id` (workspace UUID equals tenant UUID in application code).
-
-Implemented code paths for Phase 1 include:
-
-- `app/collectors/event_stream.py` — Azure Event Grid, AWS EventBridge (mutating-only), GCP Audit normalization; correlation-aware outbox idempotency
-- `workers/event_drift_worker.py` — Redis lease + baseline comparison + `cloud_drift_events` append
-- `app/drift/drift_manager.py` — zero-tolerance key compare; `ABORTED_STATE_DRIFT` agent abort
-- `app/drift/baseline_store.py` — `resource_state_baselines` persistence
-- `app/gitops_ast_hcl_indexer.py`, `app/gitops_vcs.py`, `workers/delivery_worker.py` — surgical PR + multi-VCS publishers
-- `app/gitops_crossplane_indexer.py`, `app/gitops_resource_correlation.py` — Crossplane + 3-tier mapping scaffolds
-- `agent-worker/src/runtime/pre_mutation_drift_guard.ts` — permit drift abort + expected-state gate before writes
-
-See also `docs/FEATURE_IMPLEMENTATION_README.md` for the Activity Log → drift → GitOps PR wiring detail.
+Detailed Activity Log → GitOps wiring: `docs/FEATURE_IMPLEMENTATION_README.md`.
 
 ---
 
 ## 1. Executive architecture & non-negotiable safety invariants
 
-1. **Read-only discovery** — scanners, billing connectors, live evidence, and activity streams never authorize writes from recommendations alone.
-2. **Forced PostgreSQL RLS** — every workspace table uses ENABLE + FORCE RLS; runtime uses `cloudsaver_app` only.
-3. **scoped_read vs full_scope** — provider-restricted keys filter FinOps, GitOps history, governance/outcomes lists.
-4. **Human TenantAdmin execution** — API keys cannot approve agent plans; port **8006** issues single-use permits bound to saved expected state.
-5. **Zero-tolerance drift abort** — dual inspection (drift worker + agent-worker pre-mutation) revokes permits on any operational delta, including tag-stable SKU/etag changes.
-6. **Deterministic agent programs** — numeric `ctx.call(index)` only; governed AI with processor approval, allowlists, and no cross-tenant training.
+1. Read-only discovery and telemetry — recommendations never authorize cloud writes.
+2. PostgreSQL forced RLS on every workspace table; runtime uses `cloudsaver_app` only.
+3. `scoped_read` vs `full_scope` API authorization.
+4. Human TenantAdmin approval for agent execution; port **8006** single-use permits.
+5. Zero-tolerance drift abort (drift worker + agent-worker pre-mutation guard).
+6. Numeric `ctx.call(index)` agent programs; governed AI with processor guard and no cross-tenant training.
 
-## 2. Multi-service topology & customer views
+## 2. Multi-service topology
 
 | Service | Port | Role |
 |---|---|---|
-| `web-dashboard/` | 3000 | Customer console (`/resources`, `/agents`, `/automation`, …) |
-| `services/gateway` | 8000 | Auth edge, rate limits, proxy |
-| `app/main` | 8002 | Scanner, FinOps, drift, GitOps APIs |
-| `services/agent_gateway` | 8006 | Permits, approvals, drift abort |
-| `agent-worker/` | — | Bounded connector execution |
-| `workers/` | — | Outbox + Redis leased jobs (including `event_drift_worker`, `delivery_worker`) |
-| `platform/` | 3100 | Operator portal & identity |
+| `web-dashboard/` | 3000 | Customer console |
+| `services/gateway` | 8000 | Auth edge |
+| `app/main` | 8002 | Scanner, FinOps, drift, GitOps |
+| `services/agent_gateway` | 8006 | Permits & drift abort |
+| `agent-worker/` | — | Bounded execution |
+| `workers/` | — | Outbox + Redis workers |
+| `platform/` | 3100 | Operator portal |
 
-## 3. v2.0 deep-dive modules (production targets)
+## 3. v2.0 module deep dives
 
-### 4.1 Real-time Activity-Log drift & abort
+### 4.1 Activity-log drift & abort
 
-Baseline snapshots in `resource_state_baselines`; activity events → `DRIFT_INSPECT_RESOURCE` outbox → leased re-inspect → `cloud_drift_events` + permit revocation + optional `azure_ai_drift_explainer`.
+Baselines in `resource_state_baselines`; normalized Azure/AWS/GCP events; `DRIFT_INSPECT_RESOURCE` outbox; Redis lease; `cloud_drift_events`; optional `azure_ai_drift_explainer`.
 
-### 4.2 GitOps AST, Crossplane coexistence, surgical PRs
+### 4.2 GitOps AST & surgical PRs
 
-AST line indexing, three-tier mapping (deterministic → structural → pgvector semantic), repo block verification (`REPO_DRIFT_REINDEX_REQUIRED`), multi-VCS PR delivery (GitHub, Azure DevOps, GitLab, Bitbucket).
+AST sync (`gitops_ast_sync`), Crossplane indexer, three-tier correlation, multi-VCS PR delivery, pre-merge scorecard API.
 
-### 4.3–4.6 GPU validation, Karpenter/NAP, commitment ladder, unit economics, governed Azure AI + pgvector
+### 4.3–4.6 GPU, K8s NAP, commitments, unit economics, Azure AI + pgvector
 
-See scaffolds: `app/scanner_ai_gpu.py`, `app/ai_workload_optimizer.py`, `app/k8s_karpenter_sync.py`, `app/autopilot_commitments.py`, `app/unit_economics.py`.
+See module docstrings; pgvector embeddings planned as follow-on migration when extension is enabled in production Postgres.
 
-## 4. v3.0 roadmap pillars (planned)
+## 4. v3.0 pillars
 
-- FOCUS 1.1+ SaaS mesh (`app/finops/saas_focus_connectors.py`)
-- eBPF network attribution (`ebpf-flow-exporter/`, `app/collectors/ebpf_flow_ingestor.py`)
-- Pre-merge CI firewall (`app/gitops/pre_merge_firewall.py`)
-- Sixth pillar GreenOps (`app/scanners/sixth_pillar_greenops.py`)
+- SaaS FOCUS 1.1 mesh (`finops_saas_focus_connectors`)
+- eBPF network attribution (`collectors_ebpf_flow`, `ebpf-flow-exporter/`)
+- Pre-merge CI firewall (`gitops_pre_merge_firewall`)
+- Sixth pillar GreenOps (`scanner_greenops`)
 - Spot/commitment arbitrage & ephemeral lease reaper
-- Merkle tamper-evident audit chain
+- Merkle audit chain (`governance_merkle_audit`)
 
-## 5. Phased execution & verification
+## 5. Verification gates
 
-**Phase 1 (v2 drift + GitOps AST foundation)**  
-Apply through `0029`, wire event stream + drift worker + agent abort + GitOps mapping/PR path.  
-Gate: `PYTHONPATH=.:platform python3 -m pytest tests/test_drift_event_pipeline.py tests/test_gitops_vcs_providers.py` and postgres RLS suites when available.
+```bash
+PYTHONPATH=.:platform python3 -m pytest \
+  tests/test_master_plan_all_phases.py \
+  tests/test_v2_phase1_master_plan.py \
+  tests/test_drift_event_pipeline.py \
+  tests/test_v2_advanced_scaffolds.py \
+  tests/test_gitops_vcs_providers.py -q
+```
 
-**Phase 2** — GPU/AI tier math, commitment ladder, Karpenter/NAP YAML drafts.  
-**Phase 3** — eBPF, SaaS FOCUS 1.1, pre-merge firewall.  
-**Phase 4** — GreenOps, arbitrage/reaper, Merkle audit + `scripts/release_manifest.py --check`.
-
----
-
-For the full competitive landscape tables, module tree, and week-by-week checklist from the architecture workshop, extend this file in-repo as phases land; the authoritative wiring doc for drift/GitOps remains `docs/FEATURE_IMPLEMENTATION_README.md`.
+Apply migrations through **`0031`** before enabling v3 tables in production.

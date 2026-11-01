@@ -457,7 +457,17 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         params = {k: v for k, v in request.query_params.items() if k in ('prior_cost', 'current_cost', 'prior_volume', 'current_volume')}
         return await forward('GET', 'scanner', '/api/v1/finops/unit-economics/preview', authorization, params)
 
+    @app.get('/api/v1/finops/saas-connectors')
+    async def finops_saas_connectors(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/finops/saas-connectors', authorization)
 
+    @app.post('/api/v1/finops/ebpf-flows/ingest', status_code=202)
+    async def finops_ebpf_flow_ingest(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/finops/ebpf-flows/ingest', request, authorization)
+
+    @app.get('/api/v1/finops/spot-arbitrage/preview')
+    async def finops_spot_arbitrage_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/finops/spot-arbitrage/preview', authorization, dict(request.query_params))
 
 
     resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'q', 'limit', 'offset')
@@ -610,6 +620,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     @app.post('/api/v1/gitops/pull-requests', status_code=202)
     async def gitops_pull_requests(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/gitops/pull-requests', request, authorization)
+
+    @app.post('/api/v1/gitops/pre-merge/evaluate')
+    async def gitops_pre_merge_evaluate(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/gitops/pre-merge/evaluate', request, authorization)
 
 
     @app.post('/api/v1/policies/terraform/evaluate')

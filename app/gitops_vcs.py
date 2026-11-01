@@ -456,3 +456,117 @@ def resolve_remediation_publisher(target: dict[str, Any], config, *, transport=N
     if provider == VCS_BITBUCKET:
         return BitbucketRemediationPublisher(transport=transport)
     raise GitOpsFailure("Unsupported VCS provider")
+
+
+def fetch_repository_text_file(
+    target: dict[str, Any],
+    path: str,
+    ref: str,
+    config,
+    *,
+    transport=None,
+) -> str:
+    """Read a single text file at ref for remediation drift checks."""
+    from urllib.parse import quote
+
+    provider = target.get("vcs_provider", VCS_GITHUB)
+    if not path or path.startswith("/") or ".." in path.split("/"):
+        raise GitOpsFailure("Invalid repository file path")
+    if provider == VCS_GITHUB:
+        import jwt
+
+        key = os.getenv("CLOUDSAVER_GITHUB_APP_PRIVATE_KEY")
+        if not key:
+            raise GitOpsUnavailable("GitHub App is not configured")
+        now = int(time.time())
+        app_token = jwt.encode(
+            dict(iat=now - 60, exp=now + 540, iss=config.app_id), key, algorithm="RS256"
+        )
+        repo = "/repos/" + target["repository"]
+        with httpx.Client(
+            base_url="https://api.github.com",
+            timeout=httpx.Timeout(30, connect=5),
+            follow_redirects=False,
+            transport=transport,
+        ) as client:
+
+            def request(method, api_path, token, *, allowed=(200, 201)):
+                response = client.request(
+                    method,
+                    api_path,
+                    headers={
+                        "Authorization": "Bearer " + token,
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    },
+                )
+                if response.status_code not in allowed:
+                    raise GitOpsFailure("GitHub rejected file read")
+                return response.json() if response.content else None
+
+            access = request(
+                "POST",
+                f"/app/installations/{target['installation_id']}/access_tokens",
+                app_token,
+            )
+            token = access["token"]
+            blob = request(
+                "GET",
+                repo + "/contents/" + quote(path, safe="/") + "?ref=" + quote(ref, safe=""),
+                token,
+            )
+            if blob.get("type") != "file" or blob.get("encoding") != "base64":
+                raise GitOpsFailure("GitHub file content is unavailable")
+            return base64.b64decode(blob["content"]).decode()
+
+    if provider == VCS_AZURE_DEVOPS:
+        org, project, repo_id = target["organization"], target["project"], target["repository_id"]
+        api_path = f"/{path.lstrip('/')}"
+        base = f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo_id}/items"
+        pat = os.getenv("CLOUDSAVER_AZDO_PAT")
+        if not pat:
+            raise GitOpsUnavailable("Azure DevOps PAT is not configured")
+        headers = {"Authorization": "Basic " + base64.b64encode(f":{pat}".encode()).decode()}
+        with httpx.Client(timeout=httpx.Timeout(30, connect=5), transport=transport) as client:
+            response = client.get(
+                base,
+                params={"path": api_path, "versionDescriptor.version": ref, "versionDescriptor.versionType": "commit", "$format": "text"},
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise GitOpsFailure("Azure DevOps file read failed")
+            return response.text
+
+    if provider == VCS_GITLAB:
+        token = os.getenv("CLOUDSAVER_GITLAB_TOKEN")
+        if not token:
+            raise GitOpsUnavailable("GitLab token is not configured")
+        host = target.get("gitlab_host") or "https://gitlab.com"
+        project_id = target["project_id"]
+        encoded_path = quote(path, safe="")
+        with httpx.Client(timeout=httpx.Timeout(30, connect=5), transport=transport) as client:
+            response = client.get(
+                f"{host}/api/v4/projects/{project_id}/repository/files/{encoded_path}/raw",
+                params={"ref": ref},
+                headers={"PRIVATE-TOKEN": token},
+            )
+            if response.status_code != 200:
+                raise GitOpsFailure("GitLab file read failed")
+            return response.text
+
+    if provider == VCS_BITBUCKET:
+        token = os.getenv("CLOUDSAVER_BITBUCKET_TOKEN")
+        if not token:
+            raise GitOpsUnavailable("Bitbucket token is not configured")
+        workspace, slug = target["workspace"], target["repository_slug"]
+        auth = httpx.BasicAuth("x-token-auth", token)
+        with httpx.Client(timeout=httpx.Timeout(30, connect=5), transport=transport) as client:
+            response = client.get(
+                f"https://api.bitbucket.org/2.0/repositories/{workspace}/{slug}/src/{ref}/{path.lstrip('/')}",
+                auth=auth,
+            )
+            if response.status_code != 200:
+                raise GitOpsFailure("Bitbucket file read failed")
+            return response.text
+
+    raise GitOpsFailure("Unsupported VCS provider")
