@@ -97,7 +97,7 @@ def test_terraform_import_rules_are_declared():
     for rule_id in (
         "AWS_UNATTACHED_EBS",
         "GCP_UNATTACHED_DISK",
-        "ORPHANED_DISK",
+        "AZURE_PUBLIC_IP_UNASSOCIATED",
     ):
         assert rule_id in TERRAFORM_IMPORT_RULES
         assert route_for_rule(rule_id).primary in (

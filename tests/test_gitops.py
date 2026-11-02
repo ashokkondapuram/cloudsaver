@@ -29,7 +29,7 @@ def workspace():
 
 
 def snapshot():
-    finding=dict(rule_id='ORPHANED_DISK',severity='HIGH',resource_name='archive',resource_type='Microsoft.Compute/disks',
+    finding=dict(rule_id='AZURE_DISK_UNATTACHED_RETENTION',severity='HIGH',resource_name='archive',resource_type='Microsoft.Compute/disks',
         resource_group='test',subscription_id=SUB,resource_id=f'/subscriptions/{SUB}/resourceGroups/test/providers/Microsoft.Compute/disks/archive',
         details='Review retention',estimated_monthly_waste_usd=None)
     return dict(scan_id=str(uuid4()),timestamp=datetime.now(timezone.utc).isoformat(),mode='azure',status='completed',

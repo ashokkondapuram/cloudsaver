@@ -35,14 +35,14 @@ KUBERNETES_PATCH_PREVIEW_RULES = frozenset(
     {"K8S_CONTAINER_CPU_OVERREQUEST", "K8S_CONTAINER_MEMORY_OVERREQUEST"}
 )
 
-# Legacy bash/terraform review packages (finding rule_id grammar from live scans).
+# Bash review for public IP and orphaned NIC/NSG scan signals (disk uses engineering plan).
 BASH_REMEDIATION_RULES = frozenset(
-    {"ORPHANED_DISK", "UNASSOCIATED_PUBLIC_IP", "ORPHANED_NIC", "ORPHANED_NSG"}
+    {"AZURE_PUBLIC_IP_UNASSOCIATED", "ORPHANED_NIC", "ORPHANED_NSG"}
 )
 TERRAFORM_IMPORT_RULES = frozenset(
     {
         *BASH_REMEDIATION_RULES,
-        "IDLE_APP_GATEWAY",
+        "AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR",
         "AWS_UNATTACHED_EBS",
         "AWS_UNASSOCIATED_EIP",
         "AWS_IDLE_RDS",

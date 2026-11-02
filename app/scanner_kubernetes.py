@@ -92,7 +92,7 @@ def scan_cluster(source, *, reader=None, now=None):
                     continue
                 namespace, pod, container = key
                 rid = f'k8s://{cluster}/namespaces/{namespace}/pods/{pod}/containers/{container}'
-                result = dict(rule_id='K8S_' + dimension.upper() + '_OVERSIZED', cloud_provider='kubernetes',
+                result = dict(rule_id='K8S_CONTAINER_CPU_OVERREQUEST' if dimension == 'cpu' else 'K8S_CONTAINER_MEMORY_OVERREQUEST', cloud_provider='kubernetes',
                     scope_id=cluster, subscription_id=cluster, resource_id=rid, resource_name=container,
                     resource_group=namespace, resource_type='kubernetes.io/Container', severity='MEDIUM',
                     estimated_monthly_waste_usd=None,
@@ -109,7 +109,7 @@ def scan_cluster(source, *, reader=None, now=None):
         inventory = []
         for namespace, pod, container in sorted(set().union(*(set(value) for value in series.values()))):
             inventory.append(dict(cloud_provider='kubernetes', scope_id=cluster, subscription_id=cluster,
-                inventory_rule_id='K8S_CPU_OVERSIZED',
+                inventory_rule_id='K8S_CONTAINER_CPU_OVERREQUEST',
                 resource_id=f'k8s://{cluster}/namespaces/{namespace}/pods/{pod}/containers/{container}',
                 resource_name=container, resource_group=namespace, resource_type='kubernetes.io/Container',
                 evidence={'source': 'Prometheus query_range', 'inventory_basis': 'metrics_visible_containers'}))

@@ -34,7 +34,10 @@ def group(findings):
 
 def merge(key, findings, *, observed_at=None, now=None):
     """Return (assessment, sanitized AI context) for one resource."""
-    findings = sorted(findings, key=lambda f: f['rule_id'])
+    from app.rule_id_canonical import normalize_finding
+
+    deduped = [normalize_finding(finding) for finding in findings]
+    findings = sorted(deduped, key=lambda f: f['rule_id'])
     results = [assess(f, observed_at=observed_at, now=now) for f in findings]
     checks = {}
     for result in results:

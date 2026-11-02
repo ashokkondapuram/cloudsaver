@@ -3,7 +3,7 @@
 
 def azure_disk_finding(subscription_id: str) -> dict:
     return dict(
-        rule_id='ORPHANED_DISK',
+        rule_id='AZURE_DISK_UNATTACHED_RETENTION',
         severity='HIGH',
         resource_name='archive-export-disk',
         resource_type='microsoft.compute/disks',

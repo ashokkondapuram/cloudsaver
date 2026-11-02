@@ -2,6 +2,25 @@
 
 Last review: consolidated **scanner-service** architecture (`app.main` behind `services/gateway.py`).
 
+## Legacy ARG rule IDs — migrated to catalog (2026-11)
+
+Historical scan rows and identity policy overrides normalize through `app/rule_id_canonical.py`.
+
+| Legacy `rule_id` | Canonical catalog `rule_id` |
+| --- | --- |
+| `ORPHANED_DISK` / `ORPHANED_DISKS` | `AZURE_DISK_UNATTACHED_RETENTION` |
+| `UNASSOCIATED_PUBLIC_IP` / `UNASSOCIATED_PUBLIC_IPS` | `AZURE_PUBLIC_IP_UNASSOCIATED` |
+| `STOPPED_VM` / `STOPPED_VMS` | `AZURE_VM_STOPPED_RESIDUAL_COST` |
+| `EMPTY_APP_SERVICE_PLAN` / `EMPTY_APP_SERVICE` | `AZURE_ASP_EMPTY_PAID_PLAN` |
+| `UNDERUTILIZED_VM` | `AZURE_VM_RIGHTSIZING_UTILIZATION` |
+| `UNDERUTILIZED_APP_SERVICE_PLAN` | `AZURE_ASP_UNDERUTILIZED_SKU` |
+| `IDLE_APP_GATEWAY` | `AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR` |
+| `K8S_CPU_OVERSIZED` / `K8S_MEMORY_OVERSIZED` | `K8S_CONTAINER_CPU_OVERREQUEST` / `K8S_CONTAINER_MEMORY_OVERREQUEST` |
+
+**Still remediation-only (no FAMILIES twin):** `ORPHANED_NIC`, `ORPHANED_NSG`.
+
+Database: Alembic **`0034_canonical_rule_ids`** (core) and **`i0007_canonical_rule_ids`** (identity catalog overrides).
+
 ## Removed (not referenced by Compose, gateway, or tests)
 
 | Path | Reason |

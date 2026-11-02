@@ -12,23 +12,23 @@ class ScanError(RuntimeError):
 
 _PROJECTION = "| project id, name, type, resourceGroup, subscriptionId, tags, location"
 RULES = (
-    ("ORPHANED_DISK", "HIGH", """Resources
+    ("AZURE_DISK_UNATTACHED_RETENTION", "HIGH", """Resources
 | where type =~ 'microsoft.compute/disks'
 | where tostring(properties.diskState) == 'Unattached'
 """ + _PROJECTION + ", sizeGB=toint(properties.diskSizeGB), skuName=tostring(sku.name), encryptionType=tostring(properties.encryption.type)",
      "Unattached managed disk. Confirm retention, backup, and recovery requirements before removal."),
-    ("UNASSOCIATED_PUBLIC_IP", "MEDIUM", """Resources
+    ("AZURE_PUBLIC_IP_UNASSOCIATED", "MEDIUM", """Resources
 | where type =~ 'microsoft.network/publicipaddresses'
 | where isempty(properties.ipConfiguration.id) and isempty(properties.natGateway.id)
 """ + _PROJECTION + ", skuName=tostring(sku.name)",
      "Public IP has no indexed NIC/gateway or NAT gateway association. Verify current dependencies and reservations."),
-    ("STOPPED_VM", "LOW", """Resources
+    ("AZURE_VM_STOPPED_RESIDUAL_COST", "LOW", """Resources
 | where type =~ 'microsoft.compute/virtualmachines'
 | extend powerState=tostring(properties.extended.instanceView.powerState.code)
 | where powerState in ('PowerState/stopped', 'PowerState/deallocated')
 """ + _PROJECTION + ", powerState",
      "Stopped/deallocated VM review signal. Storage can remain billable; this does not establish idle duration or savings."),
-    ("EMPTY_APP_SERVICE_PLAN", "MEDIUM", """Resources
+    ("AZURE_ASP_EMPTY_PAID_PLAN", "MEDIUM", """Resources
 | where type =~ 'microsoft.web/serverfarms'
 | where toint(properties.numberOfSites) == 0
 """ + _PROJECTION + ", skuName=tostring(sku.name), hostedAppCount=toint(properties.numberOfSites), zoneRedundant=properties.zoneRedundant",
@@ -43,7 +43,7 @@ RULES = (
 | where coalesce(array_length(properties.networkInterfaces), 0) == 0 and coalesce(array_length(properties.subnets), 0) == 0
 """ + _PROJECTION,
      "Network security group has no associated subnets or network interfaces."),
-    ("IDLE_APP_GATEWAY", "HIGH", """Resources
+    ("AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR", "HIGH", """Resources
 | where type =~ 'microsoft.network/applicationgateways'
 | extend pools=properties.backendAddressPools
 | where properties.operationalState =~ 'Stopped' or coalesce(array_length(pools), 0) == 0
@@ -189,8 +189,10 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
 
 
 def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
+    from app.rule_id_canonical import rule_enabled
+
     findings = []
-    rules = RULES if not enabled_rule_ids else tuple(r for r in RULES if r[0] in enabled_rule_ids)
+    rules = RULES if not enabled_rule_ids else tuple(r for r in RULES if rule_enabled(r[0], enabled_rule_ids))
     for rule_id, severity, query, explanation in rules:
         for row in execute_pages(client, query, subscriptions):
             evidence = []

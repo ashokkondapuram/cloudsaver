@@ -16,11 +16,11 @@ def _reset():
 def test_returns_enabled_ids_from_identity():
     def handle(request):
         assert request.url.path == f'/internal/v1/tenants/{TID}/analysis-rules/effective'
-        return httpx.Response(200, json={'tenant_id': TID, 'enabled_rule_ids': ['ORPHANED_DISK', 'STOPPED_VM']})
+        return httpx.Response(200, json={'tenant_id': TID, 'enabled_rule_ids': ['AZURE_DISK_UNATTACHED_RETENTION', 'AZURE_VM_STOPPED_RESIDUAL_COST']})
 
     reset_shared_client(IdentityClient('http://identity', 'token', cache_seconds=0,
                                        transport=httpx.MockTransport(handle), subscribe=False))
-    assert enabled_rule_ids_for_tenant(TID) == {'ORPHANED_DISK', 'STOPPED_VM'}
+    assert enabled_rule_ids_for_tenant(TID) == {'AZURE_DISK_UNATTACHED_RETENTION', 'AZURE_VM_STOPPED_RESIDUAL_COST'}
 
 
 def test_falls_back_to_full_catalog_when_identity_unreachable():

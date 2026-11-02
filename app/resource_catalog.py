@@ -110,7 +110,10 @@ RULE_DISPLAY_NAMES = {
 
 
 def display_name(rule_id: str) -> str:
-    return RULE_DISPLAY_NAMES.get(rule_id, rule_id)
+    from app.rule_id_canonical import canonical_rule_id
+
+    rid = canonical_rule_id(rule_id)
+    return RULE_DISPLAY_NAMES.get(rid, rule_id)
 
 
 def family(resource):
@@ -145,18 +148,7 @@ def definitions():
 
 def rules_catalog_items():
     """Published analysis rules with stable ids and operator-facing titles."""
-    items = [
+    return [
         dict(id=row[0], name=row[4], provider=row[1], service_category=row[2], pillar=row[5])
         for row in definitions()
     ]
-    legacy = (
-        'ORPHANED_DISK', 'ORPHANED_DISKS', 'UNASSOCIATED_PUBLIC_IP', 'UNASSOCIATED_PUBLIC_IPS',
-        'ORPHANED_NIC', 'ORPHANED_NSG', 'IDLE_APP_GATEWAY', 'UNDERUTILIZED_VM',
-        'STOPPED_VM', 'STOPPED_VMS', 'EMPTY_APP_SERVICE_PLAN', 'EMPTY_APP_SERVICE',
-        'UNDERUTILIZED_APP_SERVICE_PLAN',
-    )
-    items.extend(
-        dict(id=rule_id, name=RULE_DISPLAY_NAMES[rule_id], provider='legacy', service_category='remediation', pillar='operations')
-        for rule_id in legacy
-    )
-    return items

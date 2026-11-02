@@ -82,7 +82,9 @@ def validate_finding_scope(finding, tenant):
             'AWS_UNATTACHED_EBS': ('aws', 'aws:ec2:volume'), 'AWS_UNASSOCIATED_EIP': ('aws', 'aws:ec2:elastic-ip'),
             'AWS_IDLE_RDS': ('aws', 'aws:rds:db'), 'GCP_UNATTACHED_DISK': ('gcp', 'compute.googleapis.com/Disk'),
             'GCP_UNASSIGNED_ADDRESS': ('gcp', 'compute.googleapis.com/Address'), 'GCP_IDLE_CLOUD_SQL': ('gcp', 'sqladmin.googleapis.com/Instance'),
-            'K8S_CPU_OVERSIZED': ('kubernetes', 'kubernetes.io/Container'), 'K8S_MEMORY_OVERSIZED': ('kubernetes', 'kubernetes.io/Container')}
+            'K8S_CONTAINER_CPU_OVERREQUEST': ('kubernetes', 'kubernetes.io/Container'),
+            'K8S_CONTAINER_MEMORY_OVERREQUEST': ('kubernetes', 'kubernetes.io/Container'),
+        }
         if provider == 'kubernetes':
             from app.kubernetes_rules import DEFINITIONS
             kind = finding.get('resource_type', '').removeprefix('kubernetes.io/')

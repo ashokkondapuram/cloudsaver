@@ -17,7 +17,7 @@ def settings(mode='azure'):
 
 
 def finding(subscription=SUB):
-    return dict(rule_id='ORPHANED_DISK', severity='HIGH', resource_name='archive',
+    return dict(rule_id='AZURE_DISK_UNATTACHED_RETENTION', severity='HIGH', resource_name='archive',
                 resource_type='Microsoft.Compute/disks', resource_group='review',
                 subscription_id=subscription,
                 resource_id=f'/subscriptions/{subscription}/resourceGroups/review/providers/Microsoft.Compute/disks/archive',

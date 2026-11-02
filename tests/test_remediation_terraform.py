@@ -9,7 +9,7 @@ DISK = f'/subscriptions/{SUB}/resourceGroups/prod/providers/Microsoft.Compute/di
 
 
 def scan(mode='azure', **finding):
-    return dict(mode=mode, status='completed', findings=[dict(resource_id=DISK, subscription_id=SUB, rule_id='ORPHANED_DISK', **finding)])
+    return dict(mode=mode, status='completed', findings=[dict(resource_id=DISK, subscription_id=SUB, rule_id='AZURE_DISK_UNATTACHED_RETENTION', **finding)])
 
 
 def test_import_only_without_guessed_settings_or_destruction():

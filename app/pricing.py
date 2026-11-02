@@ -138,7 +138,7 @@ class AzurePricingClient:
         evidence=finding.get('pricing_evidence')
         if not isinstance(evidence,dict):return unknown
         rid=finding.get('rule_id','');observed=finding.get('evidence') or {}
-        legacy=rid in ('UNASSOCIATED_PUBLIC_IP','EMPTY_APP_SERVICE_PLAN','AZURE_PUBLIC_IP_UNASSOCIATED','AZURE_ASP_EMPTY_PAID_PLAN')
+        legacy=rid in ('AZURE_PUBLIC_IP_UNASSOCIATED','AZURE_ASP_EMPTY_PAID_PLAN')
         if legacy:
             quantity=evidence.get('quantity')
             if type(quantity) is not int or not 1<=quantity<=100000:return unknown
@@ -158,19 +158,19 @@ class AzurePricingClient:
                 if any(value is None for value in parsed):return unknown
                 values[key]=sum(value[0] for value in parsed)
             required=set();amount=None
-            if rid in ('ORPHANED_DISK','AZURE_DISK_UNATTACHED_RETENTION'):
+            if rid in ('AZURE_DISK_UNATTACHED_RETENTION',):
                 required={'current','snapshot'}
                 if required<=values.keys():amount=values['current']-values['snapshot']
             elif rid in ('AZURE_DISK_PROVISIONED_PERFORMANCE','AZURE_VM_RIGHTSIZING_UTILIZATION'):
                 required={'current','target'}
                 if observed.get('target_compatibility_verified') is not True:return unknown
                 if required<=values.keys():amount=values['current']-values['target']
-            elif rid in ('STOPPED_VM','AZURE_VM_STOPPED_RESIDUAL_COST'):
+            elif rid in ('AZURE_VM_STOPPED_RESIDUAL_COST',):
                 state=observed.get('power_state');required={'disks'}
                 if state=='PowerState/stopped':required.add('compute')
                 elif state!='PowerState/deallocated':return unknown
                 if required<=values.keys():amount=values['disks']+(values.get('compute',Decimal(0)) if state=='PowerState/stopped' else 0)
-            elif rid=='IDLE_APP_GATEWAY':
+            elif rid == 'AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR':
                 required={'gateway_fixed','gateway_capacity'}
                 if required<=values.keys():amount=sum(values.values())
             if amount is None or amount<0 or set(values)!=required:return unknown

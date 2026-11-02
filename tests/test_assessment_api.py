@@ -87,7 +87,7 @@ def test_viewer_can_analyse_but_cannot_invoke_models(tmp_path, monkeypatch):
     with TestClient(create_app(settings, identity_validator=Validator(), ai_gateway=AIGateway(enabled=False))) as client:
         base = '/api/v1/scans/' + scan['scan_id']
         assert client.get(base+'/analysis', headers=auth()).status_code == 200
-        payload = dict(resource_id=scan['findings'][0]['resource_id'], rule_id='ORPHANED_DISK', target_id='review',
+        payload = dict(resource_id=scan['findings'][0]['resource_id'], rule_id='AZURE_DISK_UNATTACHED_RETENTION', target_id='review',
                        idempotency_key=str(uuid4()), acknowledge_external_processing=True)
         assert client.post(base+'/ai-risk-evaluation', headers=auth(), json=payload).status_code == 403
 
@@ -105,4 +105,4 @@ def test_legacy_and_changed_scope_are_not_eligible_for_resource_or_ai_review(tmp
         assert client.get('/api/v1/scans/'+scan['scan_id']+'/analysis', headers=auth()).status_code == 409
         assert client.get('/api/v1/scans/'+original_id+'/analysis', headers=auth()).status_code == 409
         assert client.post('/api/v1/scans/'+original_id+'/analysis/resource', headers=auth(),
-                           json={'resource_id':scan['findings'][0]['resource_id'],'rule_id':'ORPHANED_DISK'}).status_code == 409
+                           json={'resource_id':scan['findings'][0]['resource_id'],'rule_id':'AZURE_DISK_UNATTACHED_RETENTION'}).status_code == 409

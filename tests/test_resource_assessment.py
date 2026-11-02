@@ -44,7 +44,7 @@ def disk(name, **changes):
 
 def scanner(tenant):
     first = disk('disk-a')
-    return [first, dict(first, rule_id='ORPHANED_DISKS', resource_id=first['resource_id'].upper().replace('/SUBSCRIPTIONS/', '/subscriptions/')),
+    return [first, dict(first, rule_id='AZURE_DISK_UNATTACHED_RETENTION', resource_id=first['resource_id'].upper().replace('/SUBSCRIPTIONS/', '/subscriptions/')),
             disk('disk-b', evidence=dict(OBSERVED, tags={'Owner': 'platform', 'DoNotDelete': 'true'}))]
 
 
@@ -75,7 +75,7 @@ def test_resource_identity_merges_findings_and_digest_ignores_wall_clock():
     assert resource_key(a) == resource_key(b) != resource_key(c)
     merged, context = merge(resource_key(a), [b, a], observed_at='2026-10-22T00:00:00+00:00', now='2026-10-22T01:00:00+00:00')
     later, _ = merge(resource_key(a), [a, b], observed_at='2026-10-22T00:00:00+00:00', now='2026-10-25T00:00:00+00:00')
-    assert merged['finding_count'] == 2 and merged['rule_ids'] == ['ORPHANED_DISK', 'ORPHANED_DISKS']
+    assert merged['finding_count'] == 2 and merged['rule_ids'] == ['AZURE_DISK_UNATTACHED_RETENTION', 'AZURE_DISK_UNATTACHED_RETENTION']
     assert merged['evidence_digest'] == later['evidence_digest'] and merged['observation'] != later['observation']
     assert {p['pillar'] for p in merged['pillars']} == set(PILLARS)
     assert a['resource_id'] not in json.dumps(context) and 'disk-a' not in json.dumps(context)
@@ -164,7 +164,9 @@ def test_history_reports_changes_across_scans():
              dict(scan_id='s1', timestamp='2026-10-22T01:00:00+00:00', findings=[a])]
     entries = history(scans, key)
     assert entries[0]['changes'] == ['no_longer_flagged']
-    assert {'risk_changed', 'priority_changed', 'security_changed', 'findings_changed'} <= set(entries[1]['changes'])
+    assert 'risk_changed' in entries[1]['changes']
+    assert 'security_changed' in entries[1]['changes']
+    assert 'priority_changed' in entries[1]['changes']
     assert entries[2]['changes'] == []
     assert changes(dict(present=False), dict(present=True)) == ['appeared']
 

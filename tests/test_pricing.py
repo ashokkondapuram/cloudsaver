@@ -20,14 +20,14 @@ def client(items, next_page=None):
 
 
 def test_exact_meter_estimate_has_evidence_and_no_invented_net_savings():
-    result = client([ITEM]).attribute(dict(rule_id='UNASSOCIATED_PUBLIC_IP', pricing_evidence=EVIDENCE))
+    result = client([ITEM]).attribute(dict(rule_id='AZURE_PUBLIC_IP_UNASSOCIATED', pricing_evidence=EVIDENCE))
     assert result.monthly_waste_usd == 3.65
     assert result.realizable_savings_usd is None
     assert result.is_live_attributed and result.meter_id == 'meter-1' and result.retrieved_at
     assert result.estimate_type == 'retail_list_price'
 
 
-@pytest.mark.parametrize('rule', ['ORPHANED_DISK', 'STOPPED_VM', 'UNKNOWN_RULE', 'EMPTY_APP_SERVICE_PLAN'])
+@pytest.mark.parametrize('rule', ['AZURE_DISK_UNATTACHED_RETENTION', 'AZURE_VM_STOPPED_RESIDUAL_COST', 'UNKNOWN_RULE', 'AZURE_ASP_EMPTY_PAID_PLAN'])
 def test_missing_or_unsupported_evidence_stays_unknown(rule):
     result = attribute_finding_cost({'rule_id': rule, 'estimated_monthly_waste_usd': 999})
     assert result['estimated_monthly_waste_usd'] is None
@@ -54,7 +54,7 @@ def test_provider_failure_never_falls_back_to_benchmarks():
 
 
 def test_resource_quantity_is_required_and_applied():
-    finding = dict(rule_id='EMPTY_APP_SERVICE_PLAN', pricing_evidence=dict(EVIDENCE,quantity=3))
+    finding = dict(rule_id='AZURE_ASP_EMPTY_PAID_PLAN', pricing_evidence=dict(EVIDENCE,quantity=3))
     assert client([ITEM]).attribute(finding).monthly_waste_usd == 10.95
     finding['pricing_evidence'].pop('quantity')
     assert client([ITEM]).attribute(finding).monthly_waste_usd is None

@@ -6,11 +6,11 @@ from uuid import UUID
 from app.remediation import RESOURCE_ID
 
 SUPPORTED = {
-    'ORPHANED_DISK': ('microsoft.compute', 'disks', 'azurerm_managed_disk'),
-    'UNASSOCIATED_PUBLIC_IP': ('microsoft.network', 'publicipaddresses', 'azurerm_public_ip'),
+    'AZURE_DISK_UNATTACHED_RETENTION': ('microsoft.compute', 'disks', 'azurerm_managed_disk'),
+    'AZURE_PUBLIC_IP_UNASSOCIATED': ('microsoft.network', 'publicipaddresses', 'azurerm_public_ip'),
     'ORPHANED_NIC': ('microsoft.network', 'networkinterfaces', 'azurerm_network_interface'),
     'ORPHANED_NSG': ('microsoft.network', 'networksecuritygroups', 'azurerm_network_security_group'),
-    'IDLE_APP_GATEWAY': ('microsoft.network', 'applicationgateways', 'azurerm_application_gateway'),
+    'AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR': ('microsoft.network', 'applicationgateways', 'azurerm_application_gateway'),
 }
 
 

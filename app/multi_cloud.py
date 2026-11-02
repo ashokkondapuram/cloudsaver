@@ -80,5 +80,6 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
     for row in inventory:
         validate_finding_scope(dict(row, rule_id=row.get('inventory_rule_id', 'INVENTORY')), tenant)
     if enabled_rule_ids is not None:
-        findings = [row for row in findings if row['rule_id'] in enabled_rule_ids]
+        from app.rule_id_canonical import rule_enabled
+        findings = [row for row in findings if rule_enabled(row['rule_id'], enabled_rule_ids)]
     return findings, inventory

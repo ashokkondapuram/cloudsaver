@@ -80,7 +80,7 @@ def demo_cloud_findings(tenant, providers):
     if 'kubernetes' in providers:
         for dimension, baseline, usage, unit in [('CPU', 2, .4, 'cores'), ('MEMORY', 4294967296, 1073741824, 'bytes')]:
             add(
-                'kubernetes', f'K8S_{dimension}_OVERSIZED',
+                'kubernetes', f'K8S_CONTAINER_{dimension}_OVERREQUEST',
                 'k8s://demo-cluster/namespaces/staging/pods/api-worker/containers/api',
                 'kubernetes.io/Container', 'demo-cluster', 'api', None,
                 evidence=dict(

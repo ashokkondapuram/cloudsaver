@@ -21,6 +21,11 @@ def normalize_legacy_scan(payload):
     return payload
 
 
+def _finalize_scan_payload(payload):
+    from app.rule_id_canonical import normalize_scan
+    return normalize_scan(normalize_legacy_scan(payload))
+
+
 class Store:
     def __init__(self, path):
         self.path = path
@@ -45,6 +50,8 @@ class Store:
         from app.cloud_scope import validate_finding_scope
         for finding in scan['findings']:
             validate_finding_scope(finding, workspace)
+        from app.rule_id_canonical import normalize_scan
+        scan = normalize_scan(scan)
         with self.connection() as db:
             db.execute('INSERT INTO scans VALUES (?, ?, ?, ?)',
                        (scan['scan_id'], tenant_id, scan['timestamp'], json.dumps(scan)))
@@ -53,13 +60,13 @@ class Store:
         with self.connection() as db:
             row = db.execute('SELECT payload FROM scans WHERE id=? AND tenant_id=?',
                              (scan_id, tenant_id)).fetchone()
-        return normalize_legacy_scan(json.loads(row[0])) if row else None
+        return _finalize_scan_payload(json.loads(row[0])) if row else None
 
     def list(self, tenant_id, limit=50):
         with self.connection() as db:
             rows = db.execute('SELECT payload FROM scans WHERE tenant_id=? ORDER BY timestamp DESC LIMIT ?',
                               (tenant_id, limit)).fetchall()
-        return [normalize_legacy_scan(json.loads(row[0])) for row in rows]
+        return [_finalize_scan_payload(json.loads(row[0])) for row in rows]
 
 
 class PostgresStore:
@@ -114,6 +121,8 @@ class PostgresStore:
         from app.waste_finding_evidence import waste_finding_evidence
         for finding in scan['findings']:
             validate_finding_scope(finding, workspace)
+        from app.rule_id_canonical import normalize_scan
+        scan = normalize_scan(scan)
         with self.connection(tenant_id) as db:
             owner = db.execute('SELECT organization_id FROM public.tenants WHERE tenant_id=%s', (tenant_id,)).fetchone()
             organization_id = owner[0] if owner else uuid5(NAMESPACE_URL, 'cloudsaver:organization:' + tenant_id)
@@ -155,12 +164,12 @@ class PostgresStore:
             return None
         with self.connection(tenant_id) as db:
             row = db.execute('SELECT payload FROM public.scans WHERE id=%s AND tenant_id=%s', (scan_id, tenant_id)).fetchone()
-        return normalize_legacy_scan(row[0]) if row else None
+        return _finalize_scan_payload(row[0]) if row else None
 
     def list(self, tenant_id, limit=50):
         with self.connection(tenant_id) as db:
             rows = db.execute('SELECT payload FROM public.scans WHERE tenant_id=%s ORDER BY timestamp DESC LIMIT %s', (tenant_id, limit)).fetchall()
-        return [normalize_legacy_scan(row[0]) for row in rows]
+        return [_finalize_scan_payload(row[0]) for row in rows]
 
 
 def _analysis_audit(finding):

@@ -38,7 +38,7 @@ def context(tmp_path, monkeypatch):
 
 def finding():
     return dict(resource_id=f'/subscriptions/{SUB}/resourceGroups/test/providers/Microsoft.Compute/disks/archive',
-                rule_id='ORPHANED_DISK', resource_name='archive', resource_group='test', subscription_id=SUB,
+                rule_id='AZURE_DISK_UNATTACHED_RETENTION', resource_name='archive', resource_group='test', subscription_id=SUB,
                 resource_type='Microsoft.Compute/disks', severity='HIGH', details='Review retention', estimated_monthly_waste_usd=999)
 
 

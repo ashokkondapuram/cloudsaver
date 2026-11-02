@@ -11,8 +11,7 @@ RESOURCE_ID = re.compile(
     r'|Microsoft\.Network/applicationGateways)'
     r'/([A-Za-z0-9_.()-]{1,80})$', re.IGNORECASE)
 RULE_TYPES = {
-    'ORPHANED_DISK': 'microsoft.compute/disks',
-    'UNASSOCIATED_PUBLIC_IP': 'microsoft.network/publicipaddresses',
+    'AZURE_PUBLIC_IP_UNASSOCIATED': 'microsoft.network/publicipaddresses',
     'ORPHANED_NIC': 'microsoft.network/networkinterfaces',
     'ORPHANED_NSG': 'microsoft.network/networksecuritygroups',
 }
@@ -48,7 +47,7 @@ def generate_script(scan: dict, resource_ids: list[str], tenant_id: str,
             raise ValueError('Selected resource does not belong to this scan')
         rule = finding.get('rule_id')
         if rule not in RULE_TYPES:
-            raise ValueError('Only unattached disks, public IPs, orphaned NICs, and NSGs support script generation')
+            raise ValueError('Only unassociated public IPs, orphaned NICs, and NSGs support script generation')
         match = RESOURCE_ID.fullmatch(rid)
         if not match or match.group(3).lower() != RULE_TYPES[rule]:
             raise ValueError('Resource identity is invalid for the finding rule')
@@ -92,7 +91,7 @@ def generate_script(scan: dict, resource_ids: list[str], tenant_id: str,
             '[ "$confirmation" = "$resource_id" ] || { echo "Confirmation did not match. Aborting." >&2; exit 1; }',
         ])
         lines.append('assert_unprotected')
-        if rule == 'ORPHANED_DISK':
+        if rule == 'AZURE_DISK_UNATTACHED_RETENTION':
             lines.extend([
                 'disk_state=$(az disk show --ids "$resource_id" --subscription "$subscription_id" --query diskState --output tsv)',
                 '[ "$disk_state" = "Unattached" ] || { echo "Disk is no longer unattached. Aborting." >&2; exit 1; }',
@@ -110,7 +109,7 @@ def generate_script(scan: dict, resource_ids: list[str], tenant_id: str,
                 'assert_unprotected',
                 'az disk delete --ids "$resource_id" --subscription "$subscription_id" --yes',
             ])
-        elif rule == 'UNASSOCIATED_PUBLIC_IP':
+        elif rule == 'AZURE_PUBLIC_IP_UNASSOCIATED':
             lines.extend([
                 "unassociated=$(az network public-ip show --ids \"$resource_id\" --subscription \"$subscription_id\" --query 'ipConfiguration.id == `null` && natGateway.id == `null`' --output tsv)",
                 '[ "$unassociated" = "true" ] || { echo "Public IP has an association or its state is unknown. Aborting." >&2; exit 1; }',

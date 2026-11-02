@@ -33,5 +33,7 @@ def policy_for_tenant(tenant_id: str) -> dict | None:
 
 
 def enabled_rule_ids_for_tenant(tenant_id: str) -> set[str] | None:
+    from app.rule_id_canonical import normalize_enabled_rule_ids
+
     policy = policy_for_tenant(tenant_id)
-    return set(policy['enabled_rule_ids']) if policy is not None else None
+    return normalize_enabled_rule_ids(set(policy['enabled_rule_ids'])) if policy is not None else None

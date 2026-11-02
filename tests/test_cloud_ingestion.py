@@ -131,7 +131,7 @@ CLUSTER = dict(cluster_id='test-cluster', prometheus_url='https://prometheus.exa
 
 def test_kubernetes_p95_and_full_window_evidence():
     results = scan_cluster(CLUSTER, reader=metric_reader(), now=NOW)
-    assert {r['rule_id'] for r in results} == {'K8S_CPU_OVERSIZED', 'K8S_MEMORY_OVERSIZED'}
+    assert {r['rule_id'] for r in results} == {'K8S_CONTAINER_CPU_OVERREQUEST', 'K8S_CONTAINER_MEMORY_OVERREQUEST'}
     for result in results:
         evidence = result['evidence']
         assert evidence['samples'] == 337 and evidence['p95_usage'] == .4

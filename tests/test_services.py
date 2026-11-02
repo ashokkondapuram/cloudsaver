@@ -62,10 +62,10 @@ def test_tenant_service_returns_no_key_hash(tmp_path):
 def test_snapshot_analytics_does_not_sum_old_snapshots():
     snapshot = dict(scan_id='latest', timestamp='2026-10-22T00:00:00Z', mode='azure',
                     total_items_found=1, total_monthly_waste_usd=None,
-                    findings=[{'rule_id': 'ORPHANED_DISK'}])
+                    findings=[{'rule_id': 'AZURE_DISK_UNATTACHED_RETENTION'}])
     result = summarize([snapshot, snapshot])
     assert result['total_items_found'] == 1
-    assert result['categories'] == {'ORPHANED_DISK': 1}
+    assert result['categories'] == {'AZURE_DISK_UNATTACHED_RETENTION': 1}
     assert result['monthly_opportunity_usd'] is None
 
 

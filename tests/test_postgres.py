@@ -61,7 +61,7 @@ def scan(tenant):
             'total_items_found': 1, 'total_monthly_waste_usd': None,
             'findings': [{'subscription_id': sub, 'resource_id': f'/subscriptions/{sub}/resourceGroups/test/providers/Microsoft.Compute/disks/archive',
                           'resource_name': 'archive', 'resource_type': 'Microsoft.Compute/disks',
-                          'resource_group': 'test', 'rule_id': 'ORPHANED_DISK', 'severity': 'HIGH',
+                          'resource_group': 'test', 'rule_id': 'AZURE_DISK_UNATTACHED_RETENTION', 'severity': 'HIGH',
                           'details': 'Review retention', 'estimated_monthly_waste_usd': None}]}
 
 

@@ -310,6 +310,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 coverage=coverage(inventory, enriched_findings, evaluations),
                 coverage_manifest=coverage_manifest(inventory, enriched_findings, evaluations, scope_results=scope_results),
             )
+            from app.rule_id_canonical import normalize_scan
+            result = normalize_scan(result)
             # Support both Pydantic v1 (parse_obj, dict) and v2 (model_validate, model_dump)
             if hasattr(ScanSummary, 'model_validate'):
                 validated = ScanSummary.model_validate(result).model_dump()
