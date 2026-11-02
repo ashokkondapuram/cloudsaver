@@ -24,7 +24,7 @@ This document records automated verification of the scan → rule evaluation →
 
 | Channel | When | Agent / operator steps |
 |---------|------|------------------------|
-| `finops_autopilot_resize` | Six rightsizing rules with resize playbooks | `resource.inspect` → `compute.resize`; optional `gitops.terraform.sync` (`rightsize_sku`) |
+| `finops_autopilot_resize` | Five catalog rightsizing rules mapped in `FINOPS_RULE_TO_ACTION` (VM/ASP/EC2/RDS/GCE) | `resource.inspect` → `compute.resize`; optional `gitops.terraform.sync` (`rightsize_sku`) |
 | `engineering_review_plan` | Azure VM rightsize or unattached disk pilot | Workload plan + readiness checks; `execution_enabled=False` |
 | `kubernetes_patch_preview` | Container CPU/memory overrequest | Patch preview API → strategic-merge YAML + kubectl dry-run |
 | `remediation_bash_review` | Legacy orphan disk/IP/NIC/NSG | Interactive bash download |
@@ -40,7 +40,7 @@ Registry: `route_for_rule()` in `app/agent_workflow_routing.py`.
 | **Azure (legacy)** | Type-specific branches in `analysis_rules.evaluate` (disk state history, VM series, IP association, ASP sites) | Review remediation scripts; rightsizing gated by SLO/utilization |
 | **AWS / GCP / Azure (catalog)** | Shared `multicloud_rules.condition()` with family-specific thresholds from `definitions()` | Destructive actions blocked by default; savings only with evidence |
 | **Kubernetes** | Kind-based rules; CPU/MEM overrequest expose patch `recommendation` | Strategic-merge patch preview API (not cloud mutate) |
-| **Rightsizing (compute)** | SLO / utilization gates where applicable | FinOps autopilot: inspect → `compute.resize` for six playbook types only |
+| **Rightsizing (compute)** | SLO / utilization gates where applicable | FinOps autopilot: inspect → `compute.resize` for the five autopilot-mapped playbook types; `azure.disk.rightsize` is listed for type-based plans only (no catalog rule autopilot route) |
 | **Orphan / idle / retention** | State history + snapshots + minimum days | Remediation bash/Terraform review artifacts; no autopilot execute |
 
 ## Recommended commands
@@ -70,12 +70,13 @@ python3 -m pytest -q tests --ignore=tests/test_postgres.py
 ## Known limits (not errors in code, but scope boundaries)
 
 - Many multicloud rules rely on generic `insufficient_evidence` without dedicated behavioral fixtures beyond AWS/GCP samples in `test_v140.py`.
-- FinOps autopilot covers **six resize playbooks** only; orphan cleanup, NAT bypass, DB tier reviews, and K8 rightsizing use other pathways (remediation scripts, patch preview, manual review).
+- FinOps autopilot covers **five** rightsizing rules wired through `FINOPS_RULE_TO_ACTION`; **`azure.disk.rightsize`** is a sixth playbook resolved by resource type for explicit operator/API requests, not by analysis rule ID routing.
 - Live provider acceptance requires authorized sandbox credentials; unit tests use synthetic inventory.
 - Disposable PostgreSQL suites require `pgvector/pgvector:pg16` (`scripts/test_postgres.py`).
 
 ## Change log
 
+- **1.8.1 verification:** Full backend unit suite (1137 passed) and programmatic catalog ↔ `evaluate_inventory` audit (0 mismatches, 51 rules); platform identity `FAMILIES` matches `app/resource_catalog.py`.
 - **Catalog fix:** `K8S_CONTAINER_UNDERPROVISIONED_RISK` added to kubernetes `deployments` family so policy/catalog match runtime evaluation (`app/resource_catalog.py`).
 - **Integrity tests:** `expected_rule_ids()` mirrors evaluation wiring; Deployment/ReplicaSet types are family grouping only (Container-scoped rules).
 - **RDS playbook:** canonical type `aws:rds:db` aligned with scanner/catalog (`finops_resize_playbooks.py`).

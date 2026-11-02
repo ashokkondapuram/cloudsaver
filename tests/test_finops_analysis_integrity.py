@@ -122,6 +122,23 @@ def test_rightsizing_rules_have_resize_playbooks(rule_id, playbook_key):
     assert resolved["finops_action"] == playbook_key
 
 
+def test_platform_identity_families_match_app_catalog():
+    from pathlib import Path
+
+    ns: dict = {}
+    exec(Path("platform/identity/analysis/multicloud.py").read_text(), ns)
+    assert ns["FAMILIES"] == FAMILIES
+
+
+def test_autopilot_playbooks_align_with_finops_rule_routing():
+    from app.agent_workflow_routing import FINOPS_RULE_TO_ACTION
+
+    autopilot_actions = frozenset(FINOPS_RULE_TO_ACTION.values())
+    assert autopilot_actions <= frozenset(PLAYBOOKS)
+    assert "azure.disk.rightsize" in PLAYBOOKS
+    assert "azure.disk.rightsize" not in autopilot_actions
+
+
 def test_family_lookup_matches_catalog_rows():
     for provider, _name, _category, resource_types, rules in FAMILIES:
         for resource_type in resource_types:

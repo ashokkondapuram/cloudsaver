@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "2c22b9084c62eb553b0441fbfaec367976771371732f503ad5f801149b151da4",
+  "inventory_sha256": "76a40d84e46bf134cea8a942b921ca840e170d4b5c44081b130e2715bf47b989",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1351,8 +1351,8 @@
     },
     {
       "path": "docs/FINOPS_ANALYSIS_VERIFICATION.md",
-      "sha256": "eb434497ecc2e5cc22cbfbc8ac12c610bb079f5b71eac4863f919f64d1a992c9",
-      "bytes": 5841
+      "sha256": "96d707c6899ba6e62d997ede1caecee39b7e3c5d0dcda618418d93256f72fed0",
+      "bytes": 6245
     },
     {
       "path": "docs/GITOPS.md",
@@ -1653,6 +1653,11 @@
       "path": "docs/releases/1.8.0-UPGRADE.md",
       "sha256": "0e05effc691cdad743fbdf054f6486207339eb1b70c0ad0cbc0022995d85b1b1",
       "bytes": 2792
+    },
+    {
+      "path": "docs/releases/1.8.1-UPGRADE.md",
+      "sha256": "937a38784b838326bd0a4ef3ce1c1832bfd0859d7435f7e5cffeaea56f1db62c",
+      "bytes": 2134
     },
     {
       "path": "docs/superpowers/plans/2026-10-27-control-plane-plan-lifecycle.md",
@@ -3211,8 +3216,8 @@
     },
     {
       "path": "tests/test_finops_analysis_integrity.py",
-      "sha256": "a063e50d3898498cfa2db26c339492b903f5b472a4617a4a7b23a452deb2fb5b",
-      "bytes": 5529
+      "sha256": "c7402475a08d8aa151dd84b1f156e98c1b6d2afa5f7d9a71fd821e88226501ad",
+      "bytes": 6105
     },
     {
       "path": "tests/test_finops_autopilot_planner.py",
