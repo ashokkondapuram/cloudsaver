@@ -1,6 +1,6 @@
 # CloudSaver (Drive v0.4.0 archive)
 
-> **Current product:** CloudSaver **v1.8.0** lives in the [repository root README](../../README.md). This folder preserves the original Drive MVP narrative (v0.2.0, six-service stack). Use it for historical context only; commands, ports and feature lists below are outdated.
+> **Current product:** CloudSaver **v1.8.1** lives in the [repository root README](../../README.md). This folder preserves the original Drive MVP narrative (v0.2.0, six-service stack). Use it for historical context only; commands, ports and feature lists below are outdated.
 
 Current release (this folder): **v0.2.0**. This includes Sprints A–C from the updated Drive README: verified Stripe billing webhooks, opt-in Celery scan workers and an explicit Azure Key Vault credential provider. See [SPRINTS_ABC.md](SPRINTS_ABC.md) for contracts and limits.
 

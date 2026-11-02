@@ -1,4 +1,4 @@
-# CloudSaver v1.8.0 — full FinOps workspace
+# CloudSaver v1.8.1 — full FinOps workspace
 
 ## Start all servers with one command
 
@@ -13,15 +13,17 @@ Open the dashboard at `http://127.0.0.1:3000`, platform portal at `http://127.0.
 This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
 
 
-**Latest (release 1.8.0 @ `a1bd0d6`, Nov 2026):**
+**Latest (release 1.8.1, Nov 2026):**
 
+- **Deployment contracts (1.8.1):** Cross-platform env reference in [DEPLOYMENT_ENVIRONMENT.md](docs/DEPLOYMENT_ENVIRONMENT.md); ACA and Helm repos pinned to 1.8.1. See [1.8.1 upgrade runbook](docs/releases/1.8.1-UPGRADE.md).
+- **Engineering & FinOps agents (1.8.1):** Engineering actions use zero-downtime profiles; FinOps catalog rules route to the correct agent workflow channel.
 - **Backend reliability (1.8.0):** Prioritized fixes for scoped scan metadata, drift ingress batch limits, fenced platform outbox leases (migration `0033`), provider JSON numeric safety, and telemetry overflow handling. See [Backend reliability guide](docs/BACKEND_RELIABILITY_GUIDE.md) and [1.8.0 upgrade runbook](docs/releases/1.8.0-UPGRADE.md).
 - **Resource data pipeline:** Scan storage persists full finding evidence on normalized `waste_findings` rows (`app/waste_finding_evidence.py`). Inventory-only resources use canonical observation rows for five-pillar assessment and scan history. Scoped workspace keys recompute `coverage` / `coverage_manifest` for the visible subset; `partial` and `clean_baseline` reflect incomplete supported inventory, not hard-coded optimism.
 - **Billable resource catalog:** 36 FinOps families across Azure, AWS, GCP and Kubernetes define metered SKUs; free topology types (NIC, NSG, subnets, and similar) are listed explicitly. `GET /api/v1/resources/billable-catalog` returns the catalog; resource lists default to **`cost_scope=billable`** (use `cost_scope=all` for every inventory row).
 - **Billing sync:** Automatic read-only imports from each provider's cost APIs (amortized and per-resource where configured), plus reservation / savings plan / committed-use snapshots in the Commitments panel. See [Cost allocation and billing](docs/features/cost-allocation-and-billing.md).
 - **FinOps & control plane (scaffolds and wiring vary):** Unit-economics preview, GitOps AST resource mapping, drift ingress stubs, GPU validation helpers, and commitment ladder modules — see [V2 scaffolds](docs/features/v2-scaffolds.md) for production boundaries.
 
-v1.8.0 adds backend reliability hardening (drift outbox fencing, ingress bounds, provider numeric safety) on top of v1.7.0 workload assessments, keyless cloud billing synchronization, approval-bound agent metadata/IaC review workflows, service matrices and automatic planning evidence. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling the new connectors. For workload grouping and ownership rules, see [workload assessments](docs/WORKLOAD_ASSESSMENTS.md). For migration head **`0033_platform_outbox_lease`**, see [1.8.0 upgrade runbook](docs/releases/1.8.0-UPGRADE.md).
+v1.8.1 adds deployment env documentation and engineering zero-downtime defaults on top of v1.8.0 backend reliability hardening. Read [setup, boundaries and upgrade steps](docs/V1_5_0_IMPLEMENTATION.md) before enabling new connectors. For migration head **`0033_platform_outbox_lease`**, see [1.8.1 upgrade runbook](docs/releases/1.8.1-UPGRADE.md).
 
 Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI, GitOps history, governance/outcomes reads, and related list endpoints; results are filtered to the key's providers and scope grants. Tenant-wide administration routes remain `full_scope`.
 

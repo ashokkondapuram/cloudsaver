@@ -2,7 +2,7 @@
 
 This release implements a narrow, complete governance workflow for one Azure storage control. Open **Risk & compliance** in the customer dashboard. Controls, findings, business risks, exceptions, source attestations and decision history are separate records. A technical pass, an accepted business risk and organizational compliance are different claims.
 
-The [upgrade runbook](releases/1.8.0-UPGRADE.md) is authoritative for deployment head and manifest verification. The [1.7.0 governance runbook](releases/1.7.0-UPGRADE.md) retains workflow detail. Existing [enterprise launch gates](ENTERPRISE_READINESS_GAPS.md) remain open. This implementation is not a NIST assessment, compliance certification, penetration test or accepted enterprise production launch.
+The [upgrade runbook](releases/1.8.1-UPGRADE.md) is authoritative for deployment head and manifest verification. The [1.7.0 governance runbook](releases/1.7.0-UPGRADE.md) retains workflow detail. Existing [enterprise launch gates](ENTERPRISE_READINESS_GAPS.md) remain open. This implementation is not a NIST assessment, compliance certification, penetration test or accepted enterprise production launch.
 
 ## Supported first control and evidence boundary
 

@@ -5,7 +5,7 @@
 [![Architecture](https://img.shields.io/badge/Stack-FastAPI_%7C_Next.js_16_%7C_PostgreSQL_16_%7C_Redis-success.svg)](#)
 [![Safety](https://img.shields.io/badge/Guardrails-5--Pillar_Blast_Radius-critical.svg)](#)
 
-**Current release:** v1.8.0 (customer console, platform portal, and core services). v1.7.0 added workload assessments; v1.8.0 adds backend reliability hardening and migration `0033_platform_outbox_lease`. For install, migration, and verification commands, use [README.md](../README.md) and [1.8.0 upgrade runbook](releases/1.8.0-UPGRADE.md).
+**Current release:** v1.8.1 (customer console, platform portal, and core services). v1.8.0 added backend reliability hardening and migration `0033_platform_outbox_lease`. For install, migration, and verification commands, use [README.md](../README.md) and [1.8.1 upgrade runbook](releases/1.8.1-UPGRADE.md).
 
 **Dashboards do not cut cloud bills—engineers do.**  
 CloudSaver is an enterprise multi-cloud FinOps automation platform and **pre-merge GitOps firewall** across **AWS, Microsoft Azure, Google Cloud Platform (GCP), and Kubernetes**. Instead of dumping static CSVs on engineering teams or acting as a blind execution layer that risks production outages, CloudSaver pairs deterministic multi-cloud discovery with five-pillar architectural risk assessments, pre-deletion safety evidence, reviewed Terraform 1.5+ exports, and human-approved agent execution.

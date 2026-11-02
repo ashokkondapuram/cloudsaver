@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE = 'cloudsaver-python:1.8.0'
+IMAGE = 'cloudsaver-python:1.8.1'
 PYTHON_SERVICES = ('api-gateway','scanner-service','governance-monitor','agent-gateway',
                    'data-retention-worker','billing-sync-worker','observability-worker',
                    'scan-worker','delivery-dispatcher','scan-scheduler')

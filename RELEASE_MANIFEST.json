@@ -1,6 +1,6 @@
 {
-  "version": "1.8.0",
-  "inventory_sha256": "44371cc4f0fceb0146e1375da120ab54edab3450e2e259d7a0db56d559b5e7a4",
+  "version": "1.8.1",
+  "inventory_sha256": "2c22b9084c62eb553b0441fbfaec367976771371732f503ad5f801149b151da4",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -91,8 +91,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "f3213f08915ae94d62097ca36c567a9d9791dac3b6b05d3018541b80ec575e7e",
-      "bytes": 33771
+      "sha256": "3804f1cff31bd9acc4af811cf4723d0645a37c4c4c9f4c0910bf803ac5ad0356",
+      "bytes": 33879
     },
     {
       "path": "ROADMAP.md",
@@ -610,6 +610,11 @@
       "bytes": 81
     },
     {
+      "path": "app/engineering/actions.py",
+      "sha256": "40e1077a75ebf4302788f56f3f60e6fe385bb0324c948c8eb7b5df4c30952d50",
+      "bytes": 1429
+    },
+    {
       "path": "app/engineering/api.py",
       "sha256": "9667e0a7cff193f98ea65960466c4723d1f10892c8fb63e48b5f80f3194a54fb",
       "bytes": 6984
@@ -623,6 +628,11 @@
       "path": "app/engineering/cursors.py",
       "sha256": "25c08cb31836dfa3233c789e5d1ee724a06eb6629d40ba7dd2b7495bac11d969",
       "bytes": 2390
+    },
+    {
+      "path": "app/engineering/execution.py",
+      "sha256": "14fbb5c06a3268f1e6c2f4c0527e5ca9db55739cbbf5e6f3083b1b04fca84af9",
+      "bytes": 3545
     },
     {
       "path": "app/engineering/readiness.py",
@@ -871,7 +881,7 @@
     },
     {
       "path": "app/main.py",
-      "sha256": "e3e6c7626efcdad5e3e97dabe7270c08e91bff93b114abd7d4aeca8c6f20dcaf",
+      "sha256": "fbef2c0c7ed3ab550a05fcfcb09ee462baa0cd64dae15b9e8cb5f31c6b2ffd3f",
       "bytes": 21818
     },
     {
@@ -1156,7 +1166,7 @@
     },
     {
       "path": "compose.yaml",
-      "sha256": "da58bf4f5f98694f6b65892c4a95d37f489e802fa4f5112c6c1dc1f6b5d48d7f",
+      "sha256": "77fd40e37230dc4423042ac3bb1af427d673733234559fe1709a6a00b4047e77",
       "bytes": 16860
     },
     {
@@ -1241,8 +1251,8 @@
     },
     {
       "path": "docs/ARCHITECTURAL_IMPROVEMENTS.md",
-      "sha256": "99ebbba6f647c7946015384a213443ed1bc4ca8bf4a00e0362b3a6ceee00dfba",
-      "bytes": 11095
+      "sha256": "5c9cb3cfa2747a5ce455b0cda93b4c008c02c5e4e94e1c6e5896dc18031bbdeb",
+      "bytes": 11061
     },
     {
       "path": "docs/ASSESSMENT_AI.md",
@@ -1285,6 +1295,11 @@
       "bytes": 9751
     },
     {
+      "path": "docs/DEPLOYMENT_ENVIRONMENT.md",
+      "sha256": "91bde7c3da4a934e4a8e0f71c76d6e923aa8cb28c2a80285a2dea1c19234abe6",
+      "bytes": 11397
+    },
+    {
       "path": "docs/DETAIL_RELIABILITY_VERIFICATION.md",
       "sha256": "d06e7ae0b5e3683edb486d0976146cf1d44e21c8231ebb67124ab8d163ca9fc4",
       "bytes": 11901
@@ -1301,13 +1316,13 @@
     },
     {
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
-      "sha256": "e3dda7753abd1d228eaa4ac036e3873f642d5091bc06faa328c61d6ba8f62848",
+      "sha256": "830d779cdddbbec95d42be8ff619c76f66c4991ea9a23ab9e15a60ed06ca4817",
       "bytes": 15469
     },
     {
       "path": "docs/ENVIRONMENT.md",
-      "sha256": "654986ede6505c5e77690b16133821172982548c95d78dbdb5ce8d986835122b",
-      "bytes": 20381
+      "sha256": "ae129b12aae8b0464833c05f27f6d01a357568d34496d7c359f495fb75307e99",
+      "bytes": 20459
     },
     {
       "path": "docs/FEATURE_ACCEPTANCE_MATRIX.md",
@@ -1421,7 +1436,7 @@
     },
     {
       "path": "docs/RISK_AND_COMPLIANCE.md",
-      "sha256": "50deb1b5516727da04aa1eafa1c0a5e459c88cad6d38b9350ec6de4d6b9b3c14",
+      "sha256": "48dd34b325a8ba8883ff8db5345fbf8c672aca4acc6a09a06dc8f7f92cbec084",
       "bytes": 22180
     },
     {
@@ -1506,7 +1521,7 @@
     },
     {
       "path": "docs/drive-v0.4.0/README.md",
-      "sha256": "404f1c5ffc5cbc0613b5e864784d0e152e48691adbd6557835e2703b883985c5",
+      "sha256": "0ce36142ef5f7f3b550e38c1a6e9513a4109cb5ee1fb997e6cb25da7e1829a3c",
       "bytes": 17815
     },
     {
@@ -1626,18 +1641,18 @@
     },
     {
       "path": "docs/releases/1.6.0-UPGRADE.md",
-      "sha256": "be24d77420936855c3f85b946c61847e31e4b7aa697731054fa6afe2b1e52174",
+      "sha256": "536cdc3a2e412d287731889ab07884bf86c35954acdd1c58022e12ac4a08b4f2",
       "bytes": 6606
     },
     {
       "path": "docs/releases/1.7.0-UPGRADE.md",
-      "sha256": "b7f805f4f9cc18ab285ef8f991978102ad8d277437249e9979e7e72926f63088",
+      "sha256": "c9948ee2481cfbf95127a6d4d2bebec09d4932f097038a3f72a9ff64e889c19f",
       "bytes": 8444
     },
     {
       "path": "docs/releases/1.8.0-UPGRADE.md",
-      "sha256": "2500b423995193d9309a4ddca677ba56379a59d813d575e0aa9b3a4d66b2d73d",
-      "bytes": 2598
+      "sha256": "0e05effc691cdad743fbdf054f6486207339eb1b70c0ad0cbc0022995d85b1b1",
+      "bytes": 2792
     },
     {
       "path": "docs/superpowers/plans/2026-10-27-control-plane-plan-lifecycle.md",
@@ -2806,7 +2821,7 @@
     },
     {
       "path": "scripts/release_manifest.py",
-      "sha256": "c39841f5f966c7e4f9eb37d68df4663911a3c855e24160d01cba19d8ab29b03b",
+      "sha256": "036013b0e43896ac29130a16c7632b38d5d4f49fdcfeafbcfb9f47ec815215e4",
       "bytes": 1849
     },
     {
@@ -2836,7 +2851,7 @@
     },
     {
       "path": "scripts/start_stack.py",
-      "sha256": "eb851bc581c4b17b3334b4ebf30713c318a72b4dac67b9229434f124ad510667",
+      "sha256": "6391a4cb84918cfe2c45b7a378a802a10f56d9dce29084bac8f04e0374419538",
       "bytes": 19122
     },
     {
@@ -2876,7 +2891,7 @@
     },
     {
       "path": "services/common.py",
-      "sha256": "1a13ef7db9224821c0ba7e3440b3ccbaef6f9ed4ff7c0ee5d8bcf8eac1f5edf6",
+      "sha256": "5c1fddba1829fd2bba930b22cd53cf92d48ef7aefe23e8327b370a106be84b4a",
       "bytes": 4322
     },
     {
@@ -3158,6 +3173,11 @@
       "path": "tests/test_engineering_migration.py",
       "sha256": "c61adaba7416bc1c88c3f3ab29f505126206657e4b8619a6b1ca5cb146d1f741",
       "bytes": 2490
+    },
+    {
+      "path": "tests/test_engineering_zero_downtime.py",
+      "sha256": "831919f3c5d292bc28462defb16761adeb186b1cf3a13293f6348946a3a53eff",
+      "bytes": 3557
     },
     {
       "path": "tests/test_enterprise.py",
@@ -4086,12 +4106,12 @@
     },
     {
       "path": "web-dashboard/package-lock.json",
-      "sha256": "a8971e5bf65daba9c4d7f9ff751d7864215f4d3759fda3ced6df99116fab7659",
+      "sha256": "48423542f4e937af18a97314875829389b2968b6213e4dc4d479a3a9541b7034",
       "bytes": 139211
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "0efcd7bc67178ab3a80d126f481f89188b51921c8e3b4e3ac3f3cad01dcb4c75",
+      "sha256": "4ec766195fcaa9959f955214cbc1bf21443ed019453651d5465f3e446c97855f",
       "bytes": 1100
     },
     {

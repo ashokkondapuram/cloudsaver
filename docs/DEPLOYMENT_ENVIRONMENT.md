@@ -8,7 +8,7 @@ Use this with [ENVIRONMENT.md](ENVIRONMENT.md) (local `.env` generation) and the
 | Azure Container Apps | [cloudsaver-containerapps](https://github.com/ashokkondapuram/cloudsaver-containerapps) | Azure Key Vault (`secretNames` + `extraSecrets`) | `backendConfig` in `production.json` |
 | Kubernetes / AKS | [cloudsaver-helm](https://github.com/ashokkondapuram/cloudsaver-helm) | Kubernetes Secrets (`runtimeSecret`, `identitySecret`, …) | Helm `values.config` ConfigMap |
 
-**Application target:** CloudSaver **1.8.0** (`ashokkondapuram/cloudsaver` @ `7061f41` or later). Pin **immutable image digests** in ACA/Helm; tags alone are not sufficient for production.
+**Application target:** CloudSaver **1.8.1** (pin immutable image digests in ACA/Helm; tags alone are not sufficient for production).
 
 ---
 
@@ -90,7 +90,7 @@ Helm: map booleans under `features:` in `values.yaml`. ACA: `features` and `work
 
 ## 4. Operator `backendConfig` / `values.config` (safe to tune)
 
-Recommended defaults for **1.8.0** (also in ACA `examples/production.json` and Helm `values.yaml`):
+Recommended defaults for **1.8.1** (also in ACA `examples/production.json` and Helm `values.yaml`):
 
 | Variable | Example value | Notes |
 | --- | --- | --- |
@@ -180,6 +180,7 @@ helm template cloudsaver charts/cloudsaver -f charts/cloudsaver/values-productio
 ## 8. Related application docs
 
 - [ENVIRONMENT.md](ENVIRONMENT.md) — full Compose / platform `.env` catalog  
-- [releases/1.8.0-UPGRADE.md](releases/1.8.0-UPGRADE.md) — migration `0033`, outbox dispatch  
+- [releases/1.8.1-UPGRADE.md](releases/1.8.1-UPGRADE.md) — current release; migration head still `0033`  
+- [releases/1.8.0-UPGRADE.md](releases/1.8.0-UPGRADE.md) — backend reliability baseline  
 - [ENGINEERING_INCREMENT.md](ENGINEERING_INCREMENT.md) — engineering API + zero-downtime policy  
 - [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md) — analysis and agent workflow channels  
