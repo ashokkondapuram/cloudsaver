@@ -7,7 +7,7 @@ CloudSaver and the platform use **two untracked env files**. Nothing loads them 
 | [`.env`](../.env.example) | CloudSaver (repo root) | `compose.yaml`, standalone API, CLI scripts |
 | [`platform/.env`](../platform/.env.example) | Platform 1.0 | `platform/compose.yaml`, identity-service, platform portal |
 
-**Related docs:** [Cloud sources and onboarding](CLOUD_SOURCES.md) · [Managed identity roles](MANAGED_IDENTITY_ROLES.md) · Annotated templates (preferred quick reference): [`.env.example`](../.env.example), [`platform/.env.example`](../platform/.env.example)
+**Related docs:** [Deployment environment (Compose / ACA / Helm)](DEPLOYMENT_ENVIRONMENT.md) · [Cloud sources and onboarding](CLOUD_SOURCES.md) · [Managed identity roles](MANAGED_IDENTITY_ROLES.md) · Annotated templates (preferred quick reference): [`.env.example`](../.env.example), [`platform/.env.example`](../platform/.env.example)
 
 ---
 
