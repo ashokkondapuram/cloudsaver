@@ -1,23 +1,14 @@
+import ruleLabels from './rule-labels.json';
 import type {Finding} from './types';
 
-const labels: Record<string, string> = {
-  ORPHANED_DISK: 'Unattached managed disk', ORPHANED_DISKS: 'Unattached managed disk',
-  UNASSOCIATED_PUBLIC_IP: 'Unassociated public IP', UNASSOCIATED_PUBLIC_IPS: 'Unassociated public IP',
-  STOPPED_VM: 'Stopped virtual machine', STOPPED_VMS: 'Stopped virtual machine',
-  EMPTY_APP_SERVICE_PLAN: 'Empty App Service plan', EMPTY_APP_SERVICE: 'Empty App Service plan',
-  UNDERUTILIZED_APP_SERVICE_PLAN: 'App Service plan review', ORPHANED_NIC: 'Orphaned network interface',
-  ORPHANED_NSG: 'Unassociated security group', IDLE_APP_GATEWAY: 'Idle Application Gateway',
-  AWS_UNATTACHED_EBS: 'Unattached EBS volume', AWS_UNASSOCIATED_EIP: 'Unassociated Elastic IP', AWS_IDLE_RDS: 'Stopped RDS instance',
-  GCP_UNATTACHED_DISK: 'Unattached persistent disk', GCP_UNASSIGNED_ADDRESS: 'Unassigned external IPv4', GCP_IDLE_CLOUD_SQL: 'Idle Cloud SQL review',
-  K8S_CPU_OVERSIZED: 'CPU request review', K8S_MEMORY_OVERSIZED: 'Memory request review',
-};
+const labels: Record<string, string> = ruleLabels as Record<string, string>;
 
 export const providerNames: Record<string, string> = {azure: 'Azure', aws: 'AWS', gcp: 'Google Cloud', kubernetes: 'Kubernetes'};
 export const providerColors: Record<string, string> = {azure: '#2563eb', aws: '#c2410c', gcp: '#15803d', kubernetes: '#7c3aed'};
 export const terraformRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG','IDLE_APP_GATEWAY','AWS_UNATTACHED_EBS','AWS_UNASSOCIATED_EIP','AWS_IDLE_RDS','GCP_UNATTACHED_DISK','GCP_UNASSIGNED_ADDRESS','GCP_IDLE_CLOUD_SQL']);
 export const bashRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG']);
 const acronyms = new Set(['AWS', 'GCP', 'VM', 'VMS', 'IP', 'IPS', 'EBS', 'EIP', 'RDS', 'NAT', 'SQL', 'ELB', 'ALB', 'NLB', 'EC2', 'S3', 'AKS', 'EKS', 'GKE', 'CPU', 'GPU', 'NIC', 'NSG', 'DNS', 'API', 'AI', 'TLS', 'SKU', 'IOPS', 'PVC', 'LB']);
-export const ruleLabel = (rule: string) => labels[rule] || rule.replace(/^K8S_/, 'Kubernetes_').split('_').filter(Boolean).map((word, index) => acronyms.has(word.toUpperCase()) ? word.toUpperCase() : index ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+export const ruleLabel = (rule: string) => labels[rule] || rule.replace(/^K8S_/, 'Kubernetes ').replaceAll('_', ' ').replace(/\b\w/g, (m, i) => (i === 0 ? m.toUpperCase() : m.toLowerCase()));
 export const providerOf = (finding: Finding) => finding.cloud_provider || 'azure';
 export const scopeOf = (finding: Finding) => finding.scope_id || finding.subscription_id;
 export const findingKey = (finding: Finding) => JSON.stringify([providerOf(finding), providerOf(finding) === 'azure' ? finding.resource_id.toLowerCase() : finding.resource_id, finding.rule_id]);

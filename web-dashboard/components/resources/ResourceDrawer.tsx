@@ -79,7 +79,7 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
     <dl className="settings-key-values">{modeled.map(([key, name, currency]) => <div key={key}><dt>{name}</dt>
       <dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</dd></div>)}</dl>
     <p className="inline-help">{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
-    {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {item.rule_id}</li>)}</ul></Notice>}</div>;
+    {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {ruleLabel(item.rule_id)}</li>)}</ul></Notice>}</div>;
 }
 
 function Dependencies({detail}: {detail: ResourceDetail}) {

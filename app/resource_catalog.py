@@ -40,6 +40,79 @@ FAMILIES = (
  ('kubernetes','services','network',('kubernetes.io/Service',),('K8S_ORPHANED_LOADBALANCER_SERVICE',)),
 )
 
+# Human-readable rule titles (stable `rule_id` keys for policy, APIs, and storage).
+RULE_DISPLAY_NAMES = {
+    'AZURE_DISK_UNATTACHED_RETENTION': 'Retained unattached managed disk review',
+    'AZURE_DISK_PROVISIONED_PERFORMANCE': 'Disk recovery and provisioned performance review',
+    'AZURE_PUBLIC_IP_UNASSOCIATED': 'Unassociated public IP review',
+    'AZURE_PUBLIC_IP_ASSOCIATED_IDLE': 'Associated public IP traffic review',
+    'AZURE_VM_STOPPED_RESIDUAL_COST': 'Stopped VM residual charge review',
+    'AZURE_VM_RIGHTSIZING_UTILIZATION': 'Evidence-based VM rightsizing review',
+    'AZURE_ASP_EMPTY_PAID_PLAN': 'Empty paid App Service plan review',
+    'AZURE_ASP_UNDERUTILIZED_SKU': 'App Service capacity review',
+    'AZURE_NAT_GATEWAY_SERVICE_ENDPOINT_BYPASS': 'NAT gateway vs service endpoint routing review',
+    'AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR': 'Empty Application Gateway or high autoscale floor review',
+    'AZURE_SQL_PG_IDLE_AND_NONPROD_HA_REVIEW': 'Azure SQL / PostgreSQL idle and non-production HA review',
+    'AZURE_COSMOSDB_MANUAL_RU_TO_AUTOSCALE': 'Cosmos DB manual throughput vs autoscale review',
+    'AZURE_REDIS_UNDERUTILIZED_TIER_REVIEW': 'Azure Cache for Redis tier utilization review',
+    'AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD': 'Storage lifecycle and orphaned VHD page blob review',
+    'AZURE_AI_FOUNDRY_PTU_VS_PAYG_ARBITRAGE': 'Azure AI Foundry PTU vs pay-as-you-go review',
+    'AWS_UNATTACHED_EBS': 'Unattached EBS volume retention review',
+    'AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING': 'EBS GP2 to GP3 and provisioned IOPS tuning review',
+    'AWS_EC2_STOPPED_EBS_RESIDUAL': 'Stopped EC2 instance residual EBS charge review',
+    'AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING': 'EC2 Graviton migration and SLO-bounded rightsizing review',
+    'AWS_UNASSOCIATED_EIP': 'Unassociated Elastic IP address review',
+    'AWS_NAT_GW_ENDPOINT_BYPASS_AND_IDLE': 'NAT gateway idle and VPC endpoint bypass review',
+    'AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION': 'Orphaned load balancer and ingress consolidation review',
+    'AWS_IDLE_RDS': 'Idle or stopped RDS instance review',
+    'AWS_RDS_AURORA_RIGHTSIZING_AND_GP3': 'RDS / Aurora rightsizing and GP3 storage review',
+    'AWS_DYNAMODB_BILLING_MODE_AND_UNUSED_GSI': 'DynamoDB billing mode and unused GSI review',
+    'AWS_ELASTICACHE_GRAVITON_AND_VALKEY_UPGRADE': 'ElastiCache Graviton and Valkey upgrade review',
+    'AWS_LAMBDA_ARM64_AND_PROVISIONED_CONCURRENCY': 'Lambda ARM64 and provisioned concurrency review',
+    'AWS_S3_INTELLIGENT_TIERING_AND_MULTIPART_CLEANUP': 'S3 Intelligent-Tiering and multipart cleanup review',
+    'AWS_BEDROCK_PT_AND_SAGEMAKER_IDLE_ENDPOINT': 'Bedrock provisioned throughput and idle SageMaker endpoint review',
+    'GCP_UNATTACHED_DISK': 'Unattached persistent disk retention review',
+    'GCP_DISK_HYPERDISK_IOPS_TUNING': 'Persistent disk Hyperdisk IOPS tuning review',
+    'GCP_GCE_STOPPED_DISK_TAX': 'Stopped GCE instance persistent disk charge review',
+    'GCP_GCE_AXION_AND_CUSTOM_RIGHTSIZING': 'GCE Axion / custom machine rightsizing review',
+    'GCP_UNASSIGNED_ADDRESS': 'Unassigned regional external IP review',
+    'GCP_CLOUD_NAT_PRIVATE_GOOGLE_ACCESS': 'Cloud NAT vs Private Google Access routing review',
+    'GCP_LB_EMPTY_BACKEND_FORWARDING_RULE': 'Empty backend forwarding rule review',
+    'GCP_IDLE_CLOUD_SQL': 'Idle Cloud SQL instance review',
+    'GCP_CLOUDSQL_ALLOYDB_RIGHTSIZING_AND_HA': 'Cloud SQL / AlloyDB rightsizing and HA review',
+    'GCP_BIGQUERY_SLOT_AUTOSCALE_AND_STORAGE': 'BigQuery slot autoscale and storage review',
+    'GCP_CLOUDRUN_MIN_INSTANCE_AND_MEMORYSTORE': 'Cloud Run min instances and Memorystore review',
+    'GCP_VERTEX_AI_IDLE_ENDPOINT_AND_REPLICA_FLOOR': 'Vertex AI idle endpoint and replica floor review',
+    'K8S_CONTAINER_CPU_OVERREQUEST': 'Container CPU request rightsizing review',
+    'K8S_CONTAINER_MEMORY_OVERREQUEST': 'Container memory working-set rightsizing review',
+    'K8S_CONTAINER_UNDERPROVISIONED_RISK': 'Container throttling, OOM, and QoS reliability review',
+    'K8S_HPA_PDB_CONFLICT_OR_IDLE_FLOOR': 'Horizontal Pod Autoscaler floor and PDB conflict review',
+    'K8S_NODE_POOL_FRAGMENTATION_WASTE': 'Node pool capacity reservation slack review',
+    'K8S_ABANDONED_WORKLOAD_OR_NAMESPACE': 'Zero-traffic workload or namespace review',
+    'K8S_PVC_UNMOUNTED_OR_LOW_OCCUPANCY': 'Unmounted or low-occupancy PVC review',
+    'K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE': 'StatefulSet memory buffer and volume template review',
+    'K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX': 'DaemonSet cluster-wide allocation overhead review',
+    'K8S_ORPHANED_LOADBALANCER_SERVICE': 'LoadBalancer service with empty endpoints review',
+    'ORPHANED_DISK': 'Unattached managed disk',
+    'ORPHANED_DISKS': 'Unattached managed disk',
+    'UNASSOCIATED_PUBLIC_IP': 'Unassociated public IP',
+    'UNASSOCIATED_PUBLIC_IPS': 'Unassociated public IP',
+    'ORPHANED_NIC': 'Orphaned network interface',
+    'ORPHANED_NSG': 'Unassociated network security group',
+    'IDLE_APP_GATEWAY': 'Idle Application Gateway',
+    'UNDERUTILIZED_VM': 'Underutilized virtual machine review',
+    'STOPPED_VM': 'Stopped virtual machine',
+    'STOPPED_VMS': 'Stopped virtual machine',
+    'EMPTY_APP_SERVICE_PLAN': 'Empty App Service plan',
+    'EMPTY_APP_SERVICE': 'Empty App Service plan',
+    'UNDERUTILIZED_APP_SERVICE_PLAN': 'Underutilized App Service plan review',
+}
+
+
+def display_name(rule_id: str) -> str:
+    return RULE_DISPLAY_NAMES.get(rule_id, rule_id)
+
+
 def family(resource):
     provider=resource.get('cloud_provider','azure');kind=resource.get('resource_type','').lower()
     return next((f for f in FAMILIES if f[0]==provider and kind in {k.lower() for k in f[3]}),None)
@@ -64,5 +137,26 @@ def definitions():
                 if fragment in rid:bounds={'utilization_percent':(default,1,40)}
             if provider=='kubernetes':bounds={}
             pillar='reliability' if 'STATEFULSET' in rid else 'operations' if 'ABANDONED' in rid else 'cost'
-            rows.append((rid,provider,category,kinds[0],rid.replace('_',' ').title(),pillar,bounds))
+            if rid not in RULE_DISPLAY_NAMES:
+                raise KeyError(f'Missing RULE_DISPLAY_NAMES entry for {rid}')
+            rows.append((rid,provider,category,kinds[0],RULE_DISPLAY_NAMES[rid],pillar,bounds))
     return tuple(rows)
+
+
+def rules_catalog_items():
+    """Published analysis rules with stable ids and operator-facing titles."""
+    items = [
+        dict(id=row[0], name=row[4], provider=row[1], service_category=row[2], pillar=row[5])
+        for row in definitions()
+    ]
+    legacy = (
+        'ORPHANED_DISK', 'ORPHANED_DISKS', 'UNASSOCIATED_PUBLIC_IP', 'UNASSOCIATED_PUBLIC_IPS',
+        'ORPHANED_NIC', 'ORPHANED_NSG', 'IDLE_APP_GATEWAY', 'UNDERUTILIZED_VM',
+        'STOPPED_VM', 'STOPPED_VMS', 'EMPTY_APP_SERVICE_PLAN', 'EMPTY_APP_SERVICE',
+        'UNDERUTILIZED_APP_SERVICE_PLAN',
+    )
+    items.extend(
+        dict(id=rule_id, name=RULE_DISPLAY_NAMES[rule_id], provider='legacy', service_category='remediation', pillar='operations')
+        for rule_id in legacy
+    )
+    return items

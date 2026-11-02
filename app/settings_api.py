@@ -280,6 +280,12 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
     def effective(tenant=Depends(current_tenant), authorization: str = Header()):
         return current_policy(tenant, authorization)
 
+    @router.get('/api/v1/rules/catalog')
+    def rules_catalog(tenant=Depends(current_tenant)):
+        from app.resource_catalog import VERSION, rules_catalog_items
+
+        return dict(version=VERSION, items=rules_catalog_items())
+
     @router.put('/api/v1/rules/overrides')
     def save_rules(body: PolicyChange, tenant=Depends(current_tenant), authorization: str = Header()):
         require_workspace_role(tenant, Role.TENANT_ADMIN)

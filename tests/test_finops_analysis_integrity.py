@@ -6,7 +6,7 @@ import pytest
 from app.analysis_rules import RULES, evaluate_inventory
 from app.finops_resize_playbooks import PLAYBOOKS, resolve_playbook
 from app.kubernetes_rules import DEFINITIONS as K8_DEFINITIONS, RULE_IDS as K8_RULE_IDS
-from app.resource_catalog import FAMILIES, definitions, family
+from app.resource_catalog import FAMILIES, definitions, RULE_DISPLAY_NAMES, family
 
 LEGACY_AZURE_RULE_IDS = frozenset(rule[0] for rule in RULES)
 
@@ -151,3 +151,12 @@ def test_definitions_cover_every_catalog_rule_once():
     published = {row[0] for row in definitions()}
     catalog_rules = {rule_id for _p, _f, _c, _t, rules in FAMILIES for rule_id in rules}
     assert published == catalog_rules
+
+
+def test_every_catalog_rule_has_human_display_name():
+    for rule_id in {rid for *_, rules in FAMILIES for rid in rules}:
+        name = RULE_DISPLAY_NAMES[rule_id]
+        assert name != rule_id
+        assert '_' not in name or name.startswith('RDS /')
+    for row in definitions():
+        assert row[4] == RULE_DISPLAY_NAMES[row[0]]
