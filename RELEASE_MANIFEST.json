@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "8ba991bd27e7dc4dfac748a3e081b75bc65941c0f06c1235cf6f3808af97a27c",
+  "inventory_sha256": "bea4e8c61b6e82c94a8d41c1a89da3869bc4a5cdb723eef4a81762553ac0ca46",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1250,6 +1250,11 @@
       "bytes": 14661
     },
     {
+      "path": "docs/ANALYSIS_RULES_MASTER.md",
+      "sha256": "8357743bbf433fdff739f8676728e91e39bc309db9429b7787c57517f7b60718",
+      "bytes": 18996
+    },
+    {
       "path": "docs/API_ROUTE_REGISTER.md",
       "sha256": "9da85de8fb7cbf04a83a49e2f3d1f1f62e7cc7202bf84500601e42831bccdad3",
       "bytes": 12626
@@ -1301,8 +1306,8 @@
     },
     {
       "path": "docs/DEPLOYMENT_ENVIRONMENT.md",
-      "sha256": "522e80dc1fc51be582fbcc493486241bb08367eb7624bda0ff760cdb98670367",
-      "bytes": 11652
+      "sha256": "f90213634742c9b8ad6fafc80e02f65decf905dd34ca4276952d4035f15565c9",
+      "bytes": 11887
     },
     {
       "path": "docs/DETAIL_RELIABILITY_VERIFICATION.md",
@@ -1356,8 +1361,8 @@
     },
     {
       "path": "docs/FINOPS_ANALYSIS_VERIFICATION.md",
-      "sha256": "65b28c51ef9245f209a8cebbbda40789a278716bddf03fe6f364a13ae52c8cf9",
-      "bytes": 6626
+      "sha256": "5b2ea2a2767802199cd6adc48f5617969b228948e55e6a79ea12b861a2972fb6",
+      "bytes": 6804
     },
     {
       "path": "docs/FINOPS_RESIZE_METRICS.md",
@@ -2825,6 +2830,11 @@
       "bytes": 510
     },
     {
+      "path": "scripts/generate_analysis_rules_master.py",
+      "sha256": "488d4f9b1d1c8095bd6727f0e1a8c7f537f6751d6ae30db77427f87ecd147644",
+      "bytes": 15415
+    },
+    {
       "path": "scripts/generate_resource_rules_doc.py",
       "sha256": "245e00ebe1ea51e037c56ad3f0b4fececa5de53421d820c7967ea999f3383ae0",
       "bytes": 4277
@@ -3241,8 +3251,8 @@
     },
     {
       "path": "tests/test_finops_analysis_integrity.py",
-      "sha256": "fc95756a3bee272252df6e3ff576250aeb84359a019df58601b378536a1e0ac6",
-      "bytes": 6880
+      "sha256": "d2b1d9d197d34fc651d67ad168b143041eec8e56a57def3471b040c0bcdfac6a",
+      "bytes": 7205
     },
     {
       "path": "tests/test_finops_autopilot_planner.py",

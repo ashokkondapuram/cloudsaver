@@ -12,7 +12,8 @@ PYTHONPATH=. python3 scripts/generate_analysis_rules_master.py
 
 Related: [RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md) (per resource type), 
 [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md), 
-[FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md).
+[FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md),
+[RULE_MATCHING_STRATEGY.md](RULE_MATCHING_STRATEGY.md) (primary vs alternate matches; Turbonomic-aligned).
 
 ---
 

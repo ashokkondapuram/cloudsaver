@@ -186,4 +186,5 @@ helm template cloudsaver charts/cloudsaver -f charts/cloudsaver/values-productio
 - [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md) — analysis and agent workflow channels  
 - [RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md) — every rule evaluated per resource type (generated catalog matrix)
 - [ANALYSIS_RULES_MASTER.md](ANALYSIS_RULES_MASTER.md) — evidence, pillars, tiers, and action paths for all catalog rules
+- [RULE_MATCHING_STRATEGY.md](RULE_MATCHING_STRATEGY.md) — Turbonomic-style primary match and overlap policy
 - [FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md) — resize metrics API (`GET /api/v1/finops/autopilot/resize-metrics`)

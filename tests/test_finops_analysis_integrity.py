@@ -162,6 +162,15 @@ def test_every_catalog_rule_has_human_display_name():
         assert row[4] == RULE_DISPLAY_NAMES[row[0]]
 
 
+def test_every_catalog_rule_has_action_class():
+    from app.resource_catalog import definitions
+    from app.rule_match_strategy import ACTION_CLASS_BY_RULE
+
+    catalog = {row[0] for row in definitions()}
+    missing = catalog - set(ACTION_CLASS_BY_RULE)
+    assert not missing, f"Add ActionClass for: {sorted(missing)}"
+
+
 def test_analysis_rules_master_doc_covers_catalog():
     from pathlib import Path
     import re
