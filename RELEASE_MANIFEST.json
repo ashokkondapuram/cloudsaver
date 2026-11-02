@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "bea4e8c61b6e82c94a8d41c1a89da3869bc4a5cdb723eef4a81762553ac0ca46",
+  "inventory_sha256": "c89323f7225790cbbbfc3c442c4701b668ebfa8509a17a81bc10792910396261",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1035,6 +1035,11 @@
       "bytes": 13699
     },
     {
+      "path": "app/rule_match_strategy.py",
+      "sha256": "e6f6068bbf7bc9559fc668dc6c3c8f20ce798ad3288323524ce9108ecc0114d3",
+      "bytes": 9996
+    },
+    {
       "path": "app/runtime.py",
       "sha256": "49d84be6bf4664535e821677f3070fe0c8f1a1c4d36fc10c0a6e139cf8d051b2",
       "bytes": 8856
@@ -1331,8 +1336,8 @@
     },
     {
       "path": "docs/ENVIRONMENT.md",
-      "sha256": "ae129b12aae8b0464833c05f27f6d01a357568d34496d7c359f495fb75307e99",
-      "bytes": 20459
+      "sha256": "0b7a2ed675b70a83288f6e2244f3af074769f74b2eb20e0614caa156b986a98a",
+      "bytes": 20763
     },
     {
       "path": "docs/FEATURE_ACCEPTANCE_MATRIX.md",
@@ -1460,6 +1465,11 @@
       "bytes": 22180
     },
     {
+      "path": "docs/RULE_MATCHING_STRATEGY.md",
+      "sha256": "c2b75609652c79e1205329186633690f0ad6202d9b9c1141dfab17fc33e4c76b",
+      "bytes": 8687
+    },
+    {
       "path": "docs/TEST_REPORT_v0.1.0.md",
       "sha256": "871bdafd7f1c24fe0765ed2a2393d37b1057fcf6a845e3a367f7dbd3f10a2c93",
       "bytes": 3999
@@ -1503,6 +1513,11 @@
       "path": "docs/UI_UX_IMPLEMENTATION.md",
       "sha256": "c471303140fe5e2163ab5cfc956d6f1534e1c374b200e19ec3e399c1b82538e6",
       "bytes": 14633
+    },
+    {
+      "path": "docs/UNUSED_CODE_AUDIT.md",
+      "sha256": "b0c94418cff156f4cc5711ed7a010df3760a6c9b486e8d0c3af851bba2d9c8a2",
+      "bytes": 1604
     },
     {
       "path": "docs/V1_4_IMPLEMENTATION.md",
@@ -2925,11 +2940,6 @@
       "bytes": 13804
     },
     {
-      "path": "services/analytics.py",
-      "sha256": "d6e819249ab8bde12d3e4c5e86d28deb8d49c9c3d458c0923b96d16579286a61",
-      "bytes": 1487
-    },
-    {
       "path": "services/common.py",
       "sha256": "5c1fddba1829fd2bba930b22cd53cf92d48ef7aefe23e8327b370a106be84b4a",
       "bytes": 4322
@@ -2948,21 +2958,6 @@
       "path": "services/governance_routes.py",
       "sha256": "2c401153d7c45562bb6fb2f15cc128bf9bf89010ca238dc253deba0cd3353596",
       "bytes": 9520
-    },
-    {
-      "path": "services/notification.py",
-      "sha256": "a2446013f58ef6135494fe4c1e03ea6d93b7ca5a10232705da42e1006690386c",
-      "bytes": 1576
-    },
-    {
-      "path": "services/scanner.py",
-      "sha256": "322098417f38b1b488cf86d316d9efd3faebd7e371236e9626012b5cb1fbfc2e",
-      "bytes": 132
-    },
-    {
-      "path": "services/tenant.py",
-      "sha256": "13fd32c11d74a0202386ae44683a1ab9c950996e60b1bc0b5921a79b99ac25b9",
-      "bytes": 1351
     },
     {
       "path": "specs/approved/2026-10-22-tenant-settings-managed-identity.md",
@@ -3448,6 +3443,11 @@
       "path": "tests/test_route_inventory.py",
       "sha256": "a53b98a9022260d83a063f436e309321a50836b1848b3a3ca320fc19ba49c1cb",
       "bytes": 3316
+    },
+    {
+      "path": "tests/test_rule_match_strategy.py",
+      "sha256": "50edfc3fffc0580a0006d0b264326d710a18302136178f9f54aca593d232141f",
+      "bytes": 2601
     },
     {
       "path": "tests/test_runtime.py",
