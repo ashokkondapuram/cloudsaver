@@ -184,3 +184,4 @@ helm template cloudsaver charts/cloudsaver -f charts/cloudsaver/values-productio
 - [releases/1.8.0-UPGRADE.md](releases/1.8.0-UPGRADE.md) — backend reliability baseline  
 - [ENGINEERING_INCREMENT.md](ENGINEERING_INCREMENT.md) — engineering API + zero-downtime policy  
 - [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md) — analysis and agent workflow channels  
+- [RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md) — every rule evaluated per resource type (generated catalog matrix)

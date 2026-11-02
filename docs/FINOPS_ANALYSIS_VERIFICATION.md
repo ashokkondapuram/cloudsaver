@@ -7,6 +7,7 @@ This document records automated verification of the scan → rule evaluation →
 | Layer | Evidence |
 |--------|----------|
 | **Rule catalog** | 36 resource families, 51 unique rule IDs; catalog matches control-plane bytes (`tests/test_v140.py`) |
+| **Rules per resource** | Matrix of resource types → rule ids and display names ([RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md), `scripts/generate_resource_rules_doc.py`) |
 | **Per-family evaluation** | Each catalog resource type gets exactly the rule IDs the engine selects (legacy Azure suffix, K8 kind, multicloud non-legacy family rules); valid outcomes, no auto-execution (`tests/test_finops_analysis_integrity.py`) |
 | **Azure legacy rules** | All 8 rules parametrized (`tests/test_expanded_rules.py`) |
 | **Multicloud rules** | No invented savings without evidence; policy disable path (`tests/test_v140.py`) |

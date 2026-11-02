@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "9d3ecdcc504b598c61276fece055febc1c1a4c06cb4d76279477bc97cd646ba5",
+  "inventory_sha256": "40c1d5b1f73822ce9a8b50637f1de15ddfb03e2367beffcb87fe3c59b5810e69",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1296,8 +1296,8 @@
     },
     {
       "path": "docs/DEPLOYMENT_ENVIRONMENT.md",
-      "sha256": "91bde7c3da4a934e4a8e0f71c76d6e923aa8cb28c2a80285a2dea1c19234abe6",
-      "bytes": 11397
+      "sha256": "f1a43d0f1a0e508c7ec6031d3f84d001f3125761bcf6c1ea0bd75b0fe8843c95",
+      "bytes": 11526
     },
     {
       "path": "docs/DETAIL_RELIABILITY_VERIFICATION.md",
@@ -1351,8 +1351,8 @@
     },
     {
       "path": "docs/FINOPS_ANALYSIS_VERIFICATION.md",
-      "sha256": "96d707c6899ba6e62d997ede1caecee39b7e3c5d0dcda618418d93256f72fed0",
-      "bytes": 6245
+      "sha256": "53d1ac2de2e2035a38f2fd3e80a45f6269af3fc2861b7b3f3deb2e6c9175cd1f",
+      "bytes": 6431
     },
     {
       "path": "docs/GITOPS.md",
@@ -1433,6 +1433,11 @@
       "path": "docs/RESOURCE_ANALYSIS_FOUNDRY_IMPLEMENTATION.md",
       "sha256": "41759bcc994f1cd0ec4f77e11b26c429f501b79176237eb065292cb541208171",
       "bytes": 14160
+    },
+    {
+      "path": "docs/RESOURCE_ANALYSIS_RULES.md",
+      "sha256": "12ac577475a3cf8c98d68700f359f888262d2280fff60702a52a242b477d2454",
+      "bytes": 19985
     },
     {
       "path": "docs/RISK_AND_COMPLIANCE.md",
@@ -2808,6 +2813,11 @@
       "path": "scripts/export_rule_labels.py",
       "sha256": "069a99344a4859f1c4c0f1479118a94c993c6fe682397d747a27d94abc4fe7ec",
       "bytes": 510
+    },
+    {
+      "path": "scripts/generate_resource_rules_doc.py",
+      "sha256": "245e00ebe1ea51e037c56ad3f0b4fececa5de53421d820c7967ea999f3383ae0",
+      "bytes": 4277
     },
     {
       "path": "scripts/keycloak_login.py",
