@@ -222,6 +222,7 @@ ROUTES = {
     ('POST', '/api/v1/finops/ebpf-flows/ingest'): 'full_scope',
     ('GET', '/api/v1/finops/spot-arbitrage/preview'): 'scoped_read',
     ('GET', '/api/v1/finops/autopilot/playbooks'): 'scoped_read',
+    ('GET', '/api/v1/finops/autopilot/resize-metrics'): 'scoped_read',
     ('POST', '/api/v1/finops/autopilot/resize'): 'full_scope',
 }
 

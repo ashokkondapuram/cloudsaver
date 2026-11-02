@@ -38,6 +38,34 @@ def create_router(settings, scan_store, evidence_store, current_tenant):
 
         return dict(items=list_playbooks())
 
+    @router.get("/resize-metrics")
+    def resize_metrics(
+        scan_id: UUID,
+        tenant=Depends(admin),
+        eligible_only: bool = False,
+        cloud_provider: str | None = None,
+    ):
+        from app.cloud_scope import validate_finding_scope
+        from app.finops_resize_metrics import build_resize_metrics
+
+        snapshot = scan_store.get(tenant["tenant_id"], str(scan_id))
+        if not snapshot or snapshot.get("status") != "completed":
+            raise HTTPException(409, "Completed scan required")
+        if snapshot.get("data_origin") == "legacy_synthetic":
+            raise HTTPException(409, "Resize metrics require a completed live scan")
+        try:
+            for finding in snapshot.get("findings") or []:
+                validate_finding_scope(finding, tenant)
+        except (ValueError, KeyError):
+            raise HTTPException(409, "The saved scan is outside the current workspace scope") from None
+        if cloud_provider and cloud_provider not in {"azure", "aws", "gcp"}:
+            raise HTTPException(422, "cloud_provider must be azure, aws, or gcp")
+        return build_resize_metrics(
+            snapshot,
+            eligible_only=eligible_only,
+            cloud_provider=cloud_provider,
+        )
+
     @router.post("/resize", status_code=202)
     async def autopilot_resize(request_body: AutopilotResizeRequest, tenant=Depends(admin)):
         if os.getenv("CLOUDSAVER_FINOPS_AUTOPILOT", "false").lower() != "true":

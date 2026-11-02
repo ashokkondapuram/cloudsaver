@@ -185,3 +185,4 @@ helm template cloudsaver charts/cloudsaver -f charts/cloudsaver/values-productio
 - [ENGINEERING_INCREMENT.md](ENGINEERING_INCREMENT.md) — engineering API + zero-downtime policy  
 - [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md) — analysis and agent workflow channels  
 - [RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md) — every rule evaluated per resource type (generated catalog matrix)
+- [FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md) — resize metrics API (`GET /api/v1/finops/autopilot/resize-metrics`)
