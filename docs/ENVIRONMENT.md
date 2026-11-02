@@ -131,10 +131,10 @@ Identity-service runs in **`platform/`** and is reached at `CLOUDSAVER_IDENTITY_
 | --- | --- | --- |
 | `CLOUDSAVER_IDENTITY_URL` | Root `.env` | Base URL for all CloudSaver callers |
 | `CLOUDSAVER_IDENTITY_TOKEN_GATEWAY` | Root `.env` | Mapped to `CLOUDSAVER_IDENTITY_TOKEN` on api-gateway |
-| `CLOUDSAVER_IDENTITY_TOKEN_TENANT` | Root `.env` | tenant-service |
+| `CLOUDSAVER_IDENTITY_TOKEN_TENANT` | Root `.env` | Legacy split-deploy token; unused when all API routes run on **scanner-service** (`app.main`) |
 | `CLOUDSAVER_IDENTITY_TOKEN_SCANNER` | Root `.env` | scanner-service |
-| `CLOUDSAVER_IDENTITY_TOKEN_ANALYTICS` | Root `.env` | analytics-service |
-| `CLOUDSAVER_IDENTITY_TOKEN_NOTIFICATION` | Root `.env` | notification-service |
+| `CLOUDSAVER_IDENTITY_TOKEN_ANALYTICS` | Root `.env` | Legacy; analytics routes are on scanner-service — token unused in current Compose |
+| `CLOUDSAVER_IDENTITY_TOKEN_NOTIFICATION` | Root `.env` | Legacy; notifications are on scanner-service — token unused in current Compose |
 | `CLOUDSAVER_IDENTITY_CACHE_SECONDS` | Root `.env` | `0`–`30`; positive verify cache (`15` default) |
 | `CLOUDSAVER_IDENTITY_REDIS_URL` | Optional | Legacy; optional second Redis for identity client cache (`redis:6379/2`) |
 
@@ -321,8 +321,7 @@ These are set in `compose.yaml` files, not copied into `.env.example`:
 
 | Variable | Typical value |
 | --- | --- |
-| `TENANT_SERVICE_URL` | `http://tenant-service:8001` |
-| `SCANNER_SERVICE_URL` | `http://scanner-service:8002` |
-| `ANALYTICS_SERVICE_URL` | `http://analytics-service:8003` |
-| `NOTIFICATION_SERVICE_URL` | `http://notification-service:8004` |
+| `SCANNER_SERVICE_URL` | `http://scanner-service:8002` (core API: scans, settings, analytics summary, notifications, `/api/v1/me`) |
 | `IDENTITY_SERVICE_URL` | `http://identity-service:8005` (portal) |
+
+Legacy split-microservice URLs (`TENANT_SERVICE_URL`, `ANALYTICS_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`) are not used in current Compose; the gateway forwards customer routes to `SCANNER_SERVICE_URL` only.
