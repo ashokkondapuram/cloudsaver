@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "76a40d84e46bf134cea8a942b921ca840e170d4b5c44081b130e2715bf47b989",
+  "inventory_sha256": "9d3ecdcc504b598c61276fece055febc1c1a4c06cb4d76279477bc97cd646ba5",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1016,8 +1016,8 @@
     },
     {
       "path": "app/resource_catalog.py",
-      "sha256": "0e6495993cf469a94c02cf66e5cb83edf4062781eee5e0f462ecf36bc43e9053",
-      "bytes": 6744
+      "sha256": "ec8e0fee29b434e99aa68c7864acc8268e543d8990337a5f9cae8034035b0c51",
+      "bytes": 13160
     },
     {
       "path": "app/resource_store.py",
@@ -1026,8 +1026,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "3bf378eb7dad9ce4d50029460b248e1f9787f965faee6968f5d7eb832f295157",
-      "bytes": 13575
+      "sha256": "3b4d0dab3cb6797514cc30039c7c6636dc554a71a6cb599451c820d429e760aa",
+      "bytes": 13628
     },
     {
       "path": "app/runtime.py",
@@ -1091,8 +1091,8 @@
     },
     {
       "path": "app/settings_api.py",
-      "sha256": "082f8bc8b9515b7c1d89d2b35946d72969f3bf5398c739b97a1ab56a25767ce5",
-      "bytes": 17366
+      "sha256": "5bbd821bbdf2f4076c58c032e7831f1ecb4abcafc1ff8233855f96f8a489b1bc",
+      "bytes": 17600
     },
     {
       "path": "app/store.py",
@@ -1951,8 +1951,8 @@
     },
     {
       "path": "platform/identity/analysis/multicloud.py",
-      "sha256": "0e6495993cf469a94c02cf66e5cb83edf4062781eee5e0f462ecf36bc43e9053",
-      "bytes": 6744
+      "sha256": "ec8e0fee29b434e99aa68c7864acc8268e543d8990337a5f9cae8034035b0c51",
+      "bytes": 13160
     },
     {
       "path": "platform/identity/analysis/seed.py",
@@ -2805,6 +2805,11 @@
       "bytes": 4295
     },
     {
+      "path": "scripts/export_rule_labels.py",
+      "sha256": "069a99344a4859f1c4c0f1479118a94c993c6fe682397d747a27d94abc4fe7ec",
+      "bytes": 510
+    },
+    {
       "path": "scripts/keycloak_login.py",
       "sha256": "bbb3975a78647a22145a94532b095322900fa6c31704863b7d3c01841f69e8de",
       "bytes": 3213
@@ -3216,8 +3221,8 @@
     },
     {
       "path": "tests/test_finops_analysis_integrity.py",
-      "sha256": "c7402475a08d8aa151dd84b1f156e98c1b6d2afa5f7d9a71fd821e88226501ad",
-      "bytes": 6105
+      "sha256": "d73ccc468f5e905196e9ce231d4f817644bd7c05758d4a4497c63d58996714e3",
+      "bytes": 6465
     },
     {
       "path": "tests/test_finops_autopilot_planner.py",
@@ -3811,8 +3816,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
-      "sha256": "234d72678245bc0251446ca61d0b0a5f1c055f0f9a5be502ee57f9d3a1a15ef8",
-      "bytes": 31553
+      "sha256": "0d98b615672a2fdb807ec4088dbcd2bdd1613c07c78ea895ccef11a0ae5a5e1b",
+      "bytes": 31564
     },
     {
       "path": "web-dashboard/components/resources/ResourceParts.tsx",
@@ -4041,8 +4046,8 @@
     },
     {
       "path": "web-dashboard/lib/finops.ts",
-      "sha256": "78b149173fdc45023c8d96e9fd1327e3eeac88321faf6b0191382f8426af8d3c",
-      "bytes": 6179
+      "sha256": "a10e6c3ff5ef855aeff523926d34668fd200288fc5a7c015f292c146e906e88d",
+      "bytes": 5209
     },
     {
       "path": "web-dashboard/lib/plan.ts",
@@ -4073,6 +4078,11 @@
       "path": "web-dashboard/lib/resources.ts",
       "sha256": "4f9e225f19ad4e61449efd07af741f388895e78472e6a316186ed31d12b61cfa",
       "bytes": 10583
+    },
+    {
+      "path": "web-dashboard/lib/rule-labels.json",
+      "sha256": "38a55f69279123dfa0796cebc072fb68575f40b8c4484d009bf70858336861a9",
+      "bytes": 5188
     },
     {
       "path": "web-dashboard/lib/session-contract.ts",
