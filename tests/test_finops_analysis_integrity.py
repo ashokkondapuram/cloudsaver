@@ -160,3 +160,14 @@ def test_every_catalog_rule_has_human_display_name():
         assert '_' not in name or name.startswith('RDS /')
     for row in definitions():
         assert row[4] == RULE_DISPLAY_NAMES[row[0]]
+
+
+def test_analysis_rules_master_doc_covers_catalog():
+    from pathlib import Path
+    import re
+
+    doc = (Path(__file__).resolve().parents[1] / "docs" / "ANALYSIS_RULES_MASTER.md").read_text()
+    catalog = {row[0] for row in definitions()}
+    found = set(re.findall(r"`([A-Z0-9_]+)`", doc))
+    missing = catalog - found
+    assert not missing, f"ANALYSIS_RULES_MASTER.md missing rule ids: {sorted(missing)}"

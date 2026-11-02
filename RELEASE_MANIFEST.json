@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "e294a38e860df9cdf414b057724d117e8aeec93f03c66cdc33948eab87c287b2",
+  "inventory_sha256": "8ba991bd27e7dc4dfac748a3e081b75bc65941c0f06c1235cf6f3808af97a27c",
   "migration_heads": {
     "core": "0033_platform_outbox_lease",
     "identity": "i0013_multicloud_analysis_catalog"
@@ -1356,8 +1356,8 @@
     },
     {
       "path": "docs/FINOPS_ANALYSIS_VERIFICATION.md",
-      "sha256": "53d1ac2de2e2035a38f2fd3e80a45f6269af3fc2861b7b3f3deb2e6c9175cd1f",
-      "bytes": 6431
+      "sha256": "65b28c51ef9245f209a8cebbbda40789a278716bddf03fe6f364a13ae52c8cf9",
+      "bytes": 6626
     },
     {
       "path": "docs/FINOPS_RESIZE_METRICS.md",
@@ -3241,8 +3241,8 @@
     },
     {
       "path": "tests/test_finops_analysis_integrity.py",
-      "sha256": "d73ccc468f5e905196e9ce231d4f817644bd7c05758d4a4497c63d58996714e3",
-      "bytes": 6465
+      "sha256": "fc95756a3bee272252df6e3ff576250aeb84359a019df58601b378536a1e0ac6",
+      "bytes": 6880
     },
     {
       "path": "tests/test_finops_autopilot_planner.py",
