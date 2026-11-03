@@ -85,10 +85,53 @@ test.describe('Engineering ↔ governance cross-links', () => {
     await navigate(page, 'Risk & compliance');
     await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
     await page.getByRole('button', {name: 'Copy plan links', exact: true}).click();
-    await expect(page.getByText(/Governance and engineering deep links copied/i)).toBeVisible();
+    await expect(page.getByText(/Governance, engineering, and declared workload deep links copied/i)).toBeVisible();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain('/governance?tab=control-plane');
     expect(clipboard).toContain('/workloads?tab=engineering');
+    expect(clipboard).toContain('/workloads?tab=declared');
+  });
+});
+
+test.describe('Declared workload deep links', () => {
+  test('bare workloads route canonicalizes assessments tab in the URL', async ({page}) => {
+    await mockWorkspace(page);
+    await page.route('**/api/v1/outcomes/ownership', route =>
+      route.fulfill({json: {items: [], basis: 'current_direct_resource_mapping'}}),
+    );
+    await page.goto('/workloads');
+    await expect(page).toHaveURL(/tab=assessments/);
+  });
+
+  test('declared workload query opens tab and highlights table row', async ({page}) => {
+    await mockWorkspace(page);
+    await mockEngineeringRoutes(page);
+    await page.goto(`/workloads?tab=declared&workload=${encodeURIComponent(engineeringWorkloadId)}`);
+    await expect(page.getByRole('button', {name: 'Declared workloads', exact: true})).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText(/Focused declared workload from a shared link/i)).toBeVisible();
+    const row = page.locator(`#declared-workload-${engineeringWorkloadId}`);
+    await expect(row).toBeVisible();
+    await expect(row).toHaveClass(/plan-card-highlight/);
+  });
+
+  test('governance plan links to declared workload record', async ({page}) => {
+    await mockWorkspace(page, {human: true});
+    await mockGovernanceRoutes(page);
+    await mockEngineeringRoutes(page);
+    await mockControlPlanePlan(page, {
+      planId: engineeringPlanId,
+      versionId: '77777777-7777-4777-8777-777777777777',
+      digest: 'a'.repeat(64),
+      initialState: 'assessed',
+      objective: 'Review disk retention',
+      engineeringWorkloadId: engineeringWorkloadId,
+      engineeringWorkloadName: 'Payments',
+    });
+    await navigate(page, 'Risk & compliance');
+    await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
+    await page.getByRole('link', {name: /View declared record \(Payments\)/i}).click();
+    await expect(page).toHaveURL(/tab=declared/);
+    await expect(page.locator(`#declared-workload-${engineeringWorkloadId}`)).toHaveClass(/plan-card-highlight/);
   });
 });
 
@@ -174,11 +217,13 @@ test('workloads tab clicks sync tab query and clears engineering deep-link param
   await navigate(page, 'Workload assessments');
   await page.getByRole('button', {name: 'Declared workloads', exact: true}).click();
   await expect(page).toHaveURL(/tab=declared/);
-  await page.getByRole('button', {name: 'Engineering plans', exact: true}).click();
-  await expect(page).toHaveURL(/tab=engineering/);
   await page.goto(
     `/workloads?tab=engineering&workload=${encodeURIComponent(engineeringWorkloadId)}&plan=${encodeURIComponent(engineeringPlanId)}`,
   );
+  await page.getByRole('button', {name: 'Declared workloads', exact: true}).click();
+  await expect(page).toHaveURL(/tab=declared/);
+  await expect(page).toHaveURL(/workload=/);
+  await expect(page).not.toHaveURL(/plan=/);
   await page.getByRole('button', {name: 'Saved assessments', exact: true}).click();
   await expect(page).toHaveURL(/tab=assessments/);
   await expect(page).not.toHaveURL(/plan=/);

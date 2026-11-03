@@ -15,3 +15,12 @@ export function workloadTabFromQuery(slug: string | null | undefined): WorkloadT
 export function workloadQueryFromTab(tab: WorkloadTab): string {
   return tab;
 }
+
+/** Path + query for the Declared workloads tab with optional row focus. */
+export function declaredWorkloadHref(workloadId: string): string {
+  return `/workloads?tab=declared&workload=${encodeURIComponent(workloadId)}`;
+}
+
+export function declaredWorkloadShareUrl(workloadId: string, origin: string): string {
+  return `${origin}${declaredWorkloadHref(workloadId)}`;
+}

@@ -72,19 +72,27 @@ export function WorkloadsView(){
   const searchParams=useSearchParams();
   const {workspace,token,scan,scans,selectScan,canBill}=useWorkspace();
   const [view,setView]=useState<WorkloadTab>('assessments');
+  const highlightDeclaredWorkloadId=searchParams.get('workload')||undefined;
   useEffect(()=>{const tab=workloadTabFromQuery(searchParams.get('tab'));if(tab)setView(tab);},[searchParams]);
+  useEffect(()=>{
+    if(workloadTabFromQuery(searchParams.get('tab')))return;
+    const params=new URLSearchParams(searchParams.toString());
+    params.set('tab',workloadQueryFromTab('assessments'));
+    router.replace(`/workloads?${params.toString()}`,{scroll:false});
+  },[searchParams,router]);
   function selectTab(name:WorkloadTab){
     setView(name);
     const params=new URLSearchParams(searchParams.toString());
     params.set('tab',workloadQueryFromTab(name));
-    if(name!=='engineering'){params.delete('workload');params.delete('plan');}
+    if(name==='assessments'){params.delete('workload');params.delete('plan');}
+    else if(name==='declared')params.delete('plan');
     const qs=params.toString();
     router.replace(qs?`/workloads?${qs}`:'/workloads',{scroll:false});
   }
   const live=!!scan&&scan.status==='completed'&&scan.data_origin!=='legacy_synthetic'&&scan.mode!=='demo';
   return <section aria-label="Workload assessments"><div className="page-heading"><div><div className="eyebrow">DISCOVER & ANALYZE</div><h1>Workload assessments</h1><p>Review mapped applications, saved evidence and guided improvement steps. No cloud changes are made here.</p></div></div>
     <div className={css.tabs} aria-label="Workload views"><button className="button secondary" aria-pressed={view==='assessments'} onClick={()=>selectTab('assessments')}>Saved assessments</button><button className="button secondary" aria-pressed={view==='declared'} onClick={()=>selectTab('declared')}>Declared workloads</button><button className="button secondary" aria-pressed={view==='engineering'} onClick={()=>selectTab('engineering')}>Engineering plans</button></div>
-    {view==='declared'?(workspace?<DeclaredWorkloadsPanel token={token} canEdit={canBill}/>:<Notice>Connect a workspace to continue.</Notice>):view==='engineering'?(workspace?<EngineeringView key={JSON.stringify([workspace.tenant_id,token])}/>:<Notice>Connect a workspace to continue.</Notice>):!workspace?<Notice>Connect a workspace to continue.</Notice>:!canBill?<section className="panel"><EmptyState icon={Layers} title="Finance access required">A billing or workspace administrator can review workload assessments.</EmptyState></section>:<>
+    {view==='declared'?(workspace?<DeclaredWorkloadsPanel token={token} canEdit={canBill} highlightWorkloadId={highlightDeclaredWorkloadId}/>:<Notice>Connect a workspace to continue.</Notice>):view==='engineering'?(workspace?<EngineeringView key={JSON.stringify([workspace.tenant_id,token])}/>:<Notice>Connect a workspace to continue.</Notice>):!workspace?<Notice>Connect a workspace to continue.</Notice>:!canBill?<section className="panel"><EmptyState icon={Layers} title="Finance access required">A billing or workspace administrator can review workload assessments.</EmptyState></section>:<>
       <section className="panel workload-toolbar"><label>Saved observation<select aria-label="Saved observation" value={scan?.scan_id||''} onChange={event=>selectScan(event.target.value)}><option value="" disabled>Select a scan</option>{scans.map(item=><option key={item.scan_id} value={item.scan_id}>{dateTime(item.timestamp)} · {item.scan_id.slice(0,8)}</option>)}</select></label>
       <p className="workload-links"><Link href="/outcomes">Manage application ownership</Link><Link href="/resources">Resource evidence</Link><Link href="/governance">Risk & compliance</Link><Link href="/automation">Reviewed remediation</Link></p></section>
       {!live?<Notice>Select a completed live scan. Synthetic and demo observations aren’t eligible.</Notice>:<Assessment key={JSON.stringify([workspace.tenant_id,token,scan.scan_id])} token={token} scanId={scan.scan_id}/>}

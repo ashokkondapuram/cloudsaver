@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–20 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–21 of the UI/UX program.
 
 ## Run locally
 
@@ -33,8 +33,8 @@ Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `workspac
 | Surface | Query parameters | Notes |
 | --- | --- | --- |
 | Governance | `tab=control-plane`, `plan=<cp_plan_id>` | Tab slugs mirror `lib/governance-tabs.ts`. Leaving Control-Plane Plans clears `plan`. |
-| Workloads | `tab=engineering\|declared\|assessments`, `workload=<id>`, `plan=<cp_plan_id>` | Engineering tab keeps workload/plan focus; other tabs drop deep-link params. |
-| Share clipboard | Governance panel **Copy plan links** | Writes governance URL and, when linked, engineering URL (`engineering_workload_id` on plan list). |
+| Workloads | `tab=engineering\|declared\|assessments`, `workload=<id>`, `plan=<cp_plan_id>` | `/workloads` without `tab` canonicalizes to `tab=assessments`. Engineering tab keeps workload/plan focus; declared tab keeps `workload` and drops `plan`; assessments clears deep-link params. |
+| Share clipboard | Governance panel **Copy plan links** | Writes governance URL and, when linked, engineering and declared workload URLs (`engineering_workload_id` on plan list). Declared tab **Copy declared workload link** copies `tab=declared&workload=`. |
 
 Cross-view refresh uses the browser event `cloudsaver:cp-plan-revision` (`lib/control-plane-sync.ts`):
 

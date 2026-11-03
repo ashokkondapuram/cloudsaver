@@ -3,12 +3,21 @@ import {useEffect, useState} from 'react';
 import {Layers, RefreshCw} from 'lucide-react';
 import {api} from '../../lib/api';
 import type {DeclaredWorkload} from '../../lib/control-plane';
+import {declaredWorkloadShareUrl} from '../../lib/workloads-tabs';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
-export function DeclaredWorkloadsPanel({token}: {token: string; canEdit: boolean}) {
+export function DeclaredWorkloadsPanel({
+  token,
+  highlightWorkloadId,
+}: {
+  token: string;
+  canEdit: boolean;
+  highlightWorkloadId?: string;
+}) {
   const [items, setItems] = useState<DeclaredWorkload[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -30,6 +39,14 @@ export function DeclaredWorkloadsPanel({token}: {token: string; canEdit: boolean
     return () => controller.abort();
   }, [token, revision]);
 
+  useEffect(() => {
+    if (!highlightWorkloadId || !items.some(w => w.id === highlightWorkloadId)) return;
+    const el = document.getElementById(`declared-workload-${highlightWorkloadId}`);
+    el?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }, [highlightWorkloadId, items, revision]);
+
+  const highlighted = highlightWorkloadId ? items.find(w => w.id === highlightWorkloadId) : undefined;
+
   return (
     <section className="panel" aria-label="Declared engineering workloads">
       <SectionTitle
@@ -46,6 +63,26 @@ export function DeclaredWorkloadsPanel({token}: {token: string; canEdit: boolean
       </SectionTitle>
       {loading && <Loading label="Loading declared engineering workloads…" />}
       {error && <Notice tone="error">{error}</Notice>}
+      {notice && <Notice tone="success">{notice}</Notice>}
+      {highlighted && (
+        <Notice>
+          Focused declared workload from a shared link. Version fencing uses the If-Match value shown below when updating
+          records through Engineering plans.
+          <button
+            type="button"
+            className="button secondary small"
+            style={{marginLeft: 8}}
+            onClick={() => {
+              const origin = typeof window === 'undefined' ? '' : window.location.origin;
+              void navigator.clipboard.writeText(declaredWorkloadShareUrl(highlighted.id, origin)).then(() =>
+                setNotice('Declared workload deep link copied to clipboard.'),
+              );
+            }}
+          >
+            Copy declared workload link
+          </button>
+        </Notice>
+      )}
       {!loading && !error && items.length === 0 && (
         <EmptyState icon={Layers} title="No declared workloads in this workspace">
           Use Engineering plans below to declare application workloads with owner, environment, and recovery references for
@@ -66,7 +103,11 @@ export function DeclaredWorkloadsPanel({token}: {token: string; canEdit: boolean
             </thead>
             <tbody>
               {items.map(w => (
-                <tr key={w.id}>
+                <tr
+                  key={w.id}
+                  id={`declared-workload-${w.id}`}
+                  className={highlightWorkloadId === w.id ? 'plan-card-highlight' : undefined}
+                >
                   <td>
                     <strong>{w.name}</strong>
                     <small className="cell-sub">{w.environment}</small>

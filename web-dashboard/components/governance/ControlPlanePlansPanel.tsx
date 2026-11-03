@@ -6,6 +6,7 @@ import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
 import {notifyControlPlanePlanRevision, subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
+import {declaredWorkloadShareUrl} from '../../lib/workloads-tabs';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
@@ -106,7 +107,8 @@ function planShareLinks(plan: PlanRecord) {
   const governance = `${origin}/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`;
   if (!plan.engineering_workload_id) return governance;
   const engineering = `${origin}/workloads?tab=engineering&workload=${encodeURIComponent(plan.engineering_workload_id)}&plan=${encodeURIComponent(plan.id)}`;
-  return `Governance: ${governance}\nEngineering: ${engineering}`;
+  const declared = declaredWorkloadShareUrl(plan.engineering_workload_id, origin);
+  return `Governance: ${governance}\nEngineering: ${engineering}\nDeclared: ${declared}`;
 }
 
 export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: string}) {
@@ -318,6 +320,11 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                         Open linked engineering workload
                         {plan.engineering_workload_name ? ` (${plan.engineering_workload_name})` : ''}
                       </Link>
+                      {' · '}
+                      <Link href={`/workloads?tab=declared&workload=${encodeURIComponent(plan.engineering_workload_id)}`}>
+                        View declared record
+                        {plan.engineering_workload_name ? ` (${plan.engineering_workload_name})` : ''}
+                      </Link>
                     </>
                   )}
                 </p>
@@ -420,7 +427,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                           void navigator.clipboard.writeText(planShareLinks(plan)).then(() =>
                             setNotice(
                               plan.engineering_workload_id
-                                ? 'Governance and engineering deep links copied to clipboard.'
+                                ? 'Governance, engineering, and declared workload deep links copied to clipboard.'
                                 : 'Plan deep link copied to clipboard.',
                             ),
                           );
