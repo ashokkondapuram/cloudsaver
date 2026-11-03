@@ -16,7 +16,7 @@ npm run test:e2e                    # both projects (full suite)
 
 | Pattern | Focus |
 | --- | --- |
-| `enterprise-ui-phase*.spec.ts` | Phase-scoped regressions (topology, ladder, lifecycle, Foundry, governance metrics) |
+| `enterprise-ui-phase*.spec.ts` | Phase-scoped regressions (topology, ladder, lifecycle, Foundry, governance metrics, engineering↔control-plane links) |
 | `control-plane-*.spec.ts` | Plans, human approval, action-safety firewall |
 | `financial-scenario-absorption.spec.ts` | Five-measure strip + commitment-aware scenarios |
 | `declared-workloads-if-match.spec.ts` | Engineering workload version fencing |

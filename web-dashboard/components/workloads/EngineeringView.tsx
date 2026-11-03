@@ -12,7 +12,7 @@ type Page<T>={items:T[];next_cursor:string|null};
 type Workload={id:string;name:string;environment:string;owner:string;team:string;scope_id:string;version:number;requirements:Record<string,string|null>};
 type Member={id:string;resource_name:string;resource_id:string;resource_type:string;resource_key:string;scan_id:string};
 type Check={code:string;status:string;reason:string;coverage_ratio?:number;p95?:number|null};
-type Version={id:string;plan_id:string;version:number;identity_digest:string;context_changed:boolean;parameters:{objective:string;action:string;candidate_sku:string|null;member_id:string;scan_id:string;readiness:{decision:string;evaluated_at:string;checks:Check[]}}};
+type Version={id:string;plan_id:string;version:number;identity_digest:string;state:string;execution_enabled:false;context_changed:boolean;parameters:{objective:string;action:string;candidate_sku:string|null;member_id:string;scan_id:string;readiness:{decision:string;evaluated_at:string;checks:Check[]}}};
 type Plan={id:string;latest:Version};
 type Event={id:string;kind:string;created_at:string};
 type Capabilities={stage:string;scopes:{scope_id:string}[];actions:{id:string;mode:string}[];acceptance_required:string[]};
@@ -74,7 +74,16 @@ function PlanCard({plan,token,w,canAdmin,scanId,done}:{plan:Plan;token:string;w:
   const [history,setHistory]=useState(false);
   const v=plan.latest,p=v.parameters,r=p.readiness;
   return <article className={css.card}>
-    <h3>{p.objective}</h3><p>{sentence(r.decision)} · Version {v.version} · {p.candidate_sku||'Disk review'}</p>
+    <h3>{p.objective}</h3>
+    <p>
+      <span className="state-badge">{sentence(v.state.replaceAll('_', ' '))}</span> · {sentence(r.decision)} · Version {v.version} ·{' '}
+      {p.candidate_sku || 'Disk review'}
+    </p>
+    <p className={css.muted}>
+      Shares the same control-plane version record as{' '}
+      <Link href="/governance">Risk &amp; compliance → Control-Plane Plans</Link>. Execution remains disabled (
+      {v.execution_enabled ? 'enabled' : 'disabled'}).
+    </p>
     {v.context_changed&&<Notice>The workload changed after this review. Create a new version to assess the current declarations.</Notice>}
     <p className={css.muted}>Assessed {dateTime(r.evaluated_at)}. Saved results describe that evidence window. Reassess with a recent observation before planning a change.</p>
     <details className={css.details}><summary>Evidence checks ({r.checks.length})</summary><ul className={css.checks}>{r.checks.map(check=><li key={check.code}><span className={css.status}>{sentence(check.status)}</span><div><strong>{sentence(check.code)}</strong><p>{check.reason}</p>{check.coverage_ratio!==undefined&&<p>Sample coverage: {(check.coverage_ratio*100).toFixed(1)}%{check.p95!=null?` · p95: ${check.p95}%`:''}</p>}</div></li>)}</ul></details>

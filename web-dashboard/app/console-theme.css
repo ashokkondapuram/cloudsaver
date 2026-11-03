@@ -216,6 +216,8 @@ html[data-theme=dark] .gov-risk,html[data-theme=dark] .gov-exception{background:
 html[data-theme=dark] .gov-result{background:var(--slate-100);color:var(--slate-700)}
 html[data-theme=dark] .enterprise-filters input,html[data-theme=dark] .enterprise-filters select{background:var(--surface);color:var(--slate-700);border-color:var(--border)}
 html[data-theme=dark] .data-governance-metrics .metric-card{background:var(--surface);border-color:var(--border)}
+html[data-theme=dark] .button.danger{background:var(--rose-700);border-color:var(--rose-700);color:#fff}
+.plan-state-badge{margin-left:8px;font-size:11px;vertical-align:middle}
 
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
 .financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}

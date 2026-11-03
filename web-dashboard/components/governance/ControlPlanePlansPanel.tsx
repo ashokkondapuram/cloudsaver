@@ -253,7 +253,12 @@ export function ControlPlanePlansPanel() {
             const latest = vers[0];
             return (
               <article key={plan.id} className="gov-risk">
-                <h3>{plan.objective}</h3>
+                <h3>
+                  {plan.objective}{' '}
+                  {latest && (
+                    <span className="state-badge plan-state-badge">{latest.state.replaceAll('_', ' ')}</span>
+                  )}
+                </h3>
                 <p className="inline-help">
                   Created {dateTime(plan.created_at)} · {vers.length} version{vers.length === 1 ? '' : 's'}
                 </p>

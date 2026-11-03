@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "0d464f5fbea654b79c3a3b23191d01e6d0f927eeece55fcb439dded9b137caba",
+  "inventory_sha256": "91c3857b19974ed2d1b2491f41a65176ece4c5f8b7a9788e5b74b7ad9bd0e01b",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -36,8 +36,8 @@
     },
     {
       "path": ".github/workflows/verify.yml",
-      "sha256": "a94e02ab0e091de39757c9a4fe9ed1d03cc56196450c62aff72787090c6d3857",
-      "bytes": 8916
+      "sha256": "01ead382c77b16f0791e44048b2543561037b4a2294d19d3690f5e17c6576db7",
+      "bytes": 8856
     },
     {
       "path": ".gitignore",
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "62e7d8151d478c5a1d5ea3d7233e0072a2ecb7aac5fd6958637e2aa505efb5d5",
-      "bytes": 32420
+      "sha256": "bc45dd42d0fdf5d5f0fe51d83677eff599899b866806b3ed1c5bf85da233bb20",
+      "bytes": 32597
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "8042a9c22d5217edf6fdb930f74f02b056b6492a2ce3aba1ebf9c1aa907c6e1e",
-      "bytes": 17122
+      "sha256": "06d21a2593ca4f28b28dc110cfee9abb71df306d2ee040b5b0f54cea943ba94a",
+      "bytes": 17325
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4106,13 +4106,18 @@
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "6874a0c4647f167c54cb10444ba2475c284755cbf98fc7a42363e26e52d17892",
-      "bytes": 19180
+      "sha256": "18b796bcf928442a5f60403c58f4b58b9c80389984e30ac82d32fc83fccd348a",
+      "bytes": 19595
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
       "sha256": "36d7bab70898793f44127fc4fd4854c274ab19a311546be33545c0c947951d5a",
       "bytes": 8917
+    },
+    {
+      "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
+      "sha256": "0e257a56f012c739209c6995bc0a33eca10ed97b26bdfc7f470c144742afa62a",
+      "bytes": 1295
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4188,6 +4193,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase10.spec.ts",
       "sha256": "fcb3c2caa98fd943f9274912cb17dc64fc50f2831c39291b83d07c2eaaaf0f7e",
       "bytes": 2692
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase11.spec.ts",
+      "sha256": "b9a809f4f6c15ad033030d59afacd6b9444bac1669d8da26070eef67f0e79e44",
+      "bytes": 1001
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
