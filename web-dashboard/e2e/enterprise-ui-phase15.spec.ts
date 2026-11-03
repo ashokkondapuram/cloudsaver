@@ -15,6 +15,6 @@ test('engineering view surfaces sync notice after control-plane revision', async
     {eventName: CONTROL_PLANE_PLAN_REVISION_EVENT, planId: engineeringPlanId},
   );
   await expect(page.getByText(/Control-plane plan state changed in governance/i)).toBeVisible();
-  await page.getByRole('button', {name: 'Refresh engineering records'}).click();
+  await page.getByRole('button', {name: 'Dismiss', exact: true}).click();
   await expect(page.getByText(/Control-plane plan state changed in governance/i)).toBeHidden();
 });

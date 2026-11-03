@@ -302,6 +302,12 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                             </span>
                           ))}
                         </div>
+                        {['queued', 'running', 'verification_pending'].includes(latest.state) && (
+                          <p className="inline-help plan-outbox-status">
+                            Worker outbox dispatch is not surfaced in this release. Status reflects control-plane transitions
+                            only; no automatic cloud mutations are triggered from this panel.
+                          </p>
+                        )}
                       </>
                     )}
                     <dl className="settings-key-values">

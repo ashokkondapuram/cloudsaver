@@ -6,9 +6,9 @@ if (!['127.0.0.1', 'localhost'].includes(address.hostname) || address.protocol !
   throw new Error('Browser fixtures require a loopback HTTP test server.');
 }
 
-/** Enterprise UI / control-plane / FinOps ladder specs (phases 1–11). */
+/** Enterprise UI / control-plane / FinOps ladder specs. */
 export const enterpriseUiTestMatch = [
-  '**/enterprise-ui-phase*.spec.ts',
+  '**/enterprise-ui*.spec.ts',
   '**/control-plane-*.spec.ts',
   '**/financial-scenario-absorption.spec.ts',
   '**/declared-workloads-if-match.spec.ts',

@@ -219,6 +219,7 @@ html[data-theme=dark] .data-governance-metrics .metric-card{background:var(--sur
 html[data-theme=dark] .button.danger{background:var(--rose-700);border-color:var(--rose-700);color:#fff}
 .plan-state-badge{margin-left:8px;font-size:11px;vertical-align:middle}
 .plan-card-highlight{outline:2px solid var(--indigo-500);box-shadow:0 0 0 4px color-mix(in srgb,var(--indigo-500) 22%,transparent);scroll-margin-top:96px}
+.plan-outbox-status{margin-top:8px;color:var(--muted-foreground)}
 
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
 .financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}
