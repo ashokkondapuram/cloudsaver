@@ -83,7 +83,7 @@ function showExecutionLadder(state: string) {
   ).includes(state);
 }
 
-export function ControlPlanePlansPanel() {
+export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: string}) {
   const {token, canAdmin, workspace} = useWorkspace();
   const humanApprover = canAdmin && workspace?.subject_type === 'user' && !workspace.key_id;
   const [plans, setPlans] = useState<PlanRecord[]>([]);
@@ -95,6 +95,12 @@ export function ControlPlanePlansPanel() {
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
   const [approvalAck, setApprovalAck] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!highlightPlanId || !plans.some(p => p.id === highlightPlanId)) return;
+    const el = document.getElementById(`control-plane-plan-${highlightPlanId}`);
+    el?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }, [highlightPlanId, plans, revision]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -231,6 +237,12 @@ export function ControlPlanePlansPanel() {
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {notice && <Notice tone="success">{notice}</Notice>}
+      {highlightPlanId && plans.some(p => p.id === highlightPlanId) && (
+        <Notice>
+          Focused plan from a shared link (for example engineering workloads). Review and approval actions apply to the
+          highlighted card below.
+        </Notice>
+      )}
       <form className="gov-form" onSubmit={createPlan}>
         <label>
           Plan objective
@@ -252,7 +264,11 @@ export function ControlPlanePlansPanel() {
             const vers = versions[plan.id] || [];
             const latest = vers[0];
             return (
-              <article key={plan.id} className="gov-risk">
+              <article
+                key={plan.id}
+                id={`control-plane-plan-${plan.id}`}
+                className={`gov-risk${highlightPlanId === plan.id ? ' plan-card-highlight' : ''}`}
+              >
                 <h3>
                   {plan.objective}{' '}
                   {latest && (
@@ -333,6 +349,16 @@ export function ControlPlanePlansPanel() {
                             {end.label}
                           </button>
                         ))}
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        onClick={() => {
+                          const url = `${window.location.origin}/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`;
+                          void navigator.clipboard.writeText(url).then(() => setNotice('Plan deep link copied to clipboard.'));
+                        }}
+                      >
+                        Copy plan link
+                      </button>
                     </div>
                     {latest.state === 'approved' && (
                       <Notice tone="success">

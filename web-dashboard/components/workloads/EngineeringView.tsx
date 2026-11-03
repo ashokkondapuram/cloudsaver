@@ -81,7 +81,9 @@ function PlanCard({plan,token,w,canAdmin,scanId,done}:{plan:Plan;token:string;w:
     </p>
     <p className={css.muted}>
       Shares the same control-plane version record as{' '}
-      <Link href="/governance">Risk &amp; compliance → Control-Plane Plans</Link>. Execution remains disabled (
+      <Link href={`/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`}>
+        Risk &amp; compliance → Control-Plane Plans
+      </Link>. Execution remains disabled (
       {v.execution_enabled ? 'enabled' : 'disabled'}).
     </p>
     {v.context_changed&&<Notice>The workload changed after this review. Create a new version to assess the current declarations.</Notice>}

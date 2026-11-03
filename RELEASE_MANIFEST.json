@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "91c3857b19974ed2d1b2491f41a65176ece4c5f8b7a9788e5b74b7ad9bd0e01b",
+  "inventory_sha256": "0c4de7e5aa2c2f1a2aa24c15c5bbf834db3673802ca22751b63bc359d89ec31d",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "bc45dd42d0fdf5d5f0fe51d83677eff599899b866806b3ed1c5bf85da233bb20",
-      "bytes": 32597
+      "sha256": "10722dd8cffcdf567257a3f5d2f48f1d624807cd7713ab2c02dad51631799f16",
+      "bytes": 32752
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3791,8 +3791,8 @@
     },
     {
       "path": "web-dashboard/app/governance/page.tsx",
-      "sha256": "0d0cd80ebe5b35129d220f7744449a2c96be34017c0b7084920c7a7ae0ea5f18",
-      "bytes": 148
+      "sha256": "a9292fb4b5d15aafde5ea7d2873f0cdc979dc01aef991534e01c81e5bab92b6d",
+      "bytes": 245
     },
     {
       "path": "web-dashboard/app/health/live/route.ts",
@@ -3971,13 +3971,13 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "06d21a2593ca4f28b28dc110cfee9abb71df306d2ee040b5b0f54cea943ba94a",
-      "bytes": 17325
+      "sha256": "68e71eeaa0ee7676ea9915ca3f83b2479cd969aa27755a45a1495d6da9ca5117",
+      "bytes": 18641
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
-      "sha256": "dba97450b4a3fb7d2c32dd0208f105908152792239bda93a31f7bd8e53209d94",
-      "bytes": 44061
+      "sha256": "206af3f6298981dee4d58b785212876212843660c27c3a30e6e094a4e8027810",
+      "bytes": 44353
     },
     {
       "path": "web-dashboard/components/governance/governance.css",
@@ -4106,8 +4106,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "18b796bcf928442a5f60403c58f4b58b9c80389984e30ac82d32fc83fccd348a",
-      "bytes": 19595
+      "sha256": "ff179779e515845ff59805c7ee03c56741b5d472be6ea17c59dfc2c318974726",
+      "bytes": 19667
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
@@ -4116,8 +4116,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "0e257a56f012c739209c6995bc0a33eca10ed97b26bdfc7f470c144742afa62a",
-      "bytes": 1295
+      "sha256": "21dce5b961f8ea8293239449b209199997b041b6afa3f1dfdde714b085734e1b",
+      "bytes": 1323
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4198,6 +4198,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase11.spec.ts",
       "sha256": "b9a809f4f6c15ad033030d59afacd6b9444bac1669d8da26070eef67f0e79e44",
       "bytes": 1001
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase12.spec.ts",
+      "sha256": "aa98c97f5cc25642c370a6c4d7f7843c8711be56c3a68b349c0787c3097f0854",
+      "bytes": 4570
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
