@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "4be3ffccf82b3a69a5410a7fe8db0c11541a3cf0d46bb5173b1c8dd04c66a07c",
+  "inventory_sha256": "1a179ca65748ed7aea9a2c2be29593015602978780e2236c60d38bec4f5a6f9a",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "061b21b1f47c17bda0f72164c5c8a9b7ece0941439eb3e876c8ac888ef8f3589",
-      "bytes": 26635
+      "sha256": "1ea9aca6e302ce9160e9826d58f7941ea716f2d508f13231b14cd3a0e7257716",
+      "bytes": 28018
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3936,8 +3936,8 @@
     },
     {
       "path": "web-dashboard/components/allocation/CommitmentLadderPanel.tsx",
-      "sha256": "2b0aa2d5d41f3343813c1792861cf96d6c0108e8f3b32e32f161124d2ab4b709",
-      "bytes": 3482
+      "sha256": "5e8a936ff11371f77287763a248457d517e00a2fec75875abde2e02f1b5a49d9",
+      "bytes": 3552
     },
     {
       "path": "web-dashboard/components/automation/HclMappingViewer.tsx",
@@ -4181,7 +4181,7 @@
     },
     {
       "path": "web-dashboard/e2e/governance.spec.ts",
-      "sha256": "1433723c5d0fd370b3fadca5ddfcde4de31cc20703c662a8ab233bfa333f5341",
+      "sha256": "625cea8c20867b9c3f46cad5f669a5b67ae78a196d403c9e68a3fb863e9566c8",
       "bytes": 12219
     },
     {

@@ -35,7 +35,7 @@ async function setup(page:Page,options:{roles?:string[];human?:boolean;state?:st
 
 test('auditor mobile dashboard preserves uncertainty and seven accessible workflow views',async({page})=>{
  await page.setViewportSize({width:390,height:844});const mutations=await setup(page);await expect(page.getByRole('heading',{name:'Risk & compliance',exact:true})).toBeVisible();
- const tabs=page.getByRole('tablist',{name:'Risk and compliance workflows'});await expect(tabs.getByRole('tab')).toHaveCount(7);await tabs.getByRole('tab',{name:'Risk register',exact:true}).focus();await page.keyboard.press('End');await expect(tabs.getByRole('tab',{name:'Audit exports',exact:true})).toBeFocused();
+ const tabs=page.getByRole('tablist',{name:'Risk and compliance workflows'});await expect(tabs.getByRole('tab')).toHaveCount(8);await tabs.getByRole('tab',{name:'Risk register',exact:true}).focus();await page.keyboard.press('End');await expect(tabs.getByRole('tab',{name:'Audit exports',exact:true})).toBeFocused();
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'Download audit package',exact:true}).click();expect((await download).suggestedFilename()).toBe(`cloudsaver-governance-${findingId}.json`);
  await tabs.getByRole('tab',{name:'Evidence',exact:true}).click();await expect(page.getByText(/Configuration evidence cannot determine historical data exposure/)).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);

@@ -87,7 +87,8 @@ export function expiryBadge(end: string | null) {
   const days = Math.ceil((Date.parse(end.slice(0, 10) + 'T12:00:00Z') - Date.now()) / 86400000);
   if (days < 0) return <span className="state-badge expired">Expired</span>;
   const thresholds = [90, 60, 30] as const;
-  const hit = thresholds.find(t => days <= t);
-  if (!hit) return null;
+  const within = thresholds.filter(t => days <= t);
+  const hit = within.length ? Math.min(...within) : null;
+  if (hit == null) return null;
   return <span className={`state-badge expiry-${hit}`}>{hit}-day expiry</span>;
 }

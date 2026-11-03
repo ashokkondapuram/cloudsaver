@@ -164,6 +164,20 @@ html[data-theme=dark] .bulk-toolbar{background:#1e293b;border-color:#52607b;box-
 html[data-theme=dark] .metric-featured{background:linear-gradient(115deg,var(--surface) 35%,#1d2048);border-color:#353a72}
 html[data-theme=dark] .priority-row:hover{background:#ffffff08}
 
+html[data-theme=dark] .financial-five-strip{background:var(--slate-100);border-color:var(--border)}
+html[data-theme=dark] .financial-five-strip article{background:var(--surface)}
+html[data-theme=dark] .financial-five-strip article.highlight-avoidable{background:color-mix(in srgb,var(--indigo-50) 50%,var(--surface));border-color:color-mix(in srgb,var(--indigo-600) 35%,var(--border))}
+html[data-theme=dark] .overlap-warning-banner{background:var(--amber-50);color:var(--amber-700)}
+html[data-theme=dark] .topology-dag-list,html[data-theme=dark] .slo-correlation-banner{background:var(--slate-100)}
+html[data-theme=dark] .slo-correlation-banner.blocked-latency{background:var(--rose-50);color:var(--rose-700)}
+html[data-theme=dark] .hcl-diff-container{background:var(--slate-100)}
+html[data-theme=dark] .hcl-diff-header{background:var(--surface)}
+html[data-theme=dark] .plan-step{background:var(--slate-100);color:var(--muted)}
+html[data-theme=dark] .plan-step.current{background:var(--indigo-50);color:var(--indigo-600)}
+html[data-theme=dark] .drift-abort-banner{background:var(--rose-50);color:var(--rose-700)}
+html[data-theme=dark] .state-badge.expiry-90,html[data-theme=dark] .state-badge.expiry-60,html[data-theme=dark] .state-badge.expiry-30{background:var(--amber-50);color:var(--amber-700)}
+html[data-theme=dark] .session-role{border-color:var(--border);color:var(--muted)}
+
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
 .financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}
 .financial-five-strip article{padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface);min-width:0}
