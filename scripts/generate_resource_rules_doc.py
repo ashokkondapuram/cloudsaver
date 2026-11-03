@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.analysis_rules import RULES, evaluate_inventory  # noqa: E402
-from app.resource_catalog import FAMILIES, RULE_DISPLAY_NAMES, display_name  # noqa: E402
+from app.analysis_rules import evaluate_inventory  # noqa: E402
+from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS, FAMILIES, RULE_DISPLAY_NAMES, azure_evidence_contracts, display_name  # noqa: E402
 
 NOW = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 NOW -= timedelta(minutes=NOW.minute % 5)

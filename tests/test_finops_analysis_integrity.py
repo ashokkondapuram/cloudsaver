@@ -3,12 +3,20 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.analysis_rules import RULES, evaluate_inventory
+from app.analysis_rules import evaluate_inventory
 from app.finops_resize_playbooks import PLAYBOOKS, resolve_playbook
 from app.kubernetes_rules import DEFINITIONS as K8_DEFINITIONS, RULE_IDS as K8_RULE_IDS
-from app.resource_catalog import FAMILIES, definitions, RULE_DISPLAY_NAMES, family
-
-LEGACY_AZURE_RULE_IDS = frozenset(rule[0] for rule in RULES)
+from app.resource_catalog import (
+    AZURE_EVIDENCE_CONTRACT_IDS,
+    FAMILIES,
+    RULE_DISPLAY_NAMES,
+    azure_evidence_contract,
+    azure_evidence_contracts,
+    definitions,
+    display_name,
+    family,
+    rule_resource_type_suffix,
+)
 
 NOW = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 NOW -= timedelta(minutes=NOW.minute % 5)
@@ -61,7 +69,7 @@ def expected_rule_ids(*, cloud_provider: str, resource_type: str) -> frozenset[s
     expected: set[str] = set()
     if cloud_provider == "azure":
         suffix = resource_type.lower().rsplit("/", 1)[-1]
-        for rule_id, type_suffix, *_rest in RULES:
+        for rule_id, type_suffix, *_rest in azure_evidence_contracts():
             if suffix == type_suffix:
                 expected.add(rule_id)
     if cloud_provider == "kubernetes":
@@ -72,7 +80,7 @@ def expected_rule_ids(*, cloud_provider: str, resource_type: str) -> frozenset[s
     row = family({"cloud_provider": cloud_provider, "resource_type": resource_type})
     if row and row[0] != "kubernetes":
         for rule_id in row[4]:
-            if rule_id not in LEGACY_AZURE_RULE_IDS:
+            if rule_id not in AZURE_EVIDENCE_CONTRACT_IDS:
                 expected.add(rule_id)
     return frozenset(expected)
 
@@ -96,13 +104,31 @@ def test_each_catalog_family_evaluates_expected_rules_without_errors(family_row)
                 assert row.get("estimated_savings") is None or row["estimated_savings"] == 0
 
 
+def test_azure_evidence_contract_bounds_match_platform_identity():
+    """Platform identity DEFINITIONS must stay aligned with resource_catalog contract bounds."""
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    platform = root / 'platform'
+    if str(platform) not in sys.path:
+        sys.path.insert(0, str(platform))
+    from identity.analysis.contracts import DEFINITIONS
+
+    catalog_bounds = {rid: azure_evidence_contract(rid)[3] for rid in AZURE_EVIDENCE_CONTRACT_IDS}
+    identity_bounds = {row[0]: row[4] for row in DEFINITIONS}
+    assert set(catalog_bounds) == set(identity_bounds)
+    for rule_id in AZURE_EVIDENCE_CONTRACT_IDS:
+        assert catalog_bounds[rule_id] == identity_bounds[rule_id], rule_id
+
+
 def test_kubernetes_catalog_covers_all_kubernetes_rule_ids():
     catalog_rules = {rule_id for _p, _f, _c, _t, rules in FAMILIES if _p == "kubernetes" for rule_id in rules}
     assert catalog_rules == set(K8_RULE_IDS)
 
 
 def test_legacy_azure_rules_still_map_to_vm_disk_and_ip_types():
-    legacy_suffixes = {rule[1] for rule in RULES}
+    legacy_suffixes = {rule_resource_type_suffix(rid) for rid in AZURE_EVIDENCE_CONTRACT_IDS}
     assert legacy_suffixes >= {"disks", "virtualmachines", "publicipaddresses", "serverfarms"}
 
 

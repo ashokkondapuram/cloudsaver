@@ -8,18 +8,8 @@ from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
 VERSION = '1.4.0'
 OUTCOMES = ('condition_detected', 'condition_not_detected', 'insufficient_evidence', 'not_applicable',
             'disabled_by_policy', 'excluded_by_exception', 'unsupported_by_collector', 'evaluation_failed')
-# id, resource type suffix, name, configurable parameters with (default, min, max)
-RULES = (
-    ('AZURE_DISK_UNATTACHED_RETENTION', 'disks', 'Retained unattached managed disk review', {'minimum_days': (14, 7, 90)}),
-    ('AZURE_DISK_PROVISIONED_PERFORMANCE', 'disks', 'Disk recovery and provisioned performance review', {'headroom_percent': (30, 20, 100)}),
-    ('AZURE_PUBLIC_IP_UNASSOCIATED', 'publicipaddresses', 'Unassociated public IP review', {'minimum_days': (7, 7, 90)}),
-    ('AZURE_PUBLIC_IP_ASSOCIATED_IDLE', 'publicipaddresses', 'Associated public IP traffic review', {'maximum_bytes': (0, 0, 1024)}),
-    ('AZURE_VM_STOPPED_RESIDUAL_COST', 'virtualmachines', 'Stopped VM residual charge review', {'minimum_days': (14, 7, 90)}),
-    ('AZURE_VM_RIGHTSIZING_UTILIZATION', 'virtualmachines', 'Evidence-based VM rightsizing review', {'cpu_percent': (10, 1, 20)}),
-    ('AZURE_ASP_EMPTY_PAID_PLAN', 'serverfarms', 'Empty paid App Service plan review', {'minimum_days': (7, 7, 90)}),
-    ('AZURE_ASP_UNDERUTILIZED_SKU', 'serverfarms', 'App Service capacity review', {'cpu_percent': (15, 1, 30), 'memory_percent': (30, 1, 40)}),
-)
-LEGACY_AZURE_RULE_IDS = frozenset(rule[0] for rule in RULES)
+
+from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS as LEGACY_AZURE_RULE_IDS
 
 
 def moment(value):
@@ -31,17 +21,9 @@ def moment(value):
 
 
 def parameters(rule_id, overrides=None):
-    rule = next(rule for rule in RULES if rule[0] == rule_id)
-    bounds = rule[3]
-    if not isinstance(overrides or {}, dict) or set(overrides or {}) - set(bounds):
-        raise ValueError('Unknown rule parameter')
-    result = {}
-    for key, (default, low, high) in bounds.items():
-        value = (overrides or {}).get(key, default)
-        if type(value) is not int or not low <= value <= high:
-            raise ValueError(f'{key} must be an integer between {low} and {high}')
-        result[key] = value
-    return result
+    from app.resource_catalog import validate_rule_parameters
+
+    return validate_rule_parameters(rule_id, overrides)
 
 
 def series(values, now):

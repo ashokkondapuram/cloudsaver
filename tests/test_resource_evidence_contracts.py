@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from app.analysis_rules import RULES, evaluate_inventory
+from app.analysis_rules import evaluate_inventory
+from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS
 from app.dependencies import canonical_inventory, group_opportunities
 from app.inventory import coverage_manifest
 from app.pricing import opportunity_totals
@@ -138,5 +139,6 @@ def test_provider_restricted_scan_drops_foreign_failed_scopes():
 
 def test_a_broken_rule_evaluation_does_not_become_a_pass():
     disk = node('disk', 'microsoft.compute/disks', evidence={'disk_state': 'Unattached'})
-    outcomes = evaluate_inventory([disk], policies={RULES[0][0]: {'parameters': {'minimum_days': True}}}, observed_at=NOW, now=NOW)
+    first_contract = 'AZURE_DISK_UNATTACHED_RETENTION'
+    outcomes = evaluate_inventory([disk], policies={first_contract: {'parameters': {'minimum_days': True}}}, observed_at=NOW, now=NOW)
     assert outcomes[0]['outcome'] == 'evaluation_failed'

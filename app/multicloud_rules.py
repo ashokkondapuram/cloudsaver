@@ -77,14 +77,15 @@ def condition(rid,e,p,now):
     return None
 
 def evaluate_inventory(inventory,*,policies=None,observed_at=None,now=None,providers=None):
-    from app.analysis_rules import LEGACY_AZURE_RULE_IDS, RULES
-    legacy_suffix = {rule[0]: rule[1] for rule in RULES}
+    from app.analysis_rules import LEGACY_AZURE_RULE_IDS
+    from app.resource_catalog import rule_resource_type_suffix
     now=now or datetime.now(timezone.utc);lookup={r[0]:r for r in definitions()};result=[]
     for resource in inventory:
         f=family(resource)
         if not f or f[0]=='kubernetes' or providers and f[0] not in providers:continue
         for rid in f[4]:
-            if rid in LEGACY_AZURE_RULE_IDS and resource['resource_type'].lower().rsplit('/', 1)[-1] != legacy_suffix[rid]:
+            suffix = rule_resource_type_suffix(rid)
+            if rid in LEGACY_AZURE_RULE_IDS and suffix and resource['resource_type'].lower().rsplit('/', 1)[-1] != suffix:
                 continue
             rule=lookup[rid];policy=(policies or {}).get(rid,{})
             output=dict(rule_id=rid,rule_version='1.4.0',name=rule[4],cloud_provider=f[0],resource_id=resource['resource_id'],

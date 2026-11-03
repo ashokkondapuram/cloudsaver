@@ -3,7 +3,8 @@ import math
 
 import pytest
 
-from app.analysis_rules import RULES, evaluate, evaluate_inventory, parameters, series
+from app.analysis_rules import evaluate, evaluate_inventory, parameters, series
+from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS, azure_evidence_contract, azure_evidence_contracts
 from app.inventory import coverage
 
 NOW = datetime(2026, 10, 23, 18, tzinfo=timezone.utc)
@@ -15,7 +16,7 @@ def resource(kind='disks', **evidence):
 
 
 def rule(rule_id, observation, **kwargs):
-    return evaluate(observation, next(r for r in RULES if r[0] == rule_id), observed_at=NOW, now=NOW, **kwargs)
+    return evaluate(observation, azure_evidence_contract(rule_id), observed_at=NOW, now=NOW, **kwargs)
 
 
 def metric(value=1):
@@ -24,7 +25,7 @@ def metric(value=1):
                 points=[{'at': (start + timedelta(seconds=300 * i)).isoformat(), 'value': value} for i in range(1, 8641)])
 
 
-@pytest.mark.parametrize('definition', RULES)
+@pytest.mark.parametrize('definition', azure_evidence_contracts())
 def test_missing_required_evidence_is_never_a_pass(definition):
     result = evaluate(resource(definition[1]), definition, observed_at=NOW, now=NOW)
     assert result['outcome'] == 'insufficient_evidence'
@@ -87,5 +88,5 @@ def test_coverage_keeps_unsupported_unknown_and_disabled_separate():
 
 def test_stale_and_future_observations_cannot_produce_a_risk_or_pass():
     for when in (NOW - timedelta(days=2), NOW + timedelta(seconds=1)):
-        result = evaluate(resource(power_state='PowerState/stopped'), RULES[4], observed_at=when, now=NOW)
+        result = evaluate(resource(power_state='PowerState/stopped'), azure_evidence_contract('AZURE_VM_STOPPED_RESIDUAL_COST'), observed_at=when, now=NOW)
         assert result['outcome'] == 'insufficient_evidence'

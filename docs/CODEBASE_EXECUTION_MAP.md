@@ -84,7 +84,7 @@ Triggered by `POST /api/v1/scans` or `POST /api/v1/scans/multi-cloud` in `app/ma
 |------|-------|----------|
 | **Core** | `main.py`, `store.py`, `auth.py`, `schemas.py`, `runtime.py` | HTTP app, scan CRUD, auth |
 | **Scan** | `scanner.py`, `multi_cloud.py`, `scan_progress.py`, `scan_billing.py`, `scan_response.py` | Cloud collection |
-| **Resources** | `resource_api.py`, `resource_assessment.py`, `resource_action_items.py`, `assessment.py` | `/resources` API + deterministic **action_items** |
+| **Resources** | `resource_api.py`, `resource_assessment.py`, `resource_action_items/`, `assessment.py` | `/resources` API + deterministic **action_items** (by category module) |
 | **Azure** | `azure_*`, `collectors/azure_*`, `azure_pricing_evidence.py` | ARM, live evidence, pricing |
 | **FinOps** | `finops_api.py`, `focus.py`, `billing_jobs.py`, `commitment_*`, `finops_autopilot_api.py` | Billing FOCUS, sync jobs |
 | **Outcomes** | `outcome_api.py`, `outcome_store.py`, `outcome_evidence.py`, `outcome_anomalies.py` | Savings cases, reconcile |
@@ -164,7 +164,7 @@ Mirror `app/` domains; **`tests/test_route_inventory.py`** guards API surface.
 | ~~Azure finops split~~ | ~~`azure_resource_finops.py`~~ | **Removed** — use `azure_json_profile.py` only |
 | ARM api-version | `azure_resource_registry` (`api_version_for_arm_resource_id`) | **Done** — drift operational fetch uses catalog resolver |
 | UI theme presets | `app/ui_theme.py`, `platform/identity/ui_theme.py` | **Keep both** (separate deployables); change presets in both or extract shared package later |
-| Rule evaluation | `resource_catalog` + `kubernetes_rules` via `multicloud_rules` | **Done** — `evaluate_inventory` is catalog + K8s; `analysis_rules.RULES` kept for contract unit tests only |
+| Rule evaluation | `resource_catalog` + `kubernetes_rules` via `multicloud_rules` | **Done** — Azure evidence contracts + bounds live in `resource_catalog`; `parameters()` delegates to `validate_rule_parameters` |
 | Running inventory | `store.running_inventory_page` | **Done** — legacy in-memory page removed; `./start.sh` uses Postgres |
 | Synthetic scans | `data_origin=legacy_synthetic` in `store.py`, UI guards | **Demo/e2e only** — do not extend; remove feature when e2e uses live fixtures only |
 | Docs sprawl | `docs/archive/*` | **Done** — not linked from root README; use `docs/features/` + this map |
@@ -175,7 +175,7 @@ Mirror `app/` domains; **`tests/test_route_inventory.py`** guards API surface.
 ## 7. Legacy retirement checklist (no new legacy code)
 
 1. **Scans:** Only persist `data_origin` live (`completed` / `running`); stop seeding `legacy_synthetic` except explicit test fixtures.
-2. **Rules:** One evaluation path (`resource_catalog` + K8s); retire duplicate `RULES` tuple when identity seed reads catalog bounds only.
+2. **Rules:** One evaluation path (`resource_catalog` + K8s); keep platform `identity.analysis.contracts` aligned with `AZURE_EVIDENCE_CONTRACT_IDS` bounds.
 3. **ARM versions:** One resolver (`azure_resource_registry.api_version_for_arm_resource_id` / `resolve_arm_api_version`).
 4. **Azure cost:** One profile builder (`fetch_azure_resource_profile`); clients consume JSON only.
 5. **Inventory paging:** `running_inventory_page` on the scan store (Postgres in `./start.sh`; SQLite test store implements the same contract).
