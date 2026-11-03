@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "ec9e9049bdc5e057679b268f77327270a4005c612a310b12f512b65cdb16898d",
+  "inventory_sha256": "3dfcd2fb980de982a34ba3cf56b3858f410ce313d3c7d367b7815d17c310b28d",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "33c8330f7431586e8738f622045ee58c0a419e0bdff6b5324dedc039a612d0ce",
-      "bytes": 32003
+      "sha256": "62e7d8151d478c5a1d5ea3d7233e0072a2ecb7aac5fd6958637e2aa505efb5d5",
+      "bytes": 32420
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "2ec0e7bdac0e254450139429c797303d8f27d7c420cfe74bc1ceb3da00ed6425",
-      "bytes": 13572
+      "sha256": "494cf1202b844627bd62f905cb45bb160bc57899bde78259e4cafbb93fd4ff9d",
+      "bytes": 15207
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4140,9 +4140,14 @@
       "bytes": 8138
     },
     {
+      "path": "web-dashboard/e2e/control-plane-fixture.ts",
+      "sha256": "f87110e86edc6b7b7e6ded1b2bfa93b197fd8a6009003c69a2e87ad2777e2224",
+      "bytes": 3175
+    },
+    {
       "path": "web-dashboard/e2e/control-plane-human-approval.spec.ts",
-      "sha256": "f589faf757ac20d77a94d4eb415b23fdd2a5afae31e9789c536fa729b13881c7",
-      "bytes": 3167
+      "sha256": "b9daaac28612f72a1942a8e041cdc485c6a1fe9f75971cd5afcebf978159c335",
+      "bytes": 1500
     },
     {
       "path": "web-dashboard/e2e/control-plane-plan-lifecycle.spec.ts",
@@ -4193,6 +4198,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase6.spec.ts",
       "sha256": "5442f949bc8103a6b72f4173d9d752133dfd0ac9aecabded3db90685a5eeb739",
       "bytes": 3384
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase7.spec.ts",
+      "sha256": "75b79ca15ca9121f13892a3168ed21ff36fa069dd48ff68cb610bd88f8ebfebb",
+      "bytes": 2892
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",

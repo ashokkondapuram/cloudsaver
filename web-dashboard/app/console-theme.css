@@ -175,6 +175,8 @@ html[data-theme=dark] .hcl-diff-header{background:var(--surface)}
 html[data-theme=dark] .plan-step{background:var(--slate-100);color:var(--muted)}
 html[data-theme=dark] .plan-step.current{background:var(--indigo-50);color:var(--indigo-600)}
 html[data-theme=dark] .plan-step.completed{background:var(--emerald-50);color:var(--emerald-700)}
+html[data-theme=dark] .plan-step.plan-step-failed{background:var(--rose-50);color:var(--rose-700)}
+html[data-theme=dark] .plan-step.plan-step-warning{background:var(--amber-50);color:var(--amber-700)}
 html[data-theme=dark] .drift-abort-banner{background:var(--rose-50);color:var(--rose-700)}
 html[data-theme=dark] .state-badge.expiry-90,html[data-theme=dark] .state-badge.expiry-60,html[data-theme=dark] .state-badge.expiry-30{background:var(--amber-50);color:var(--amber-700)}
 html[data-theme=dark] .session-role{border-color:var(--border);color:var(--muted)}
@@ -231,6 +233,8 @@ html[data-theme=dark] .data-governance-metrics .metric-card{background:var(--sur
 .plan-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:550;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--slate-50);color:var(--muted);white-space:nowrap}
 .plan-step.current{border-color:var(--indigo-600);background:var(--indigo-50);color:var(--indigo-600)}
 .plan-step.completed{border-color:color-mix(in srgb,var(--emerald-700) 40%,var(--border));background:color-mix(in srgb,var(--emerald-50) 55%,var(--surface));color:var(--emerald-700)}
+.plan-step.plan-step-failed{border-color:var(--rose-700);background:var(--rose-50);color:var(--rose-700)}
+.plan-step.plan-step-warning{border-color:var(--amber-700);background:var(--amber-50);color:var(--amber-700)}
 .drift-abort-banner{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border:1px solid var(--rose-700);border-radius:9px;background:var(--rose-50);color:var(--rose-700);font-size:13px;line-height:1.6}
 .panel-bleed{margin-inline:0!important}
 @media(max-width:1100px){.financial-five-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}

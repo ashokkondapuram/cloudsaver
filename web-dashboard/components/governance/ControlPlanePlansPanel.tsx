@@ -21,6 +21,18 @@ const NEXT_STATE: Record<string, string> = {
   verification_pending: 'verified',
 };
 
+const ALT_TRANSITIONS: Record<string, {to: string; label: string}[]> = {
+  running: [
+    {to: 'failed', label: 'Record failed outcome'},
+    {to: 'reconciliation_required', label: 'Require reconciliation'},
+  ],
+  verification_pending: [
+    {to: 'failed', label: 'Record failed outcome'},
+    {to: 'reconciliation_required', label: 'Require reconciliation'},
+  ],
+  failed: [{to: 'reconciliation_required', label: 'Advance to reconciliation required'}],
+};
+
 function reviewStepClass(step: (typeof REVIEW_STEPS)[number], state: string) {
   const stepIdx = REVIEW_STEPS.indexOf(step);
   const stateIdx = REVIEW_STEPS.indexOf(state as (typeof REVIEW_STEPS)[number]);
@@ -34,6 +46,14 @@ function reviewStepClass(step: (typeof REVIEW_STEPS)[number], state: string) {
 
 function executionStepClass(step: (typeof EXECUTION_STEPS)[number], state: string) {
   if (state === 'approved') return '';
+  if (state === 'failed') {
+    if (step === 'running') return 'current plan-step-failed';
+    return EXECUTION_STEPS.indexOf(step) < EXECUTION_STEPS.indexOf('running') ? 'completed' : '';
+  }
+  if (state === 'reconciliation_required') {
+    if (step === 'verification_pending') return 'current plan-step-warning';
+    return EXECUTION_STEPS.indexOf(step) < EXECUTION_STEPS.indexOf('verification_pending') ? 'completed' : '';
+  }
   const stepIdx = EXECUTION_STEPS.indexOf(step);
   const stateIdx = EXECUTION_STEPS.indexOf(state as (typeof EXECUTION_STEPS)[number]);
   if (stateIdx >= 0) {
@@ -264,6 +284,18 @@ export function ControlPlanePlansPanel() {
                           Advance to {NEXT_STATE[latest.state].replaceAll('_', ' ')}
                         </button>
                       )}
+                      {canAdmin &&
+                        (ALT_TRANSITIONS[latest.state] ?? []).map(alt => (
+                          <button
+                            key={alt.to}
+                            type="button"
+                            className="button secondary small"
+                            disabled={busy}
+                            onClick={() => transition(latest, alt.to)}
+                          >
+                            {alt.label}
+                          </button>
+                        ))}
                     </div>
                     {latest.state === 'approved' && (
                       <Notice tone="success">
@@ -282,7 +314,10 @@ export function ControlPlanePlansPanel() {
                     )}
                     {(latest.state === 'failed' || latest.state === 'reconciliation_required') && (
                       <Notice tone="error">
-                        Plan version is in {latest.state.replaceAll('_', ' ')}. Reconcile evidence or open a new version before retrying execution tracking.
+                        Plan version is in {latest.state.replaceAll('_', ' ')}.
+                        {latest.state === 'failed'
+                          ? ' Record reconciliation after evidence review or open a new plan version.'
+                          : ' Reconcile external evidence before creating a new version; no further execution transitions apply.'}
                       </Notice>
                     )}
                     {latest.state === 'review_requested' && humanApprover && (
