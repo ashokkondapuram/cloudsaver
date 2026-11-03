@@ -65,28 +65,92 @@ function Rules({detail}: {detail: ResourceDetail}) {
     <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}</small></article>)}</div>}</div>;
 }
 
+const utcDayOffset = (days: number) => {
+  const now = new Date();
+  const base = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(base + days * 86400000).toISOString().slice(0, 10);
+};
+
+type AzureCostSnapshot = {
+  observation: {start: string; end: string; billed_cost_usd: number | null; effective_cost_usd: number | null; currency: string | null; coverage_complete: boolean};
+  baseline: AzureCostSnapshot['observation'] | null;
+  retail: {monthly_run_rate_usd: number | null; window_run_rate_usd: number | null};
+  balance: NonNullable<ResourceDetail['costs']>;
+  booked_savings_usd: number | null;
+  finance_reconciled_benefit_usd: number | null;
+  warning: string | null;
+};
+
 function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => void}) {
-  const {token, canAdmin} = useWorkspace();
+  const {token, canAdmin, canBill} = useWorkspace();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [observationEnd, setObservationEnd] = useState(() => utcDayOffset(0));
+  const [observationStart, setObservationStart] = useState(() => utcDayOffset(-30));
+  const [baselineEnd, setBaselineEnd] = useState(() => utcDayOffset(-30));
+  const [baselineStart, setBaselineStart] = useState(() => utcDayOffset(-60));
+  const [azureEvidence, setAzureEvidence] = useState<AzureCostSnapshot | null>(null);
   const supplemental = [['modeled_future_cost_usd', 'Modeled future cost', 'USD']] as const;
-  async function fetchCost() {
+  async function importCost() {
     setBusy(true); setError('');
     try {
-      const qs = new URLSearchParams({resource_id: detail.assessment.resource_id, scope_id: detail.assessment.scope_id}).toString();
+      const qs = new URLSearchParams({
+        resource_id: detail.assessment.resource_id,
+        scope_id: detail.assessment.scope_id,
+        start: observationStart,
+        end: observationEnd,
+      }).toString();
       await api(`/finops/resource-cost?${qs}`, token, {method: 'POST', body: {}});
       onFetched();
     } catch (cause) {setError((cause as Error).message);}
     finally {setBusy(false);}
   }
+  async function fetchAzureCosts() {
+    setBusy(true); setError('');
+    try {
+      const qs = new URLSearchParams({
+        resource_id: detail.assessment.resource_id,
+        scope_id: detail.assessment.scope_id,
+        start: observationStart,
+        end: observationEnd,
+        baseline_start: baselineStart,
+        baseline_end: baselineEnd,
+        scan_id: detail.scan_id,
+      });
+      const snapshot = await api<AzureCostSnapshot>(`/finops/azure-resource-costs?${qs}`, token);
+      setAzureEvidence(snapshot);
+    } catch (cause) {setError((cause as Error).message);}
+    finally {setBusy(false);}
+  }
+  const currency = azureEvidence?.observation.currency || detail.costs?.currency || 'USD';
   return <div className="drawer-section drawer-costs-panel"><h3>Costs</h3>
     <FinancialFiveStrip detail={detail} token={token} canAdmin={canAdmin} knownOnly/>
-    {detail.assessment.provider === 'azure' && <p><button className="button secondary" disabled={busy} onClick={fetchCost}>{busy ? 'Fetching cost…' : 'Fetch latest cost for this resource'}</button></p>}
+    {detail.assessment.provider === 'azure' && canBill && <div className="outcome-form drawer-cost-fetch">
+      <p className="inline-help">Live Azure Cost Management (billed + amortized) and scan retail meters. End dates are exclusive UTC day boundaries.</p>
+      <label>Observation start<input type="date" value={observationStart} onChange={e => setObservationStart(e.target.value)}/></label>
+      <label>Observation end<input type="date" value={observationEnd} onChange={e => setObservationEnd(e.target.value)}/></label>
+      <label>Baseline start<input type="date" value={baselineStart} onChange={e => setBaselineStart(e.target.value)}/></label>
+      <label>Baseline end<input type="date" value={baselineEnd} onChange={e => setBaselineEnd(e.target.value)}/></label>
+      <div className="drawer-header-actions">
+        <button className="button primary" disabled={busy} onClick={fetchAzureCosts}>{busy ? 'Calling Azure…' : 'Fetch retail + billed from Azure'}</button>
+        <button className="button secondary" disabled={busy} onClick={importCost}>{busy ? 'Importing…' : 'Import observation window to billing'}</button>
+      </div>
+    </div>}
     {error && <Notice tone="error">{error}</Notice>}
-    {supplemental.map(([key, name, currency]) => {
+    {azureEvidence && <dl className="settings-key-values azure-cost-snapshot">
+      <div><dt>Observation billed</dt><dd>{money(azureEvidence.observation.billed_cost_usd, currency)} · {formatDay(azureEvidence.observation.start)} – {formatDay(azureEvidence.observation.end)}</dd></div>
+      <div><dt>Observation effective</dt><dd>{money(azureEvidence.observation.effective_cost_usd, currency)}</dd></div>
+      <div><dt>Azure retail (window)</dt><dd>{money(azureEvidence.retail.window_run_rate_usd, currency)} · monthly {money(azureEvidence.retail.monthly_run_rate_usd, currency)}</dd></div>
+      <div><dt>Billed vs retail</dt><dd>{money(azureEvidence.balance.billed_vs_retail_usd, currency)}</dd></div>
+      {azureEvidence.baseline && <div><dt>Baseline billed</dt><dd>{money(azureEvidence.baseline.billed_cost_usd, currency)} · {formatDay(azureEvidence.baseline.start)} – {formatDay(azureEvidence.baseline.end)}</dd></div>}
+      <div><dt>Booked savings (billing delta)</dt><dd>{azureEvidence.booked_savings_usd == null ? 'Unknown' : money(azureEvidence.booked_savings_usd, currency)}</dd></div>
+      {azureEvidence.finance_reconciled_benefit_usd != null && <div><dt>Finance reconciled benefit</dt><dd>{money(azureEvidence.finance_reconciled_benefit_usd, currency)}</dd></div>}
+    </dl>}
+    {azureEvidence?.warning && <Notice tone="warning">{azureEvidence.warning}</Notice>}
+    {supplemental.map(([key, name, cur]) => {
       const value = detail.costs?.[key];
       if (value == null) return null;
       return (
-        <dl key={key} className="settings-key-values"><div><dt>{name}</dt><dd>{money(value, currency)}</dd></div></dl>
+        <dl key={key} className="settings-key-values"><div><dt>{name}</dt><dd>{money(value, cur)}</dd></div></dl>
       );
     })}
     <p className="inline-help">{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>

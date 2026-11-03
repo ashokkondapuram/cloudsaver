@@ -78,7 +78,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     api.include_router(outcome_router(store,evidence_store,current_tenant))
     from app.data_governance_api import create_router as governance_router
     api.include_router(governance_router(evidence_store,current_tenant))
-    api.include_router(finops_router(FocusRepository(evidence_store),current_tenant))
+    api.include_router(finops_router(FocusRepository(evidence_store), current_tenant, scan_store=store))
     from app.finops_autopilot_api import create_router as finops_autopilot_router
     api.include_router(finops_autopilot_router(settings, store, evidence_store, current_tenant))
     from app.control_plane_api import create_router as control_plane_router

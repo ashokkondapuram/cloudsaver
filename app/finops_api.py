@@ -10,7 +10,7 @@ from app.focus import FocusError, FocusRepository, ImportRequest, money
 from app.schemas import bounded_json
 
 
-def create_router(repository, current_tenant):
+def create_router(repository, current_tenant, *, scan_store=None):
     router=APIRouter(prefix='/api/v1/finops',tags=['Billing evidence'])
 
     def finance(tenant=Depends(current_tenant)):
@@ -94,19 +94,115 @@ def create_router(repository, current_tenant):
             raise HTTPException(error.status if isinstance(error,FocusError) else 422,
                                 str(error) if isinstance(error,FocusError) else 'Budget must be a nonnegative decimal string') from None
 
-    @router.post('/resource-cost')
-    async def resource_cost(resource_id: str = Query(..., min_length=1, max_length=300), scope_id: str = Query(..., min_length=1, max_length=64),
-                            tenant=Depends(finance)):
-        from app.collectors.billing_sync import azure_resource_rows, bindings, _import_snapshot
-        from datetime import timedelta
+    def _azure_resource_binding(tenant, scope_id: str, resource_id: str):
+        from app.collectors.billing_sync import bindings
+
         selected = bindings(tenant)
-        binding = next((b for b in selected if b['provider'] == 'azure' and b['scope_id'] == scope_id), None)
+        binding = next(
+            (b for b in selected if b['provider'] == 'azure' and b['scope_id'] == scope_id),
+            None,
+        )
         if not binding:
             raise HTTPException(403, 'This Azure subscription is not an authorized billing scope')
         if not resource_id.lower().startswith(f'/subscriptions/{scope_id}/'.lower()):
             raise HTTPException(422, 'resource_id must belong to the given subscription scope')
-        end = datetime.now(timezone.utc).date() - timedelta(days=1)
-        start = end - timedelta(days=30)
+        return binding
+
+    @router.get('/azure-resource-costs')
+    async def azure_resource_costs(
+        resource_id: str = Query(..., min_length=1, max_length=300),
+        scope_id: str = Query(..., min_length=1, max_length=64),
+        start: date = Query(..., description='Observation window start (UTC, inclusive)'),
+        end: date = Query(..., description='Observation window end (UTC, exclusive)'),
+        baseline_start: date | None = None,
+        baseline_end: date | None = None,
+        scan_id: UUID | None = None,
+        persist: bool = False,
+        tenant=Depends(finance),
+    ):
+        from app.azure_resource_finops import build_snapshot
+        from app.collectors.billing_sync import azure_resource_rows, _import_snapshot
+
+        _azure_resource_binding(tenant, scope_id, resource_id)
+        if (baseline_start is None) ^ (baseline_end is None):
+            raise HTTPException(422, 'Provide both baseline_start and baseline_end, or neither')
+        findings = None
+        if scan_id is not None and scan_store is not None:
+            scan = scan_store.get(tenant['tenant_id'], str(scan_id))
+            if scan is None:
+                raise HTTPException(404, 'Owned scan not found')
+            normalize = resource_id.lower()
+            findings = [
+                row
+                for row in scan.get('findings') or []
+                if row.get('cloud_provider', 'azure') == 'azure'
+                and row.get('resource_id', '').lower() == normalize
+            ]
+        try:
+            snapshot = await run_in_threadpool(
+                build_snapshot,
+                tenant=tenant,
+                scope_id=scope_id,
+                resource_id=resource_id,
+                observation_start=start,
+                observation_end=end,
+                baseline_start=baseline_start,
+                baseline_end=baseline_end,
+                scan_id=scan_id,
+                scan_store=scan_store,
+                evidence_store=repository.store,
+                findings=findings,
+                fetch_rows=azure_resource_rows,
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        except FocusError as error:
+            raise HTTPException(error.status, str(error)) from None
+        except Exception:
+            raise HTTPException(503, 'Azure resource billing is unavailable right now') from None
+        if persist:
+            binding = _azure_resource_binding(tenant, scope_id, resource_id)
+            currency = snapshot['observation'].get('currency') or 'USD'
+            obs_rows = await run_in_threadpool(
+                azure_resource_rows, scope_id, resource_id, tenant, start, end
+            )
+            imported = await run_in_threadpool(
+                _import_snapshot,
+                repository,
+                tenant,
+                binding,
+                [row for row in obs_rows if row['currency'] == currency],
+                start,
+                end,
+                currency,
+            )
+            snapshot['persisted'] = dict(inserted=imported['inserted'], currency=currency)
+        else:
+            snapshot['persisted'] = None
+        return snapshot
+
+    @router.post('/resource-cost')
+    async def resource_cost(
+        resource_id: str = Query(..., min_length=1, max_length=300),
+        scope_id: str = Query(..., min_length=1, max_length=64),
+        start: date | None = None,
+        end: date | None = None,
+        tenant=Depends(finance),
+    ):
+        from app.collectors.billing_sync import azure_resource_rows, _import_snapshot
+        from datetime import timedelta
+
+        binding = _azure_resource_binding(tenant, scope_id, resource_id)
+        if start is None or end is None:
+            end = datetime.now(timezone.utc).date()
+            start = end - timedelta(days=30)
+        else:
+            try:
+                from app.azure_resource_finops import validate_window
+
+                validate_window(start, end)
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from None
         try:
             rows = await run_in_threadpool(azure_resource_rows, scope_id, resource_id, tenant, start, end)
         except FocusError as error:
@@ -114,8 +210,18 @@ def create_router(repository, current_tenant):
         except Exception:
             raise HTTPException(503, 'Resource cost is unavailable right now') from None
         currencies = sorted({r['currency'] for r in rows})
-        imported = [await run_in_threadpool(_import_snapshot, repository, tenant, binding, rows, start, end, c) for c in currencies]
-        return dict(resource_id=resource_id, rows=len(rows), currencies=currencies, inserted=sum(x['inserted'] for x in imported))
+        imported = [
+            await run_in_threadpool(_import_snapshot, repository, tenant, binding, rows, start, end, c)
+            for c in currencies
+        ]
+        return dict(
+            resource_id=resource_id,
+            rows=len(rows),
+            currencies=currencies,
+            inserted=sum(x['inserted'] for x in imported),
+            window_start=start.isoformat(),
+            window_end=end.isoformat(),
+        )
 
     @router.get('/unit-economics/preview')
     def unit_economics_preview(

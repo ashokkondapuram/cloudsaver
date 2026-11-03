@@ -431,9 +431,32 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         params={k:v for k,v in request.query_params.items() if k in ('start','end','currency','budget')}
         return await forward('GET','scanner','/api/v1/finops/summary',authorization,params)
 
+    @app.get('/api/v1/finops/azure-resource-costs')
+    async def azure_resource_costs(request: Request, row=Depends(allowed), authorization: str = Header()):
+        params = {
+            k: v
+            for k, v in request.query_params.items()
+            if k
+            in (
+                'resource_id',
+                'scope_id',
+                'start',
+                'end',
+                'baseline_start',
+                'baseline_end',
+                'scan_id',
+                'persist',
+            )
+        }
+        return await forward('GET', 'scanner', '/api/v1/finops/azure-resource-costs', authorization, params)
+
     @app.post('/api/v1/finops/resource-cost')
     async def resource_cost(request: Request, row=Depends(allowed), authorization: str = Header()):
-        params = {k: v for k, v in request.query_params.items() if k in ('resource_id', 'scope_id')}
+        params = {
+            k: v
+            for k, v in request.query_params.items()
+            if k in ('resource_id', 'scope_id', 'start', 'end')
+        }
         return await forward('POST', 'scanner', '/api/v1/finops/resource-cost', authorization, params)
 
     @app.get('/api/v1/control-plane/plans')
