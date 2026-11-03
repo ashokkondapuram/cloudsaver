@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "3848ba9d652fe6521550c238d46a784c7fb9d52a2680bcd3a34b480b61bf8d3a",
+  "inventory_sha256": "30cd664cd90ea3803bba7f5fff1fa293474867f638856a1ad33da4938286e139",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -91,8 +91,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "b7f5569c4dabc0bb6494d1efd5a3754ec6f3a752f4fb9cc40f2397098e9eeb9c",
-      "bytes": 34536
+      "sha256": "6c2d241a0f0db9a1b4e817f042adab03983d56b9801c6e37d911a1595637975d",
+      "bytes": 34594
     },
     {
       "path": "ROADMAP.md",
@@ -1398,6 +1398,11 @@
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
       "sha256": "830d779cdddbbec95d42be8ff619c76f66c4991ea9a23ab9e15a60ed06ca4817",
       "bytes": 15469
+    },
+    {
+      "path": "docs/ENTERPRISE_UI_PROGRAM.md",
+      "sha256": "5561cb90d2348e38daf0523273e8789f30c4b105fe8218a328b75c198cfeb63c",
+      "bytes": 3427
     },
     {
       "path": "docs/ENVIRONMENT.md",
@@ -4106,8 +4111,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "f0d560bf910e15167f6525c4a02504e62b95289c58ee146ccc021db7a201275f",
-      "bytes": 21284
+      "sha256": "7d5176b1cc181cbb8b362046ce83d39cfe48cfb8f89f155b64663e3fe8caa7f0",
+      "bytes": 21976
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
@@ -4116,8 +4121,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "fe94514877c0fd1eea302975267ed1b78d9259ca5fa234c5dc68a4d15bb09498",
-      "bytes": 3591
+      "sha256": "83df11ee5872be7d48fa991cba0ed821ee67c7b5b3e1d6dd890e3c35c6102c55",
+      "bytes": 3693
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4211,8 +4216,8 @@
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-governance-engineering.spec.ts",
-      "sha256": "4be677dad7870622628f9c4bd74f9b979167d52309b7b2afec1f1d9fb94146fe",
-      "bytes": 12429
+      "sha256": "43e08677ba76358b52304f6c07384d96bf6ad2e1b5ff477401561fde6183c9ba",
+      "bytes": 13084
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-governance-theme.spec.ts",

@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–23 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–24 of the UI/UX program. Phase history and invariants: [`docs/ENTERPRISE_UI_PROGRAM.md`](../../docs/ENTERPRISE_UI_PROGRAM.md).
 
 ## Run locally
 

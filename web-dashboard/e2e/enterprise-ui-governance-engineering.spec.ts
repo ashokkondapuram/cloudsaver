@@ -21,6 +21,18 @@ test.describe('Engineering ↔ governance cross-links', () => {
     await expect(page.getByRole('link', {name: /Control-Plane Plans/i})).toBeVisible();
   });
 
+  test('engineering plan in execution tracking surfaces outbox coordination copy', async ({page}) => {
+    await mockWorkspace(page);
+    await mockEngineeringRoutes(page, {planState: 'queued'});
+    await navigate(page, 'Workload assessments');
+    await openEngineeringWorkload(page);
+    await expect(page.locator('.plan-outbox-status')).toContainText(/engineering worker outbox pending and published counts/i);
+    await expect(page.locator('.plan-outbox-status').getByRole('link', {name: /linked control-plane plan/i})).toHaveAttribute(
+      'href',
+      `/governance?tab=control-plane&plan=${encodeURIComponent(engineeringPlanId)}`,
+    );
+  });
+
   test('engineering plan links to governance with plan query', async ({page}) => {
     await mockWorkspace(page);
     await mockEngineeringRoutes(page, {readinessDecision: 'ready_with_gaps', objective: 'Resize archive VM disks'});

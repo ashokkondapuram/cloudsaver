@@ -20,6 +20,8 @@ type Event={id:string;kind:string;created_at:string};
 type Capabilities={stage:string;scopes:{scope_id:string}[];actions:{id:string;mode:string}[];acceptance_required:string[]};
 type Resource={resource_key:string;resource_name:string;resource_type:string;scope_id:string};
 
+const ENGINEERING_EXECUTION_STATES=['queued','running','verification_pending','verified','failed','reconciliation_required'] as const;
+
 function useRead<T>(path:string|null,token:string,revision=0){
   const [value,setValue]=useState<T|null>(null),[error,setError]=useState('');
   useEffect(()=>{const controller=new AbortController();setValue(null);setError('');
@@ -88,6 +90,14 @@ function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan
       </Link>. Execution remains disabled (
       {v.execution_enabled ? 'enabled' : 'disabled'}).
     </p>
+    {ENGINEERING_EXECUTION_STATES.includes(v.state as (typeof ENGINEERING_EXECUTION_STATES)[number]) && (
+      <p className={`${css.muted} plan-outbox-status`}>
+        Execution tracking on the{' '}
+        <Link href={`/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`}>linked control-plane plan</Link>{' '}
+        includes read-only engineering worker outbox pending and published counts. Saving engineering records refreshes those
+        aggregates in governance; this dashboard does not dispatch outbox messages.
+      </p>
+    )}
     {v.context_changed&&<Notice>The workload changed after this review. Create a new version to assess the current declarations.</Notice>}
     <p className={css.muted}>Assessed {dateTime(r.evaluated_at)}. Saved results describe that evidence window. Reassess with a recent observation before planning a change.</p>
     <details className={css.details}><summary>Evidence checks ({r.checks.length})</summary><ul className={css.checks}>{r.checks.map(check=><li key={check.code}><span className={css.status}>{sentence(check.status)}</span><div><strong>{sentence(check.code)}</strong><p>{check.reason}</p>{check.coverage_ratio!==undefined&&<p>Sample coverage: {(check.coverage_ratio*100).toFixed(1)}%{check.p95!=null?` · p95: ${check.p95}%`:''}</p>}</div></li>)}</ul></details>
