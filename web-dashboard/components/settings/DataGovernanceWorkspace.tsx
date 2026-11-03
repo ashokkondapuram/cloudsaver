@@ -42,6 +42,19 @@ export function DataGovernanceWorkspace(){
     {error&&<Notice tone="error">{error}</Notice>}
     {!view?!error&&<Loading label="Loading data governance…"/>:<>
       <Notice tone={view.policy.status==='enforced'?'info':'warning'}>{view.policy.status==='enforced'?`Data-use policy enforced for ${view.policy.environment_id}.`:'AI processing is blocked until the owning environment and reviewed processors are registered.'} Workspace consent and task approval cannot override the data-use policy.</Notice>
+      <div className="data-governance-metrics" aria-label="Data-use decision summary">
+        {[
+          ['Allowed requests', view.counts.allowed || 0],
+          ['Blocked requests', view.counts.blocked || 0],
+          ['Content erasures', view.counts.erased || 0],
+          ['Active legal holds', view.active_holds.length],
+        ].map(([label, value]) => (
+          <article key={label} className="metric-card">
+            <span className="metric-label">{label}</span>
+            <strong>{value}</strong>
+          </article>
+        ))}
+      </div>
       <section className="panel" style={{padding:24,margin:'20px 0'}}><h2><ShieldCheck size={20}/> Data-use boundaries</h2><dl className="settings-key-values" style={{padding:0}}>{[
         ['Permitted model data','Allowlisted operational facts and filtered instructions'],['Inventory, tags and credentials','Excluded from model context'],
         ['Training and cross-tenant reuse','Prohibited'],['Generic HTTP action transfers','Prohibited'],

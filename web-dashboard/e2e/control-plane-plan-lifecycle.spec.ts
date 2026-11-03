@@ -76,7 +76,6 @@ test('human approver advances plan lifecycle and records bound approval', async 
   });
   await page.route(`**/api/v1/control-plane/plan-versions/${versionId}/approvals`, route => {
     approvals.push(route.request().postDataJSON());
-    state = 'approved';
     return route.fulfill({status: 201, json: {id: 'approval-fixture'}});
   });
   await navigate(page, 'Risk & compliance');
@@ -84,8 +83,14 @@ test('human approver advances plan lifecycle and records bound approval', async 
   await page.getByRole('button', {name: 'Advance to review requested'}).click();
   await page.getByRole('checkbox', {name: /I reviewed the exact targets/i}).check();
   await page.getByRole('button', {name: 'Record human approval'}).click();
-  expect(transitions).toEqual([{from_state: 'assessed', to_state: 'review_requested'}]);
+  await expect(page.getByText(/plan version is approved/i)).toBeVisible();
+  expect(transitions).toEqual([
+    {from_state: 'assessed', to_state: 'review_requested'},
+    {from_state: 'review_requested', to_state: 'approved'},
+  ]);
   expect(approvals[0]).toMatchObject({identity_digest: digest});
+  await expect(page.locator('.plan-step.completed')).toHaveCount(4);
+  await expect(page.locator('.plan-step.current')).toContainText('approved');
 });
 
 test('foundry connection probe renders ordered metadata stages', async ({page}) => {

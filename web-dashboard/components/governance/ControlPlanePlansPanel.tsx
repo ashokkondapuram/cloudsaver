@@ -12,6 +12,7 @@ const NEXT_STATE: Partial<Record<(typeof STEPS)[number], (typeof STEPS)[number]>
   draft: 'evidence_required',
   evidence_required: 'assessed',
   assessed: 'review_requested',
+  review_requested: 'approved',
 };
 
 function stepIndex(state: string) {
@@ -118,7 +119,11 @@ export function ControlPlanePlansPanel() {
         method: 'POST',
         body: {identity_digest: version.identity_digest, expires_at: expires},
       });
-      setNotice('Human approval recorded for this identity digest. Execution remains disabled until separate verification.');
+      await api(`/control-plane/plan-versions/${version.id}/transitions`, token, {
+        method: 'POST',
+        body: {from_state: version.state, to_state: 'approved'},
+      });
+      setNotice('Human approval recorded and plan version advanced to approved. Execution remains disabled until separate verification.');
       setApprovalAck(prev => ({...prev, [version.id]: false}));
       setRevision(r => r + 1);
     } catch (cause) {
@@ -215,13 +220,19 @@ export function ControlPlanePlansPanel() {
                         <button
                           type="button"
                           className="button secondary small"
-                          disabled={busy}
+                          disabled={busy || (latest.state === 'review_requested' && humanApprover)}
                           onClick={() => transition(latest, NEXT_STATE[latest.state as (typeof STEPS)[number]]!)}
                         >
                           Advance to {NEXT_STATE[latest.state as (typeof STEPS)[number]]!.replaceAll('_', ' ')}
                         </button>
                       )}
                     </div>
+                    {latest.state === 'approved' && (
+                      <Notice tone="success">
+                        This plan version is approved with a bound human attestation. Queueing and execution still require
+                        separate control-plane checks.
+                      </Notice>
+                    )}
                     {latest.state === 'review_requested' && humanApprover && (
                       <div className="plan-approval-box">
                         <Notice tone="warning">

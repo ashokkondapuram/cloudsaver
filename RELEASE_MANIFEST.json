@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "72d4b4830c2c6056cc4389a66ce9e66cc3b76a587d56ab6748b448f08b2bb778",
+  "inventory_sha256": "8ff530e1fc6676186c7d0bc3dff661fc70c14e7f6ae79dc096d024a5d65b1d48",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "5d9d89ce57d48a8071a6afa00f0683e6e1d41702c9160436fbff750dda888d67",
-      "bytes": 30433
+      "sha256": "535d7869b37818840467852003af9c906d866b09ac8c36f3833baae7c0445a1a",
+      "bytes": 31771
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "47b6b82b7165fdfe88dc09ca80306fcaf14e15c7894a9a8a5c7751d9be534408",
-      "bytes": 10502
+      "sha256": "a2ab8e165b87380e2398c08835d567398772e509da5addbdb86ff16e84a43359",
+      "bytes": 11120
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4061,8 +4061,8 @@
     },
     {
       "path": "web-dashboard/components/settings/DataGovernanceWorkspace.tsx",
-      "sha256": "c535370ce610a1f0c74ac153917e9c8de600baab13f92788cd977d2366ef7ab8",
-      "bytes": 11815
+      "sha256": "0d7d5e8b119706a5c1ffa2f49d95bd82ff41da6f6feb3b24127fc26e54b8b963",
+      "bytes": 12379
     },
     {
       "path": "web-dashboard/components/settings/ObservabilitySettings.tsx",
@@ -4143,6 +4143,11 @@
       "path": "web-dashboard/e2e/control-plane-human-approval.spec.ts",
       "sha256": "f589faf757ac20d77a94d4eb415b23fdd2a5afae31e9789c536fa729b13881c7",
       "bytes": 3167
+    },
+    {
+      "path": "web-dashboard/e2e/control-plane-plan-lifecycle.spec.ts",
+      "sha256": "8a4720b1388f9af59b9fe85a39b6ed6d9d6bc8aa5309e5121b98e99de44d7e09",
+      "bytes": 6319
     },
     {
       "path": "web-dashboard/e2e/control-plane-safety-firewall.spec.ts",
@@ -4366,8 +4371,8 @@
     },
     {
       "path": "web-dashboard/next-env.d.ts",
-      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
-      "bytes": 288
+      "sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc",
+      "bytes": 296
     },
     {
       "path": "web-dashboard/next.config.ts",

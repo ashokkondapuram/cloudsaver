@@ -174,6 +174,7 @@ html[data-theme=dark] .hcl-diff-container{background:var(--slate-100)}
 html[data-theme=dark] .hcl-diff-header{background:var(--surface)}
 html[data-theme=dark] .plan-step{background:var(--slate-100);color:var(--muted)}
 html[data-theme=dark] .plan-step.current{background:var(--indigo-50);color:var(--indigo-600)}
+html[data-theme=dark] .plan-step.completed{background:var(--emerald-50);color:var(--emerald-700)}
 html[data-theme=dark] .drift-abort-banner{background:var(--rose-50);color:var(--rose-700)}
 html[data-theme=dark] .state-badge.expiry-90,html[data-theme=dark] .state-badge.expiry-60,html[data-theme=dark] .state-badge.expiry-30{background:var(--amber-50);color:var(--amber-700)}
 html[data-theme=dark] .session-role{border-color:var(--border);color:var(--muted)}
@@ -191,6 +192,11 @@ html[data-theme=dark] .finding-review[open]>summary{background:var(--slate-100)}
 html[data-theme=dark] .config-snapshot{background:var(--slate-100);color:var(--slate-700)}
 html[data-theme=dark] .safety-firewall-grid .state-badge.legacy{background:var(--slate-100);color:var(--muted)}
 
+.data-governance-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.data-governance-metrics .metric-card{padding:16px 18px;border:1px solid var(--border);border-radius:10px;background:var(--surface);min-width:0}
+.data-governance-metrics .metric-label{font-size:11px;font-weight:550;color:var(--muted);line-height:1.35}
+.data-governance-metrics strong{display:block;font-size:26px;font-variant-numeric:tabular-nums;margin-top:8px;color:var(--text)}
+@media(max-width:900px){.data-governance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .plan-approval-box{margin:16px 0;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--slate-50);display:flex;flex-direction:column;gap:12px}
 .foundry-probe-stages{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
 .foundry-probe-stage{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
@@ -204,6 +210,11 @@ html[data-theme=dark] .plan-approval-box{background:var(--slate-100)}
 html[data-theme=dark] .foundry-probe-stage{background:var(--surface)}
 html[data-theme=dark] .foundry-probe-stage .probe-index{background:var(--slate-100)}
 
+html[data-theme=dark] .gov-risk,html[data-theme=dark] .gov-exception{background:var(--surface)}
+html[data-theme=dark] .gov-result{background:var(--slate-100);color:var(--slate-700)}
+html[data-theme=dark] .enterprise-filters input,html[data-theme=dark] .enterprise-filters select{background:var(--surface);color:var(--slate-700);border-color:var(--border)}
+html[data-theme=dark] .data-governance-metrics .metric-card{background:var(--surface);border-color:var(--border)}
+
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
 .financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}
 .financial-five-strip article{padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface);min-width:0}
@@ -216,6 +227,7 @@ html[data-theme=dark] .foundry-probe-stage .probe-index{background:var(--slate-1
 .plan-stepper{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
 .plan-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:550;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--slate-50);color:var(--muted);white-space:nowrap}
 .plan-step.current{border-color:var(--indigo-600);background:var(--indigo-50);color:var(--indigo-600)}
+.plan-step.completed{border-color:color-mix(in srgb,var(--emerald-700) 40%,var(--border));background:color-mix(in srgb,var(--emerald-50) 55%,var(--surface));color:var(--emerald-700)}
 .drift-abort-banner{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border:1px solid var(--rose-700);border-radius:9px;background:var(--rose-50);color:var(--rose-700);font-size:13px;line-height:1.6}
 .panel-bleed{margin-inline:0!important}
 @media(max-width:1100px){.financial-five-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
