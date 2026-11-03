@@ -25,6 +25,7 @@ def test_cloud_status_includes_subscriptions(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_CLOUD_IDENTITY', 'developer')
     monkeypatch.setenv('CLOUDSAVER_BILLING_CONNECTORS', '[]')
     tenant = dict(tenant_id=TID, subscription_ids=[SUB], identity={})
-    summary = cloud_status(tenant, {})
+    summary = cloud_status(tenant, {}, schema_capabilities={'typed_resource_tables': True})
+    assert summary['schema_capabilities']['typed_resource_tables'] is True
     assert summary['subscription_ids'] == [SUB]
     assert 'access' in summary and 'billing' in summary

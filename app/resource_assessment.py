@@ -194,6 +194,7 @@ def decision_state(assessment, decision, *, now=None):
 
 
 FILTERS = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status')
+ARM_DETAIL_VALUES = frozenset({'collected', 'unsupported_type', 'resource_budget_exceeded', 'api_version_unresolved', 'fetch_failed'})
 
 
 def matches(item, filters):

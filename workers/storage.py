@@ -26,6 +26,8 @@ class JobRepository:
                                    ('public.' + table,)).fetchone()
                 if not flags or not all(flags):
                     raise ValueError('Apply worker migrations with forced RLS before starting workers')
+            from app.schema_capabilities import require_platform_outbox_lease_columns
+            require_platform_outbox_lease_columns(db)
 
     @contextmanager
     def transaction(self, tenant_id):

@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "e185af5edd24d94f36dd7d0b2b1ed196558f2c230f8920cf3f7b3421d0b22091",
+  "inventory_sha256": "10eb56ff7bd902f2904791c5d340f81bb258b23c983d371cff184083c53d8acd",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -356,8 +356,8 @@
     },
     {
       "path": "app/cloud_status.py",
-      "sha256": "3bce4c5c476615677e32fb11df3689fb570505655f01b71edd6afde88d9646f1",
-      "bytes": 1772
+      "sha256": "4979ad24249df740de808aa47f5509a4ea58f3f75cb79ab040d61eee079d0e83",
+      "bytes": 1924
     },
     {
       "path": "app/cloudsaver_platform_settings.py",
@@ -1031,13 +1031,13 @@
     },
     {
       "path": "app/resource_api.py",
-      "sha256": "c5a0bc07bd43a24dc8e44cc5a7987500e417d1c4f2b0c385bb3c9cae1af5397d",
-      "bytes": 29505
+      "sha256": "dd9cc8647dbe78106dc4ae31e8de361a9474ba24416715d51114b034a7540ab8",
+      "bytes": 30229
     },
     {
       "path": "app/resource_assessment.py",
-      "sha256": "c72afbc5c3ed8d49877caf66fbc74c8ad27d582dd8f7116369bfea23389ffa7e",
-      "bytes": 18090
+      "sha256": "dd06cacaa77b0b2f0dd22c286c42dada02b7db3dc14f3b33b3c2023f7932892e",
+      "bytes": 18225
     },
     {
       "path": "app/resource_batches.py",
@@ -1073,6 +1073,11 @@
       "path": "app/runtime.py",
       "sha256": "5033737b5d5b2239239514e02da21e3efde54ef2e5d9e794298851416997f9a3",
       "bytes": 9032
+    },
+    {
+      "path": "app/scan_concurrency.py",
+      "sha256": "8ffdfeba04329779057e3bd853bacc1a6c8391c1b3565f1db2a32fecc7fe7ad7",
+      "bytes": 602
     },
     {
       "path": "app/scan_progress.py",
@@ -1141,8 +1146,8 @@
     },
     {
       "path": "app/settings_api.py",
-      "sha256": "131a6acc620fdb8c2959cf7aca93ffbeed47423438650573655ca55724229aa8",
-      "bytes": 18000
+      "sha256": "a6c0076c13b78aae6c060e1d80fcf4cff36eb2c29224b8ecdeaefa5548f8ec51",
+      "bytes": 18217
     },
     {
       "path": "app/store.py",
@@ -3081,8 +3086,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "00bdb2b3fea914780b818a7ac404a2b6a0e7f56c59b8bdf0ad1fec4515e41a13",
-      "bytes": 45016
+      "sha256": "d95ee4ffb867e9560da0a9f60625837f05411e6ef3b86f65c34b3047c3a491b8",
+      "bytes": 45030
     },
     {
       "path": "services/governance_routes.py",
@@ -3266,8 +3271,8 @@
     },
     {
       "path": "tests/test_cloud_status.py",
-      "sha256": "b1919880e43e3cef4e3f42e46da726049106e48320b53fab86222481dd8072cf",
-      "bytes": 1110
+      "sha256": "57c3e70fbec31d386bf801d34a0c6ffddf8cf788961039488588cb5d2e3899e9",
+      "bytes": 1238
     },
     {
       "path": "tests/test_commitments.py",
@@ -3615,6 +3620,11 @@
       "bytes": 4676
     },
     {
+      "path": "tests/test_scan_concurrency.py",
+      "sha256": "ba83b18f9e1f0fd4ff83cb9ba61e371c494b452d5a86cd143b8dbc34d09d8adb",
+      "bytes": 1280
+    },
+    {
       "path": "tests/test_scanner.py",
       "sha256": "1d7e823aa0552fd6d16f47da48302215fa77acd06497ac6984b77bec82c870e5",
       "bytes": 4511
@@ -3761,8 +3771,8 @@
     },
     {
       "path": "web-dashboard/app/api/[...path]/route.ts",
-      "sha256": "302215ac6558c6555d257d0b151f535e9e9de19988b5e8d404193ab01537ab09",
-      "bytes": 6970
+      "sha256": "828350406cb973bd41d666c58556bbbdf06b41c2e40e40788f3fb93b9f9b59dc",
+      "bytes": 7146
     },
     {
       "path": "web-dashboard/app/automation/page.tsx",
@@ -4556,8 +4566,8 @@
     },
     {
       "path": "workers/storage.py",
-      "sha256": "bd5e6f0f1876f9c1839d6ea38bb382ff23d0927999910b21b4cd7f7389276b49",
-      "bytes": 14342
+      "sha256": "ff1f572b0c0a0b9aa679473c19104fb759de75842d90643c4bb8562eadcd39a9",
+      "bytes": 14482
     },
     {
       "path": "workers/tasks.py",

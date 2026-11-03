@@ -277,7 +277,9 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
         store = registry()
         tenant = store.get(workspace['tenant_id']) or workspace
         from app.cloud_status import cloud_status
-        return cloud_status(tenant, store.platform() if store is not None else None)
+        from app.schema_capabilities import postgres_schema_capabilities
+        capabilities = postgres_schema_capabilities(settings.database_url) if settings.database_url else None
+        return cloud_status(tenant, store.platform() if store is not None else None, schema_capabilities=capabilities)
 
     def current_policy(tenant, authorization, *, management=False):
         path = (f'/customer/v1/workspaces/{tenant["tenant_id"]}/analysis-rules' if management else

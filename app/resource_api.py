@@ -121,8 +121,10 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             inventory_by_key[resource_key(pseudo)] = obs
         items = []
         for key, (assessment, _) in merged.items():
+            obs = inventory_by_key.get(key)
+            arm_detail = (obs.get('evidence') or {}).get('arm_detail') if obs else None
             row_item = dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
-                              decision=decision_state(assessment, decisions.get(key)))
+                              decision=decision_state(assessment, decisions.get(key)), arm_detail=arm_detail)
             if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=inventory_by_key.get(key)):
                 continue
             items.append(row_item)
@@ -130,9 +132,12 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         items.sort(key=lambda i: (order[i['review_priority']], -(i['retail_estimate_usd'] or 0), i['resource_name'], i['resource_key']))
         return merged, items
 
-    def filtered(items, filters, search):
+    def filtered(items, filters, search, *, arm_detail=None):
         needle = (search or '').casefold()
-        return [i for i in items if matches(i, filters) and (not needle or needle in (i['resource_name'] + ' ' + i['resource_id']).casefold())]
+        selected = [i for i in items if matches(i, filters) and (not needle or needle in (i['resource_name'] + ' ' + i['resource_id']).casefold())]
+        if arm_detail:
+            selected = [i for i in selected if i.get('arm_detail') == arm_detail]
+        return selected
 
     def one(scan, key):
         pair=assessments(scan).get(key)
@@ -173,6 +178,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 lifecycle_delta='new',
                 ai=ai_state(assessment, None, None),
                 decision=None,
+                arm_detail=(obs.get('evidence') or {}).get('arm_detail'),
             )
             if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
                 continue
@@ -259,7 +265,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         review_priority=Query(None, pattern=r'^(critical|high|evidence_required)$'),
         ai_status=Query(None, pattern=r'^(not_run|queued|running|completed|stale|failed)$'),
         ai_risk=Query(None, pattern=r'^(low|medium|high|critical|none)$'),
-        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'))
+        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'),
+        arm_detail=Query(None, pattern=r'^(collected|unsupported_type|resource_budget_exceeded|api_version_unresolved|fetch_failed)$'))
 
     @router.get('/resources/billable-catalog')
     def billable_catalog_route(tenant=Depends(current_tenant)):
@@ -285,19 +292,20 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                   service_category: str | None = filter_params['service_category'],
                   review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
                   ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
+                  arm_detail: str | None = filter_params['arm_detail'],
                   cost_scope: str = Query('billable', pattern=r'^(billable|all)$'),
                   q: str | None = Query(None, max_length=200), limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0),
                   tenant=Depends(current_tenant)):
         filters = query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)
         scan = owned(scan_id, tenant)
-        if scan['status'] == 'running' and not q and not any(filters.values()):
+        if scan['status'] == 'running' and not q and not any(filters.values()) and not arm_detail:
             if cost_scope == 'all':
                 page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
                 if page is not None:
                     return page
             return inventory_running_page_legacy(scan, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
         _, items = inventory(scan, tenant, cost_scope=cost_scope)
-        selected = filtered(items, filters, q)
+        selected = filtered(items, filters, q, arm_detail=arm_detail)
         return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summary(items),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
                     total=len(selected), items=selected[offset:offset + limit])
 
@@ -306,11 +314,12 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                service_category: str | None = filter_params['service_category'],
                review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
                ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
+               arm_detail: str | None = filter_params['arm_detail'],
                q: str | None = Query(None, max_length=200),
                cost_scope: str = Query('billable', pattern=r'^(billable|all)$'), tenant=Depends(current_tenant)):
         scan = owned(scan_id, tenant)
         _, items = inventory(scan, tenant, cost_scope=cost_scope)
-        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q)
+        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q, arm_detail=arm_detail)
         return dict(filename=f"cloudsaver-resources-{scan['scan_id']}.csv", rows=len(selected), content=csv_report(selected))
 
     @router.get('/scans/{scan_id}/resources/{resource_key}')

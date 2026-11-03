@@ -542,7 +542,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         return await post_json('/api/v1/finops/autopilot/resize', request, authorization)
 
 
-    resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'cost_scope', 'q', 'limit', 'offset')
+    resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'cost_scope', 'arm_detail', 'q', 'limit', 'offset')
     resource_key = Path(pattern=r'^[a-f0-9]{64}$')
 
 

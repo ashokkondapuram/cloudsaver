@@ -37,9 +37,9 @@ def azure_session_hint():
         return {'mode': 'developer', 'developer_sign_in': 'run_az_login'}
 
 
-def cloud_status(tenant, platform=None):
+def cloud_status(tenant, platform=None, *, schema_capabilities=None):
     stored = dict(tenant)
-    return {
+    payload = {
         'workspace_id': tenant.get('tenant_id'),
         'identity_mode': identity_mode(),
         'subscription_ids': list(stored.get('subscription_ids') or []),
@@ -48,3 +48,6 @@ def cloud_status(tenant, platform=None):
         'billing': billing_scope_rows(stored),
         'access': run_probe(stored, platform),
     }
+    if schema_capabilities is not None:
+        payload['schema_capabilities'] = schema_capabilities
+    return payload
