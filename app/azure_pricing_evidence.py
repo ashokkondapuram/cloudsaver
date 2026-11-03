@@ -20,12 +20,54 @@ _PREMIUM_GB_TIERS = (
     (32767, 'P80'),
 )
 
+_STANDARD_SSD_GB_TIERS = (
+    (4, 'E1'),
+    (8, 'E2'),
+    (16, 'E3'),
+    (32, 'E4'),
+    (64, 'E6'),
+    (128, 'E10'),
+    (256, 'E15'),
+    (512, 'E20'),
+    (1024, 'E30'),
+    (2048, 'E40'),
+    (4096, 'E50'),
+    (8192, 'E60'),
+    (16384, 'E70'),
+    (32767, 'E80'),
+)
+
+_STANDARD_HDD_GB_TIERS = (
+    (32, 'S4'),
+    (64, 'S6'),
+    (128, 'S10'),
+    (256, 'S15'),
+    (512, 'S20'),
+    (1024, 'S30'),
+    (2048, 'S40'),
+    (4096, 'S50'),
+    (8192, 'S60'),
+    (16384, 'S70'),
+    (32767, 'S80'),
+)
+
+
+def _normalize_region(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    region = value.strip()
+    if not region:
+        return None
+    if ' ' in region:
+        region = region.replace(' ', '').lower()
+    return region
+
 
 def _region(finding: dict, observation: dict | None) -> str | None:
     for source in (finding, observation or {}):
-        region = source.get('region')
-        if isinstance(region, str) and region.strip():
-            return region.strip()
+        region = _normalize_region(source.get('region'))
+        if region:
+            return region
     return None
 
 
@@ -35,13 +77,25 @@ def _evidence(finding: dict, observation: dict | None) -> dict:
     return merged
 
 
-def _premium_retail_sku(size_gb: int) -> str | None:
+def _tier_retail_sku(size_gb: int, tiers: tuple[tuple[int, str], ...], *, fallback: str) -> str | None:
     if type(size_gb) is not int or size_gb <= 0 or size_gb > 32767:
         return None
-    for limit, tier in _PREMIUM_GB_TIERS:
+    for limit, tier in tiers:
         if size_gb <= limit:
             return f'{tier} LRS'
-    return 'P80 LRS'
+    return fallback
+
+
+def _premium_retail_sku(size_gb: int) -> str | None:
+    return _tier_retail_sku(size_gb, _PREMIUM_GB_TIERS, fallback='P80 LRS')
+
+
+def _standard_ssd_retail_sku(size_gb: int) -> str | None:
+    return _tier_retail_sku(size_gb, _STANDARD_SSD_GB_TIERS, fallback='E80 LRS')
+
+
+def _standard_hdd_retail_sku(size_gb: int) -> str | None:
+    return _tier_retail_sku(size_gb, _STANDARD_HDD_GB_TIERS, fallback='S80 LRS')
 
 
 def _disk_components(client, *, region: str, arm_sku: str, size_gb: int, include_snapshot: bool):
@@ -61,7 +115,7 @@ def _disk_components(client, *, region: str, arm_sku: str, size_gb: int, include
         unit = '1/Month'
         quantity = 1
     elif arm_lower in ('standardssd_lrs', 'standardssd_zrs'):
-        retail_sku = _premium_retail_sku(size_gb)
+        retail_sku = _standard_ssd_retail_sku(size_gb)
         if not retail_sku:
             return None
         product = 'Standard SSD Managed Disks'
@@ -69,11 +123,13 @@ def _disk_components(client, *, region: str, arm_sku: str, size_gb: int, include
         unit = '1/Month'
         quantity = 1
     elif arm_lower in ('standard_lrs', 'standard_zrs'):
+        retail_sku = _standard_hdd_retail_sku(size_gb)
+        if not retail_sku:
+            return None
         product = 'Standard HDD Managed Disks'
-        retail_sku = 'S4 LRS'
-        meter = 'S4 LRS'
-        unit = '1 GB/Month'
-        quantity = size_gb
+        meter = f'{retail_sku} Disk'
+        unit = '1/Month'
+        quantity = 1
     elif arm_lower in ('premiumv2_lrs',):
         product = 'Premium SSD v2 Managed Disks'
         retail_sku = 'Premium LRS Provisioned'
@@ -174,7 +230,7 @@ def build_pricing_evidence(finding: dict, observation: dict | None = None, *, cl
         row = _public_ip_component(client, region=region, sku_name=evidence.get('sku_name'))
         if not row:
             return None
-        return dict(**row, quantity=1, unit_of_measure='1 Hour')
+        return dict(row, quantity=1)
 
     if rule_id in ('AZURE_ASP_EMPTY_PAID_PLAN',) or (
         rule_id == 'AZURE_INVENTORY_RETAIL' and 'microsoft.web/serverfarms' in kind
@@ -182,7 +238,7 @@ def build_pricing_evidence(finding: dict, observation: dict | None = None, *, cl
         row = _asp_component(client, region=region, sku_name=evidence.get('sku_name'))
         if not row:
             return None
-        return dict(**row, quantity=1, unit_of_measure='1 Hour')
+        return dict(row, quantity=1)
 
     return None
 
@@ -190,10 +246,35 @@ def build_pricing_evidence(finding: dict, observation: dict | None = None, *, cl
 def enrich_azure_pricing_evidence(finding: dict, observation: dict | None = None, *, client=None) -> dict:
     if finding.get('pricing_evidence'):
         return finding
-    built = build_pricing_evidence(finding, observation, client=client)
+    merged = dict(finding)
+    if observation:
+        if not merged.get('region') and observation.get('region'):
+            merged['region'] = observation['region']
+        merged['evidence'] = dict(observation.get('evidence') or {}, **(merged.get('evidence') or {}))
+    built = build_pricing_evidence(merged, observation, client=client)
     if not built:
-        return finding
-    return dict(finding, pricing_evidence=built)
+        return merged if merged is not finding else finding
+    return dict(merged, pricing_evidence=built)
+
+
+def resource_retail_run_rate_usd(findings: list[dict], *, client=None) -> float | None:
+    """Monthly retail run-rate for a resource (current meters), not waste deltas."""
+    if not findings:
+        return None
+    first = findings[0]
+    evidence: dict = {}
+    region = None
+    for row in findings:
+        if row.get('region'):
+            region = row['region']
+        evidence.update(row.get('evidence') or {})
+    observation = dict(
+        cloud_provider=first.get('cloud_provider', 'azure'),
+        resource_type=first.get('resource_type', ''),
+        region=region or first.get('region'),
+        evidence=evidence,
+    )
+    return inventory_retail_usd(observation, client=client)
 
 
 def inventory_retail_usd(observation: dict, *, client=None) -> float | None:

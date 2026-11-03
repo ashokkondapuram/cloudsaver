@@ -86,6 +86,52 @@ def test_resource_identity_merges_findings_and_digest_ignores_wall_clock():
     assert protected['disposition'] == 'protected' and protected['protected_reasons']
 
 
+def test_merge_retail_prefers_run_rate_over_finding_waste():
+    import httpx
+    from app.azure_pricing_evidence import enrich_azure_pricing_evidence
+    from app.pricing import AzurePricingClient, attribute_finding_cost
+
+    disk_item = dict(
+        armRegionName='eastus', skuName='P10 LRS', meterName='P10 LRS Disk', productName='Premium SSD Managed Disks',
+        meterId='disk-current', type='Consumption', currencyCode='USD', unitOfMeasure='1/Month',
+        tierMinimumUnits=0, isPrimaryMeterRegion=True, effectiveStartDate='2026-01-01T00:00:00Z', unitPrice=19.71,
+    )
+    snap_item = dict(
+        armRegionName='eastus', skuName='Snapshots LRS', meterName='LRS Snapshots', productName='Storage',
+        meterId='snap-meter', type='Consumption', currencyCode='USD', unitOfMeasure='1 GB/Month',
+        tierMinimumUnits=0, isPrimaryMeterRegion=True, effectiveStartDate='2026-01-01T00:00:00Z', unitPrice=0.05,
+    )
+    filters = {
+        "armRegionName eq 'eastus' and productName eq 'Premium SSD Managed Disks' and skuName eq 'P10 LRS' and meterName eq 'P10 LRS Disk' and priceType eq 'Consumption'": [disk_item],
+        "armRegionName eq 'eastus' and productName eq 'Storage' and skuName eq 'Snapshots LRS' and meterName eq 'LRS Snapshots' and priceType eq 'Consumption'": [snap_item],
+    }
+
+    from tests.test_azure_pricing_evidence import _filter_matches
+
+    def handler(request):
+        key = request.url.params.get('$filter', '')
+        items = filters.get(key)
+        if items is None:
+            for pattern, rows in filters.items():
+                if _filter_matches(key, pattern):
+                    items = rows
+                    break
+        items = items or []
+        return httpx.Response(200, json={'Items': items, 'NextPageLink': None})
+
+    client = AzurePricingClient(transport=httpx.MockTransport(handler))
+    base = azure_disk_finding(SUB)
+    base.update(
+        rule_id='AZURE_DISK_UNATTACHED_RETENTION',
+        region='eastus',
+        evidence=dict(OBSERVED, size_gb=128, sku_name='Premium_LRS'),
+    )
+    priced = attribute_finding_cost(enrich_azure_pricing_evidence(base, client=client), client=client)
+    merged, _ = merge(resource_key(base), [priced], observed_at='2026-10-22T00:00:00+00:00')
+    assert priced['estimated_monthly_waste_usd'] == 13.31
+    assert merged['retail_estimate_usd'] == 19.71
+
+
 def test_resource_advice_schema_rejects_unsafe_or_unsupported_actions():
     a, b, c = scanner(None)
     _, context = merge(resource_key(a), [a, b])

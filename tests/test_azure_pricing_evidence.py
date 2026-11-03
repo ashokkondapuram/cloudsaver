@@ -20,10 +20,20 @@ IP_ITEM = dict(
 )
 
 
+def _filter_matches(key: str, pattern: str) -> bool:
+    return all(part in key for part in pattern.split(' and ') if part.strip())
+
+
 def mock_client(responses):
     def handler(request):
         key = request.url.params.get('$filter', '')
-        items = responses.get(key, [])
+        items = responses.get(key)
+        if items is None:
+            for pattern, rows in responses.items():
+                if _filter_matches(key, pattern):
+                    items = rows
+                    break
+        items = items or []
         return httpx.Response(200, json={'Items': items, 'NextPageLink': None})
 
     return AzurePricingClient(transport=httpx.MockTransport(handler))
@@ -45,7 +55,7 @@ def test_disk_finding_builds_composite_pricing_evidence():
     evidence = build_pricing_evidence(finding, client=client)
     assert evidence and 'components' in evidence
     priced = attribute_finding_cost(dict(finding, pricing_evidence=evidence), client=client)
-    assert priced['estimated_monthly_waste_usd'] == 15.71
+    assert priced['estimated_monthly_waste_usd'] == 13.31
 
 
 def test_public_ip_legacy_pricing_evidence():
@@ -72,3 +82,64 @@ def test_inventory_retail_uses_current_component_only():
         evidence=dict(size_gb=128, sku_name='Premium_LRS'),
     )
     assert inventory_retail_usd(observation, client=client) == 19.71
+
+
+def test_standard_ssd_uses_e_tiers_not_premium():
+    item = dict(
+        DISK_ITEM,
+        skuName='E10 LRS',
+        meterName='E10 LRS Disk',
+        productName='Standard SSD Managed Disks',
+        unitPrice=5.0,
+    )
+    key = "armRegionName eq 'eastus' and productName eq 'Standard SSD Managed Disks' and skuName eq 'E10 LRS' and meterName eq 'E10 LRS Disk' and priceType eq 'Consumption'"
+    client = mock_client({key: [item]})
+    finding = dict(
+        cloud_provider='azure',
+        rule_id='AZURE_INVENTORY_RETAIL',
+        resource_type='microsoft.compute/disks',
+        region='eastus',
+        evidence=dict(size_gb=128, sku_name='StandardSSD_LRS'),
+    )
+    assert inventory_retail_usd(dict(finding, evidence=finding['evidence']), client=client) == 5.0
+
+
+def test_standard_hdd_uses_size_tier_not_flat_s4_gb():
+    item = dict(
+        DISK_ITEM,
+        skuName='S10 LRS',
+        meterName='S10 LRS Disk',
+        productName='Standard HDD Managed Disks',
+        unitPrice=4.8,
+    )
+    key = "armRegionName eq 'eastus' and productName eq 'Standard HDD Managed Disks' and skuName eq 'S10 LRS' and meterName eq 'S10 LRS Disk' and priceType eq 'Consumption'"
+    client = mock_client({key: [item]})
+    observation = dict(
+        cloud_provider='azure',
+        resource_type='microsoft.compute/disks',
+        region='eastus',
+        evidence=dict(size_gb=128, sku_name='Standard_LRS'),
+    )
+    assert inventory_retail_usd(observation, client=client) == 4.8
+
+
+def test_resource_retail_run_rate_differs_from_waste_delta():
+    disk_filters = {
+        "armRegionName eq 'eastus' and productName eq 'Premium SSD Managed Disks' and skuName eq 'P10 LRS' and meterName eq 'P10 LRS Disk' and priceType eq 'Consumption'": [DISK_ITEM],
+        "armRegionName eq 'eastus' and productName eq 'Storage' and skuName eq 'Snapshots LRS' and meterName eq 'LRS Snapshots' and priceType eq 'Consumption'": [SNAP_ITEM],
+    }
+    client = mock_client(disk_filters)
+    finding = dict(
+        cloud_provider='azure',
+        rule_id='AZURE_DISK_UNATTACHED_RETENTION',
+        resource_type='microsoft.compute/disks',
+        resource_id='/subscriptions/x/resourceGroups/r/providers/Microsoft.Compute/disks/d',
+        region='eastus',
+        evidence=dict(size_gb=128, sku_name='Premium_LRS'),
+    )
+    enriched = enrich_azure_pricing_evidence(finding, client=client)
+    priced = attribute_finding_cost(enriched, client=client)
+    assert priced['estimated_monthly_waste_usd'] == 13.31
+    from app.azure_pricing_evidence import resource_retail_run_rate_usd
+
+    assert resource_retail_run_rate_usd([priced], client=client) == 19.71

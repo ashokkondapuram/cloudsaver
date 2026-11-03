@@ -59,7 +59,24 @@ def merge(key, findings, *, observed_at=None, now=None):
         pillars.append(dict(pillar=name, status=status, checks=items))
     guardrails = list(dict.fromkeys(g for r in results for g in r['guardrails']))
     protected = sorted({reason for r in results for reason in r['protected_reasons']})
-    amounts = [Decimal(str(r['retail_estimate_usd'])) for r in results if r['retail_estimate_usd'] is not None]
+    waste_amounts = [Decimal(str(r['retail_estimate_usd'])) for r in results if r['retail_estimate_usd'] is not None]
+    from app.azure_pricing_evidence import resource_retail_run_rate_usd
+
+    run_rate = resource_retail_run_rate_usd(findings)
+    if run_rate is not None:
+        retail_estimate = float(Decimal(str(run_rate)).quantize(Decimal('0.01')))
+    elif waste_amounts:
+        retail_estimate = float(max(waste_amounts).quantize(Decimal('0.01')))
+    else:
+        retail_estimate = None
+
+    def _first_cost(field):
+        for result in results:
+            value = result.get(field)
+            if value is not None:
+                return value
+        return None
+
     risk_codes = sorted({c['code'] for c in merged_checks if c['status'] == 'risk'})
     first = findings[0]
     provider, _ = identity(first)
@@ -77,8 +94,10 @@ def merge(key, findings, *, observed_at=None, now=None):
         evidence_gap_codes=sorted({c['code'] for c in merged_checks if c['status'] == 'unknown'}),
         pillars=pillars, guardrails=guardrails,
         evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
-        retail_estimate_usd=float(max(amounts).quantize(Decimal('0.01'))) if amounts else None,
-        billed_cost_usd=results[0].get('billed_cost_usd'), effective_cost_usd=results[0].get('effective_cost_usd'), commitment_locked=results[0].get('commitment_locked',False), currency=results[0].get('currency'), realizable_savings_usd=None, automatic_execution=False)
+        retail_estimate_usd=retail_estimate,
+        billed_cost_usd=_first_cost('billed_cost_usd'), effective_cost_usd=_first_cost('effective_cost_usd'),
+        commitment_locked=any(r.get('commitment_locked') for r in results), currency=_first_cost('currency'),
+        realizable_savings_usd=None, automatic_execution=False)
     context = dict(
         resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,
         findings=[dict(rule_id=f['rule_id'], facts=ai_context(f, r)['facts']) for f, r in zip(findings, results)],
