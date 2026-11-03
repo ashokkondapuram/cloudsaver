@@ -15,12 +15,14 @@ export type DecisionKind = 'accept' | 'dismiss' | 'defer';
 export type Action = {title: string; rationale: string; kind: string; pillar: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
 export type Decision = {id: string; decision: DecisionKind; note: string; defer_until: string | null; evidence_digest: string; created_at: string; scan_id: string; evidence_changed?: boolean};
 export type AIState = {status: AIStatus; risk_level: string | null; summary: string | null; actions: Action[]; assessment_id: string | null; created_at: string | null; reason: string | null};
+export type ArmDetailStatus = 'collected' | 'unsupported_type' | 'resource_budget_exceeded' | 'api_version_unresolved' | 'fetch_failed';
 export type ResourceRow = {
   resource_key: string; provider: string; resource_id: string; resource_name: string; resource_type: string; resource_group: string; scope_id: string;
   service_category: string; finding_count: number; rule_ids: string[]; review_priority: string; disposition: string; protected_reasons: string[];
   risk_level: string; risk_check_codes: string[]; evidence_gap_codes: string[]; evidence_coverage: {observed: number; total: number};
   billed_cost_usd?:number|null;effective_cost_usd?:number|null;commitment_locked?:boolean;lifecycle_delta?:'new'|'persisting'|'regressed';
   retail_estimate_usd: number | null; evidence_digest: string; pillars: Record<string, PillarStatus>; ai: AIState; decision: Decision | null;
+  arm_detail?: ArmDetailStatus | null;
 };
 export type Summary = {total: number; ai_status: Record<string, number>; ai_risk: Record<string, number>; decision: Record<string, number>; review_priority: Record<string, number>;resolved_count?:number|null;no_longer_observed_count?:number|null};
 export type ResourcePage = {scan_id: string; observed_at: string; summary: Summary;commitment_baseline?:{status:string;clean_steady_state_hr:string|null;recommended_new_commitment_hr:string|null;warning:string}; total: number; items: ResourceRow[]};
@@ -66,6 +68,13 @@ export const label = (value: string) => value.replaceAll('_', ' ').toLowerCase()
 export const sentence = (value: string) => {const text = label(value); return text.charAt(0).toUpperCase() + text.slice(1);};
 export const aiStatusLabels: Record<AIStatus, string> = {not_run: 'Not run', queued: 'Queued', running: 'Running', completed: 'Completed', stale: 'Stale', failed: 'Failed'};
 export const decisionLabels: Record<DecisionKind, string> = {accept: 'Accepted', dismiss: 'Dismissed', defer: 'Deferred'};
+export const armDetailLabels: Record<ArmDetailStatus, string> = {
+  collected: 'ARM detail collected',
+  unsupported_type: 'Unsupported ARM type',
+  resource_budget_exceeded: 'ARM detail budget exceeded',
+  api_version_unresolved: 'ARM API version unresolved',
+  fetch_failed: 'ARM detail fetch failed',
+};
 
 /** Same identity the API uses: provider plus resource ID, with Azure IDs case-insensitive. */
 export function identityOf(provider: string, resourceId: string) {
@@ -79,10 +88,10 @@ export async function resourceKeyOf(finding: Finding) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function useResources(scanId: string | undefined, token: string, enabled = true, syncEpoch = 0, options: {running?: boolean} = {}) {
+export function useResources(scanId: string | undefined, token: string, enabled = true, syncEpoch = 0, options: {running?: boolean; armDetail?: import('./resources').ArmDetailStatus} = {}) {
   const [state, setState] = useState<{key:string;page:ResourcePage|null;error:string}>({key:'',page:null,error:''});
   const [version, setVersion] = useState(0);
-  const key=JSON.stringify([scanId,token,enabled,syncEpoch,options.running,version]);
+  const key=JSON.stringify([scanId,token,enabled,syncEpoch,options.running,options.armDetail,version]);
   const reload = useCallback(() => setVersion(value => value + 1), []);
   useEffect(() => {
     if (!options.running || !scanId || !enabled) return;
@@ -100,7 +109,7 @@ export function useResources(scanId: string | undefined, token: string, enabled 
       (path,opts)=>api(path,token,opts),
       scanId,
       request.signal,
-      {partial: options.running, costScope: options.running ? 'all' : 'billable', pageSize: RUNNING_RESOURCE_PAGE_SIZE},
+      {partial: options.running, costScope: options.running ? 'all' : 'billable', pageSize: RUNNING_RESOURCE_PAGE_SIZE, armDetail: options.armDetail},
     )
       .then(page=>{if(!request.signal.aborted)setState({key:loadingKey,page,error:''});})
       .catch(cause=>{if(!request.signal.aborted)setState(previous=>({key:loadingKey,page:options.running?previous.page:null,error:cause instanceof Error?cause.message:'Resource evidence could not be loaded.'}));});

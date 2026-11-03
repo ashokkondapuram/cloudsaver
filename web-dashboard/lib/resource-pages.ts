@@ -1,4 +1,6 @@
-import type {ResourcePage, ResourceRow, Batch} from './resources';
+import type {ArmDetailStatus, ResourcePage, ResourceRow, Batch} from './resources';
+
+const ARM_DETAIL_VALUES: ArmDetailStatus[] = ['collected', 'unsupported_type', 'resource_budget_exceeded', 'api_version_unresolved', 'fetch_failed'];
 
 export const RESOURCE_PAGE_SIZE = 1000;
 export const RUNNING_RESOURCE_PAGE_SIZE = 100;
@@ -21,6 +23,7 @@ function validRow(value: unknown): value is ResourceRow {
   if (!object(ai) || !['not_run','queued','running','completed','stale','failed'].includes(String(ai.status)) || !nullableString(ai.risk_level) || !nullableString(ai.summary) || !Array.isArray(ai.actions)) return false;
   if (decision !== null && (!object(decision) || !['accept','dismiss','defer','none'].includes(String(decision.decision)) || typeof decision.created_at !== 'string')) return false;
   if(value.retail_estimate_usd===undefined||!/^[a-f0-9]{64}$/.test(String(value.evidence_digest)))return false;
+  if (value.arm_detail != null && value.arm_detail !== undefined && !ARM_DETAIL_VALUES.includes(value.arm_detail as ArmDetailStatus)) return false;
   return ['billed_cost_usd','effective_cost_usd','retail_estimate_usd'].every(key => finiteMoney(value[key]));
 }
 
@@ -29,15 +32,16 @@ export async function loadResourcePages(
   request: (path: string, options: {signal?: AbortSignal}) => Promise<unknown>,
   scanId: string,
   signal?: AbortSignal,
-  options: {partial?: boolean; costScope?: 'billable' | 'all'; pageSize?: number} = {},
+  options: {partial?: boolean; costScope?: 'billable' | 'all'; pageSize?: number; armDetail?: ArmDetailStatus} = {},
 ): Promise<ResourcePage> {
   const costQuery = options.costScope === 'all' ? '&cost_scope=all' : '';
+  const armQuery = options.armDetail ? `&arm_detail=${encodeURIComponent(options.armDetail)}` : '';
   const pageSize = options.partial ? (options.pageSize ?? RUNNING_RESOURCE_PAGE_SIZE) : RESOURCE_PAGE_SIZE;
   let first: ResourcePage | null = null;
   const items: ResourceRow[] = [], seen = new Set<string>();
   for (let offset=0; offset<MAX_RESOURCE_ROWS;) {
     signal?.throwIfAborted();
-    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${offset}${costQuery}`, {signal});
+    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${offset}${costQuery}${armQuery}`, {signal});
     signal?.throwIfAborted();
     if(object(raw)&&Number.isSafeInteger(raw.total)&&Number(raw.total)>MAX_RESOURCE_ROWS)throw new Error('Resource evidence is incomplete: the explorer supports up to 10,000 resources per scan. Select smaller scan scopes before reviewing this estate.');
     if (!object(raw) || raw.scan_id!==scanId || typeof raw.observed_at!=='string' || !Number.isSafeInteger(raw.total) || Number(raw.total)<0 || Number(raw.total)>MAX_RESOURCE_ROWS || !Array.isArray(raw.items) || raw.items.length>pageSize || !raw.items.every(validRow)) throw invalid();

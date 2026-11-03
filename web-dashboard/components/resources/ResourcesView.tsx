@@ -9,7 +9,7 @@ import {resourceCsv} from '../../lib/resource-csv';
 import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
-import {ACTIVE_BATCH, aiStatusLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
+import {ACTIVE_BATCH, aiStatusLabels, armDetailLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type ArmDetailStatus, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, ProviderBadge} from '../ui/shared';
@@ -17,8 +17,8 @@ import {AIRisk, AIStatusBadge, DecisionBadge, PillarDots} from './ResourceParts'
 import {ResourceDrawer} from './ResourceDrawer';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 
-type Filters = {service_category:string;pillar_status:string;provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string};
-const empty: Filters = {service_category:'',pillar_status:'',provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: ''};
+type Filters = {service_category:string;pillar_status:string;provider: string; review_priority: string; ai_status: string; ai_risk: string; decision: string; arm_detail: string};
+const empty: Filters = {service_category:'',pillar_status:'',provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: '', arm_detail: ''};
 const GRID_PAGE_SIZE=50;
 const priorityRank: Record<string, number> = {critical: 0, high: 1, evidence_required: 2};
 
@@ -27,6 +27,7 @@ function matches(row: ResourceRow, filters: Filters, query: string) {
   return (!filters.service_category||row.service_category===filters.service_category)&&(!filters.pillar_status||Object.values(row.pillars).includes(filters.pillar_status as 'observed'|'risk'|'unknown'))&&(!filters.provider || row.provider === filters.provider) && (!filters.review_priority || row.review_priority === filters.review_priority)
     && (!filters.ai_status || row.ai.status === filters.ai_status) && (!filters.ai_risk || (row.ai.risk_level || 'none') === filters.ai_risk)
     && (!filters.decision || (row.decision?.decision || 'none') === filters.decision)
+    && (!filters.arm_detail || row.arm_detail === filters.arm_detail)
     && (!needle || `${row.resource_name} ${row.resource_id}`.toLowerCase().includes(needle));
 }
 
@@ -104,9 +105,10 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const router = useRouter(), params = useSearchParams();
   const live = isLiveSnapshot(scan);
   const inProgress = scan?.status === 'running';
-  const {page, error, reload} = useResources(scan?.scan_id, token, live, liveScanEpoch, {running: inProgress});
-  const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
   const [filters, setFilters] = useState<Filters>(empty), [query, setQuery] = useState(''), [selected, setSelected] = useState<Set<string>>(new Set());
+  const serverArmDetail = filters.arm_detail as ArmDetailStatus | '';
+  const {page, error, reload} = useResources(scan?.scan_id, token, live, liveScanEpoch, {running: inProgress, armDetail: serverArmDetail || undefined});
+  const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
   const [category, setCategory] = useState<Category | ''>(initialCategory), [intent, setIntent] = useState<Intent>(initialIntent), [pricing, setPricing] = useState<Pricing>(initialPricing);
   const [offset,setOffset]=useState(0);
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
@@ -190,7 +192,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
         <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{page.items.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
         <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={() => setCategory('')}>All categories</button>{categories.filter(([id]) => (categoryCounts[id] || 0) > 0).map(([id, name]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(category === id ? '' : id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
       </div>
-      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing} onClick={() => {setIntent(''); setPricing('');}}>All evidence</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
+      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing && !filters.arm_detail} onClick={() => {setIntent(''); setPricing(''); setFilters(f => ({...f, arm_detail: ''}));}}>All evidence</button><button aria-pressed={filters.arm_detail === 'collected'} onClick={() => setFilters(f => ({...f, arm_detail: f.arm_detail === 'collected' ? '' : 'collected', pillar_status: '', ai_status: '', ai_risk: '', decision: ''}))}>ARM detail collected</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
       {!!discoveryChips.length && <div className="active-filters"><Filter size={13}/>{discoveryChips.map(chip => <button key={chip.label} onClick={chip.clear}>{chip.label}<X size={12}/></button>)}<button className="clear-filters" onClick={resetDiscovery}>Clear all</button></div>}
       <div className="grid-filters">
         <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search resource names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
@@ -201,6 +203,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
         {select('ai_status', [['', 'All AI statuses'], ...Object.entries(aiStatusLabels)], 'AI status')}
         {select('ai_risk', [['', 'All AI risks'], ['critical', 'Critical'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['unknown', 'Unknown'], ['none', 'Not assessed']], 'AI risk')}
         {select('decision', [['', 'All decisions'], ...Object.entries(decisionLabels), ['none', 'No decision']], 'Decision')}
+        {select('arm_detail', [['', 'All ARM detail statuses'], ...Object.entries(armDetailLabels)], 'ARM configuration detail')}
       </div>
       <div className="grid-scroll" tabIndex={0} aria-label="Scrollable resource table">
         <table className="data-table resource-table">
