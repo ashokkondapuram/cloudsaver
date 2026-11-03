@@ -10,7 +10,9 @@ export type Plan = {summary: string; steps: Step[]};
 export type Outcome = {status: 'succeeded' | 'failed' | 'uncertain'; code: string; http_status?: number; evidence_digest?: string};
 export type Task = {id: string; tenant_id: string; provider: string; scope_id: string; resource_id: string; state: string;
   payload: {plan: Plan; plan_hash: string; connector_ids: string[];
-    approval: {plan_hash: string; expires_at: string} | null}};
+    approval: {plan_hash: string; expires_at: string} | null;
+    permit_status?: string;
+    expected_state?: Record<string, unknown> | null}};
 export type Assignment = {task: Task; phase: 'draft' | 'execute'; lease_token: string; code: string | null; connectors: Connector[]};
 
 export function loadConnectors(raw: string): Connector[] {
@@ -116,7 +118,7 @@ export function checkAssignment(a: Assignment, local: Connector[]): void {
   if (!Array.isArray(t.payload.plan?.steps) || t.payload.plan.steps.length < 1 || t.payload.plan.steps.length > 8 || a.code !== renderCode(t.payload.plan)) {
     throw new Error('The runCode artifact does not match the reviewed connector program');
   }
-  let writes=0,syncs=0;let metadata:Record<string,unknown>|undefined;const inspected=new Set<string>();
+  let writes=0,syncs=0;let metadata:Record<string,unknown>|undefined;let resizeTarget:string|undefined;const inspected=new Set<string>();
   for (const step of t.payload.plan.steps) {
     const remote = a.connectors.find(c => c.id === step.connector_id);
     const own = local.find(c => c.id === step.connector_id);
@@ -126,11 +128,19 @@ export function checkAssignment(a: Assignment, local: Connector[]): void {
     }
     validateStepData(step,own);
     if(step.operation==='gitops.terraform.sync'){
-      if(++syncs>1||writes!==1||!metadata||step!==t.payload.plan.steps.at(-1)||canonical(step.arguments.attributes)!==canonical(metadata))throw new Error('Repository review must exactly match the prior inspected metadata write');
+      if(++syncs>1||writes!==1||step!==t.payload.plan.steps.at(-1))throw new Error('Repository review must exactly match the prior cloud write');
+      const mode=step.arguments.patch_mode;
+      if(mode==='tags_sync'){
+        if(!metadata||canonical(step.arguments.attributes)!==canonical(metadata))throw new Error('Repository review must exactly match the prior inspected metadata write');
+      }else if(mode==='rightsize_sku'){
+        const attrs=step.arguments.attributes as Record<string,unknown>;
+        if(!resizeTarget||attrs.target_size!==resizeTarget)throw new Error('Repository review must exactly match the prior approved resize');
+      }else throw new Error('Unsupported GitOps patch mode');
     }else if(readOperations.has(step.operation))inspected.add(own.id);
     else {
       if(!inspected.has(own.id)||++writes>1)throw new Error('Each single write requires prior inspection');
       if(['tags.merge','labels.merge','annotations.merge'].includes(step.operation))metadata=step.arguments;
+      if(step.operation==='compute.resize')resizeTarget=String(step.arguments.target_size);
     }
   }
 }

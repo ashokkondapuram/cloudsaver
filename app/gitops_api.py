@@ -78,11 +78,12 @@ def create_router(settings,store,current_tenant,*,config=None,client=None):
         try:
             if not isinstance(raw,dict) or set(raw)!={'task_id','plan_hash'}:raise ValueError()
             task_id=str(UUID(raw['task_id']))
-            task=AgentRepository(EnterpriseStore(settings)).get(tenant,task_id)
+            enterprise=EnterpriseStore(settings)
+            task=AgentRepository(enterprise).get(tenant,task_id)
             if not task:raise HTTPException(404,'Owned agent task not found')
             if raw['plan_hash']!=task['payload'].get('plan_hash'):raise HTTPException(409,'Task plan changed')
             scan=store.get(tenant['tenant_id'],task['scan_id'])
-            return build_synchronized_agent_gitops_bundle(task,tenant,scan,config,connectors())
+            return build_synchronized_agent_gitops_bundle(task,tenant,scan,config,connectors(),store=enterprise)
         except (ValueError,KeyError,TypeError):
             raise HTTPException(422,'An owned drafted task, exact plan hash and configured paired connector are required') from None
 

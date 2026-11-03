@@ -8,7 +8,10 @@ export function assertPermitNotDriftAborted(task: Task): void {
 }
 
 export function assertExpectedStatePresent(task: Task, writeStep: boolean): void {
-  if (writeStep && !task.payload?.expected_state) {
+  if (!writeStep) return;
+  const taskExpected = task.payload?.expected_state;
+  const stepExpected = task.payload?.plan?.steps?.[0]?.arguments?.expected_state;
+  if (taskExpected === null || (taskExpected === undefined && stepExpected === undefined)) {
     throw new Error('EXPECTED_STATE_REQUIRED');
   }
 }

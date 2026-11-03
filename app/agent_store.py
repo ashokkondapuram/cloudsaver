@@ -20,7 +20,7 @@ def unreconciled(payload):
     steps=(payload.get('plan') or {}).get('steps',[])
     paired=any(s['operation']=='gitops.terraform.sync' for s in steps)
     return any(s.get('state')=='started' for s in payload.get('steps',[])) or bool(paired and any(
-        s.get('state')=='succeeded' and steps[i]['operation'] in ('tags.merge','labels.merge','annotations.merge')
+        s.get('state')=='succeeded' and steps[i]['operation'] in ('tags.merge','labels.merge','annotations.merge','compute.resize')
         for i,s in enumerate(payload.get('steps',[]))))
 
 

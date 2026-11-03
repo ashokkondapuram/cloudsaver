@@ -12,7 +12,7 @@ function assignment():Assignment{
   const plan={summary:'Inspect and tag',steps:[{connector_id:connector.id,operation:'resource.inspect' as const,arguments:{},purpose:'Read',verification:'Read',rollback:'Read-only'},
     {connector_id:connector.id,operation:'tags.merge' as const,arguments:{tags:{CostCenter:'FINOPS-42'}},purpose:'Tag',verification:'Readback',rollback:'Separate review'}]};
   return {phase:'execute',lease_token:'synthetic-lease',code:renderCode(plan),connectors:[connector],task:{id:'33333333-3333-4333-8333-333333333333',tenant_id:tid,provider:'azure',scope_id:sid,
-    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/disks/qa`,state:'running',payload:{plan,plan_hash:'a'.repeat(64),connector_ids:[connector.id],approval:{plan_hash:'a'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}};
+    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/disks/qa`,state:'running',payload:{plan,plan_hash:'a'.repeat(64),connector_ids:[connector.id],expected_state:{},approval:{plan_hash:'a'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}};
 }
 
 test('runCode executes the exact TypeScript artifact with ordered one-time gateway permits',async()=>{
@@ -125,4 +125,20 @@ test('paired repository action uses the gateway result and never calls a cloud a
   assert.deepEqual(calls,[0,1]);
   a.task.payload.plan.steps[2].arguments.attributes={tags:{CostCenter:'DIFFERENT'}};a.code=renderCode(a.task.payload.plan);
   assert.throws(()=>checkAssignment(a,[connector,c]));
+});
+
+test('paired rightsize repository action must match the approved resize target',()=>{
+  const target={tenant_id:tid,target_id:'infra',repository:'example/infra',repository_id:123,base_branch:'main',installation_id:456};
+  const resizeConnector:Connector={...connector,id:'azure-resize',operations:['resource.inspect','compute.resize']};
+  const c:Connector={...connector,id:'repo-sync',kind:'gitops_terraform',operations:['gitops.terraform.sync'],target_id:'infra',target_binding:target};
+  const plan={summary:'Resize',steps:[
+    {connector_id:resizeConnector.id,operation:'resource.inspect' as const,arguments:{expected_state:{vm_size:'Standard_D4s_v5'}},purpose:'Read',verification:'Read',rollback:'Read-only'},
+    {connector_id:resizeConnector.id,operation:'compute.resize' as const,arguments:{target_size:'Standard_D8s_v5',restore_power:true},purpose:'Resize',verification:'Readback',rollback:'Separate review'},
+    {connector_id:c.id,operation:'gitops.terraform.sync',arguments:{target_id:'infra',patch_mode:'rightsize_sku',attributes:{target_size:'Standard_D8s_v5',terraform_attribute:'sku_name'}},purpose:'Review',verification:'Inspect draft PR',rollback:'Reconcile without replay'},
+  ]};
+  checkAssignment({phase:'execute',lease_token:'lease',code:renderCode(plan),connectors:[resizeConnector,c],task:{id:'33333333-3333-4333-8333-333333333333',tenant_id:tid,provider:'azure',scope_id:sid,
+    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/qa`,state:'running',payload:{plan,plan_hash:'b'.repeat(64),connector_ids:[resizeConnector.id,c.id],expected_state:{vm_size:'Standard_D4s_v5'},approval:{plan_hash:'b'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}},[resizeConnector,c]);
+  plan.steps[2].arguments.attributes={target_size:'Standard_D16s_v5',terraform_attribute:'sku_name'};
+  assert.throws(()=>checkAssignment({phase:'execute',lease_token:'lease',code:renderCode(plan),connectors:[resizeConnector,c],task:{id:'33333333-3333-4333-8333-333333333333',tenant_id:tid,provider:'azure',scope_id:sid,
+    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/qa`,state:'running',payload:{plan,plan_hash:'b'.repeat(64),connector_ids:[resizeConnector.id,c.id],expected_state:{vm_size:'Standard_D4s_v5'},approval:{plan_hash:'b'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}},[resizeConnector,c]));
 });
