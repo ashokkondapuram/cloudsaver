@@ -289,6 +289,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                         href={`/workloads?tab=engineering&workload=${encodeURIComponent(plan.engineering_workload_id)}&plan=${encodeURIComponent(plan.id)}`}
                       >
                         Open linked engineering workload
+                        {plan.engineering_workload_name ? ` (${plan.engineering_workload_name})` : ''}
                       </Link>
                     </>
                   )}

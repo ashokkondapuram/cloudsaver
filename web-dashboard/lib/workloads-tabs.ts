@@ -11,3 +11,7 @@ export function workloadTabFromQuery(slug: string | null | undefined): WorkloadT
   if (!slug) return null;
   return queryToTab[slug] ?? null;
 }
+
+export function workloadQueryFromTab(tab: WorkloadTab): string {
+  return tab;
+}

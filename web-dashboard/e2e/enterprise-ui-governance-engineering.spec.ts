@@ -59,10 +59,11 @@ test.describe('Engineering ↔ governance cross-links', () => {
       initialState: 'assessed',
       objective: 'Review disk retention',
       engineeringWorkloadId: engineeringWorkloadId,
+      engineeringWorkloadName: 'Payments',
     });
     await navigate(page, 'Risk & compliance');
     await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
-    await page.getByRole('link', {name: 'Open linked engineering workload', exact: true}).click();
+    await page.getByRole('link', {name: /Open linked engineering workload \(Payments\)/i}).click();
     await expect(page).toHaveURL(/tab=engineering/);
     await expect(page.getByRole('button', {name: 'Engineering plans', exact: true})).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator(`#engineering-plan-${engineeringPlanId}`)).toHaveClass(/plan-card-highlight/);
@@ -143,4 +144,21 @@ test('engineering view surfaces sync notice after control-plane revision', async
   await expect(page.getByText(/Control-plane plan state changed in governance/i)).toBeVisible();
   await page.getByRole('button', {name: 'Dismiss', exact: true}).click();
   await expect(page.getByText(/Control-plane plan state changed in governance/i)).toBeHidden();
+});
+
+test('workloads tab clicks sync tab query and clears engineering deep-link params', async ({page}) => {
+  await mockWorkspace(page);
+  await mockEngineeringRoutes(page);
+  await navigate(page, 'Workload assessments');
+  await page.getByRole('button', {name: 'Declared workloads', exact: true}).click();
+  await expect(page).toHaveURL(/tab=declared/);
+  await page.getByRole('button', {name: 'Engineering plans', exact: true}).click();
+  await expect(page).toHaveURL(/tab=engineering/);
+  await page.goto(
+    `/workloads?tab=engineering&workload=${encodeURIComponent(engineeringWorkloadId)}&plan=${encodeURIComponent(engineeringPlanId)}`,
+  );
+  await page.getByRole('button', {name: 'Saved assessments', exact: true}).click();
+  await expect(page).toHaveURL(/tab=assessments/);
+  await expect(page).not.toHaveURL(/plan=/);
+  await expect(page).not.toHaveURL(/workload=/);
 });

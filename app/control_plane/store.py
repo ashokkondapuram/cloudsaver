@@ -162,6 +162,9 @@ def list_plans(store, tenant_id, limit=50):
         rows = db.execute(
             "SELECT p.id,p.objective,p.created_at,"
             "(SELECT l.workload_id FROM engineering_plan_links l "
+            "WHERE l.tenant_id=p.tenant_id AND l.plan_id=p.id LIMIT 1),"
+            "(SELECT w.name FROM engineering_plan_links l "
+            "INNER JOIN engineering_workloads w ON w.tenant_id=l.tenant_id AND w.id=l.workload_id "
             "WHERE l.tenant_id=p.tenant_id AND l.plan_id=p.id LIMIT 1) "
             "FROM cp_plans p WHERE p.tenant_id=%s ORDER BY p.created_at DESC LIMIT %s",
             (tenant_id, limit),
@@ -172,6 +175,7 @@ def list_plans(store, tenant_id, limit=50):
             objective=r[1],
             created_at=str(r[2]),
             engineering_workload_id=str(r[3]) if r[3] is not None else None,
+            engineering_workload_name=r[4] if r[4] is not None else None,
         )
         for r in rows
     ]

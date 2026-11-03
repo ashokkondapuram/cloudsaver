@@ -46,6 +46,7 @@ export type MockControlPlanePlanOptions = {
   objective?: string;
   targets?: string[];
   engineeringWorkloadId?: string | null;
+  engineeringWorkloadName?: string | null;
 };
 
 export async function mockControlPlanePlan(page: Page, options: MockControlPlanePlanOptions) {
@@ -65,6 +66,7 @@ export async function mockControlPlanePlan(page: Page, options: MockControlPlane
             objective,
             created_at: '2026-10-01T12:00:00Z',
             engineering_workload_id: options.engineeringWorkloadId ?? null,
+            engineering_workload_name: options.engineeringWorkloadName ?? null,
           },
         ],
       },
