@@ -94,6 +94,13 @@ export function AIFoundryConfigurationEditor() {
           {canAdmin && <button type="button" className="button secondary small" disabled={!!busy || dirty || !view.ai_foundry.providers[provider].target_id}
             onClick={() => void test(provider)}>{busy === provider ? 'Checking metadata…' : `Test ${names[provider]} connection`}</button>}
           {result && <div role="status" className="foundry-probe-result"><strong>{result.status === 'inconclusive' ? 'Connection check incomplete. Inference permission isn’t verified.' : sentence(result.status)} · {result.latency_ms} ms</strong>
+            {result.inference_invoked ? (
+              <p className="inline-help">
+                <span className="state-badge active">Inference invoked during probe</span> — a live model call was attempted; review data-use policy before enabling advisory.
+              </p>
+            ) : (
+              <p className="inline-help">Metadata-only probe — no inference call was invoked.</p>
+            )}
             {result.failure_category ? <p className="foundry-probe-failure"><span className="state-badge expired">{sentence(result.failure_category)}</span></p> : null}
             <p>{result.remediation_hint}</p>
             <ol className="foundry-probe-stages" aria-label="Four-stage metadata probe">

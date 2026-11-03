@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:enterprise-ui": "playwright test e2e/enterprise-ui-phase*.spec.ts e2e/control-plane-*.spec.ts e2e/financial-scenario-absorption.spec.ts e2e/declared-workloads-if-match.spec.ts e2e/commitment-expiry-badges.spec.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

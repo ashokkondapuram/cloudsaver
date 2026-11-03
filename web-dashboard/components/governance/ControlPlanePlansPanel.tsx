@@ -33,6 +33,16 @@ const ALT_TRANSITIONS: Record<string, {to: string; label: string}[]> = {
   failed: [{to: 'reconciliation_required', label: 'Advance to reconciliation required'}],
 };
 
+const CANCELLABLE = new Set(['draft', 'evidence_required', 'assessed', 'review_requested', 'approved', 'queued']);
+const EXPIRABLE = new Set(['evidence_required', 'assessed', 'review_requested', 'approved', 'queued']);
+
+function lifecycleEndTransitions(state: string): {to: string; label: string}[] {
+  const actions: {to: string; label: string}[] = [];
+  if (CANCELLABLE.has(state)) actions.push({to: 'cancelled', label: 'Cancel plan version'});
+  if (EXPIRABLE.has(state)) actions.push({to: 'expired', label: 'Mark expired'});
+  return actions;
+}
+
 function reviewStepClass(step: (typeof REVIEW_STEPS)[number], state: string) {
   const stepIdx = REVIEW_STEPS.indexOf(step);
   const stateIdx = REVIEW_STEPS.indexOf(state as (typeof REVIEW_STEPS)[number]);
@@ -65,7 +75,9 @@ function executionStepClass(step: (typeof EXECUTION_STEPS)[number], state: strin
 }
 
 function showExecutionLadder(state: string) {
-  return (['approved', ...EXECUTION_STEPS, 'failed', 'reconciliation_required'] as string[]).includes(state);
+  return (
+    ['approved', ...EXECUTION_STEPS, 'failed', 'reconciliation_required', 'cancelled', 'expired'] as string[]
+  ).includes(state);
 }
 
 export function ControlPlanePlansPanel() {
@@ -296,6 +308,18 @@ export function ControlPlanePlansPanel() {
                             {alt.label}
                           </button>
                         ))}
+                      {canAdmin &&
+                        lifecycleEndTransitions(latest.state).map(end => (
+                          <button
+                            key={end.to}
+                            type="button"
+                            className="button danger small"
+                            disabled={busy}
+                            onClick={() => transition(latest, end.to)}
+                          >
+                            {end.label}
+                          </button>
+                        ))}
                     </div>
                     {latest.state === 'approved' && (
                       <Notice tone="success">
@@ -311,6 +335,12 @@ export function ControlPlanePlansPanel() {
                     )}
                     {latest.state === 'verified' && (
                       <Notice tone="success">Verification completed for this plan version. Outcomes remain separate from compliance attestation.</Notice>
+                    )}
+                    {(latest.state === 'cancelled' || latest.state === 'expired') && (
+                      <Notice tone="warning">
+                        This plan version is {latest.state}. It cannot advance further; create a new version to continue review or
+                        execution tracking.
+                      </Notice>
                     )}
                     {(latest.state === 'failed' || latest.state === 'reconciliation_required') && (
                       <Notice tone="error">

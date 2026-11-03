@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "3dfcd2fb980de982a34ba3cf56b3858f410ce313d3c7d367b7815d17c310b28d",
+  "inventory_sha256": "25027b171b1293391a30b658cd6126bd26ed119cb7c1e47506a89cf491e74fc6",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "494cf1202b844627bd62f905cb45bb160bc57899bde78259e4cafbb93fd4ff9d",
-      "bytes": 15207
+      "sha256": "57989b9c7d094d543ba48b152af8ab87d393f1cb2ab109722efdb2d6b11e7b23",
+      "bytes": 16686
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4051,8 +4051,8 @@
     },
     {
       "path": "web-dashboard/components/settings/AIFoundryConfigurationEditor.tsx",
-      "sha256": "860dead37c522e1ee5a194bb4247be0f4d6c9f2b2fa42986a7684ce00c4d5faa",
-      "bytes": 13539
+      "sha256": "e450825558b3825b38274bc163edfa30700bd04058d90b39b7d22dc97f30c083",
+      "bytes": 13952
     },
     {
       "path": "web-dashboard/components/settings/AccessSettings.tsx",
@@ -4203,6 +4203,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase7.spec.ts",
       "sha256": "75b79ca15ca9121f13892a3168ed21ff36fa069dd48ff68cb610bd88f8ebfebb",
       "bytes": 2892
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase8.spec.ts",
+      "sha256": "dacc257b58567e16237324f873a380bd8db756ae023f3128a6784333c3f22426",
+      "bytes": 1397
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
@@ -4406,8 +4411,8 @@
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "4ec766195fcaa9959f955214cbc1bf21443ed019453651d5465f3e446c97855f",
-      "bytes": 1100
+      "sha256": "1ad8ab81074780d0df04fcd19f47837e977924325ce809c5ea057d0cc562acad",
+      "bytes": 1325
     },
     {
       "path": "web-dashboard/playwright.config.ts",
