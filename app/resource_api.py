@@ -367,13 +367,30 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         overlaps = [dict(resource_id=row['resource_id'], resource_name=row.get('resource_name'), rule_id=row['rule_id'])
                     for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_id(row['resource_id']) != selected_id]
         from app.pricing import opportunity_totals
+        from app.financial_balance import resource_financial_balance
         billed_currency = assessment.get('currency')
         opportunity = opportunity_totals(findings)
-        costs = dict(billed_cost_usd=assessment.get('billed_cost_usd'), effective_cost_usd=assessment.get('effective_cost_usd'),retail_estimate_usd=assessment['retail_estimate_usd'], modeled_future_cost_usd=None,
-                     opportunity_usd=opportunity['total_monthly_opportunity_usd'],
-                     verified_realized_savings_usd=None, currency=billed_currency or 'USD',
-                     explanation=f'Billed/effective values are exact resource-period {billed_currency} FOCUS imports where available; inspect coverage. Retail opportunities are estimates in USD and post-change savings remain unverified.' if billed_currency
-                     else 'Billed/effective values are exact resource-period FOCUS imports where available; inspect coverage. Retail opportunities are estimates in USD and post-change savings remain unverified.')
+        balance = resource_financial_balance(
+            billed_cost_usd=assessment.get('billed_cost_usd'),
+            effective_cost_usd=assessment.get('effective_cost_usd'),
+            retail_run_rate_usd=assessment.get('retail_estimate_usd'),
+            opportunity=opportunity,
+        )
+        costs = dict(
+            billed_cost_usd=assessment.get('billed_cost_usd'),
+            effective_cost_usd=assessment.get('effective_cost_usd'),
+            retail_estimate_usd=assessment['retail_estimate_usd'],
+            modeled_future_cost_usd=None,
+            opportunity_usd=balance['retail_waste_opportunity_usd'],
+            verified_realized_savings_usd=None,
+            currency=billed_currency or 'USD',
+            **balance,
+            explanation=(
+                'Billed/effective are FOCUS or Cost Management imports for the scan billing window. '
+                'Retail run-rate and waste use Azure retail meters (USD list); waste is not verified savings. '
+                'Balance fields compare billed payable to catalog run-rate and modeled waste.'
+            ),
+        )
         obs_evidence = ((observation or {}).get('evidence') or {}) if observation else {}
         configuration_detail = obs_evidence.get('typed_configuration') or (observation or {}).get('configuration_snapshot')
         assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation))

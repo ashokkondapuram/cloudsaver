@@ -104,13 +104,16 @@ const pillarState = (status: string) => status === 'risk' ? 'Risk observed' : st
 
 function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab: string) => void}) {
   const a = detail.assessment;
-  const retail = detail.costs?.retail_estimate_usd ?? a.retail_estimate_usd;
+  const retail = detail.costs?.retail_run_rate_usd ?? detail.costs?.retail_estimate_usd ?? a.retail_estimate_usd;
+  const balance = detail.costs?.billed_vs_retail_usd;
   return <>
     {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}.</Notice>}
     {a.observation.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
     <dl className="settings-key-values overview-snapshot">
       <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
-      <div><dt>Retail estimate</dt><dd>{retail == null ? 'Unknown' : money(retail)}</dd></div>
+      <div><dt>Azure retail run-rate</dt><dd>{retail == null ? 'Unknown' : money(retail)}</dd></div>
+      <div><dt>Billed vs retail</dt><dd>{balance == null ? 'Unknown' : money(balance)}</dd></div>
+      <div><dt>Retail-modeled waste</dt><dd>{detail.costs?.retail_waste_opportunity_usd == null ? 'Unknown' : money(detail.costs.retail_waste_opportunity_usd)}</dd></div>
       <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
     </dl>
     <div className="drawer-section overview-radar"><EvidenceRadar pillars={a.pillars} onInspect={() => onOpenTab('evidence')}/></div>
