@@ -480,6 +480,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             else:
                 validated = ScanSummary.parse_obj(result).dict()
 
+            try:
+                from app.scan_billing import materialize_scan_billing
+                validated = materialize_scan_billing(tenant, validated, FocusRepository(evidence_store))
+            except Exception:
+                logger.warning('Scan billing materialization failed scan_id=%s', scan_id, exc_info=True)
+
             if heartbeat:
                 heartbeat.ensure_owned()
             logger.info('Scan persisting workspace=%s scan_id=%s items=%s', tenant_id, scan_id, result['total_items_found'])

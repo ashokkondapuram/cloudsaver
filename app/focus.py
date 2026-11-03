@@ -289,9 +289,11 @@ class FocusRepository:
                 billing_basis='imported_FOCUS_not_provider_reconciled',
             )
 
-    def attach(self, tenant, scan):
+    def attach(self, tenant, scan, *, force=False):
         from copy import deepcopy
         result=deepcopy(scan)
+        if result.get('billing_materialized') and not force:
+            return result
         rows=[*result.get('inventory',[]),*result.get('findings',[])]
         stamp=utc(scan['timestamp'])
         resource_ids=[r['resource_id'] for r in rows]
@@ -307,6 +309,8 @@ class FocusRepository:
         attach_signals(self.store,tenant,rows)
         from app.k8s_cost_reconciler import attach_node_costs
         attach_node_costs(result.get('inventory',[]))
+        result['billing_materialized'] = True
+        result['billing_materialized_at'] = scan.get('timestamp')
         return result
 
     def imports(self,tenant,limit=25):
