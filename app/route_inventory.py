@@ -74,6 +74,7 @@ ROUTES = {
     ('POST','/api/v1/finops/resource-cost'):'full_scope',
     ('GET','/api/v1/control-plane/plans'):'scoped_read',
     ('GET','/api/v1/control-plane/plans/{plan_id}/versions'):'scoped_read',
+    ('GET','/api/v1/control-plane/plan-versions/{version_id}/engineering-outbox'):'scoped_read',
     ('POST','/api/v1/control-plane/plans'):'full_scope',
     ('POST','/api/v1/control-plane/plans/{plan_id}/versions'):'full_scope',
     ('POST','/api/v1/control-plane/plan-versions/{version_id}/transitions'):'full_scope',

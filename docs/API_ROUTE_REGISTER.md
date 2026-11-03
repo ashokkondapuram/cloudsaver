@@ -34,6 +34,7 @@ See [analysis and fixing guide](BACKEND_RELIABILITY_GUIDE.md) for required endpo
 | POST | `/api/v1/billing/webhook` | `public` |
 | POST | `/api/v1/control-plane/action-assessments` | `full_scope` |
 | POST | `/api/v1/control-plane/financial-scenarios` | `full_scope` |
+| GET | `/api/v1/control-plane/plan-versions/{version_id}/engineering-outbox` | `scoped_read` |
 | POST | `/api/v1/control-plane/plan-versions/{version_id}/approvals` | `full_scope` |
 | POST | `/api/v1/control-plane/plan-versions/{version_id}/transitions` | `full_scope` |
 | GET | `/api/v1/control-plane/plans` | `scoped_read` |

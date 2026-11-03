@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "744748192d10f3008aa4daabb1b140213ff5685fe5facad94a915caf812440f7",
+  "inventory_sha256": "f3bbf69ce588eb1374d91ab06062ac3d8299f53c4e94c6a643a0513e1769dad3",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -1056,8 +1056,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "51108f7ea93e5e3802b2a6f2e6b5edb0cc9270931892597be33ebf445b1804d7",
-      "bytes": 14096
+      "sha256": "2791ba380f451e8d874c1c7139c417e9d4fceae85692c14f847fc6588e6d92d3",
+      "bytes": 14193
     },
     {
       "path": "app/rule_id_canonical.py",
@@ -1326,8 +1326,8 @@
     },
     {
       "path": "docs/API_ROUTE_REGISTER.md",
-      "sha256": "554071336965d07c3b0f4e01d59155fded6036a091525b4b1e89242fcd38846c",
-      "bytes": 12757
+      "sha256": "3b9e46a7e5ef7d2ce94aebbb8beed79c9ece82f9bd6f4f6f5f767a1d8d279496",
+      "bytes": 12853
     },
     {
       "path": "docs/ARCHITECTURAL_IMPROVEMENTS.md",
@@ -3081,8 +3081,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "640953d40e129bb0a1f567fadbf4b2c6e9c9f5caf5c408aa02c0e66b171043a6",
-      "bytes": 43502
+      "sha256": "00bdb2b3fea914780b818a7ac404a2b6a0e7f56c59b8bdf0ad1fec4515e41a13",
+      "bytes": 45016
     },
     {
       "path": "services/governance_routes.py",
@@ -3756,8 +3756,8 @@
     },
     {
       "path": "web-dashboard/app/api/[...path]/route.ts",
-      "sha256": "2188ea34066e7db3a0decbd8714e484657a738b3a3c0fbf96aff3c7720425025",
-      "bytes": 6586
+      "sha256": "4eb338eb69f750f313b1ea919d18b291928675759ec1b0f08e2176764ad2b6aa",
+      "bytes": 6795
     },
     {
       "path": "web-dashboard/app/automation/page.tsx",

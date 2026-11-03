@@ -470,6 +470,35 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def control_plane_financial_scenario(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/control-plane/financial-scenarios', request, authorization)
 
+    @app.get('/api/v1/control-plane/plan-versions/{version_id}/engineering-outbox')
+    async def control_plane_list_plan_version_outbox(
+        version_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()
+    ):
+        params = {k: v for k, v in request.query_params.items() if k == 'limit'}
+        return await forward(
+            'GET',
+            'scanner',
+            f'/api/v1/control-plane/plan-versions/{version_id}/engineering-outbox',
+            authorization,
+            params,
+        )
+
+    @app.get('/api/v1/resources/billable-catalog')
+    async def resources_billable_catalog(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/resources/billable-catalog', authorization)
+
+    @app.get('/api/v1/catalog/azure-resource-types')
+    async def catalog_azure_resource_types(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/catalog/azure-resource-types', authorization)
+
+    @app.get('/api/v1/catalog/typed-resource-tables')
+    async def catalog_typed_resource_tables(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/catalog/typed-resource-tables', authorization)
+
+    @app.get('/api/v1/rules/catalog')
+    async def rules_catalog(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/rules/catalog', authorization)
+
     @app.get('/api/v1/finops/unit-economics/preview')
     async def unit_economics_preview(request: Request, row=Depends(allowed), authorization: str = Header()):
         params = {k: v for k, v in request.query_params.items() if k in ('prior_cost', 'current_cost', 'prior_volume', 'current_volume')}
@@ -513,7 +542,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         return await post_json('/api/v1/finops/autopilot/resize', request, authorization)
 
 
-    resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'q', 'limit', 'offset')
+    resource_filters = ('provider', 'service_category', 'review_priority', 'ai_status', 'ai_risk', 'decision', 'pillar_status', 'cost_scope', 'q', 'limit', 'offset')
     resource_key = Path(pattern=r'^[a-f0-9]{64}$')
 
 
