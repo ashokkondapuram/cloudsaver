@@ -1,5 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
+import Link from 'next/link';
 import {RefreshCw} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
@@ -22,6 +23,7 @@ const NEXT_STATE: Record<string, string> = {
 };
 
 const ALT_TRANSITIONS: Record<string, {to: string; label: string}[]> = {
+  review_requested: [{to: 'assessed', label: 'Return to assessed'}],
   running: [
     {to: 'failed', label: 'Record failed outcome'},
     {to: 'reconciliation_required', label: 'Require reconciliation'},
@@ -215,6 +217,11 @@ export function ControlPlanePlansPanel() {
         Revision-bound plans with immutable identity digests. Automatic execution stays disabled; approvals bind to exact
         plan versions.
       </SectionTitle>
+      <p className="inline-help" style={{margin: '0 0 16px'}}>
+        Pair plans with{' '}
+        <Link href="/workloads">declared engineering workloads</Link> and resource-level action-safety checks before any
+        external change workflow.
+      </p>
       {!humanApprover && (
         <Notice tone="warning">
           Read/scoped workspace key — human approval disabled. Service accounts and bearer licences cannot approve plan
