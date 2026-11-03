@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "6bbe584e603dcbceee2dde0f62da6cd13b198047534c637156c8159760e0c77a",
+  "inventory_sha256": "0d464f5fbea654b79c3a3b23191d01e6d0f927eeece55fcb439dded9b137caba",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -36,8 +36,8 @@
     },
     {
       "path": ".github/workflows/verify.yml",
-      "sha256": "01ead382c77b16f0791e44048b2543561037b4a2294d19d3690f5e17c6576db7",
-      "bytes": 8856
+      "sha256": "a94e02ab0e091de39757c9a4fe9ed1d03cc56196450c62aff72787090c6d3857",
+      "bytes": 8916
     },
     {
       "path": ".gitignore",
@@ -3731,8 +3731,8 @@
     },
     {
       "path": "web-dashboard/README.md",
-      "sha256": "9e30bfb469a6119aa4967c78ed94567aa7e7f3217208792b3c0611b8cbabff3a",
-      "bytes": 4169
+      "sha256": "299a1afd456cca99303e7f192bc7a08da183d3ea7047a98472fb235f4bb84218",
+      "bytes": 4284
     },
     {
       "path": "web-dashboard/app/activity/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "9fe1bb8d70d4c0e3cd298ca0f0b7eb486cee859b06484a5dcd64776cd96834d6",
-      "bytes": 17043
+      "sha256": "8042a9c22d5217edf6fdb930f74f02b056b6492a2ce3aba1ebf9c1aa907c6e1e",
+      "bytes": 17122
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4096,8 +4096,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/DeclaredWorkloadsPanel.tsx",
-      "sha256": "b2b6bbfbba3dab17a6383ad48e9e320439c4bd0e6a7352818712d7cf077d3757",
-      "bytes": 4373
+      "sha256": "2ec0e6b46218c49c19f1ea7c6bd1be4e138640c618932a7692a901c7b5abb100",
+      "bytes": 4520
     },
     {
       "path": "web-dashboard/components/workloads/Engineering.module.css",
@@ -4183,6 +4183,11 @@
       "path": "web-dashboard/e2e/enterprise-fixture.ts",
       "sha256": "9104e3a2e9de83fa0549ca775b59145d101ec2d605838baa42a8bb9dff47ffce",
       "bytes": 3978
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase10.spec.ts",
+      "sha256": "fcb3c2caa98fd943f9274912cb17dc64fc50f2831c39291b83d07c2eaaaf0f7e",
+      "bytes": 2692
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
@@ -4416,13 +4421,13 @@
     },
     {
       "path": "web-dashboard/package.json",
-      "sha256": "1ad8ab81074780d0df04fcd19f47837e977924325ce809c5ea057d0cc562acad",
-      "bytes": 1325
+      "sha256": "8748bf295a8b7dc92e9e909393f8628e1e0f25a64bc2e1ed53a95c2d475820e1",
+      "bytes": 1169
     },
     {
       "path": "web-dashboard/playwright.config.ts",
-      "sha256": "dacf5da1f31e4edb5dad292ce989ef48b9654edf3e314d54325fc78353cfd4b8",
-      "bytes": 592
+      "sha256": "a18f27f78ad76784907ef1f503398a7b1739f047eb198fab5674e7ef1e4e19e4",
+      "bytes": 1095
     },
     {
       "path": "web-dashboard/postcss.config.js",

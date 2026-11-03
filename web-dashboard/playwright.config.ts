@@ -1,16 +1,33 @@
 import {defineConfig} from '@playwright/test';
 
-const baseURL=process.env.CLOUDSAVER_DASHBOARD_URL||'http://127.0.0.1:3000';
-const address=new URL(baseURL);
-if(!['127.0.0.1','localhost'].includes(address.hostname)||address.protocol!=='http:')throw new Error('Browser fixtures require a loopback HTTP test server.');
+const baseURL = process.env.CLOUDSAVER_DASHBOARD_URL || 'http://127.0.0.1:3000';
+const address = new URL(baseURL);
+if (!['127.0.0.1', 'localhost'].includes(address.hostname) || address.protocol !== 'http:') {
+  throw new Error('Browser fixtures require a loopback HTTP test server.');
+}
+
+/** Enterprise UI / control-plane / FinOps ladder specs (phases 1–11). */
+export const enterpriseUiTestMatch = [
+  '**/enterprise-ui-phase*.spec.ts',
+  '**/control-plane-*.spec.ts',
+  '**/financial-scenario-absorption.spec.ts',
+  '**/declared-workloads-if-match.spec.ts',
+  '**/commitment-expiry-badges.spec.ts',
+];
 
 export default defineConfig({
-  testDir:'./e2e',
-  workers:1,
-  reporter:'list',
-  use:{
+  testDir: './e2e',
+  workers: 1,
+  reporter: 'list',
+  use: {
     baseURL,
-    launchOptions:process.env.CLOUDSAVER_BROWSER_EXECUTABLE?{executablePath:process.env.CLOUDSAVER_BROWSER_EXECUTABLE}:undefined,
-    screenshot:'only-on-failure',
+    launchOptions: process.env.CLOUDSAVER_BROWSER_EXECUTABLE
+      ? {executablePath: process.env.CLOUDSAVER_BROWSER_EXECUTABLE}
+      : undefined,
+    screenshot: 'only-on-failure',
   },
+  projects: [
+    {name: 'enterprise-ui', testMatch: enterpriseUiTestMatch},
+    {name: 'dashboard', testIgnore: enterpriseUiTestMatch},
+  ],
 });

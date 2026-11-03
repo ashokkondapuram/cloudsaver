@@ -23,6 +23,7 @@ const NEXT_STATE: Record<string, string> = {
 };
 
 const ALT_TRANSITIONS: Record<string, {to: string; label: string}[]> = {
+  assessed: [{to: 'evidence_required', label: 'Return to evidence required'}],
   review_requested: [{to: 'assessed', label: 'Return to assessed'}],
   running: [
     {to: 'failed', label: 'Record failed outcome'},

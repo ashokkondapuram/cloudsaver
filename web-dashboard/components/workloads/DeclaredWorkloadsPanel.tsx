@@ -41,7 +41,8 @@ export function DeclaredWorkloadsPanel({token}: {token: string; canEdit: boolean
         }
       >
         Persisted workload boundaries, SLO and recovery references, and version-fenced readiness declarations. Declarations
-        provide context and never fabricate measured telemetry.
+        provide context and never fabricate measured telemetry. Control-plane plans that reference these boundaries live under{' '}
+        <a href="/governance">Risk &amp; compliance</a> (Control-Plane Plans).
       </SectionTitle>
       {loading && <Loading label="Loading declared engineering workloads…" />}
       {error && <Notice tone="error">{error}</Notice>}
