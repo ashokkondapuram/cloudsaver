@@ -220,6 +220,9 @@ html[data-theme=dark] .button.danger{background:var(--rose-700);border-color:var
 .plan-state-badge{margin-left:8px;font-size:11px;vertical-align:middle}
 .plan-card-highlight{outline:2px solid var(--indigo-500);box-shadow:0 0 0 4px color-mix(in srgb,var(--indigo-500) 22%,transparent);scroll-margin-top:96px}
 .summary-table tr.plan-card-highlight td{box-shadow:inset 0 0 0 2px var(--indigo-500);background:color-mix(in srgb,var(--indigo-500) 8%,transparent)}
+.plan-outbox-readout{margin:12px 0 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:color-mix(in srgb,var(--surface) 92%,var(--indigo-500) 8%)}
+.plan-outbox-readout summary{cursor:pointer;font-size:13px;font-weight:600}
+.plan-outbox-readout ul{margin:10px 0 0;padding-left:20px;font-size:13px;line-height:1.7;color:var(--muted)}
 .plan-outbox-status{margin-top:8px;color:var(--muted-foreground)}
 
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */

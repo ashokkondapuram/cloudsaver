@@ -7,6 +7,7 @@ import {dateTime} from '../../lib/finops';
 import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
 import {notifyControlPlanePlanRevision, subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {declaredWorkloadShareUrl} from '../../lib/workloads-tabs';
+import {planOutboxHasSurface, planOutboxReadoutItems, planOutboxStatusCopy} from '../../lib/plan-outbox';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
@@ -83,23 +84,6 @@ function showExecutionLadder(state: string) {
   return (
     ['approved', ...EXECUTION_STEPS, 'failed', 'reconciliation_required', 'cancelled', 'expired'] as string[]
   ).includes(state);
-}
-
-function planOutboxStatusCopy(latest: PlanVersionRecord) {
-  const pending = latest.engineering_outbox_pending_count ?? 0;
-  const published = latest.engineering_outbox_published_count ?? 0;
-  const total = pending + published;
-  if (total > 0) {
-    const latestState = latest.engineering_outbox_state ?? (pending > 0 ? 'pending' : 'published');
-    return `Engineering event outbox: ${pending} pending, ${published} published (latest ${latestState}). Cloud execution remains disabled in this dashboard.`;
-  }
-  if (latest.engineering_outbox_state === 'pending') {
-    return 'Engineering event outbox: pending dispatch. Cloud execution remains disabled in this dashboard.';
-  }
-  if (latest.engineering_outbox_state === 'published') {
-    return 'Engineering event outbox: published. Control-plane execution tracking still does not invoke cloud APIs from this panel.';
-  }
-  return 'Worker outbox dispatch is not surfaced for this plan version. Status reflects control-plane transitions only; no automatic cloud mutations are triggered from this panel.';
 }
 
 function planShareLinks(plan: PlanRecord) {
@@ -267,7 +251,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         title="Control-plane plans"
         action={
           <button type="button" className="button secondary small" disabled={busy} onClick={() => setRevision(r => r + 1)}>
-            <RefreshCw size={14} /> Refresh
+            <RefreshCw size={14} /> Refresh plans &amp; outbox
           </button>
         }
       >
@@ -410,6 +394,30 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                         )
                       )}
                     </dl>
+                    {planOutboxHasSurface(latest) && (
+                      <details className="plan-outbox-readout">
+                        <summary>Engineering outbox readout (audit-only)</summary>
+                        <ul>
+                          {planOutboxReadoutItems(latest).map(line => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                        {plan.engineering_workload_id && (
+                          <p className="inline-help">
+                            <Link
+                              href={`/workloads?tab=engineering&workload=${encodeURIComponent(plan.engineering_workload_id)}&plan=${encodeURIComponent(plan.id)}`}
+                            >
+                              Open linked engineering workload
+                              {plan.engineering_workload_name ? ` (${plan.engineering_workload_name})` : ''}
+                            </Link>
+                            {' · '}
+                            <Link href={`/workloads?tab=declared&workload=${encodeURIComponent(plan.engineering_workload_id)}`}>
+                              View declared record
+                            </Link>
+                          </p>
+                        )}
+                      </details>
+                    )}
                     <div className="button-row">
                       {canAdmin && NEXT_STATE[latest.state] && (
                         <button

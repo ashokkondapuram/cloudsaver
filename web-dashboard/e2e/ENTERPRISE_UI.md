@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–24 of the UI/UX program. Phase history and invariants: [`docs/ENTERPRISE_UI_PROGRAM.md`](../../docs/ENTERPRISE_UI_PROGRAM.md).
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–25 of the UI/UX program. Phase history and invariants: [`docs/ENTERPRISE_UI_PROGRAM.md`](../../docs/ENTERPRISE_UI_PROGRAM.md).
 
 ## Run locally
 
@@ -41,7 +41,7 @@ Cross-view refresh uses the browser event `cloudsaver:cp-plan-revision` (`lib/co
 - Governance transitions notify with `source: governance`; engineering subscribes and refetches.
 - Engineering saves notify with `source: engineering`; governance refetches plan versions (targeted when `planId` is set) and shows a dismissible sync notice with refreshed outbox counts.
 
-Plan version payloads may include `engineering_outbox_pending_count`, `engineering_outbox_published_count`, and `engineering_outbox_state` (latest row). Execution tracking in the UI remains audit-only; outbox rows do not trigger cloud mutations from the dashboard.
+Plan version payloads may include `engineering_outbox_pending_count`, `engineering_outbox_published_count`, and `engineering_outbox_state` (latest row). When present, control-plane cards expose an expandable **Engineering outbox readout (audit-only)** with aggregate bullet lines (not per-row dispatch). Helpers live in `lib/plan-outbox.ts`. Execution tracking in the UI remains audit-only; outbox rows do not trigger cloud mutations from the dashboard.
 
 ## CI
 

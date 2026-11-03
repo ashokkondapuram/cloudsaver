@@ -20,9 +20,9 @@ Living record of the incremental **Enterprise UI** workstream on the CloudSaver 
 | Resources / FinOps | `/resources`, optimization, allocation | Resource drawer action-safety firewall, topology, commitment ladder |
 | AI data governance | `/ai/governance` | Data governance metrics (dark theme) |
 
-Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/control-plane-sync.ts`, `lib/control-plane.ts`.
+Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/control-plane-sync.ts`, `lib/control-plane.ts`, `lib/plan-outbox.ts`.
 
-## Phase log (1–24)
+## Phase log (1–25)
 
 | Phase | Theme |
 | --- | --- |
@@ -36,6 +36,7 @@ Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/contro
 | 22 | Typed revision `source`, governance outbox live refresh + sync notice, `/governance` → `tab=risk` |
 | 23 | Shared `governance-theme-fixture.ts`, theme spec uses control-plane fixtures |
 | 24 | This program doc; engineering execution-state outbox coordination copy |
+| 25 | Shared `lib/plan-outbox.ts`, expandable audit-only outbox readout on plan cards |
 
 ## Verification
 

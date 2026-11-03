@@ -1,6 +1,7 @@
 import {test, expect} from './test';
 import {mockWorkspace, navigate, scanTime} from './workspace-fixture';
 import {mockControlPlanePlan, mockGovernanceRoutes} from './control-plane-fixture';
+import {engineeringWorkloadId} from './engineering-fixture';
 
 test.describe('Control-plane plan lifecycle', () => {
   test('approved plan exposes execution tracking ladder and advance to queued', async ({page}) => {
@@ -100,10 +101,17 @@ test.describe('Control-plane plan lifecycle', () => {
       engineeringOutboxState: 'pending',
       engineeringOutboxPendingCount: 2,
       engineeringOutboxPublishedCount: 1,
+      engineeringWorkloadId: engineeringWorkloadId,
+      engineeringWorkloadName: 'Payments',
     });
     await navigate(page, 'Risk & compliance');
     await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
     await expect(page.getByText(/2 pending, 1 published/i)).toBeVisible();
+    await page.getByText('Engineering outbox readout (audit-only)', {exact: true}).click();
+    await expect(page.getByText(/2 engineering event\(s\) pending worker dispatch/i)).toBeVisible();
+    await expect(
+      page.locator('.plan-outbox-readout').getByRole('link', {name: /Open linked engineering workload \(Payments\)/i}),
+    ).toBeVisible();
   });
 
   test('admin marks queued plan version expired', async ({page}) => {
