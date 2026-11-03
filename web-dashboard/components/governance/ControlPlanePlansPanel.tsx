@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {RefreshCw} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
-import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
+import type {EngineeringOutboxRow, PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
 import {notifyControlPlanePlanRevision, subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {declaredWorkloadShareUrl} from '../../lib/workloads-tabs';
 import {planOutboxHasSurface, planOutboxReadoutItems, planOutboxStatusCopy} from '../../lib/plan-outbox';
@@ -108,6 +108,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
   const [revision, setRevision] = useState(0);
   const [approvalAck, setApprovalAck] = useState<Record<string, boolean>>({});
   const [syncNotice, setSyncNotice] = useState('');
+  const [outboxRows, setOutboxRows] = useState<Record<string, EngineeringOutboxRow[]>>({});
 
   useEffect(() => {
     if (!highlightPlanId || !plans.some(p => p.id === highlightPlanId)) return;
@@ -162,6 +163,30 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
       .catch(() => {});
     return () => controller.abort();
   }, [plans, token, revision]);
+
+  useEffect(() => {
+    if (!plans.length) return;
+    const controller = new AbortController();
+    const jobs = plans.flatMap(plan => {
+      const latest = versions[plan.id]?.[0];
+      if (!latest || !planOutboxHasSurface(latest)) return [];
+      return api<{items: EngineeringOutboxRow[]}>(
+        `/control-plane/plan-versions/${latest.id}/engineering-outbox?limit=20`,
+        token,
+        {signal: controller.signal},
+      ).then(res => [latest.id, res.items] as const);
+    });
+    if (!jobs.length) {
+      setOutboxRows({});
+      return () => controller.abort();
+    }
+    Promise.all(jobs)
+      .then(rows => {
+        if (!controller.signal.aborted) setOutboxRows(Object.fromEntries(rows));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [plans, versions, token, revision]);
 
   async function createPlan(event: React.FormEvent) {
     event.preventDefault();
@@ -402,6 +427,37 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                             <li key={line}>{line}</li>
                           ))}
                         </ul>
+                        {outboxRows[latest.id]?.length ? (
+                          <div className="summary-table-scroll">
+                            <table className="summary-table plan-outbox-table">
+                              <thead>
+                                <tr>
+                                  <th>Event id</th>
+                                  <th>Kind</th>
+                                  <th>Outbox state</th>
+                                  <th>Recorded</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {outboxRows[latest.id].map(row => (
+                                  <tr key={row.event_id}>
+                                    <td>
+                                      <code>{row.event_id.slice(0, 8)}…</code>
+                                    </td>
+                                    <td>{row.kind.replaceAll('.', ' ')}</td>
+                                    <td>{row.state}</td>
+                                    <td>{dateTime(row.created_at)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="inline-help">No per-event outbox rows are returned for this plan version yet.</p>
+                        )}
+                        <p className="inline-help plan-outbox-dispatch-note">
+                          Worker dispatch runs outside this dashboard. Outbox states are read-only here.
+                        </p>
                         {plan.engineering_workload_id && (
                           <p className="inline-help">
                             <Link

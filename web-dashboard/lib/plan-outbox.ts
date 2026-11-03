@@ -33,7 +33,7 @@ export function planOutboxReadoutItems(latest: PlanVersionRecord): string[] {
   if (latest.engineering_outbox_state) {
     lines.push(`Latest outbox row state: ${latest.engineering_outbox_state}.`);
   }
-  lines.push('Individual outbox rows are not listed here; aggregates bind to this plan version record.');
+  lines.push('Expand this readout to list per-event outbox rows when the control-plane API returns them.');
   lines.push('This dashboard does not dispatch or mutate worker outbox messages.');
   return lines;
 }

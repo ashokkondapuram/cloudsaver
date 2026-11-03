@@ -112,6 +112,18 @@ def test_record_check_is_insert_only():
 from tests.test_enterprise import evidence, workspace, TID  # noqa: E402
 
 
+def test_list_plan_version_engineering_outbox_not_found():
+    with pytest.raises(cs.NotFoundError):
+        cs.list_plan_version_engineering_outbox(FakeStore([Cur()]), "t1", "v")
+
+
+def test_list_plan_version_engineering_outbox_filters_by_tenant():
+    s = FakeStore([Cur([(1,)]), Cur([("e1", "plan.created", "pending", "2026-01-01T00:00:00+00:00")])])
+    rows = cs.list_plan_version_engineering_outbox(s, "t1", "v1", 10)
+    assert rows == [{"event_id": "e1", "kind": "plan.created", "state": "pending", "created_at": "2026-01-01T00:00:00+00:00"}]
+    assert "tenant_id" in s.db.calls[1][0]
+
+
 def test_control_plane_tables_exist(evidence):
     settings, repo, scan = evidence
     with repo.transaction(TID) as db:

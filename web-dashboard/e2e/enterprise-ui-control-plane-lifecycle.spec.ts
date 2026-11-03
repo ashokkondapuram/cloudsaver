@@ -103,12 +103,33 @@ test.describe('Control-plane plan lifecycle', () => {
       engineeringOutboxPublishedCount: 1,
       engineeringWorkloadId: engineeringWorkloadId,
       engineeringWorkloadName: 'Payments',
+      engineeringOutboxItems: [
+        {
+          event_id: '11111111-1111-4111-8111-111111111111',
+          kind: 'plan.version.created',
+          state: 'pending',
+          created_at: '2026-10-28T12:00:00Z',
+        },
+        {
+          event_id: '22222222-2222-4222-8222-222222222222',
+          kind: 'plan.readiness.assessed',
+          state: 'pending',
+          created_at: '2026-10-28T12:05:00Z',
+        },
+        {
+          event_id: '33333333-3333-4333-8333-333333333333',
+          kind: 'plan.execution.queued',
+          state: 'published',
+          created_at: '2026-10-28T12:10:00Z',
+        },
+      ],
     });
     await navigate(page, 'Risk & compliance');
     await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
     await expect(page.getByText(/2 pending, 1 published/i)).toBeVisible();
     await page.getByText('Engineering outbox readout (audit-only)', {exact: true}).click();
     await expect(page.getByText(/2 engineering event\(s\) pending worker dispatch/i)).toBeVisible();
+    await expect(page.locator('.plan-outbox-table')).toContainText('plan version created');
     await expect(
       page.locator('.plan-outbox-readout').getByRole('link', {name: /Open linked engineering workload \(Payments\)/i}),
     ).toBeVisible();

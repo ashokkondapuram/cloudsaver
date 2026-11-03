@@ -50,6 +50,12 @@ export type MockControlPlanePlanOptions = {
   engineeringOutboxState?: 'pending' | 'published' | null;
   engineeringOutboxPendingCount?: number | (() => number);
   engineeringOutboxPublishedCount?: number | (() => number);
+  engineeringOutboxItems?: Array<{
+    event_id: string;
+    kind: string;
+    state: 'pending' | 'published';
+    created_at: string;
+  }>;
 };
 
 export async function mockControlPlanePlan(page: Page, options: MockControlPlanePlanOptions) {
@@ -95,6 +101,13 @@ export async function mockControlPlanePlan(page: Page, options: MockControlPlane
             engineering_outbox_published_count: resolveCount(options.engineeringOutboxPublishedCount),
           },
         ],
+      },
+    }),
+  );
+  await page.route(`**/api/v1/control-plane/plan-versions/${options.versionId}/engineering-outbox*`, route =>
+    route.fulfill({
+      json: {
+        items: options.engineeringOutboxItems ?? [],
       },
     }),
   );

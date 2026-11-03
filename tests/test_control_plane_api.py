@@ -133,3 +133,17 @@ def test_financial_scenario_idempotent_replay(tmp_path):
     assert first.status_code == 201 and first.json()['result']['status'] == 'computed'
     second = c.post('/api/v1/control-plane/financial-scenarios', json=body, headers=AUTH)
     assert second.status_code == 200 and second.json()['id'] == first.json()['id']
+
+
+def test_plan_version_engineering_outbox_read_returns_items(tmp_path):
+    c = client(tmp_path)
+    plan = c.post('/api/v1/control-plane/plans', json={'objective': 'Outbox read surface'}, headers=AUTH).json()
+    version = c.post(
+        f'/api/v1/control-plane/plans/{plan["id"]}/versions',
+        json={'expected_version': 0, 'targets': ['r1'], 'parameters': {}},
+        headers=AUTH,
+    ).json()
+    response = c.get(f'/api/v1/control-plane/plan-versions/{version["id"]}/engineering-outbox', headers=AUTH)
+    assert response.status_code == 200 and response.json()['items'] == []
+    missing = c.get(f'/api/v1/control-plane/plan-versions/{uuid4()}/engineering-outbox', headers=AUTH)
+    assert missing.status_code == 404

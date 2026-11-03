@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–25 of the UI/UX program. Phase history and invariants: [`docs/ENTERPRISE_UI_PROGRAM.md`](../../docs/ENTERPRISE_UI_PROGRAM.md).
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–26 of the UI/UX program. Phase history and invariants: [`docs/ENTERPRISE_UI_PROGRAM.md`](../../docs/ENTERPRISE_UI_PROGRAM.md).
 
 ## Run locally
 
@@ -26,7 +26,7 @@ npm run test:e2e                    # both projects (full suite)
 | `declared-workloads-if-match.spec.ts` | Engineering workload version fencing |
 | `commitment-expiry-badges.spec.ts` | FinOps commitment expiry badges |
 
-Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `governance-theme-fixture.ts`, `workspace-fixture.ts`.
+Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `governance-theme-fixture.ts`, `governance-workflow-fixture.ts`, `workspace-fixture.ts`.
 
 ## Deep links and live refresh
 
@@ -41,15 +41,15 @@ Cross-view refresh uses the browser event `cloudsaver:cp-plan-revision` (`lib/co
 - Governance transitions notify with `source: governance`; engineering subscribes and refetches.
 - Engineering saves notify with `source: engineering`; governance refetches plan versions (targeted when `planId` is set) and shows a dismissible sync notice with refreshed outbox counts.
 
-Plan version payloads may include `engineering_outbox_pending_count`, `engineering_outbox_published_count`, and `engineering_outbox_state` (latest row). When present, control-plane cards expose an expandable **Engineering outbox readout (audit-only)** with aggregate bullet lines (not per-row dispatch). Helpers live in `lib/plan-outbox.ts`. Execution tracking in the UI remains audit-only; outbox rows do not trigger cloud mutations from the dashboard.
+Plan version payloads may include `engineering_outbox_pending_count`, `engineering_outbox_published_count`, and `engineering_outbox_state` (latest row). When present, control-plane cards expose an expandable **Engineering outbox readout (audit-only)** with aggregate bullet lines and a read-only table from `GET /api/v1/control-plane/plan-versions/{version_id}/engineering-outbox`. Helpers live in `lib/plan-outbox.ts`. Execution tracking in the UI remains audit-only; outbox rows do not trigger cloud mutations from the dashboard.
 
 ## CI
 
-GitHub Actions `dashboard` job currently runs `npm run test:e2e` (both Playwright projects) against a production build on port 3099. To surface enterprise regressions separately in CI logs, split the job after the server is ready:
+GitHub Actions `dashboard` job currently runs `npm run test:e2e` (both Playwright projects) on port 3099. To apply the phase 26 split, replace that command in `.github/workflows/verify.yml` with:
 
 ```bash
 npm run test:enterprise-ui
 npx playwright test --project=dashboard
 ```
 
-Local development can still use `npm run test:e2e` for a single combined run.
+Pushing workflow changes requires a GitHub token with the `workflow` scope. Locally, `npm run test:e2e` still runs both projects in one command.

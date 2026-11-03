@@ -219,6 +219,24 @@ def list_plan_versions(store, tenant_id, plan_id, limit=50):
     ]
 
 
+def list_plan_version_engineering_outbox(store, tenant_id, version_id, limit=50):
+    with store.transaction(tenant_id) as db:
+        if db.execute("SELECT 1 FROM cp_plan_versions WHERE tenant_id=%s AND id=%s", (tenant_id, version_id)).fetchone() is None:
+            raise NotFoundError()
+        rows = db.execute(
+            "SELECT e.id,e.kind,o.state,o.created_at "
+            "FROM engineering_events e "
+            "INNER JOIN engineering_outbox o ON o.tenant_id=e.tenant_id AND o.event_id=e.id "
+            "WHERE e.tenant_id=%s AND e.version_id=%s "
+            "ORDER BY o.created_at DESC LIMIT %s",
+            (tenant_id, version_id, limit),
+        ).fetchall()
+    return [
+        dict(event_id=str(r[0]), kind=r[1], state=r[2], created_at=str(r[3]))
+        for r in rows
+    ]
+
+
 def record_approval(store, tenant_id, version_id, identity_digest, approver_hash, verified_human, expires_at):
     """Refuses unless the digest matches the stored version, so edited plans cannot inherit approval."""
     if verified_human is not True:

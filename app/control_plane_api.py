@@ -78,6 +78,17 @@ def create_router(store, current_tenant):
         except NotFoundError:
             raise HTTPException(404, 'Plan not found') from None
 
+    @router.get('/plan-versions/{version_id}/engineering-outbox')
+    def list_plan_version_engineering_outbox_route(
+        version_id: UUID,
+        limit: int = Query(50, ge=1, le=200),
+        tenant=Depends(reader),
+    ):
+        try:
+            return {'items': cp_store.list_plan_version_engineering_outbox(store, tenant['tenant_id'], str(version_id), limit)}
+        except NotFoundError:
+            raise HTTPException(404, 'Plan version not found') from None
+
     @router.post('/plans', status_code=201)
     def create_plan(body: PlanRequest, tenant=Depends(admin)):
         plan_id = cp_store.create_plan(store, tenant['tenant_id'], body.objective, actor(tenant))

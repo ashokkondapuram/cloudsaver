@@ -83,6 +83,13 @@ export interface PlanVersionRecord {
   engineering_outbox_published_count?: number;
 }
 
+export interface EngineeringOutboxRow {
+  event_id: string;
+  kind: string;
+  state: 'pending' | 'published';
+  created_at: string;
+}
+
 export interface DeclaredWorkload {
   id: string;
   tenant_id: string;

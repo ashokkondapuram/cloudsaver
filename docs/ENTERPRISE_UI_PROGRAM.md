@@ -22,7 +22,7 @@ Living record of the incremental **Enterprise UI** workstream on the CloudSaver 
 
 Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/control-plane-sync.ts`, `lib/control-plane.ts`, `lib/plan-outbox.ts`.
 
-## Phase log (1–25)
+## Phase log (1–26)
 
 | Phase | Theme |
 | --- | --- |
@@ -35,20 +35,21 @@ Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/contro
 | 21 | Declared workload deep links, workloads URL canonicalization, extended share links |
 | 22 | Typed revision `source`, governance outbox live refresh + sync notice, `/governance` → `tab=risk` |
 | 23 | Shared `governance-theme-fixture.ts`, theme spec uses control-plane fixtures |
-| 24 | This program doc; engineering execution-state outbox coordination copy |
+| 24 | Program doc; engineering execution-state outbox coordination copy |
 | 25 | Shared `lib/plan-outbox.ts`, expandable audit-only outbox readout on plan cards |
+| 26 | **Program backlog closed:** outbox row read API + UI table, governance workflow fixture migration, CI enterprise slice split (apply `verify.yml` diff below when token has `workflow` scope) |
 
 ## Verification
 
 ```bash
 cd web-dashboard
 npm run test:enterprise-ui
+python3 scripts/release_manifest.py --check   # from repo root after changes
+pytest tests/test_control_plane_api.py tests/test_control_plane_store.py -q
 ```
 
-CI (`.github/workflows/verify.yml` dashboard job) runs the full dashboard Playwright suite via `npm run test:e2e` unless the job is split per `ENTERPRISE_UI.md`.
+CI: GitHub Actions `dashboard` job runs the full dashboard Playwright suite via `npm run test:e2e` until the workflow split from `ENTERPRISE_UI.md` is applied.
 
-## Backlog (not committed)
+## Program status
 
-- Dedicated read/dispatch API for per-row `engineering_outbox` in the UI (today: version-level aggregates only).
-- Optional CI step split (`test:enterprise-ui` then `--project=dashboard`) — requires GitHub token with `workflow` scope to change Actions YAML.
-- Migrate rich `governance.spec.ts` mocks into shared fixtures without losing role-specific scenarios.
+**Backlog complete as of phase 26.** Future work is product-driven (e.g. worker dispatch controls) and must preserve audit-only dashboard boundaries unless explicitly approved.
