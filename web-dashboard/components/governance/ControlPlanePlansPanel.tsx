@@ -5,6 +5,7 @@ import {RefreshCw} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
+import {notifyControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
@@ -153,6 +154,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
       setObjective('');
       setTargets('');
       setNotice('Control-plane plan saved. Transitions and human approval remain separate steps.');
+      notifyControlPlanePlanRevision(plan.id);
       setRevision(r => r + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -170,6 +172,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         body: {from_state: version.state, to_state: to},
       });
       setNotice(`Plan version advanced to ${to.replaceAll('_', ' ')}.`);
+      notifyControlPlanePlanRevision(version.plan_id);
       setRevision(r => r + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -193,6 +196,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         body: {from_state: version.state, to_state: 'approved'},
       });
       setNotice('Human approval recorded and plan version advanced to approved. Execution remains disabled until separate verification.');
+      notifyControlPlanePlanRevision(version.plan_id);
       setApprovalAck(prev => ({...prev, [version.id]: false}));
       setRevision(r => r + 1);
     } catch (cause) {

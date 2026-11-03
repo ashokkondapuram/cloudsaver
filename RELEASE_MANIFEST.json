@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "0c4de7e5aa2c2f1a2aa24c15c5bbf834db3673802ca22751b63bc359d89ec31d",
+  "inventory_sha256": "493cb253e566bca5d0ebb1545a2b5c59442cd85acd776a8c6bd2261bab52b72b",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3971,13 +3971,13 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "68e71eeaa0ee7676ea9915ca3f83b2479cd969aa27755a45a1495d6da9ca5117",
-      "bytes": 18641
+      "sha256": "30a175af1201e89e686d0631657a895ed741cf3637d3e393dc12312bb69d5848",
+      "bytes": 18875
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
-      "sha256": "206af3f6298981dee4d58b785212876212843660c27c3a30e6e094a4e8027810",
-      "bytes": 44353
+      "sha256": "5a6d7370b4270c71872d6429ddd9d6d03bd42d0df82cfdff9133697678d5d539",
+      "bytes": 44789
     },
     {
       "path": "web-dashboard/components/governance/governance.css",
@@ -4106,8 +4106,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "ff179779e515845ff59805c7ee03c56741b5d472be6ea17c59dfc2c318974726",
-      "bytes": 19667
+      "sha256": "d0e335e5c151d3cc155bf45cf461ca3d43f67c4dafbd7327046630bfbefd51c9",
+      "bytes": 19827
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
@@ -4116,8 +4116,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "21dce5b961f8ea8293239449b209199997b041b6afa3f1dfdde714b085734e1b",
-      "bytes": 1323
+      "sha256": "1d9e693b076cbe04e00a5604de3f7715d4eec02dc3394f6454031be8f42d7899",
+      "bytes": 1337
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4203,6 +4203,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase12.spec.ts",
       "sha256": "aa98c97f5cc25642c370a6c4d7f7843c8711be56c3a68b349c0787c3097f0854",
       "bytes": 4570
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase13.spec.ts",
+      "sha256": "53c0761f8530ff9a5ec70fc3aebbbb7d368e0ed36f7b227001839925f8abe089",
+      "bytes": 4860
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",

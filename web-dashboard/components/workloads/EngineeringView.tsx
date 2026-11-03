@@ -4,6 +4,7 @@ import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {api,ApiError} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
+import {subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading,Notice} from '../ui/shared';
 import css from './Engineering.module.css';
@@ -144,6 +145,7 @@ function Detail({id,token,revision,refresh,canAdmin,scanId}:{id:string;token:str
 export function EngineeringView(){
   const {token,workspace,canAdmin,scan}=useWorkspace();
   const [revision,setRevision]=useState(0),[cursor,setCursor]=useState<string|null>(null),[selected,setSelected]=useState('');
+  useEffect(()=>subscribeControlPlanePlanRevision(()=>setRevision(n=>n+1)),[]);
   const capabilities=useRead<Capabilities>('/engineering/capabilities',token,revision);
   const workloads=useRead<Page<Workload>>('/engineering/workloads'+query(cursor),token,revision);
   const [capabilityDetails,setCapabilityDetails]=useState(false);
