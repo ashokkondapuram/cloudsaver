@@ -144,17 +144,21 @@ function Detail({id,token,revision,refresh,canAdmin,scanId}:{id:string;token:str
 
 export function EngineeringView(){
   const {token,workspace,canAdmin,scan}=useWorkspace();
-  const [revision,setRevision]=useState(0),[cursor,setCursor]=useState<string|null>(null),[selected,setSelected]=useState('');
-  useEffect(()=>subscribeControlPlanePlanRevision(()=>setRevision(n=>n+1)),[]);
+  const [revision,setRevision]=useState(0),[cursor,setCursor]=useState<string|null>(null),[selected,setSelected]=useState(''),[syncNotice,setSyncNotice]=useState('');
+  useEffect(()=>subscribeControlPlanePlanRevision(()=>{
+    setRevision(n=>n+1);
+    setSyncNotice('Control-plane plan state changed in governance. Engineering records refreshed to match the shared version record.');
+  }),[]);
   const capabilities=useRead<Capabilities>('/engineering/capabilities',token,revision);
   const workloads=useRead<Page<Workload>>('/engineering/workloads'+query(cursor),token,revision);
   const [capabilityDetails,setCapabilityDetails]=useState(false);
-  const refresh=()=>setRevision(n=>n+1);
+  const refresh=()=>{setSyncNotice('');setRevision(n=>n+1);};
   const live=scan?.status==='completed'&&scan?.data_origin!=='legacy_synthetic'&&scan?.mode!=='demo';
   if(!workspace)return <Notice>Connect a workspace to continue.</Notice>;
   return <section className={css.root} aria-label="Engineering plans">
     <div className={css.intro}><div><strong>1. Define the workload</strong><p>Assign an owner and explain its service, peak demand and recovery needs.</p></div><div><strong>2. Review the evidence</strong><p>Attach saved observations and compare a candidate against the evidence requirements.</p></div><div><strong>3. Prepare the change</strong><p>Resolve blockers before a reviewed Terraform change. Track verified results in <Link href="/outcomes">Outcomes</Link>.</p></div></div>
     <div className={css.actions}><button className="button secondary" onClick={refresh}>Refresh engineering records</button><button className="button secondary" aria-expanded={capabilityDetails} onClick={()=>setCapabilityDetails(!capabilityDetails)}>Pilot capabilities</button></div>
+    {syncNotice&&<Notice tone="success">{syncNotice}</Notice>}
     {capabilities.error&&<Notice tone="error">{capabilities.error}</Notice>}
     {capabilityDetails&&capabilities.value&&<section className={'panel '+css.panel}><h2>Azure pilot capabilities</h2><p>Workload declarations and evidence reviews are available. Infrastructure execution is disabled.</p><ul>{capabilities.value.actions.map(a=><li key={a.id}>{sentence(a.id)} · {sentence(a.mode)}</li>)}</ul><h3>Required before live execution</h3><ul>{capabilities.value.acceptance_required.map(a=><li key={a}>{sentence(a)}</li>)}</ul></section>}
     {canAdmin&&!!capabilities.value?.scopes.length&&<details className={'panel '+css.panel+' '+css.details}><summary>Create a workload</summary><Command key={revision} token={token} path="/engineering/workloads" label="Create workload" body={workloadBody} done={()=>{setCursor(null);refresh();}}><WorkloadFields scopes={capabilities.value.scopes}/></Command></details>}

@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–14 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–15 of the UI/UX program.
 
 ## Run locally
 
@@ -22,7 +22,7 @@ npm run test:e2e                    # both projects (full suite)
 | `declared-workloads-if-match.spec.ts` | Engineering workload version fencing |
 | `commitment-expiry-badges.spec.ts` | FinOps commitment expiry badges |
 
-Shared fixtures: `control-plane-fixture.ts`, `workspace-fixture.ts`.
+Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `workspace-fixture.ts`.
 
 ## CI
 
