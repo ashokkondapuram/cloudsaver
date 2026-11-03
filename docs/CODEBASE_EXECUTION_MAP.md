@@ -222,6 +222,8 @@ See `docs/DEPLOYMENT_ENVIRONMENT.md` for the full list.
 | Change scan steps | `scanner.py`, `main.py` scan handler |
 | Change resource drawer costs | `web-dashboard/components/resources/ResourceDrawer.tsx` |
 | Add API route | Feature `*_api.py`, `route_inventory.py`, `gateway.py`, dashboard `route.ts` allowlist |
+| Map UI tab → API | `docs/UI_API_MAP.md` |
+| Smoke-test workspace APIs (local/product dev) | `scripts/audit_workspace_api.py` |
 | Billing import | `collectors/billing_sync.py`, `workers/billing_sync.py` |
 
 ---

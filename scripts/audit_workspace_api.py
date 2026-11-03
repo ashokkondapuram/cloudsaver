@@ -58,6 +58,7 @@ def main() -> int:
         ('GET', '/health/live', False),
         ('GET', '/health/ready', False),
         ('GET', '/api/v1/me', True),
+        ('GET', '/api/v1/scans', True),
         ('GET', '/api/v1/settings', True),
         ('GET', '/api/v1/rules/catalog', True),
         ('GET', '/api/v1/rules/effective', True),
@@ -86,6 +87,12 @@ def main() -> int:
         scan_id = payload['scan_id']
     else:
         lines.append(f'- Using scan `{scan_id}`')
+
+    optional_scan_paths = [f'/api/v1/scans/{scan_id}/kubernetes']
+    for path in optional_scan_paths:
+        status, _ = call('GET', path, required=False)
+        ok = status in (200, 404)
+        lines.append(f'- {"OK" if ok else "WARN"} `GET {path}` → {status} (404 ok if no K8s)')
 
     resource_checks = [
         f'/api/v1/scans/{scan_id}/resources?limit=50',
