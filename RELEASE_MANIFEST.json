@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "9232b97dcc835f88f3b082cb02dbc021ff1ca2069aa3aaf09cc250c49cab2aaf",
+  "inventory_sha256": "126991667de259db7e337e1e7e1e1088c84577b24e6f487129c8581fc14babb6",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3971,18 +3971,18 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "acfa89ce77e7cbbec58896125f2573c10b7e0abc2ef58c0094a988bbc45c61d1",
-      "bytes": 23063
+      "sha256": "4f6295970dda17d70719aadabbd3991cc3f5636fab9dc43086d4cbaf86e69cf9",
+      "bytes": 23996
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
-      "sha256": "5a6d7370b4270c71872d6429ddd9d6d03bd42d0df82cfdff9133697678d5d539",
-      "bytes": 44789
+      "sha256": "e2e65e2a7649344883c81efb1514e5296b0f395580621eb1febadee2bcc228f0",
+      "bytes": 45085
     },
     {
       "path": "web-dashboard/components/governance/governance.css",
-      "sha256": "0b20b1cd69e0470f738dd3f70999e568bc3d16410538b9037e5e15cbd737d58b",
-      "bytes": 3818
+      "sha256": "9e5410b81b21d11eac4af01c6e4570d61cdd081f4aee47b7a691ee23605be35b",
+      "bytes": 3908
     },
     {
       "path": "web-dashboard/components/governance/types.ts",
@@ -4106,8 +4106,8 @@
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "be80811f540a161147651993cf22ecaaeca9b08080d99e000d2b88ec2397d60c",
-      "bytes": 21213
+      "sha256": "f0d560bf910e15167f6525c4a02504e62b95289c58ee146ccc021db7a201275f",
+      "bytes": 21284
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
@@ -4116,8 +4116,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "8a28ca1235c36f3a82af0eb89878d1b1cbc958a94bf4c4f79a521c5f42b276c6",
-      "bytes": 3151
+      "sha256": "e6c8d59badbb516e776bea49cce4a2c07ca07dea795a2e0c6bc019b392e4ab60",
+      "bytes": 3342
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4146,8 +4146,8 @@
     },
     {
       "path": "web-dashboard/e2e/control-plane-fixture.ts",
-      "sha256": "4fc751afd87c1553b9155e678eaa6f993aad3d2fd077ffce241b5c800ccc2baa",
-      "bytes": 3909
+      "sha256": "28360ba6599343c00f16fcf6a6a562bd66712501a00979f351623958ee13002d",
+      "bytes": 4091
     },
     {
       "path": "web-dashboard/e2e/control-plane-human-approval.spec.ts",
@@ -4211,8 +4211,8 @@
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-governance-engineering.spec.ts",
-      "sha256": "71e834469ee0014b2cb6f42f8809fb84090ae4dc04aa979e099e90eff95c5de9",
-      "bytes": 10767
+      "sha256": "4be677dad7870622628f9c4bd74f9b979167d52309b7b2afec1f1d9fb94146fe",
+      "bytes": 12429
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-governance-theme.spec.ts",
@@ -4336,8 +4336,8 @@
     },
     {
       "path": "web-dashboard/lib/control-plane-sync.ts",
-      "sha256": "cad179a556f21c7b9a8369622da6b4587652a6d5b783235ba0bae9d3cc81283c",
-      "bytes": 635
+      "sha256": "0641231a5fb22efd79da8a07b5c7a16475e913f84e05ff7adbdaeb87b39aa60a",
+      "bytes": 1172
     },
     {
       "path": "web-dashboard/lib/control-plane.ts",

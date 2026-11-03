@@ -48,6 +48,12 @@ export function GovernanceWorkspace(){
   router.replace(qs?`/governance?${qs}`:'/governance',{scroll:false});
  }
  useEffect(()=>{const fromQuery=governanceTabFromQuery(searchParams.get('tab'));if(fromQuery)setTab(fromQuery);},[searchParams]);
+ useEffect(()=>{
+  if(governanceTabFromQuery(searchParams.get('tab')))return;
+  const params=new URLSearchParams(searchParams.toString());
+  params.set('tab',governanceQueryFromTab('Risk register'));
+  router.replace(`/governance?${params.toString()}`,{scroll:false});
+ },[searchParams,router]);
  useEffect(()=>{const c=new AbortController();setData(null);setError('');api<Caps>('/governance/capabilities',token,{signal:c.signal}).then(async capabilities=>{
   if(c.signal.aborted)return;setCaps(capabilities);if(!capabilities.readable)return;
   const [controls,directory,findings,risks,exceptions,summary,access]=await Promise.all([

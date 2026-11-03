@@ -187,7 +187,9 @@ test('engineering plans refetch when control-plane revision is signaled', async 
   planState = 'review_requested';
   await page.evaluate(
     ({eventName, planId}) => {
-      window.dispatchEvent(new CustomEvent(eventName, {detail: {planId, at: Date.now()}}));
+      window.dispatchEvent(
+        new CustomEvent(eventName, {detail: {planId, at: Date.now(), source: 'governance'}}),
+      );
     },
     {eventName: CONTROL_PLANE_PLAN_REVISION_EVENT, planId: engineeringPlanId},
   );
@@ -202,7 +204,9 @@ test('engineering view surfaces sync notice after control-plane revision', async
   await openEngineeringWorkload(page);
   await page.evaluate(
     ({eventName, planId}) => {
-      window.dispatchEvent(new CustomEvent(eventName, {detail: {planId, at: Date.now()}}));
+      window.dispatchEvent(
+        new CustomEvent(eventName, {detail: {planId, at: Date.now(), source: 'governance'}}),
+      );
     },
     {eventName: CONTROL_PLANE_PLAN_REVISION_EVENT, planId: engineeringPlanId},
   );
@@ -228,4 +232,42 @@ test('workloads tab clicks sync tab query and clears engineering deep-link param
   await expect(page).toHaveURL(/tab=assessments/);
   await expect(page).not.toHaveURL(/plan=/);
   await expect(page).not.toHaveURL(/workload=/);
+});
+
+test('governance route canonicalizes risk tab in the URL', async ({page}) => {
+  await mockWorkspace(page, {human: true});
+  await mockGovernanceRoutes(page);
+  await page.goto('/governance');
+  await expect(page).toHaveURL(/tab=risk/);
+});
+
+test('control-plane panel refreshes outbox counts after engineering revision signal', async ({page}) => {
+  let pendingCount = 0;
+  await mockWorkspace(page, {human: true});
+  await mockGovernanceRoutes(page);
+  await mockControlPlanePlan(page, {
+    planId: engineeringPlanId,
+    versionId: '77777777-7777-4777-8777-777777777777',
+    digest: 'a'.repeat(64),
+    initialState: 'queued',
+    objective: 'Outbox live refresh',
+    engineeringOutboxState: 'pending',
+    engineeringOutboxPendingCount: () => pendingCount,
+    engineeringOutboxPublishedCount: 1,
+  });
+  await page.goto(`/governance?tab=control-plane&plan=${encodeURIComponent(engineeringPlanId)}`);
+  await expect(page.getByText(/0 pending, 1 published/i)).toBeVisible();
+  pendingCount = 3;
+  await page.evaluate(
+    ({eventName, planId}) => {
+      window.dispatchEvent(
+        new CustomEvent(eventName, {detail: {planId, at: Date.now(), source: 'engineering'}}),
+      );
+    },
+    {eventName: CONTROL_PLANE_PLAN_REVISION_EVENT, planId: engineeringPlanId},
+  );
+  await expect(page.getByText(/Engineering records changed/i)).toBeVisible();
+  await expect(page.getByText(/3 pending, 1 published/i)).toBeVisible();
+  await page.getByRole('button', {name: 'Dismiss', exact: true}).click();
+  await expect(page.getByText(/Engineering records changed/i)).toBeHidden();
 });

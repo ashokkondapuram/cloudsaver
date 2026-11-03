@@ -123,6 +123,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
   const [approvalAck, setApprovalAck] = useState<Record<string, boolean>>({});
+  const [syncNotice, setSyncNotice] = useState('');
 
   useEffect(() => {
     if (!highlightPlanId || !plans.some(p => p.id === highlightPlanId)) return;
@@ -130,7 +131,23 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
     el?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }, [highlightPlanId, plans, revision]);
 
-  useEffect(() => subscribeControlPlanePlanRevision(() => setRevision(r => r + 1)), []);
+  useEffect(
+    () =>
+      subscribeControlPlanePlanRevision(detail => {
+        if (detail.source === 'governance') return;
+        setSyncNotice(
+          'Engineering records changed. Plan versions were refreshed to include outbox pending and published counts.',
+        );
+        if (detail.planId) {
+          void api<{items: PlanVersionRecord[]}>(`/control-plane/plans/${detail.planId}/versions?limit=20`, token).then(res =>
+            setVersions(prev => ({...prev, [detail.planId!]: res.items})),
+          );
+          return;
+        }
+        setRevision(r => r + 1);
+      }),
+    [token],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -183,7 +200,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
       setObjective('');
       setTargets('');
       setNotice('Control-plane plan saved. Transitions and human approval remain separate steps.');
-      notifyControlPlanePlanRevision(plan.id);
+      notifyControlPlanePlanRevision(plan.id, {source: 'governance'});
       setRevision(r => r + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -201,7 +218,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         body: {from_state: version.state, to_state: to},
       });
       setNotice(`Plan version advanced to ${to.replaceAll('_', ' ')}.`);
-      notifyControlPlanePlanRevision(version.plan_id);
+      notifyControlPlanePlanRevision(version.plan_id, {source: 'governance'});
       setRevision(r => r + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -225,7 +242,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         body: {from_state: version.state, to_state: 'approved'},
       });
       setNotice('Human approval recorded and plan version advanced to approved. Execution remains disabled until separate verification.');
-      notifyControlPlanePlanRevision(version.plan_id);
+      notifyControlPlanePlanRevision(version.plan_id, {source: 'governance'});
       setApprovalAck(prev => ({...prev, [version.id]: false}));
       setRevision(r => r + 1);
     } catch (cause) {
@@ -270,6 +287,14 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {notice && <Notice tone="success">{notice}</Notice>}
+      {syncNotice && (
+        <div className="cp-sync-notice">
+          <Notice tone="success">{syncNotice}</Notice>
+          <button type="button" className="button secondary small" onClick={() => setSyncNotice('')}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {highlightPlanId && plans.some(p => p.id === highlightPlanId) && (
         <Notice>
           Focused plan from a shared link (for example engineering workloads). Review and approval actions apply to the

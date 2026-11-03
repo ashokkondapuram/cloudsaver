@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–21 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–22 of the UI/UX program.
 
 ## Run locally
 
@@ -32,14 +32,14 @@ Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `workspac
 
 | Surface | Query parameters | Notes |
 | --- | --- | --- |
-| Governance | `tab=control-plane`, `plan=<cp_plan_id>` | Tab slugs mirror `lib/governance-tabs.ts`. Leaving Control-Plane Plans clears `plan`. |
+| Governance | `tab=risk`, `findings`, `control-plane`, …, `plan=<cp_plan_id>` | `/governance` without `tab` canonicalizes to `tab=risk`. Leaving Control-Plane Plans clears `plan`. |
 | Workloads | `tab=engineering\|declared\|assessments`, `workload=<id>`, `plan=<cp_plan_id>` | `/workloads` without `tab` canonicalizes to `tab=assessments`. Engineering tab keeps workload/plan focus; declared tab keeps `workload` and drops `plan`; assessments clears deep-link params. |
 | Share clipboard | Governance panel **Copy plan links** | Writes governance URL and, when linked, engineering and declared workload URLs (`engineering_workload_id` on plan list). Declared tab **Copy declared workload link** copies `tab=declared&workload=`. |
 
-Cross-view refresh uses the browser event `cloudsaver:cp-plan-revision` (`lib/control-plane-sync.ts`):
+Cross-view refresh uses the browser event `cloudsaver:cp-plan-revision` (`lib/control-plane-sync.ts`). Event detail includes optional `planId` and `source` (`engineering` | `governance`):
 
-- Control-plane transitions and approvals notify engineering to refetch plan state.
-- Engineering workload/plan saves notify governance to refetch plan versions (including engineering outbox pending/published counts).
+- Governance transitions notify with `source: governance`; engineering subscribes and refetches.
+- Engineering saves notify with `source: engineering`; governance refetches plan versions (targeted when `planId` is set) and shows a dismissible sync notice with refreshed outbox counts.
 
 Plan version payloads may include `engineering_outbox_pending_count`, `engineering_outbox_published_count`, and `engineering_outbox_state` (latest row). Execution tracking in the UI remains audit-only; outbox rows do not trigger cloud mutations from the dashboard.
 

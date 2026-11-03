@@ -111,7 +111,7 @@ function Detail({id,token,revision,refresh,canAdmin,scanId,highlightPlanId}:{id:
   const plans=useRead<Page<Plan>>(`/engineering/workloads/${id}/plans${query(planCursor)}`,token,revision);
   const events=useRead<Page<Event>>(`/engineering/workloads/${id}/events${query(eventCursor)}`,token,revision);
   const resources=useRead<{items:Resource[];total:number}>(canAdmin&&scanId?`/scans/${scanId}/resources?provider=azure&limit=20&offset=${offset}`:null,token);
-  const refreshDetail=(planId?:string)=>{setMemberCursor(null);setPlanCursor(null);setEventCursor(null);setSelected('');refresh();notifyControlPlanePlanRevision(planId);};
+  const refreshDetail=(planId?:string)=>{setMemberCursor(null);setPlanCursor(null);setEventCursor(null);setSelected('');refresh();notifyControlPlanePlanRevision(planId,{source:'engineering'});};
   if(w.error)return <Notice tone="error">{w.error}</Notice>;
   if(!w.value)return <Loading label="Loading workload…"/>;
   const workload=w.value;
@@ -155,7 +155,8 @@ export function EngineeringView(){
     const el=document.getElementById(`engineering-plan-${highlightPlanId}`);
     el?.scrollIntoView({behavior:'smooth',block:'nearest'});
   },[highlightPlanId,selected,revision]);
-  useEffect(()=>subscribeControlPlanePlanRevision(()=>{
+  useEffect(()=>subscribeControlPlanePlanRevision(detail=>{
+    if(detail.source!=='governance')return;
     setRevision(n=>n+1);
     setSyncNotice('Control-plane plan state changed in governance. Engineering records refreshed to match the shared version record.');
   }),[]);
