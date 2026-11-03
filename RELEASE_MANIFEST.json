@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "c2b7ad277fd544f28af71213e853839e7eaec9a76219e2405a27691fc033520e",
+  "inventory_sha256": "d03d473ba29720c58f287b06b060898f4c84bd28be767b1361ea41050479e8f3",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "10722dd8cffcdf567257a3f5d2f48f1d624807cd7713ab2c02dad51631799f16",
-      "bytes": 32752
+      "sha256": "d6e534e810548cbd9f46a065aaeb4addf8c410830a3692319b3c3c3d5def3b23",
+      "bytes": 32818
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "30a175af1201e89e686d0631657a895ed741cf3637d3e393dc12312bb69d5848",
-      "bytes": 18875
+      "sha256": "cf31358f2d626b67b73df19f73e64c5e74c3ac75a61de45c7a5971bf70f455e9",
+      "bytes": 19325
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4101,13 +4101,13 @@
     },
     {
       "path": "web-dashboard/components/workloads/Engineering.module.css",
-      "sha256": "c606ed58f56f2b7d5f8374dbd2fb1fe8789489c643685c167ffbfb03ded0a2be",
-      "bytes": 2312
+      "sha256": "eb4167550f049e6f35940eaeabdc642e1ebdd6397b24f386d878bc6b05f077b7",
+      "bytes": 2106
     },
     {
       "path": "web-dashboard/components/workloads/EngineeringView.tsx",
-      "sha256": "16e02d6d8b2954ed0a331650c4697d39782eb5ece74e79882885dd43d10add31",
-      "bytes": 20098
+      "sha256": "0b1049fafdf7aabdc6ec9be340edc8da7f85f16bcfe8372be3b3775b30e70fff",
+      "bytes": 20300
     },
     {
       "path": "web-dashboard/components/workloads/WorkloadsView.tsx",
@@ -4116,8 +4116,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "b0fa3d5ee79bb29cc93a8933ebdc68b82636c4eb04b5d4ac84289be724186def",
-      "bytes": 1363
+      "sha256": "bef09528a73ceab12b18e7a85e32b0cdd2759295aae6fb2678e4ef7afefdb32a",
+      "bytes": 1540
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4180,6 +4180,11 @@
       "bytes": 7697
     },
     {
+      "path": "web-dashboard/e2e/engineering-fixture.ts",
+      "sha256": "1a7f1ff8ab7577d0c1d7c08a4b6200688a41384b0d85a5a22acd6efcdea4b235",
+      "bytes": 4484
+    },
+    {
       "path": "web-dashboard/e2e/engineering.spec.ts",
       "sha256": "a3c63005014ea63429536e19abad38dc3fb2656244b3a5d3876464752e8068c0",
       "bytes": 8284
@@ -4190,14 +4195,14 @@
       "bytes": 3978
     },
     {
-      "path": "web-dashboard/e2e/enterprise-ui-phase10.spec.ts",
-      "sha256": "fcb3c2caa98fd943f9274912cb17dc64fc50f2831c39291b83d07c2eaaaf0f7e",
-      "bytes": 2692
+      "path": "web-dashboard/e2e/enterprise-ui-control-plane-lifecycle.spec.ts",
+      "sha256": "99d1cb68bca64aaa236feb5307898ff8c68776a8e809ab3764a1e4abaf9e774d",
+      "bytes": 9657
     },
     {
-      "path": "web-dashboard/e2e/enterprise-ui-phase11.spec.ts",
-      "sha256": "b9a809f4f6c15ad033030d59afacd6b9444bac1669d8da26070eef67f0e79e44",
-      "bytes": 1001
+      "path": "web-dashboard/e2e/enterprise-ui-foundry-probe.spec.ts",
+      "sha256": "2d760b021cec9283c2499b4fc3e16ffd82c0c06fbdb524fed2fbd2b8f6dfc46c",
+      "bytes": 3113
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-phase12.spec.ts",
@@ -4215,6 +4220,11 @@
       "bytes": 2283
     },
     {
+      "path": "web-dashboard/e2e/enterprise-ui-phase15.spec.ts",
+      "sha256": "ccd6a05e0cde89b0db88f585413cdb8712f306b72f8624f919b0694e5afc0c55",
+      "bytes": 1037
+    },
+    {
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
       "sha256": "cf9e9d6691019f9f7df18980a49c7ba79295848049709425dd568b9ae0710cec",
       "bytes": 7305
@@ -4223,26 +4233,6 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase5.spec.ts",
       "sha256": "d1ae025cbab78d93624d595608cfa0369f7ea3a9b9ca35670279a21d2fee60d1",
       "bytes": 4372
-    },
-    {
-      "path": "web-dashboard/e2e/enterprise-ui-phase6.spec.ts",
-      "sha256": "5442f949bc8103a6b72f4173d9d752133dfd0ac9aecabded3db90685a5eeb739",
-      "bytes": 3384
-    },
-    {
-      "path": "web-dashboard/e2e/enterprise-ui-phase7.spec.ts",
-      "sha256": "75b79ca15ca9121f13892a3168ed21ff36fa069dd48ff68cb610bd88f8ebfebb",
-      "bytes": 2892
-    },
-    {
-      "path": "web-dashboard/e2e/enterprise-ui-phase8.spec.ts",
-      "sha256": "dacc257b58567e16237324f873a380bd8db756ae023f3128a6784333c3f22426",
-      "bytes": 1397
-    },
-    {
-      "path": "web-dashboard/e2e/enterprise-ui-phase9.spec.ts",
-      "sha256": "9ed459882f4914548c618476934772388476dc651cdf286b1c162fc5a72bd904",
-      "bytes": 3305
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
@@ -4461,8 +4451,8 @@
     },
     {
       "path": "web-dashboard/playwright.config.ts",
-      "sha256": "a18f27f78ad76784907ef1f503398a7b1739f047eb198fab5674e7ef1e4e19e4",
-      "bytes": 1095
+      "sha256": "ede7f803925e95ee738c56c77ed3f226138833a1e6a850d047ae15160bafc324",
+      "bytes": 1073
     },
     {
       "path": "web-dashboard/postcss.config.js",
