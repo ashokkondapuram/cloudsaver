@@ -72,12 +72,12 @@ const utcDayOffset = (days: number) => {
 };
 
 type AzureCostSnapshot = {
-  observation: {start: string; end: string; billed_cost_usd: number | null; effective_cost_usd: number | null; currency: string | null; coverage_complete: boolean};
-  baseline: AzureCostSnapshot['observation'] | null;
-  retail: {monthly_run_rate_usd: number | null; window_run_rate_usd: number | null};
-  balance: NonNullable<ResourceDetail['costs']>;
-  booked_savings_usd: number | null;
-  finance_reconciled_benefit_usd: number | null;
+  schema_version?: string;
+  resource_type?: string | null;
+  arm?: {status: string; resource_type?: string; location?: string; arm_api_version?: string; document?: {typed_configuration?: Record<string, unknown>}};
+  cost_management: {observation: {start: string; end: string; billed_cost_usd: number | null; effective_cost_usd: number | null; currency: string | null; coverage_complete: boolean}; baseline: AzureCostSnapshot['cost_management']['observation'] | null};
+  retail_prices: {monthly_run_rate_usd: number | null; window_run_rate_usd: number | null};
+  financial: {balance: NonNullable<ResourceDetail['costs']>; booked_savings_usd: number | null; finance_reconciled_benefit_usd?: number | null};
   warning: string | null;
 };
 
@@ -121,7 +121,10 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
     } catch (cause) {setError((cause as Error).message);}
     finally {setBusy(false);}
   }
-  const currency = azureEvidence?.observation.currency || detail.costs?.currency || 'USD';
+  const currency = azureEvidence?.cost_management.observation.currency || detail.costs?.currency || 'USD';
+  const obs = azureEvidence?.cost_management.observation;
+  const base = azureEvidence?.cost_management.baseline;
+  const fin = azureEvidence?.financial;
   return <div className="drawer-section drawer-costs-panel"><h3>Costs</h3>
     <FinancialFiveStrip detail={detail} token={token} canAdmin={canAdmin} knownOnly/>
     {detail.assessment.provider === 'azure' && canBill && <div className="outcome-form drawer-cost-fetch">
@@ -136,14 +139,15 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
       </div>
     </div>}
     {error && <Notice tone="error">{error}</Notice>}
-    {azureEvidence && <dl className="settings-key-values azure-cost-snapshot">
-      <div><dt>Observation billed</dt><dd>{money(azureEvidence.observation.billed_cost_usd, currency)} · {formatDay(azureEvidence.observation.start)} – {formatDay(azureEvidence.observation.end)}</dd></div>
-      <div><dt>Observation effective</dt><dd>{money(azureEvidence.observation.effective_cost_usd, currency)}</dd></div>
-      <div><dt>Azure retail (window)</dt><dd>{money(azureEvidence.retail.window_run_rate_usd, currency)} · monthly {money(azureEvidence.retail.monthly_run_rate_usd, currency)}</dd></div>
-      <div><dt>Billed vs retail</dt><dd>{money(azureEvidence.balance.billed_vs_retail_usd, currency)}</dd></div>
-      {azureEvidence.baseline && <div><dt>Baseline billed</dt><dd>{money(azureEvidence.baseline.billed_cost_usd, currency)} · {formatDay(azureEvidence.baseline.start)} – {formatDay(azureEvidence.baseline.end)}</dd></div>}
-      <div><dt>Booked savings (billing delta)</dt><dd>{azureEvidence.booked_savings_usd == null ? 'Unknown' : money(azureEvidence.booked_savings_usd, currency)}</dd></div>
-      {azureEvidence.finance_reconciled_benefit_usd != null && <div><dt>Finance reconciled benefit</dt><dd>{money(azureEvidence.finance_reconciled_benefit_usd, currency)}</dd></div>}
+    {azureEvidence && obs && fin && <dl className="settings-key-values azure-cost-snapshot">
+      {azureEvidence.resource_type && <div><dt>ARM resource type</dt><dd><code>{azureEvidence.resource_type}</code>{azureEvidence.arm?.location ? ` · ${azureEvidence.arm.location}` : ''}</dd></div>}
+      <div><dt>Observation billed</dt><dd>{money(obs.billed_cost_usd, currency)} · {formatDay(obs.start)} – {formatDay(obs.end)}</dd></div>
+      <div><dt>Observation effective</dt><dd>{money(obs.effective_cost_usd, currency)}</dd></div>
+      <div><dt>Azure retail (window)</dt><dd>{money(azureEvidence.retail_prices.window_run_rate_usd, currency)} · monthly {money(azureEvidence.retail_prices.monthly_run_rate_usd, currency)}</dd></div>
+      <div><dt>Billed vs retail</dt><dd>{money(fin.balance.billed_vs_retail_usd, currency)}</dd></div>
+      {base && <div><dt>Baseline billed</dt><dd>{money(base.billed_cost_usd, currency)} · {formatDay(base.start)} – {formatDay(base.end)}</dd></div>}
+      <div><dt>Booked savings (billing delta)</dt><dd>{fin.booked_savings_usd == null ? 'Unknown' : money(fin.booked_savings_usd, currency)}</dd></div>
+      {fin.finance_reconciled_benefit_usd != null && <div><dt>Finance reconciled benefit</dt><dd>{money(fin.finance_reconciled_benefit_usd, currency)}</dd></div>}
     </dl>}
     {azureEvidence?.warning && <Notice tone="warning">{azureEvidence.warning}</Notice>}
     {supplemental.map(([key, name, cur]) => {

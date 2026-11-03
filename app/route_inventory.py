@@ -71,6 +71,7 @@ ROUTES = {
     ('GET','/api/v1/optimization/scans/{scan_id}/auto-scenarios'):'scoped_read',
     ('GET','/api/v1/gitops/syncs'):'full_scope',
     ('POST','/api/v1/finops/sync'):'full_scope',
+    ('GET','/api/v1/finops/azure-rest-catalog'):'full_scope',
     ('GET','/api/v1/finops/azure-resource-costs'):'full_scope',
     ('POST','/api/v1/finops/resource-cost'):'full_scope',
     ('GET','/api/v1/control-plane/plans'):'scoped_read',

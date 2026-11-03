@@ -108,6 +108,12 @@ def create_router(repository, current_tenant, *, scan_store=None):
             raise HTTPException(422, 'resource_id must belong to the given subscription scope')
         return binding
 
+    @router.get('/azure-rest-catalog')
+    def azure_rest_catalog(tenant=Depends(finance)):
+        from app.azure_rest_catalog import catalog_operations
+
+        return dict(items=catalog_operations())
+
     @router.get('/azure-resource-costs')
     async def azure_resource_costs(
         resource_id: str = Query(..., min_length=1, max_length=300),
@@ -120,7 +126,7 @@ def create_router(repository, current_tenant, *, scan_store=None):
         persist: bool = False,
         tenant=Depends(finance),
     ):
-        from app.azure_resource_finops import build_snapshot
+        from app.azure_json_profile import fetch_azure_resource_profile
         from app.collectors.billing_sync import azure_resource_rows, _import_snapshot
 
         _azure_resource_binding(tenant, scope_id, resource_id)
@@ -140,7 +146,7 @@ def create_router(repository, current_tenant, *, scan_store=None):
             ]
         try:
             snapshot = await run_in_threadpool(
-                build_snapshot,
+                fetch_azure_resource_profile,
                 tenant=tenant,
                 scope_id=scope_id,
                 resource_id=resource_id,
@@ -162,7 +168,7 @@ def create_router(repository, current_tenant, *, scan_store=None):
             raise HTTPException(503, 'Azure resource billing is unavailable right now') from None
         if persist:
             binding = _azure_resource_binding(tenant, scope_id, resource_id)
-            currency = snapshot['observation'].get('currency') or 'USD'
+            currency = snapshot['cost_management']['observation'].get('currency') or 'USD'
             obs_rows = await run_in_threadpool(
                 azure_resource_rows, scope_id, resource_id, tenant, start, end
             )
