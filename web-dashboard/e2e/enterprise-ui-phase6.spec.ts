@@ -1,62 +1,20 @@
-import {test, expect, type Page} from './test';
+import {test, expect} from './test';
 import {mockWorkspace, navigate} from './workspace-fixture';
+import {mockControlPlanePlan, mockGovernanceRoutes} from './control-plane-fixture';
 
 const planId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const versionId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const digest = 'e'.repeat(64);
 
-async function mockGovernance(page: Page) {
-  await page.route('**/api/v1/governance/**', async route => {
-    const path = new URL(route.request().url()).pathname.replace('/api/v1/governance', '');
-    if (path === '/capabilities') {
-      return route.fulfill({
-        json: {roles: ['ComplianceReviewer'], subject_id: 'reviewer', human: true, manage_access: false, readable: true, automatic_execution: false},
-      });
-    }
-    if (path === '/summary') {
-      return route.fulfill({
-        json: {
-          open_material_risks: 0,
-          overdue_findings: 0,
-          expiring_exceptions: 0,
-          unknown_assessments: 0,
-          stale_evidence: 0,
-          unassigned_resources: 0,
-          assessment_results: {pass: 0, fail: 0, unknown: 0, not_applicable: 0},
-          monitor: null,
-          warning: 'TEST FIXTURE',
-          compliance_score: null,
-        },
-      });
-    }
-    if (['/controls', '/directory', '/findings', '/risks', '/exceptions', '/access'].includes(path)) {
-      return route.fulfill({json: path === '/controls' ? {policy: null} : {items: []}});
-    }
-    return route.fulfill({status: 404, json: {detail: 'Unknown test route'}});
-  });
-}
-
 test('approved plan exposes execution tracking ladder and advance to queued', async ({page}) => {
   await mockWorkspace(page, {human: true});
-  let state = 'approved';
-  await mockGovernance(page);
-  await page.route('**/api/v1/control-plane/plans*', route => {
-    if (route.request().method() !== 'GET') return route.continue();
-    return route.fulfill({
-      json: {items: [{id: planId, objective: 'Post-approval execution tracking', created_at: '2026-10-01T12:00:00Z'}]},
-    });
-  });
-  await page.route(`**/api/v1/control-plane/plans/${planId}/versions*`, route =>
-    route.fulfill({
-      json: {
-        items: [{id: versionId, plan_id: planId, version: 1, state, targets: [], parameters: {}, identity_digest: digest}],
-      },
-    }),
-  );
-  await page.route(`**/api/v1/control-plane/plan-versions/${versionId}/transitions`, route => {
-    const body = route.request().postDataJSON();
-    state = body.to_state;
-    return route.fulfill({json: {id: versionId, plan_id: planId, version: 1, state, identity_digest: digest}});
+  await mockGovernanceRoutes(page);
+  await mockControlPlanePlan(page, {
+    planId,
+    versionId,
+    digest,
+    initialState: 'approved',
+    objective: 'Post-approval execution tracking',
   });
   await navigate(page, 'Risk & compliance');
   await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();

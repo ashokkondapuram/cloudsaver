@@ -17,6 +17,8 @@ const NEXT_STATE: Record<string, string> = {
   review_requested: 'approved',
   approved: 'queued',
   queued: 'running',
+  running: 'verification_pending',
+  verification_pending: 'verified',
 };
 
 function reviewStepClass(step: (typeof REVIEW_STEPS)[number], state: string) {

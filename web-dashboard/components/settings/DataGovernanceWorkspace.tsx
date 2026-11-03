@@ -7,6 +7,17 @@ import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState,Loading,Notice,SectionTitle} from '../ui/shared';
 
+function processorReviewBadge(expiresAt: string): {label: string; className: string} | null {
+  const ms = Date.parse(expiresAt) - Date.now();
+  if (Number.isNaN(ms)) return null;
+  const days = Math.ceil(ms / 86_400_000);
+  if (days < 0) return {label: 'Review expired', className: 'state-badge expired'};
+  if (days <= 30) return {label: `Review in ${days}d`, className: 'state-badge expiry-30'};
+  if (days <= 60) return {label: `Review in ${days}d`, className: 'state-badge expiry-60'};
+  if (days <= 90) return {label: `Review in ${days}d`, className: 'state-badge expiry-90'};
+  return null;
+}
+
 type Processor={target_id:string;azure_resource_id:string;endpoint_url:string;deployment_name?:string;provider?:string;aws_region?:string;aws_account_id?:string;model_id?:string;gcp_project_id?:string;gcp_location?:string;purposes:string[];review_reference:string;review_expires_at:string};
 type Record={attempt_id:string;purpose:string;expires_at:string;erased_at:string|null};
 type View={policy:{status:string;policy_revision:number|null;environment_id:string|null;response_retention_days:number;processors:Processor[];provider_controls?:string};
@@ -61,7 +72,7 @@ export function DataGovernanceWorkspace(){
         ['New model-content retention',`${view.policy.response_retention_days} days`],['Policy revision',String(view.policy.policy_revision??'Unavailable')],
       ].map(([name,value])=><div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl><p className="inline-help">Filtered identifiers reduce exposure but don’t guarantee anonymization. Don’t paste secrets or sensitive text into requests. Source inventory stays in its existing tenant-owned storage.</p></section>
       <section className="panel"><div className="grid-heading"><div><h2>Registered data processors</h2><p>Platform operators register an exact workspace, Azure account, endpoint, deployment, purpose and review expiry.</p></div></div>
-        {!view.policy.processors.length?<EmptyState icon={ShieldCheck} title="No processing approvals">New model calls remain blocked. Ask the platform data owner to register a reviewed processor.</EmptyState>:<div className="grid-scroll" tabIndex={0} aria-label="Approved data processors"><table className="data-table"><thead><tr><th>Processor</th><th>Permitted purposes</th><th>Review</th></tr></thead><tbody>{view.policy.processors.map(p=><tr key={p.target_id}><td>{p.target_id}<small>{providerNames[p.provider||'azure']??p.provider} · {p.deployment_name||p.model_id}</small><small style={{overflowWrap:'anywhere'}}>{p.endpoint_url||p.aws_region||p.gcp_location}</small></td><td>{p.purposes.map(sentence).join(' · ')}</td><td>{p.review_reference}<small>{dateTime(p.review_expires_at)}</small></td></tr>)}</tbody></table></div>}
+        {!view.policy.processors.length?<EmptyState icon={ShieldCheck} title="No processing approvals">New model calls remain blocked. Ask the platform data owner to register a reviewed processor.</EmptyState>:<div className="grid-scroll" tabIndex={0} aria-label="Approved data processors"><table className="data-table"><thead><tr><th>Processor</th><th>Permitted purposes</th><th>Review</th></tr></thead><tbody>{view.policy.processors.map(p=>{const reviewBadge=processorReviewBadge(p.review_expires_at);return <tr key={p.target_id}><td>{p.target_id}<small>{providerNames[p.provider||'azure']??p.provider} · {p.deployment_name||p.model_id}</small><small style={{overflowWrap:'anywhere'}}>{p.endpoint_url||p.aws_region||p.gcp_location}</small></td><td>{p.purposes.map(sentence).join(' · ')}</td><td>{p.review_reference}{reviewBadge?<span className={reviewBadge.className} style={{marginLeft:8}}>{reviewBadge.label}</span>:null}<small>{dateTime(p.review_expires_at)}</small></td></tr>})}</tbody></table></div>}
         <p className="settings-notice">Provider retention, training and processing-location controls require a documented owner review. Registration records that review; CloudSaver does not independently certify the provider’s internal handling.</p>
       </section>
       <section className="panel" style={{marginTop:20}}><div className="grid-heading"><div><h2>Content retention & privacy requests</h2><p>Erase model responses and follow-up text while keeping usage counters and request replay fences.</p></div><Database size={20}/></div>

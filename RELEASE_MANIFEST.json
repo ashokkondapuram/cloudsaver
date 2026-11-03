@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "21c729eacc5369188008674fc491fdb7f6929898c17c653de66e5cce4f80e2d7",
+  "inventory_sha256": "ec9e9049bdc5e057679b268f77327270a4005c612a310b12f512b65cdb16898d",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "dadc5d7a5e67303ed26369feb37207c132580a321373881d3dabd58dc8d61fc1",
-      "bytes": 13501
+      "sha256": "2ec0e7bdac0e254450139429c797303d8f27d7c420cfe74bc1ceb3da00ed6425",
+      "bytes": 13572
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4061,8 +4061,8 @@
     },
     {
       "path": "web-dashboard/components/settings/DataGovernanceWorkspace.tsx",
-      "sha256": "0d7d5e8b119706a5c1ffa2f49d95bd82ff41da6f6feb3b24127fc26e54b8b963",
-      "bytes": 12379
+      "sha256": "0e4d0b25c41bc5f40a11d787c46c7619fd4d68aa8ae6b5af62439e25c9b80b25",
+      "bytes": 13157
     },
     {
       "path": "web-dashboard/components/settings/ObservabilitySettings.tsx",
@@ -4146,8 +4146,8 @@
     },
     {
       "path": "web-dashboard/e2e/control-plane-plan-lifecycle.spec.ts",
-      "sha256": "8a4720b1388f9af59b9fe85a39b6ed6d9d6bc8aa5309e5121b98e99de44d7e09",
-      "bytes": 6319
+      "sha256": "567a7179101e4b932b2e9bdff1b81178fe3856d6bef650849f130869b621ae0e",
+      "bytes": 4044
     },
     {
       "path": "web-dashboard/e2e/control-plane-safety-firewall.spec.ts",
@@ -4188,6 +4188,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase5.spec.ts",
       "sha256": "d1ae025cbab78d93624d595608cfa0369f7ea3a9b9ca35670279a21d2fee60d1",
       "bytes": 4372
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase6.spec.ts",
+      "sha256": "5442f949bc8103a6b72f4173d9d752133dfd0ac9aecabded3db90685a5eeb739",
+      "bytes": 3384
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",

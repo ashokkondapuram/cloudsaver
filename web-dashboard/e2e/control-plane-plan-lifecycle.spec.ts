@@ -1,82 +1,21 @@
-import {test, expect, type Page} from './test';
+import {test, expect} from './test';
 import {mockWorkspace, navigate} from './workspace-fixture';
+import {mockControlPlanePlan, mockGovernanceRoutes} from './control-plane-fixture';
 
 const planId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const versionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const digest = 'c'.repeat(64);
 
-async function mockGovernance(page: Page) {
-  await page.route('**/api/v1/governance/**', async route => {
-    const path = new URL(route.request().url()).pathname.replace('/api/v1/governance', '');
-    let response: unknown;
-    if (path === '/capabilities') {
-      response = {
-        roles: ['ComplianceReviewer'],
-        subject_id: 'reviewer',
-        human: true,
-        manage_access: false,
-        readable: true,
-        automatic_execution: false,
-      };
-    } else if (path === '/controls') response = {policy: null};
-    else if (path === '/directory') response = {items: []};
-    else if (['/findings', '/risks', '/exceptions', '/access'].includes(path)) response = {items: []};
-    else if (path === '/summary') {
-      response = {
-        open_material_risks: 0,
-        overdue_findings: 0,
-        expiring_exceptions: 0,
-        unknown_assessments: 0,
-        stale_evidence: 0,
-        unassigned_resources: 0,
-        assessment_results: {pass: 0, fail: 0, unknown: 0, not_applicable: 0},
-        monitor: null,
-        warning: 'TEST FIXTURE',
-        compliance_score: null,
-      };
-    } else return route.fulfill({status: 404, json: {detail: 'Unknown test route'}});
-    await route.fulfill({json: response});
-  });
-}
-
 test('human approver advances plan lifecycle and records bound approval', async ({page}) => {
   await mockWorkspace(page, {human: true});
-  let state = 'assessed';
-  const transitions: unknown[] = [];
-  const approvals: unknown[] = [];
-  await mockGovernance(page);
-  await page.route('**/api/v1/control-plane/plans*', route => {
-    if (route.request().method() !== 'GET') return route.continue();
-    return route.fulfill({
-      json: {items: [{id: planId, objective: 'Rightsize with independent approval', created_at: '2026-10-01T12:00:00Z'}]},
-    });
-  });
-  await page.route(`**/api/v1/control-plane/plans/${planId}/versions*`, route =>
-    route.fulfill({
-      json: {
-        items: [
-          {
-            id: versionId,
-            plan_id: planId,
-            version: 1,
-            state,
-            targets: ['/subscriptions/x/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1'],
-            parameters: {},
-            identity_digest: digest,
-          },
-        ],
-      },
-    }),
-  );
-  await page.route(`**/api/v1/control-plane/plan-versions/${versionId}/transitions`, route => {
-    const body = route.request().postDataJSON();
-    transitions.push(body);
-    state = body.to_state;
-    return route.fulfill({json: {id: versionId, plan_id: planId, version: 1, state, identity_digest: digest}});
-  });
-  await page.route(`**/api/v1/control-plane/plan-versions/${versionId}/approvals`, route => {
-    approvals.push(route.request().postDataJSON());
-    return route.fulfill({status: 201, json: {id: 'approval-fixture'}});
+  await mockGovernanceRoutes(page);
+  const {transitions, approvals} = await mockControlPlanePlan(page, {
+    planId,
+    versionId,
+    digest,
+    initialState: 'assessed',
+    objective: 'Rightsize with independent approval',
+    targets: ['/subscriptions/x/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1'],
   });
   await navigate(page, 'Risk & compliance');
   await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
