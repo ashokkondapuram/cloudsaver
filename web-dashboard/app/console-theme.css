@@ -225,6 +225,9 @@ html[data-theme=dark] .data-governance-metrics .metric-card{background:var(--sur
 .overlap-warning-banner{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border:1px solid color-mix(in srgb,var(--amber-700) 35%,var(--border));border-left:4px solid var(--amber-700);border-radius:8px;background:var(--amber-50);color:var(--amber-700);font-size:12px;line-height:1.65}
 .safety-firewall-grid{margin-top:12px}
 .plan-stepper{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
+.plan-execution-stepper{border-bottom:none;margin-bottom:4px}
+.plan-ladder-label{margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.foundry-probe-failure{margin:8px 0 0}
 .plan-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:550;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--slate-50);color:var(--muted);white-space:nowrap}
 .plan-step.current{border-color:var(--indigo-600);background:var(--indigo-50);color:var(--indigo-600)}
 .plan-step.completed{border-color:color-mix(in srgb,var(--emerald-700) 40%,var(--border));background:color-mix(in srgb,var(--emerald-50) 55%,var(--surface));color:var(--emerald-700)}

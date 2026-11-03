@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "8ff530e1fc6676186c7d0bc3dff661fc70c14e7f6ae79dc096d024a5d65b1d48",
+  "inventory_sha256": "21c729eacc5369188008674fc491fdb7f6929898c17c653de66e5cce4f80e2d7",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "535d7869b37818840467852003af9c906d866b09ac8c36f3833baae7c0445a1a",
-      "bytes": 31771
+      "sha256": "33c8330f7431586e8738f622045ee58c0a419e0bdff6b5324dedc039a612d0ce",
+      "bytes": 32003
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "a2ab8e165b87380e2398c08835d567398772e509da5addbdb86ff16e84a43359",
-      "bytes": 11120
+      "sha256": "dadc5d7a5e67303ed26369feb37207c132580a321373881d3dabd58dc8d61fc1",
+      "bytes": 13501
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4051,8 +4051,8 @@
     },
     {
       "path": "web-dashboard/components/settings/AIFoundryConfigurationEditor.tsx",
-      "sha256": "f1e33fbf880685e8da6772583c7d87fb335e624bc692376d0dda9d35c90ac132",
-      "bytes": 13370
+      "sha256": "860dead37c522e1ee5a194bb4247be0f4d6c9f2b2fa42986a7684ce00c4d5faa",
+      "bytes": 13539
     },
     {
       "path": "web-dashboard/components/settings/AccessSettings.tsx",
@@ -4183,6 +4183,11 @@
       "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
       "sha256": "cf9e9d6691019f9f7df18980a49c7ba79295848049709425dd568b9ae0710cec",
       "bytes": 7305
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase5.spec.ts",
+      "sha256": "d1ae025cbab78d93624d595608cfa0369f7ea3a9b9ca35670279a21d2fee60d1",
+      "bytes": 4372
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
@@ -4371,8 +4376,8 @@
     },
     {
       "path": "web-dashboard/next-env.d.ts",
-      "sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc",
-      "bytes": 296
+      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
+      "bytes": 288
     },
     {
       "path": "web-dashboard/next.config.ts",

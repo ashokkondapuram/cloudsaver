@@ -7,17 +7,43 @@ import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
-const STEPS = ['draft', 'evidence_required', 'assessed', 'review_requested', 'approved'] as const;
-const NEXT_STATE: Partial<Record<(typeof STEPS)[number], (typeof STEPS)[number]>> = {
+const REVIEW_STEPS = ['draft', 'evidence_required', 'assessed', 'review_requested', 'approved'] as const;
+const EXECUTION_STEPS = ['queued', 'running', 'verification_pending', 'verified'] as const;
+
+const NEXT_STATE: Record<string, string> = {
   draft: 'evidence_required',
   evidence_required: 'assessed',
   assessed: 'review_requested',
   review_requested: 'approved',
+  approved: 'queued',
+  queued: 'running',
 };
 
-function stepIndex(state: string) {
-  const idx = STEPS.indexOf(state as (typeof STEPS)[number]);
-  return idx < 0 ? 0 : idx;
+function reviewStepClass(step: (typeof REVIEW_STEPS)[number], state: string) {
+  const stepIdx = REVIEW_STEPS.indexOf(step);
+  const stateIdx = REVIEW_STEPS.indexOf(state as (typeof REVIEW_STEPS)[number]);
+  if (stateIdx >= 0) {
+    if (stateIdx === stepIdx) return 'current';
+    if (stateIdx > stepIdx) return 'completed';
+    return '';
+  }
+  return 'completed';
+}
+
+function executionStepClass(step: (typeof EXECUTION_STEPS)[number], state: string) {
+  if (state === 'approved') return '';
+  const stepIdx = EXECUTION_STEPS.indexOf(step);
+  const stateIdx = EXECUTION_STEPS.indexOf(state as (typeof EXECUTION_STEPS)[number]);
+  if (stateIdx >= 0) {
+    if (stateIdx === stepIdx) return 'current';
+    if (stateIdx > stepIdx) return 'completed';
+    return '';
+  }
+  return '';
+}
+
+function showExecutionLadder(state: string) {
+  return (['approved', ...EXECUTION_STEPS, 'failed', 'reconciliation_required'] as string[]).includes(state);
 }
 
 export function ControlPlanePlansPanel() {
@@ -191,16 +217,26 @@ export function ControlPlanePlansPanel() {
                 </p>
                 {latest && (
                   <>
+                    <p className="plan-ladder-label">Review & approval</p>
                     <div className="plan-stepper">
-                      {STEPS.map(step => (
-                        <span
-                          key={step}
-                          className={`plan-step ${latest.state === step ? 'current' : stepIndex(latest.state) > stepIndex(step) ? 'completed' : ''}`}
-                        >
+                      {REVIEW_STEPS.map(step => (
+                        <span key={step} className={`plan-step ${reviewStepClass(step, latest.state)}`}>
                           {step.replaceAll('_', ' ')}
                         </span>
                       ))}
                     </div>
+                    {showExecutionLadder(latest.state) && (
+                      <>
+                        <p className="plan-ladder-label">Execution tracking (no automatic cloud mutations)</p>
+                        <div className="plan-stepper plan-execution-stepper">
+                          {EXECUTION_STEPS.map(step => (
+                            <span key={step} className={`plan-step ${executionStepClass(step, latest.state)}`}>
+                              {step.replaceAll('_', ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
                     <dl className="settings-key-values">
                       <div>
                         <dt>Latest version</dt>
@@ -216,14 +252,14 @@ export function ControlPlanePlansPanel() {
                       </div>
                     </dl>
                     <div className="button-row">
-                      {canAdmin && NEXT_STATE[latest.state as (typeof STEPS)[number]] && (
+                      {canAdmin && NEXT_STATE[latest.state] && (
                         <button
                           type="button"
                           className="button secondary small"
                           disabled={busy || (latest.state === 'review_requested' && humanApprover)}
-                          onClick={() => transition(latest, NEXT_STATE[latest.state as (typeof STEPS)[number]]!)}
+                          onClick={() => transition(latest, NEXT_STATE[latest.state])}
                         >
-                          Advance to {NEXT_STATE[latest.state as (typeof STEPS)[number]]!.replaceAll('_', ' ')}
+                          Advance to {NEXT_STATE[latest.state].replaceAll('_', ' ')}
                         </button>
                       )}
                     </div>
@@ -231,6 +267,20 @@ export function ControlPlanePlansPanel() {
                       <Notice tone="success">
                         This plan version is approved with a bound human attestation. Queueing and execution still require
                         separate control-plane checks.
+                      </Notice>
+                    )}
+                    {['queued', 'running', 'verification_pending'].includes(latest.state) && (
+                      <Notice tone="info">
+                        Execution states are recorded for audit and coordination only. Transitions do not invoke cloud
+                        provider APIs or agent workers.
+                      </Notice>
+                    )}
+                    {latest.state === 'verified' && (
+                      <Notice tone="success">Verification completed for this plan version. Outcomes remain separate from compliance attestation.</Notice>
+                    )}
+                    {(latest.state === 'failed' || latest.state === 'reconciliation_required') && (
+                      <Notice tone="error">
+                        Plan version is in {latest.state.replaceAll('_', ' ')}. Reconcile evidence or open a new version before retrying execution tracking.
                       </Notice>
                     )}
                     {latest.state === 'review_requested' && humanApprover && (
