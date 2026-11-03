@@ -17,6 +17,11 @@ ACTIONS: dict[str, dict[str, str | bool]] = {
         "summary": "Review unattached disk retention; no destructive execution",
         "allows_agent_resize": False,
     },
+    "azure.storage.lifecycle.review": {
+        "rule_id": "CS-AZ-STORAGE-LIFECYCLE",
+        "summary": "Review blob lifecycle and multipart cleanup; configuration only",
+        "allows_agent_resize": False,
+    },
 }
 
 

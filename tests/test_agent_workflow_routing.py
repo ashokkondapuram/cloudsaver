@@ -36,11 +36,16 @@ def test_every_catalog_rule_has_a_workflow_route():
 def test_engineering_capabilities_actions_align_with_readiness():
     from app.engineering.readiness import RULES
 
-    assert set(RULES) == {"azure.vm.rightsize", "azure.disk.review"}
+    assert set(RULES) == {"azure.vm.rightsize", "azure.disk.review", "azure.storage.lifecycle.review"}
+    rule_by_action = {
+        "azure.vm.rightsize": "AZURE_VM_RIGHTSIZING_UTILIZATION",
+        "azure.disk.review": "AZURE_DISK_UNATTACHED_RETENTION",
+        "azure.storage.lifecycle.review": "AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD",
+    }
     for action, rule_code in RULES.items():
-        assert action in ("azure.vm.rightsize", "azure.disk.review")
+        assert action in rule_by_action
         assert rule_code.startswith("CS-AZ-")
-        route = route_for_rule("AZURE_VM_RIGHTSIZING_UTILIZATION" if action == "azure.vm.rightsize" else "AZURE_DISK_UNATTACHED_RETENTION")
+        route = route_for_rule(rule_by_action[action])
         if route.engineering_action == action:
             assert route.zero_downtime is True
 

@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "574ebe2d116af8b2ca5f35992ce63fd5cb6f1c0bbcf1310e2412a477588fa93c",
+  "inventory_sha256": "00e1aa90051edf458e951d8daded3e4a8614095715214f9a4bb29ff91241bb56",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0016_workspace_ui_themes"
@@ -246,8 +246,8 @@
     },
     {
       "path": "app/agent_workflow_routing.py",
-      "sha256": "50f0bff4634c6b063eefc8581380c117aa42415d21b459716055be77b5781fd3",
-      "bytes": 4990
+      "sha256": "a7ff0af59c1eeca8775fc37cf56cb422e2d2d46a0fc4182308ccecea92963288",
+      "bytes": 5124
     },
     {
       "path": "app/ai_advisory.py",
@@ -381,8 +381,8 @@
     },
     {
       "path": "app/collectors/azure_configuration_evidence.py",
-      "sha256": "206e99259a7497bd9f5bc5af5e77504b4e705ff79d6003fc3d834e811e7fc88a",
-      "bytes": 10170
+      "sha256": "694d1eb0edcd784fccb60d62dfc9ecc321e80711e2ec91eb5a5378e3992b71ed",
+      "bytes": 10404
     },
     {
       "path": "app/collectors/azure_endpoint.py",
@@ -636,8 +636,8 @@
     },
     {
       "path": "app/engineering/actions.py",
-      "sha256": "40e1077a75ebf4302788f56f3f60e6fe385bb0324c948c8eb7b5df4c30952d50",
-      "bytes": 1429
+      "sha256": "d17e08e5fdc22e456dd868da33bd027ec1c5ae991d0e425f21dcca4816d21388",
+      "bytes": 1646
     },
     {
       "path": "app/engineering/api.py",
@@ -661,8 +661,8 @@
     },
     {
       "path": "app/engineering/readiness.py",
-      "sha256": "9c682de5306fce4c51ef75cc5883346ac720b6cb3d0411a054b275d340621696",
-      "bytes": 8008
+      "sha256": "3f0662383d362016f7bb1f0288de4eb3cf4b33b0838d026991f76fcf2009a5c1",
+      "bytes": 9122
     },
     {
       "path": "app/engineering/repository.py",
@@ -841,8 +841,8 @@
     },
     {
       "path": "app/governance_evidence.py",
-      "sha256": "b18eae1a47107ea211d56880327951e925cf37f7ae1fa130b24fad063a1cb9a8",
-      "bytes": 7032
+      "sha256": "3d9457d77281fd5f28ca7c31c27858cc328a16170440847bbc7f3f25a65e4af6",
+      "bytes": 7242
     },
     {
       "path": "app/governance_merkle_audit.py",
@@ -1101,8 +1101,8 @@
     },
     {
       "path": "app/scanner.py",
-      "sha256": "7c3a2e48c001589d2edfec7e9a9d7502ae2fde31822f4767bd69975b92b94cf4",
-      "bytes": 17128
+      "sha256": "e5cc465d50b716c686b3b5cf02afc73b393783caff24c423382c3a5f2cad1553",
+      "bytes": 17334
     },
     {
       "path": "app/scanner_ai_gpu.py",
@@ -3231,8 +3231,8 @@
     },
     {
       "path": "tests/test_agent_workflow_routing.py",
-      "sha256": "f1e445f8dd770bc2614358ddf1969d151c4815a1c955817df5b0de8b1ebcec69",
-      "bytes": 7145
+      "sha256": "37fe94aa936771a777b97a168952d9f82bc9596579a894ecb77ebe212397b97b",
+      "bytes": 7310
     },
     {
       "path": "tests/test_ai_advisory.py",
@@ -3271,8 +3271,8 @@
     },
     {
       "path": "tests/test_azure_configuration_evidence.py",
-      "sha256": "6ca9d7d63d7df97a8d6ec25baa3183a09b16d6dca0d839a95bc918b5aa9afb10",
-      "bytes": 2286
+      "sha256": "63b3fa80049607e27864933c128d95f89896fbda7d77b39794bcd58eda279a97",
+      "bytes": 3219
     },
     {
       "path": "tests/test_azure_developer_cache.py",

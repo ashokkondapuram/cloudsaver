@@ -131,7 +131,12 @@ def receipt(raw, signature, tenant, finding, now, *, require_recent_issuance=Tru
 def evaluate(resource, scan, context, policy, now):
     observed = moment(scan.get("timestamp"))
     kind = str(resource.get("resource_type", "")).lower()
-    flag = (resource.get("evidence") or {}).get("allow_blob_public_access")
+    evidence = resource.get("evidence") or {}
+    flag = evidence.get("allow_blob_public_access")
+    if type(flag) is not bool:
+        props = evidence.get("typed_configuration") or {}
+        raw = props.get("allowBlobPublicAccess")
+        flag = raw if type(raw) is bool else None
     config = {"allow_blob_public_access": flag if type(flag) is bool else None}
     state = digest(
         dict(configuration=config, context=context, control_version=policy["version"])

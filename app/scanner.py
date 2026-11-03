@@ -258,6 +258,8 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
                 stack_settings = Settings.load()
                 if arm_detail_enabled(stack_settings):
                     inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
+                from app.collectors.azure_storage_policy import enrich_storage_management_policies
+                inventory = enrich_storage_management_policies(reader, inventory, settings=stack_settings)
                 from app.collectors.live_common import enabled
                 if enabled(stack_settings):
                     from app.collectors.azure_live import enrich

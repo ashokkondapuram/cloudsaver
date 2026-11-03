@@ -45,3 +45,24 @@ def test_inventory_pass_applies_readiness():
     readiness = rows[0]['evidence']['analysis_readiness']
     assert readiness['configuration'] in ('complete', 'partial')
     assert 'AZURE_ASP_UNDERUTILIZED_SKU' in readiness['telemetry_pending_rule_ids']
+
+
+def test_storage_account_lifecycle_readiness_from_policy_evidence():
+    resource = dict(
+        resource_type='microsoft.storage/storageaccounts',
+        resource_id='/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/acct1',
+        evidence=dict(
+            typed_configuration=dict(
+                allowBlobPublicAccess=False,
+                minimumTlsVersion='TLS1_2',
+                encryption=dict(keySource='Microsoft.Storage'),
+            ),
+            lifecycle_policy_verified=True,
+            multipart_abort_rule_present=False,
+            allow_blob_public_access=False,
+        ),
+    )
+    enrich_configuration_evidence(resource)
+    readiness = resource['evidence']['analysis_readiness']
+    assert readiness['configuration'] == 'complete'
+    assert 'AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD' not in resource.get('unsupported_rule_ids', [])

@@ -49,7 +49,12 @@ def evaluate(resource, scan, workload, *, action, candidate_sku=None, now=None, 
     protected = bool(evidence.get('management_locks')) or any(str(v).casefold() in ('true','yes','1') for k,v in tags.items() if str(k).casefold() in ('donotdelete','protected','legalhold'))
     check('PROTECTION', 'fail' if protected else 'unknown', 'Observed locks or retention intent block change.' if protected else 'Absence of returned protection is not a complete protection/hold assessment.')
     kind = resource.get('resource_type','').lower()
-    expected = 'microsoft.compute/virtualmachines' if action == 'azure.vm.rightsize' else 'microsoft.compute/disks'
+    expected_by_action = {
+        'azure.vm.rightsize': 'microsoft.compute/virtualmachines',
+        'azure.disk.review': 'microsoft.compute/disks',
+        'azure.storage.lifecycle.review': 'microsoft.storage/storageaccounts',
+    }
+    expected = expected_by_action.get(action, '')
     check('APPLICABILITY', 'pass' if resource.get('cloud_provider','azure')=='azure' and kind==expected else 'not_applicable', 'The pilot action is limited to its exact Azure resource type.')
     check('ZERO_DOWNTIME_POLICY', 'pass', 'Engineering actions are limited to zero-downtime review and execution profiles; deallocate/stop resize cycles are out of scope.',
           'policy', downtime_policy=POLICY['downtime_policy'], action=action)
@@ -61,6 +66,24 @@ def evaluate(resource, scan, workload, *, action, candidate_sku=None, now=None, 
         check('ZERO_DOWNTIME_METHOD', 'unknown',
               'Live resize without deallocate/stop must be verified for this SKU pair, or use scale-out replacement outside this pilot.',
               'execution_profile', resize_mode='zero_downtime')
+    elif action == 'azure.storage.lifecycle.review':
+        verified = evidence.get('lifecycle_policy_verified')
+        multipart = evidence.get('multipart_abort_rule_present')
+        check(
+            'LIFECYCLE_POLICY',
+            'pass' if verified is True else 'unknown',
+            'Management policy evidence must be collected for this storage account.',
+            'storage_management_policy',
+            lifecycle_policy_verified=verified,
+        )
+        check(
+            'MULTIPART_ABORT',
+            'pass' if multipart is True else 'unknown' if multipart is None else 'fail',
+            'Abort incomplete multipart uploads within seven days, or document an exception.',
+            'storage_management_policy',
+            multipart_abort_rule_present=multipart,
+        )
+        check('ZERO_DOWNTIME_METHOD', 'pass', 'Lifecycle review is configuration-only; no compute transition is requested.', 'execution_profile')
     else:
         check('ZERO_DOWNTIME_METHOD', 'pass', 'Disk review collects evidence only; no compute power transition is requested.', 'execution_profile')
         check('ATTACHMENT_HISTORY','unknown', 'Unattached state today does not prove sustained disuse or deletion eligibility.')

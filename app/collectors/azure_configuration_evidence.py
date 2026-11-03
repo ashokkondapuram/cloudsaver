@@ -125,8 +125,8 @@ def _apply_type_contract(resource: dict, props: dict) -> tuple[int, int]:
         if isinstance(state, str):
             evidence['site_state'] = state
     elif rtype == 'microsoft.storage/storageaccounts':
-        if props.get('allowBlobPublicAccess') is False:
-            _set_bool(evidence, 'allow_blob_public_access', False)
+        if type(props.get('allowBlobPublicAccess')) is bool:
+            _set_bool(evidence, 'allow_blob_public_access', props['allowBlobPublicAccess'])
         if props.get('supportsHttpsTrafficOnly') is True:
             _set_bool(evidence, 'supports_https_traffic_only', True)
         tls = props.get('minimumTlsVersion')
@@ -137,6 +137,8 @@ def _apply_type_contract(resource: dict, props: dict) -> tuple[int, int]:
             _set_bool(evidence, 'encrypted', True)
         want('encrypted', isinstance(evidence.get('encrypted'), bool))
         want('tls_required', isinstance(evidence.get('tls_required'), bool))
+        want('allow_blob_public_access', isinstance(evidence.get('allow_blob_public_access'), bool))
+        want('lifecycle_policy_verified', isinstance(evidence.get('lifecycle_policy_verified'), bool))
     elif rtype == 'microsoft.dbforpostgresql/flexibleservers':
         _set_number(evidence, 'backup_retention_days', _get(props, 'backup', 'backupRetentionDays'))
         ha = props.get('highAvailability')

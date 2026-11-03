@@ -29,6 +29,7 @@ FINOPS_RULE_TO_ACTION: dict[str, str] = {
 ENGINEERING_ACTION_BY_RULE: dict[str, str] = {
     "AZURE_VM_RIGHTSIZING_UTILIZATION": "azure.vm.rightsize",
     "AZURE_DISK_UNATTACHED_RETENTION": "azure.disk.review",
+    "AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD": "azure.storage.lifecycle.review",
 }
 
 KUBERNETES_PATCH_PREVIEW_RULES = frozenset(
@@ -43,6 +44,7 @@ TERRAFORM_IMPORT_RULES = frozenset(
     {
         *BASH_REMEDIATION_RULES,
         "AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR",
+        "AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD",
         "AWS_UNATTACHED_EBS",
         "AWS_UNASSOCIATED_EIP",
         "AWS_IDLE_RDS",
