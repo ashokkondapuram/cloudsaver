@@ -1,124 +1,166 @@
-"""Regression anchors for Enterprise Backend program BC-01–BC-14.
-
-Each test maps to one backlog item in docs/ENTERPRISE_BACKEND_PROGRAM.md.
-"""
+"""Behavioral regression anchors for Enterprise Backend program BC-01–BC-14."""
+import hashlib
+import re
 from pathlib import Path
-from uuid import uuid4
 
+import httpx
 import pytest
+from fastapi.testclient import TestClient
 
 from app.route_inventory import ROUTES, classify
+from services.gateway import create_app as gateway_app
 
 REPO = Path(__file__).resolve().parents[1]
 BFF_ROUTE = REPO / 'web-dashboard/app/api/[...path]/route.ts'
-GATEWAY = (REPO / 'services/gateway.py').read_text()
+TID = '11111111-1111-4111-8111-111111111111'
+SID = '33333333-3333-4333-8333-333333333333'
+KEY = 'test-enterprise-backend-key-32-chars!!'
 VERSION_ID = '00000000-0000-4000-8000-000000000001'
+SCAN_ID = '44444444-4444-4444-8444-444444444444'
+
+
+class Limiter:
+    async def check(self, tenant_id):
+        return None
+
+
+def _settings(tmp_path):
+    from app.config import Settings
+    return Settings('azure', str(tmp_path / 'bc.sqlite3'), (
+        dict(tenant_id=TID, name='BC', subscription_ids=[SID], roles=['TenantAdmin'],
+             api_key_sha256=hashlib.sha256(KEY.encode()).hexdigest()),
+    ))
 
 
 def _bff_source() -> str:
     return BFF_ROUTE.read_text()
 
 
-def _route_classified(method: str, path: str) -> bool:
-    return classify(method, path) is not None
+def _bff_regex(name: str) -> re.Pattern[str]:
+    source = _bff_source()
+    match = re.search(rf"const {name}=/\^(.+)\$/;", source)
+    assert match, f'Missing BFF route group {name}'
+    return re.compile('^' + match.group(1) + '$')
 
 
 @pytest.mark.parametrize(
-    'method,path',
+    'method,path,kind',
     [
-        pytest.param('GET', f'/api/v1/control-plane/plan-versions/{VERSION_ID}/engineering-outbox', id='BC-01-scanner'),
-        pytest.param('GET', '/api/v1/resources/billable-catalog', id='BC-02-billable-catalog'),
-        pytest.param('GET', '/api/v1/catalog/azure-resource-types', id='BC-02-azure-types'),
-        pytest.param('GET', '/api/v1/catalog/typed-resource-tables', id='BC-02-typed-tables'),
-        pytest.param('GET', '/api/v1/rules/catalog', id='BC-02-rules-catalog'),
+        ('GET', f'/api/v1/control-plane/plan-versions/{VERSION_ID}/engineering-outbox', 'scoped_read'),
+        ('GET', '/api/v1/resources/billable-catalog', 'scoped_read'),
+        ('GET', '/api/v1/catalog/azure-resource-types', 'scoped_read'),
+        ('GET', '/api/v1/catalog/typed-resource-tables', 'scoped_read'),
+        ('GET', '/api/v1/rules/catalog', 'scoped_read'),
+        ('POST', '/api/v1/gitops/pull-requests', 'scan_write'),
+        ('POST', '/api/v1/gitops/ast/sync', 'full_scope'),
     ],
 )
-def test_bc01_bc02_routes_in_inventory(method, path):
-    assert (method, path.replace(VERSION_ID, '{version_id}')) in ROUTES or _route_classified(method, path)
+def test_bc_routes_classified_in_inventory(method, path, kind):
+    templated = path.replace(VERSION_ID, '{version_id}')
+    assert (method, templated) in ROUTES or classify(method, path) == kind
 
 
-def test_bc01_engineering_outbox_reachable_via_bff():
-    source = _bff_source()
-    assert 'engineering-outbox' in source
-    assert 'controlPlaneRoutes' in source
+@pytest.mark.parametrize(
+    'group,sample',
+    [
+        ('controlPlaneRoutes', f'v1/control-plane/plan-versions/{VERSION_ID}/engineering-outbox'),
+        ('catalogRoutes', 'v1/resources/billable-catalog'),
+        ('catalogRoutes', 'v1/catalog/azure-resource-types'),
+        ('finopsSurfaceRoutes', 'v1/finops/autopilot/playbooks'),
+        ('finopsSurfaceRoutes', 'v1/finops/saas-focus/import'),
+        ('platformGitopsRoutes', 'v1/gitops/pull-requests'),
+        ('platformGitopsRoutes', 'v1/gitops/ast/sync'),
+    ],
+)
+def test_bc_bff_allowlist_matches_sample_paths(group, sample):
+    assert _bff_regex(group).match(sample)
 
 
-def test_bc02_catalog_routes_reachable_via_bff():
-    source = _bff_source()
-    assert 'catalogRoutes' in source
-    assert 'billable-catalog' in source
-    assert 'azure-resource-types' in source
-    assert 'typed-resource-tables' in source
-    assert 'rules/catalog' in source or 'rules\\/catalog' in source
+def test_bc03_bc08_gateway_forwards_resource_query_params(tmp_path):
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen['path'] = request.url.path
+        seen['query'] = str(request.url.query)
+        return httpx.Response(200, json={'scan_id': SCAN_ID, 'observed_at': '2026-01-01T00:00:00Z', 'total': 0, 'items': [],
+                                         'summary': {'total': 0, 'ai_status': {}, 'ai_risk': {}, 'decision': {}, 'review_priority': {}}})
+
+    client = TestClient(gateway_app(_settings(tmp_path), Limiter(), httpx.MockTransport(handler)))
+    headers = {'Authorization': 'Bearer ' + KEY}
+    response = client.get(
+        f'/api/v1/scans/{SCAN_ID}/resources?cost_scope=all&arm_detail=collected&limit=10&offset=0',
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert seen['path'].endswith(f'/api/v1/scans/{SCAN_ID}/resources')
+    assert 'cost_scope=all' in seen['query']
+    assert 'arm_detail=collected' in seen['query']
 
 
-def test_bc03_cost_scope_forwarded_on_resource_lists():
-    assert "'cost_scope'" in GATEWAY or '"cost_scope"' in GATEWAY
-    assert 'resource_filters' in GATEWAY
-
-
-def test_bc04_bc05_agent_worker_contracts_documented():
+def test_bc04_worker_exposes_check_assignment():
     contracts = (REPO / 'agent-worker/src/contracts.ts').read_text()
+    assert re.search(r'\bcheckAssignment\b', contracts)
+
+
+def test_bc05_worker_requires_expected_state_before_writes():
     runtime = (REPO / 'agent-worker/src/runtime/pre_mutation_drift_guard.ts').read_text()
-    assert 'checkAssignment' in contracts or 'checkAssignment' in runtime
-    assert 'expected_state' in runtime
-    assert 'Task' in contracts
+    assert 'EXPECTED_STATE_REQUIRED' in runtime
+    assert 'assertExpectedStatePresent' in runtime
 
 
-def test_bc06_gitops_sync_agent_and_unreconciled_resize():
-    gitops = (REPO / 'app/gitops_api.py').read_text()
+def test_bc06_unreconciled_includes_compute_resize():
     store = (REPO / 'app/agent_store.py').read_text()
-    assert 'EnterpriseStore' in gitops
     assert 'compute.resize' in store
 
 
-def test_bc07_scan_jobs_respects_distributed_lease():
-    jobs = (REPO / 'app/jobs_api.py').read_text()
-    assert 'distributed_scan_lease_held' in jobs
-    assert '409' in jobs
-    assert 'SCAN_LEASE_BUSY' in jobs
+def test_bc07_scan_jobs_returns_409_when_lease_held(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.scan_concurrency.distributed_scan_lease_held', lambda _tenant: True)
+    monkeypatch.setenv('CLOUDSAVER_INTERACTIVE_JOBS', 'true')
+    monkeypatch.setenv('CLOUDSAVER_DELIVERY_ENABLED', 'true')
+
+    class Repo:
+        def submit(self, *args, **kwargs):
+            raise AssertionError('submit should not run when lease is held')
+
+    from fastapi import FastAPI
+    from app.jobs_api import create_router as jobs_router
+
+    settings = _settings(tmp_path)
+    tenant = settings.tenants[0]
+    app = FastAPI()
+    app.include_router(jobs_router(settings, lambda: tenant, repository=Repo()))
+    client = TestClient(app)
+    response = client.post(
+        '/api/v1/scan-jobs',
+        headers={'Authorization': 'Bearer ' + KEY},
+        json={'idempotency_key': '11111111-1111-4111-8111-111111111111', 'providers': ['azure']},
+    )
+    assert response.status_code == 409
 
 
-def test_bc08_bc09_arm_detail_filter_end_to_end():
-    resource_api = (REPO / 'app/resource_api.py').read_text()
-    assert 'arm_detail' in resource_api
-    assert "'arm_detail'" in GATEWAY or '"arm_detail"' in GATEWAY
+def test_bc10_cloud_status_includes_schema_capabilities(tmp_path):
+    from app.cloud_status import cloud_status
+    tenant = dict(tenant_id=TID, subscription_ids=[SID])
+    payload = cloud_status(tenant, {}, schema_capabilities={'typed_resource_tables': True})
+    assert payload['schema_capabilities']['typed_resource_tables'] is True
 
 
-def test_bc10_cloud_status_schema_capabilities():
-    cloud_status = (REPO / 'app/cloud_status.py').read_text()
-    assert 'schema_capabilities' in cloud_status
+def test_bc11_platform_outbox_lease_guard_raises():
+    from app.schema_capabilities import require_platform_outbox_lease_columns
 
+    class Row:
+        def __init__(self, value):
+            self.value = value
 
-def test_bc11_platform_outbox_lease_guard():
-    module = (REPO / 'app/schema_capabilities.py').read_text()
-    assert 'require_platform_outbox_lease_columns' in module
-    assert '0033_platform_outbox_lease' in module
+        def fetchone(self):
+            return self.value
 
+    class Db:
+        def __init__(self, rows):
+            self.rows = iter(rows)
 
-def test_bc12_finops_autopilot_bff_parity():
-    source = _bff_source()
-    assert 'finopsSurfaceRoutes' in source
-    assert 'autopilot' in source
+        def execute(self, sql, params=None):
+            return Row(next(self.rows, None))
 
-
-def test_bc13_saas_focus_import_bff_parity():
-    source = _bff_source()
-    assert 'saas-focus' in source
-
-
-def test_bc14_platform_gitops_ast_routes_bff_parity():
-    source = _bff_source()
-    assert 'platformGitopsRoutes' in source
-    assert 'ast/' in source or 'ast\\/' in source
-    assert 'pull-requests' in source
-
-
-def test_bc14_platform_gitops_routes_classified_on_gateway():
-    for method, path in (
-        ('POST', '/api/v1/gitops/pull-requests'),
-        ('POST', '/api/v1/gitops/pre-merge/evaluate'),
-        ('POST', '/api/v1/gitops/ast/sync'),
-        ('POST', '/api/v1/gitops/ast/index-repositories'),
-    ):
-        assert _route_classified(method, path), f'{method} {path}'
+    with pytest.raises(ValueError, match='0033_platform_outbox_lease'):
+        require_platform_outbox_lease_columns(Db([(1,), None]))

@@ -15,8 +15,8 @@ from app.cloud_scope import validate_finding_scope
 from app.schemas import bounded_json
 from app.inference_ledger import attribution
 from app.resource_assessment import (FILTERS, ai_state, assessments, csv_report, decision_state, group, history,
-                                     inventory_observation, merge, merge_inventory, planning_summary,
-                                     matches, resource_key, row)
+                                     inventory_observation, merge, merge_inventory, observation_arm_detail,
+                                     planning_summary, matches, resource_key, row, summarize_resource_rows)
 from app.resource_store import ResourceConflict, ResourceStore
 
 KEY = r'^[a-f0-9]{64}$'
@@ -122,7 +122,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         items = []
         for key, (assessment, _) in merged.items():
             obs = inventory_by_key.get(key)
-            arm_detail = (obs.get('evidence') or {}).get('arm_detail') if obs else None
+            arm_detail = observation_arm_detail(obs)
             row_item = dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
                               decision=decision_state(assessment, decisions.get(key)), arm_detail=arm_detail)
             if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=inventory_by_key.get(key)):
@@ -144,61 +144,84 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         if pair is None:raise HTTPException(404,'Resource not found in this scan')
         return group(scan['findings']).get(key,[]), *pair
 
-    def summary(items):
-        counts = lambda field: {k: sum(1 for i in items if field(i) == k) for k in sorted({field(i) for i in items})}
-        return dict(total=len(items), ai_status=counts(lambda i: i['ai']['status']), ai_risk=counts(lambda i: i['ai']['risk_level'] or 'none'),
-                    decision=counts(lambda i: (i['decision'] or {}).get('decision', 'none')),
-                    review_priority=counts(lambda i: i['review_priority']))
-
     def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status):
         return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)))
 
-    def inventory_running_page(scan_id, tenant, *, cost_scope, limit, offset):
+    def inventory_running_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
         """Serve the requested inventory page straight from Postgres (no full-scan assessment)."""
-        if not hasattr(store, 'running_inventory_page'):
-            return None
-        snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=offset, limit=limit)
-        if snap is None:
-            raise HTTPException(404, 'Scan not found')
-        if snap.get('status') != 'running' or snap.get('data_origin') == 'legacy_synthetic':
-            return None
+        if arm_detail:
+            full_scan = store.get(tenant['tenant_id'], str(scan_id))
+            if full_scan is None:
+                raise HTTPException(404, 'Scan not found')
+            if full_scan.get('status') != 'running' or full_scan.get('data_origin') == 'legacy_synthetic':
+                return None
+            snap = dict(
+                scan_id=full_scan['scan_id'],
+                status=full_scan.get('status'),
+                timestamp=full_scan.get('timestamp'),
+                data_origin=full_scan.get('data_origin'),
+                findings=list(full_scan.get('findings') or []),
+                inventory_total=0,
+                inventory=[],
+            )
+        else:
+            full_scan = None
+            if not hasattr(store, 'running_inventory_page'):
+                return None
+            snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=offset, limit=limit)
+            if snap is None:
+                raise HTTPException(404, 'Scan not found')
+            if snap.get('status') != 'running' or snap.get('data_origin') == 'legacy_synthetic':
+                return None
         from app.billable_resources import include_in_cost_workspace
         findings_by_key = group(snap['findings'])
         observed_at = snap.get('timestamp')
-        items = []
-        for obs in snap['inventory']:
-            pseudo = inventory_observation(obs)
-            key = resource_key(pseudo)
-            if key in findings_by_key:
-                assessment, _ = merge(key, findings_by_key[key], observed_at=observed_at)
-            else:
-                assessment, _ = merge_inventory(key, obs, observed_at=observed_at)
-            row_item = dict(
-                row(assessment),
-                lifecycle_delta='new',
-                ai=ai_state(assessment, None, None),
-                decision=None,
-                arm_detail=(obs.get('evidence') or {}).get('arm_detail'),
+
+        def observation_rows(observations):
+            rows = []
+            for obs in observations:
+                pseudo = inventory_observation(obs)
+                key = resource_key(pseudo)
+                if key in findings_by_key:
+                    assessment, _ = merge(key, findings_by_key[key], observed_at=observed_at)
+                else:
+                    assessment, _ = merge_inventory(key, obs, observed_at=observed_at)
+                row_item = dict(
+                    row(assessment),
+                    lifecycle_delta='new',
+                    ai=ai_state(assessment, None, None),
+                    decision=None,
+                    arm_detail=observation_arm_detail(obs),
+                )
+                if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
+                    continue
+                rows.append(row_item)
+            return rows
+
+        if arm_detail:
+            full_inventory = [obs for obs in (full_scan.get('inventory') or []) if observation_arm_detail(obs) == arm_detail]
+            all_items = observation_rows(full_inventory)
+            total = len(all_items)
+            items = all_items[offset:offset + limit]
+            summary_payload = summarize_resource_rows(all_items)
+        else:
+            items = observation_rows(snap['inventory'])
+            total = snap['inventory_total']
+            review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
+            for key, grouped in findings_by_key.items():
+                assessment, _ = merge(key, grouped, observed_at=observed_at)
+                review_priority[assessment['review_priority']] = review_priority.get(assessment['review_priority'], 0) + 1
+            review_priority['evidence_required'] += max(0, snap['inventory_total'] - len(findings_by_key))
+            summary_payload = dict(
+                total=total,
+                ai_status={'not_run': total} if total else {},
+                ai_risk={'none': total} if total else {},
+                decision={'none': total} if total else {},
+                review_priority={k: v for k, v in review_priority.items() if v} or ({'evidence_required': total} if total else {}),
+                comparison_scan_id=None,
+                resolved_count=None,
+                no_longer_observed_count=None,
             )
-            if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
-                continue
-            items.append(row_item)
-        total = snap['inventory_total']
-        review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
-        for key, grouped in findings_by_key.items():
-            assessment, _ = merge(key, grouped, observed_at=observed_at)
-            review_priority[assessment['review_priority']] = review_priority.get(assessment['review_priority'], 0) + 1
-        review_priority['evidence_required'] += max(0, snap['inventory_total'] - len(findings_by_key))
-        summary_payload = dict(
-            total=total,
-            ai_status={'not_run': total} if total else {},
-            ai_risk={'none': total} if total else {},
-            decision={'none': total} if total else {},
-            review_priority={k: v for k, v in review_priority.items() if v} or ({'evidence_required': total} if total else {}),
-            comparison_scan_id=None,
-            resolved_count=None,
-            no_longer_observed_count=None,
-        )
         return dict(
             scan_id=snap['scan_id'],
             observed_at=observed_at,
@@ -298,15 +321,19 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                   tenant=Depends(current_tenant)):
         filters = query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)
         scan = owned(scan_id, tenant)
-        if scan['status'] == 'running' and not q and not any(filters.values()) and not arm_detail:
-            if cost_scope == 'all':
-                page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
-                if page is not None:
-                    return page
-            return inventory_running_page_legacy(scan, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
+        if scan['status'] == 'running' and not q and not any(filters.values()):
+            page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset, arm_detail=arm_detail)
+            if page is not None:
+                return page
+            if not arm_detail:
+                if cost_scope == 'all':
+                    page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
+                    if page is not None:
+                        return page
+                return inventory_running_page_legacy(scan, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
         _, items = inventory(scan, tenant, cost_scope=cost_scope)
         selected = filtered(items, filters, q, arm_detail=arm_detail)
-        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summary(items),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
+        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summarize_resource_rows(selected),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
                     total=len(selected), items=selected[offset:offset + limit])
 
     @router.get('/scans/{scan_id}/resources/export')
@@ -348,7 +375,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                      else 'Billed/effective values are exact resource-period FOCUS imports where available; inspect coverage. Retail opportunities are estimates in USD and post-change savings remain unverified.')
         obs_evidence = ((observation or {}).get('evidence') or {}) if observation else {}
         configuration_detail = obs_evidence.get('typed_configuration') or (observation or {}).get('configuration_snapshot')
-        return dict(scan_id=scan['scan_id'], assessment=assessment, findings=findings, ai_context=context,
+        assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation))
+        return dict(scan_id=scan['scan_id'], assessment=assessment_payload, findings=findings, ai_context=context,
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,
                     followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,

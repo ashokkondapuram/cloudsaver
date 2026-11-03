@@ -22,6 +22,24 @@ def test_arm_detail_filter_on_inventory_rows():
     assert len(collected) == 1
 
 
+def test_observation_arm_detail_reads_inventory_evidence():
+    from app.resource_assessment import observation_arm_detail
+    assert observation_arm_detail({'evidence': {'arm_detail': 'collected'}}) == 'collected'
+    assert observation_arm_detail(None) is None
+
+
+def test_summarize_resource_rows_counts_filtered_items():
+    from app.resource_assessment import summarize_resource_rows
+    items = [
+        {'review_priority': 'high', 'ai': {'status': 'not_run', 'risk_level': None}, 'decision': None},
+        {'review_priority': 'high', 'ai': {'status': 'completed', 'risk_level': 'low'}, 'decision': {'decision': 'accept'}},
+    ]
+    summary = summarize_resource_rows(items)
+    assert summary['total'] == 2
+    assert summary['ai_status'] == {'completed': 1, 'not_run': 1}
+    assert summary['decision'] == {'accept': 1, 'none': 1}
+
+
 class _Result:
     def __init__(self, row):
         self._row = row

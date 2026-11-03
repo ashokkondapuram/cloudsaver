@@ -223,6 +223,7 @@ def test_resources_batches_decisions_questions_and_export(app_state):
     detail = client.get(f"{base}/resources/{disk_a['resource_key']}", headers=auth()).json()
     assert len(detail['findings']) == 2 and detail['followups_remaining'] == 5
     assert disk_a['resource_id'] not in json.dumps(detail['ai_context'])
+    assert detail['assessment'].get('arm_detail') is None
 
     batch = dict(all=True, target_id='review', idempotency_key=str(uuid4()), acknowledge_external_processing=True)
     for invalid in (dict(batch, acknowledge_external_processing=False), dict(batch, resource_keys=[disk_a['resource_key']]),
@@ -271,6 +272,43 @@ def test_resources_batches_decisions_questions_and_export(app_state):
     assert report['rows'] == 1 and 'defer' in report['content'] and report['filename'].endswith('.csv')
     trail = client.get(f'/api/v1/resources/{key}/history', headers=auth()).json()
     assert trail['scans'][0]['present'] and len(trail['ai_results']) == 1 and trail['decisions'][0]['decision'] == 'defer'
+
+
+def test_arm_detail_filter_summary_and_detail_payload(tmp_path):
+    from app.store import Store
+
+    settings = Settings('azure', str(tmp_path / 'arm-detail.db'), (workspace(TID, KEY),))
+    findings = scanner(None)
+    inventory = [
+        dict(disk('disk-a'), evidence=dict(OBSERVED, arm_detail='collected')),
+        dict(disk('disk-b'), evidence=dict(OBSERVED, arm_detail='fetch_failed')),
+    ]
+    scan_id = str(uuid4())
+    scan = dict(
+        scan_id=scan_id,
+        timestamp='2026-10-22T15:30:00+00:00',
+        status='completed',
+        mode='azure',
+        cloud_providers=['azure'],
+        scope_fingerprint='test',
+        subscriptions_scanned=1,
+        total_items_found=len(inventory),
+        total_monthly_waste_usd=None,
+        realizable_monthly_savings_usd=None,
+        findings=findings,
+        inventory=inventory,
+    )
+    store = Store(settings.database)
+    store.save(TID, scan, workspace=workspace(TID, KEY))
+    gateway = AIGateway(enabled=False)
+    with TestClient(create_app(settings, scanner=scanner, ai_gateway=gateway)) as client:
+        base = f'/api/v1/scans/{scan_id}'
+        filtered = client.get(base + '/resources?arm_detail=collected', headers=auth()).json()
+        assert filtered['total'] == 1
+        assert filtered['summary']['total'] == 1
+        assert filtered['items'][0]['arm_detail'] == 'collected'
+        detail = client.get(f"{base}/resources/{filtered['items'][0]['resource_key']}", headers=auth()).json()
+        assert detail['assessment']['arm_detail'] == 'collected'
 
 
 def test_batches_wait_for_budget_skip_changed_evidence_and_cancel(app_state):

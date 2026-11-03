@@ -2,6 +2,9 @@
 import {useCallback, useEffect, useState} from 'react';
 import {api} from './api';
 import {loadResourcePages,readBatchPage,RUNNING_RESOURCE_PAGE_SIZE} from './resource-pages';
+import type {ArmDetailStatus} from './arm-detail';
+export type {ArmDetailStatus} from './arm-detail';
+export {ARM_DETAIL_STATUSES, armDetailFromQuery, armDetailLabels} from './arm-detail';
 import type {Finding, Scan} from './types';
 
 /** Live inventory from a real scan, including in-progress snapshots. */
@@ -15,9 +18,6 @@ export type DecisionKind = 'accept' | 'dismiss' | 'defer';
 export type Action = {title: string; rationale: string; kind: string; pillar: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
 export type Decision = {id: string; decision: DecisionKind; note: string; defer_until: string | null; evidence_digest: string; created_at: string; scan_id: string; evidence_changed?: boolean};
 export type AIState = {status: AIStatus; risk_level: string | null; summary: string | null; actions: Action[]; assessment_id: string | null; created_at: string | null; reason: string | null};
-import type {ArmDetailStatus} from './arm-detail';
-export type {ArmDetailStatus} from './arm-detail';
-export {ARM_DETAIL_STATUSES, armDetailFromQuery, armDetailLabels} from './arm-detail';
 export type ResourceRow = {
   resource_key: string; provider: string; resource_id: string; resource_name: string; resource_type: string; resource_group: string; scope_id: string;
   service_category: string; finding_count: number; rule_ids: string[]; review_priority: string; disposition: string; protected_reasons: string[];

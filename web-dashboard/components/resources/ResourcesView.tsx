@@ -132,6 +132,16 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     const search = nextParams.toString();
     router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
   }, [filters.arm_detail, params, router]);
+  useEffect(() => {
+    const current = params.get('provider') || '';
+    const next = filters.provider || '';
+    if (current === next) return;
+    const nextParams = new URLSearchParams(params.toString());
+    if (next) nextParams.set('provider', next);
+    else nextParams.delete('provider');
+    const search = nextParams.toString();
+    router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
+  }, [filters.provider, params, router]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id,token,scope]);
   const findings = scan?.findings || [];
   const findingIndex=useMemo(()=>{const index=new Map<string,Finding[]>();for(const finding of findings){const key=identityOf(finding.cloud_provider||'azure',finding.resource_id);const group=index.get(key)||[];group.push(finding);index.set(key,group);}return index;},[findings]);

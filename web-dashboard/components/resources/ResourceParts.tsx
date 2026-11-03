@@ -22,7 +22,11 @@ export function DecisionBadge({decision}: {decision: Decision | null}) {
 export function ArmDetailBadge({status, hideFromParentName}: {status: ArmDetailStatus | null | undefined; hideFromParentName?: boolean}) {
   if (!status) return null;
   const tone = status === 'collected' ? 'configured' : status === 'unsupported_type' ? 'legacy' : 'review-required';
-  return <span className={`state-badge arm-detail-badge ${tone}`} aria-hidden={hideFromParentName || undefined} title="Azure Resource Manager configuration enrichment">{armDetailLabels[status]}</span>;
+  const label = armDetailLabels[status];
+  return <>
+    <span className={`state-badge arm-detail-badge ${tone}`} aria-hidden={hideFromParentName || undefined} title="Azure Resource Manager configuration enrichment">{label}</span>
+    {hideFromParentName ? <span className="sr-only">{label}</span> : null}
+  </>;
 }
 
 export function Actions({actions}: {actions: Action[]}) {

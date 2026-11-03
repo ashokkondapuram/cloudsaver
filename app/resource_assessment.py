@@ -166,6 +166,20 @@ def row(assessment):
     return dict({k: assessment[k] for k in keys}, billed_cost_usd=assessment.get('billed_cost_usd'),effective_cost_usd=assessment.get('effective_cost_usd'),commitment_locked=assessment.get('commitment_locked',False), pillars={p['pillar']: p['status'] for p in assessment['pillars']})
 
 
+def observation_arm_detail(observation):
+    if not observation:
+        return None
+    return (observation.get('evidence') or {}).get('arm_detail')
+
+
+def summarize_resource_rows(items):
+    """Aggregate summary for resource list rows (matches explorer KPI cards)."""
+    counts = lambda field: {k: sum(1 for i in items if field(i) == k) for k in sorted({field(i) for i in items})}
+    return dict(total=len(items), ai_status=counts(lambda i: i['ai']['status']), ai_risk=counts(lambda i: i['ai']['risk_level'] or 'none'),
+                decision=counts(lambda i: (i['decision'] or {}).get('decision', 'none')),
+                review_priority=counts(lambda i: i['review_priority']))
+
+
 def ai_state(assessment, result, item):
     """Combine the latest AI result and batch item into one display state."""
     if item and item['status'] in ('queued', 'running'):
