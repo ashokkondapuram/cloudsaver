@@ -109,6 +109,12 @@ def test_api_respects_scheduled_worker_distributed_lease(settings, monkeypatch):
             pass
         def acquire(self, tenant_id, token):
             return False
+        def held(self, tenant_id):
+            return True
+        def force_clear(self, tenant_id):
+            pass
+        def close(self):
+            pass
     monkeypatch.setenv('CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', 'true')
     monkeypatch.setattr(workers.tasks, 'RedisLease', BusyLease)
     def never_scan(_):

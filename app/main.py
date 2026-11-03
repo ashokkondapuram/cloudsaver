@@ -294,10 +294,13 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
         lock = locks.setdefault(tenant_id, threading.Lock())
         if not lock.acquire(blocking=False):
             raise HTTPException(409, 'A scan is already running for this workspace')
+        from app.scan_concurrency import SCAN_LEASE_BUSY, distributed_scan_lease_held
+        if distributed_scan_lease_held(tenant_id):
+            lock.release()
+            raise HTTPException(409, SCAN_LEASE_BUSY)
         scan_id = str(uuid4())
         observation_time = datetime.now(timezone.utc).isoformat()
         _abandon_other_running_scans(tenant_id, keep_scan_id=scan_id)
-        _clear_distributed_scan_lease(tenant_id)
         preview = _running_scan_payload(scan_id, observation_time, tenant, providers)
 
         def worker():

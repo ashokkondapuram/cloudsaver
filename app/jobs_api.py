@@ -49,6 +49,9 @@ def create_router(settings, current_tenant, *, repository=None):
                 if not set(requested)<=set(tenant['subscription_ids']):raise ValueError('Select authorized subscriptions')
         except (ValueError,KeyError,TypeError) as error:
             raise HTTPException(422,str(error)) from None
+        from app.scan_concurrency import SCAN_LEASE_BUSY, distributed_scan_lease_held
+        if distributed_scan_lease_held(tenant['tenant_id']):
+            raise HTTPException(409, SCAN_LEASE_BUSY)
         enforce_providers(tenant,payload.providers or ['azure'])
         enforce_subscription_quota(tenant,count(requested),adding_count=0)
         try:

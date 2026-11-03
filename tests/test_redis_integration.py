@@ -25,6 +25,7 @@ def test_real_redis_exclusion_owner_renewal_and_stale_release(leases):
     a,b = leases
     tenant = str(uuid4())
     assert a.acquire(tenant,'owner-a')
+    assert a.held(tenant)
     assert not b.acquire(tenant,'owner-b')
     assert not b.renew(tenant,'owner-b')
     a.client.delete('cloudsaver:scan-lease:'+tenant)  # Simulate expiry/recovery.
