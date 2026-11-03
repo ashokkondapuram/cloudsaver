@@ -44,9 +44,10 @@ test('detail drawer preserves context and previews actual returned review code',
   const resource=page.getByRole('button',{name:/^archive-data-01/});await resource.click();
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('heading',{name:'Resource identity'})).toBeVisible();
-  await drawer.getByRole('tab',{name:'Costs',exact:true}).click();
-  await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();
+  await drawer.getByRole('tab', {name: 'Evidence', exact: true}).click();
+  await expect(drawer.getByText('Resource identity', {exact: true})).toBeVisible();
+  await drawer.getByRole('tab', {name: 'Costs', exact: true}).click();
+  await expect(drawer.getByRole('heading', {name: 'Costs', exact: true})).toBeVisible();
   await drawer.getByRole('tab',{name:'Code',exact:true}).click();
   await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();
   await drawer.getByRole('button',{name:'Preview Terraform imports',exact:true}).click();

@@ -10,13 +10,15 @@ type Props = {
   detail: ResourceDetail;
   token: string;
   canAdmin: boolean;
+  /** When true, hide measures with no value instead of five Unknown cards. */
+  knownOnly?: boolean;
 };
 
 function display(value: number | null | undefined, currency = 'USD') {
   return value == null ? 'Unknown' : money(value, currency);
 }
 
-export function FinancialFiveStrip({detail, token, canAdmin}: Props) {
+export function FinancialFiveStrip({detail, token, canAdmin, knownOnly = false}: Props) {
   const costs = detail.costs;
   const currency = costs?.currency || 'USD';
   const [absorptionProven, setAbsorptionProven] = useState(false);
@@ -59,21 +61,36 @@ export function FinancialFiveStrip({detail, token, canAdmin}: Props) {
   }
 
   const measures = [
-    {label: '30-day billed cost', value: display(costs?.billed_cost_usd, currency), sub: 'Payable usage · FOCUS BilledCost window'},
-    {label: '30-day effective cost', value: display(costs?.effective_cost_usd, currency), sub: 'Amortized allocation · commitment-aware'},
-    {label: 'Retail review estimate', value: display(costs?.retail_estimate_usd ?? detail.assessment.retail_estimate_usd), sub: 'Catalog retail · not billing truth'},
+    {label: '30-day billed cost', value: display(costs?.billed_cost_usd, currency), sub: 'Payable usage · FOCUS BilledCost window', known: costs?.billed_cost_usd != null},
+    {label: '30-day effective cost', value: display(costs?.effective_cost_usd, currency), sub: 'Amortized allocation · commitment-aware', known: costs?.effective_cost_usd != null},
+    {
+      label: 'Retail review estimate',
+      value: display(costs?.retail_estimate_usd ?? detail.assessment.retail_estimate_usd),
+      sub: 'Catalog retail · not billing truth',
+      known: (costs?.retail_estimate_usd ?? detail.assessment.retail_estimate_usd) != null,
+    },
     {
       label: 'Avoidable payable spend',
       value: avoidableFromScenario ?? display(costs?.opportunity_usd, currency),
       sub: absorptionProven ? 'Absorption proven in scenario' : 'Modeled opportunity · do not add overlaps',
       highlight: true,
+      known: avoidableFromScenario != null || costs?.opportunity_usd != null,
     },
-    {label: 'Verified realized savings', value: display(costs?.verified_realized_savings_usd), sub: 'Finance acceptance required'},
+    {label: 'Verified realized savings', value: display(costs?.verified_realized_savings_usd), sub: 'Finance acceptance required', known: costs?.verified_realized_savings_usd != null},
   ];
+  const visible = knownOnly ? measures.filter(item => item.known) : measures;
+
+  if (knownOnly && !visible.length) {
+    return (
+      <Notice>
+        No billed, retail, or savings evidence is attached yet. Fetch billing on this tab or run a scan with verified retail meters.
+      </Notice>
+    );
+  }
 
   return (
     <div className="financial-five-strip panel-bleed" aria-label="Five-measure financial evidence">
-      {measures.map(item => (
+      {visible.map(item => (
         <article key={item.label} className={item.highlight ? 'highlight-avoidable' : undefined}>
           <span className="measure-label">{item.label}</span>
           <strong className={item.value === 'Unknown' ? 'metric-unknown measure-value' : 'measure-value'}>{item.value}</strong>

@@ -88,7 +88,7 @@ export const findingDrawerTabs: WorkspaceTab[] = [
 ];
 
 export const resourceDrawerLeads: Record<string, string> = {
-  overview: 'Disposition, pillars, and financial snapshot for this resource.',
+  overview: 'Summary and pillar radar. Open Costs, Findings, or Evidence for detail.',
   findings: 'Findings linked to this resource in the selected scan.',
   evidence: 'Collector evidence, telemetry hooks, rules, and dependencies.',
   costs: 'Retail and billed cost breakdown when pricing evidence exists.',

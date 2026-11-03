@@ -22,7 +22,9 @@ test('closing and reopening a resource requires fresh details before showing old
   const {findings}=await mockWorkspace(page);await navigate(page,'Resources');
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
-  await expect(drawer.getByRole('heading',{name:'Resource identity'})).toBeVisible();
+  await expect(drawer.getByRole('tab', {name: 'Overview', exact: true})).toHaveAttribute('aria-selected', 'true');
+  await drawer.getByRole('tab', {name: 'Evidence', exact: true}).click();
+  await expect(drawer.getByText('Resource identity', {exact: true})).toBeVisible();
   await page.keyboard.press('Escape');
   let requested=false,release=()=>{};const gate=new Promise<void>(r=>release=r);
   await page.route(`**/api/v1/scans/${scanId}/resources/*`,async route=>{
@@ -32,8 +34,10 @@ test('closing and reopening a resource requires fresh details before showing old
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   await expect.poll(()=>requested).toBe(true);
   await expect(drawer.getByText('Loading resource details…')).toBeVisible();
-  await expect(drawer.getByRole('heading',{name:'Resource identity'})).toHaveCount(0);
-  release();await expect(drawer.getByRole('heading',{name:'Resource identity'})).toBeVisible();
+  await expect(drawer.getByText('Resource identity', {exact: true})).toHaveCount(0);
+  release();
+  await drawer.getByRole('tab', {name: 'Evidence', exact: true}).click();
+  await expect(drawer.getByText('Resource identity', {exact: true})).toBeVisible();
 });
 
 test('revoked session clears workspace data, credentials and action controls',async({page})=>{

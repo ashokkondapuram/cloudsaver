@@ -45,6 +45,7 @@ test('resource drawer exposes action-safety firewall and five-measure financial 
   );
   await navigate(page, 'Resources');
   await page.getByRole('button', {name: 'archive-data-01 disks'}).click();
+  await page.getByRole('tab', {name: 'Costs', exact: true}).click();
   await expect(page.locator('.financial-five-strip')).toBeVisible();
   await expect(page.getByText('30-day billed cost')).toBeVisible();
   await page.getByRole('tab', {name: 'Action safety'}).click();

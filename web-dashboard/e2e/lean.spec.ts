@@ -30,7 +30,7 @@ test('unified resources keep imported billing separate from retail estimates and
   await page.getByLabel('Pillar status',{exact:true}).selectOption('unknown');await expect(page.getByRole('button',{name:'View analysis for review-disk'})).toBeVisible();
   await page.getByRole('button',{name:'View analysis for review-disk'}).click();const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await drawer.getByRole('tab',{name:'Costs',exact:true}).click();
-  await expect(drawer.getByRole('heading',{name:'Financial evidence'})).toBeVisible();await expect(drawer.getByRole('tabpanel',{name:'Costs'}).getByText('$12.50',{exact:true})).toBeVisible();await expect(drawer.getByText('$15.00',{exact:true})).toBeVisible();
+  await expect(drawer.getByRole('heading',{name:'Costs',exact:true})).toBeVisible();await expect(drawer.getByRole('tabpanel',{name:'Costs'}).getByText('$12.50',{exact:true})).toBeVisible();await expect(drawer.getByText('$15.00',{exact:true})).toBeVisible();
   await drawer.getByRole('tab',{name:'Evidence',exact:true}).click();
   await expect(drawer.getByRole('heading',{name:'Utilization telemetry'})).toBeVisible();await expect(drawer.getByText('Unverified',{exact:true})).toBeVisible();
   const audit=await new AxeBuilder({page}).include('dialog[open]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);

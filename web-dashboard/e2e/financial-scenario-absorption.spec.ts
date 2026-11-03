@@ -39,6 +39,7 @@ test('absorption proven drives commitment-aware scenario on the five-measure str
   );
   await navigate(page, 'Resources');
   await page.getByRole('button', {name: 'archive-data-01 disks'}).click();
+  await page.getByRole('tab', {name: 'Costs', exact: true}).click();
   await expect(page.locator('.financial-five-strip')).toBeVisible();
   await page.getByRole('checkbox', {name: /Absorption proven/}).check();
   await page.getByRole('button', {name: 'Run commitment-aware scenario'}).click();

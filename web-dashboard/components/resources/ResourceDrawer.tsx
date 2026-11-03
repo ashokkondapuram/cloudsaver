@@ -31,7 +31,7 @@ function Evidence({detail}: {detail: ResourceDetail}) {
     {readiness && <><div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
     {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}</>}
     </dl>
-    <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence appears on the Overview tab.</p>
+    <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence is listed under Five-pillar checks above.</p>
     <details className="drawer-disclosure"><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>
   </div>;
 }
@@ -66,11 +66,9 @@ function Rules({detail}: {detail: ResourceDetail}) {
 }
 
 function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => void}) {
-  const {token} = useWorkspace();
+  const {token, canAdmin} = useWorkspace();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const billedCurrency = detail.costs?.currency || 'USD';
-  const supplemental = [['modeled_future_cost_usd', 'Modeled future cost', 'USD'], ['opportunity_usd', 'Modeled opportunity', 'USD'],
-    ['verified_realized_savings_usd', 'Verified realized savings', 'USD']] as const;
+  const supplemental = [['modeled_future_cost_usd', 'Modeled future cost', 'USD']] as const;
   async function fetchCost() {
     setBusy(true); setError('');
     try {
@@ -80,12 +78,17 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
     } catch (cause) {setError((cause as Error).message);}
     finally {setBusy(false);}
   }
-  return <div className="drawer-section"><h3>Financial evidence</h3>
-    <p className="inline-help">Billed, effective, and retail measures are in the header strip. Use this tab for billing refresh and supplemental modeled fields.</p>
+  return <div className="drawer-section drawer-costs-panel"><h3>Costs</h3>
+    <FinancialFiveStrip detail={detail} token={token} canAdmin={canAdmin} knownOnly/>
     {detail.assessment.provider === 'azure' && <p><button className="button secondary" disabled={busy} onClick={fetchCost}>{busy ? 'Fetching cost…' : 'Fetch latest cost for this resource'}</button></p>}
     {error && <Notice tone="error">{error}</Notice>}
-    <dl className="settings-key-values">{supplemental.map(([key, name, currency]) => <div key={key}><dt>{name}</dt>
-      <dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</dd></div>)}</dl>
+    {supplemental.map(([key, name, currency]) => {
+      const value = detail.costs?.[key];
+      if (value == null) return null;
+      return (
+        <dl key={key} className="settings-key-values"><div><dt>{name}</dt><dd>{money(value, currency)}</dd></div></dl>
+      );
+    })}
     <p className="inline-help">{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
     {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {ruleLabel(item.rule_id)}</li>)}</ul></Notice>}</div>;
 }
@@ -99,22 +102,39 @@ function Dependencies({detail}: {detail: ResourceDetail}) {
 const formatDay = (value: string) => new Date(value + 'T00:00:00').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
 const pillarState = (status: string) => status === 'risk' ? 'Risk observed' : status === 'observed' ? 'Evidence observed' : 'Evidence incomplete';
 
-function Overview({detail}: {detail: ResourceDetail}) {
+function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab: string) => void}) {
+  const a = detail.assessment;
+  const retail = detail.costs?.retail_estimate_usd ?? a.retail_estimate_usd;
+  return <>
+    {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}.</Notice>}
+    {a.observation.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
+    <dl className="settings-key-values overview-snapshot">
+      <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
+      <div><dt>Retail estimate</dt><dd>{retail == null ? 'Unknown' : money(retail)}</dd></div>
+      <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
+    </dl>
+    <div className="drawer-section overview-radar"><EvidenceRadar pillars={a.pillars} onInspect={() => onOpenTab('evidence')}/></div>
+    <div className="drawer-header-actions overview-actions">
+      {detail.findings.length > 0 && <button type="button" className="button secondary small" onClick={() => onOpenTab('findings')}><ListChecks size={14}/>Review findings</button>}
+      <button type="button" className="button secondary small" onClick={() => onOpenTab('costs')}><CircleDollarSign size={14}/>Costs</button>
+      <button type="button" className="button secondary small" onClick={() => onOpenTab('evidence')}><Activity size={14}/>Evidence & checks</button>
+    </div>
+  </>;
+}
+
+function AssessmentChecks({detail}: {detail: ResourceDetail}) {
   const a = detail.assessment;
   const [pillar, setPillar] = useState('');
-  return <>
-    {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}. AI can’t suggest decommissioning this resource.</Notice>}
-    {a.observation.status !== 'recent' && <Notice tone="warning">This observation is older than {a.observation.max_age_hours} hours or its time can’t be verified. Run a new scan before you plan a change.</Notice>}
-    <div className="drawer-section"><h3>Five-pillar assessment</h3><p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks have observed evidence. Each check keeps its most severe status across this resource’s findings.</p>
-      <EvidenceRadar pillars={a.pillars} onInspect={id => setPillar(id)}/>
-      <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={pillar ? pillar === p.pillar : p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{pillarState(p.status)}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{sentence(c.code)}</h4><p>{c.explanation}</p>{!!c.evidence_fields.length && <small className="inline-help">Evidence: {c.evidence_fields.join(', ')}</small>}</div></article>)}</div></details>)}</div></div>
-    <div className="drawer-section"><h3>Resource identity</h3><dl className="detail-metadata">
+  return <div className="drawer-section"><h3>Five-pillar checks</h3>
+    <p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks have observed evidence.</p>
+    <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={pillar ? pillar === p.pillar : p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{pillarState(p.status)}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{sentence(c.code)}</h4><p>{c.explanation}</p>{!!c.evidence_fields.length && <small className="inline-help">Evidence: {c.evidence_fields.join(', ')}</small>}</div></article>)}</div></details>)}</div>
+    <details className="drawer-disclosure"><summary>Resource identity</summary><dl className="detail-metadata">
       <div><dt>Resource type</dt><dd>{a.resource_type || 'Not supplied'}</dd></div><div><dt>Service category</dt><dd>{sentence(a.service_category || 'other')}</dd></div>
       <div><dt>Group or namespace</dt><dd>{a.resource_group || 'Not supplied'}</dd></div><div><dt>Account or scope</dt><dd><code>{a.scope_id}</code></dd></div>
-      <div className="full-width"><dt>Resource ID</dt><dd><code>{a.resource_id}</code></dd></div></dl></div>
-    <div className="drawer-section"><h3>Required guardrails</h3><ul className="assessment-guardrails">{a.guardrails.map(code => <li key={code}>{sentence(code)}</li>)}</ul></div>
+      <div className="full-width"><dt>Resource ID</dt><dd><code>{a.resource_id}</code></dd></div></dl></details>
+    {!!a.guardrails.length && <details className="drawer-disclosure"><summary>Required guardrails</summary><ul className="assessment-guardrails">{a.guardrails.map(code => <li key={code}>{sentence(code)}</li>)}</ul></details>}
     <p className="inline-help" title={a.evidence_digest}>Policy {a.policy_version} · Evidence fingerprint {a.evidence_digest.slice(0, 16)}</p>
-  </>;
+  </div>;
 }
 
 function Findings({detail}: {detail: ResourceDetail}) {
@@ -268,14 +288,13 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
-        <p className="drawer-header-meta">{a.evidence_coverage.total ? `${Math.round(100 * a.evidence_coverage.observed / a.evidence_coverage.total)}% evidence` : 'Evidence incomplete'} · Observed {a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}</p>
-        <FinancialFiveStrip detail={current} token={token} canAdmin={canAdmin}/>
+        <p className="drawer-header-meta">Observed {a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{current.findings.length ? ` · ${current.findings.length} finding${current.findings.length === 1 ? '' : 's'}` : ''}</p>
         <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
       </div>
       <TabWorkspaceShell id="resource-drawer" label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content">
-        {tab === 'overview' && <Overview detail={current}/>}
+        {tab === 'overview' && <Overview detail={current} onOpenTab={setTab}/>}
         {tab === 'findings' && <Findings detail={current}/>}
-        {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
+        {tab === 'evidence' && <><AssessmentChecks detail={current}/><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
         {tab === 'costs' && <Costs detail={current} onFetched={refetch}/>}
         {tab === 'safety' && (
           <ActionSafetyPanel
