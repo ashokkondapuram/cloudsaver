@@ -187,6 +187,12 @@ def list_plan_versions(store, tenant_id, plan_id, limit=50):
             raise NotFoundError()
         rows = db.execute(
             "SELECT v.id,v.plan_id,v.version,v.identity_digest,v.targets,v.parameters,v.policy_digest,v.evidence_digest,v.state,"
+            "(SELECT count(*) FROM engineering_events e "
+            "INNER JOIN engineering_outbox o ON o.tenant_id=e.tenant_id AND o.event_id=e.id "
+            "WHERE e.tenant_id=v.tenant_id AND e.version_id=v.id AND o.state='pending'),"
+            "(SELECT count(*) FROM engineering_events e "
+            "INNER JOIN engineering_outbox o ON o.tenant_id=e.tenant_id AND o.event_id=e.id "
+            "WHERE e.tenant_id=v.tenant_id AND e.version_id=v.id AND o.state='published'),"
             "(SELECT o.state FROM engineering_events e "
             "INNER JOIN engineering_outbox o ON o.tenant_id=e.tenant_id AND o.event_id=e.id "
             "WHERE e.tenant_id=v.tenant_id AND e.version_id=v.id "
@@ -205,7 +211,9 @@ def list_plan_versions(store, tenant_id, plan_id, limit=50):
             policy_digest=r[6],
             evidence_digest=r[7],
             state=r[8],
-            engineering_outbox_state=r[9] if r[9] is not None else None,
+            engineering_outbox_pending_count=int(r[9] or 0),
+            engineering_outbox_published_count=int(r[10] or 0),
+            engineering_outbox_state=r[11] if r[11] is not None else None,
         )
         for r in rows
     ]

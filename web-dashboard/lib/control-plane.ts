@@ -79,6 +79,8 @@ export interface PlanVersionRecord {
   policy_digest?: string;
   evidence_digest?: string;
   engineering_outbox_state?: 'pending' | 'published' | null;
+  engineering_outbox_pending_count?: number;
+  engineering_outbox_published_count?: number;
 }
 
 export interface DeclaredWorkload {

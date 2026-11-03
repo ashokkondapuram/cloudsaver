@@ -98,11 +98,12 @@ test.describe('Control-plane plan lifecycle', () => {
       initialState: 'queued',
       objective: 'Outbox pending fixture',
       engineeringOutboxState: 'pending',
+      engineeringOutboxPendingCount: 2,
+      engineeringOutboxPublishedCount: 1,
     });
     await navigate(page, 'Risk & compliance');
     await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
-    await expect(page.getByText(/Engineering event outbox: pending dispatch/i)).toBeVisible();
-    await expect(page.locator('dt').filter({hasText: 'Engineering outbox'}).locator('..').getByText('pending')).toBeVisible();
+    await expect(page.getByText(/2 pending, 1 published/i)).toBeVisible();
   });
 
   test('admin marks queued plan version expired', async ({page}) => {

@@ -5,7 +5,7 @@ import {RefreshCw} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import type {PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
-import {notifyControlPlanePlanRevision} from '../../lib/control-plane-sync';
+import {notifyControlPlanePlanRevision, subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
@@ -85,6 +85,13 @@ function showExecutionLadder(state: string) {
 }
 
 function planOutboxStatusCopy(latest: PlanVersionRecord) {
+  const pending = latest.engineering_outbox_pending_count ?? 0;
+  const published = latest.engineering_outbox_published_count ?? 0;
+  const total = pending + published;
+  if (total > 0) {
+    const latestState = latest.engineering_outbox_state ?? (pending > 0 ? 'pending' : 'published');
+    return `Engineering event outbox: ${pending} pending, ${published} published (latest ${latestState}). Cloud execution remains disabled in this dashboard.`;
+  }
   if (latest.engineering_outbox_state === 'pending') {
     return 'Engineering event outbox: pending dispatch. Cloud execution remains disabled in this dashboard.';
   }
@@ -120,6 +127,8 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
     const el = document.getElementById(`control-plane-plan-${highlightPlanId}`);
     el?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
   }, [highlightPlanId, plans, revision]);
+
+  useEffect(() => subscribeControlPlanePlanRevision(() => setRevision(r => r + 1)), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -350,11 +359,23 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                           <code>{latest.identity_digest.slice(0, 16)}…</code>
                         </dd>
                       </div>
-                      {latest.engineering_outbox_state && (
+                      {(latest.engineering_outbox_pending_count ?? 0) > 0 ||
+                      (latest.engineering_outbox_published_count ?? 0) > 0 ? (
                         <div>
                           <dt>Engineering outbox</dt>
-                          <dd>{latest.engineering_outbox_state}</dd>
+                          <dd>
+                            {latest.engineering_outbox_pending_count ?? 0} pending ·{' '}
+                            {latest.engineering_outbox_published_count ?? 0} published
+                            {latest.engineering_outbox_state ? ` · latest ${latest.engineering_outbox_state}` : ''}
+                          </dd>
                         </div>
+                      ) : (
+                        latest.engineering_outbox_state && (
+                          <div>
+                            <dt>Engineering outbox</dt>
+                            <dd>{latest.engineering_outbox_state}</dd>
+                          </div>
+                        )
                       )}
                     </dl>
                     <div className="button-row">

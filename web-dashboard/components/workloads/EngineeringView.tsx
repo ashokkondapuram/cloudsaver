@@ -5,7 +5,7 @@ import {useSearchParams} from 'next/navigation';
 import {api,ApiError} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
-import {subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
+import {notifyControlPlanePlanRevision, subscribeControlPlanePlanRevision} from '../../lib/control-plane-sync';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading,Notice} from '../ui/shared';
 import css from './Engineering.module.css';
@@ -72,7 +72,7 @@ function History({token,planId}:{token:string;planId:string}){
   return <>{error?<Notice tone="error">{error}</Notice>:!value?<Loading label="Loading plan history…"/>:<><ol>{[...value.items].sort((a,b)=>b.version-a.version).map(v=><li key={v.id}>Version {v.version}: {v.parameters.candidate_sku||'Disk review'} · {dateTime(v.parameters.readiness.evaluated_at)}<p className={css.wrap}>Manifest: {v.identity_digest}</p></li>)}</ol><Pages cursor={cursor} next={value.next_cursor} onChange={setCursor} label="Plan history pages"/></>}</>;
 }
 
-function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan;token:string;w:Workload;canAdmin:boolean;scanId?:string;done:()=>void;highlightPlanId?:string}){
+function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan;token:string;w:Workload;canAdmin:boolean;scanId?:string;done:(planId?:string)=>void;highlightPlanId?:string}){
   const [history,setHistory]=useState(false);
   const v=plan.latest,p=v.parameters,r=p.readiness;
   return <article id={`engineering-plan-${plan.id}`} className={`${css.card}${highlightPlanId===plan.id?' plan-card-highlight':''}`}>
@@ -95,7 +95,7 @@ function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan
     <p className={css.muted}>Estimated opportunity, validated run rate and reconciled benefit are unavailable until their supporting evidence is accepted.</p>
     <button className="button secondary" aria-expanded={history} onClick={()=>setHistory(!history)}>{history?'Hide version history':'View version history'}</button>
     {history&&<History token={token} planId={plan.id}/>}
-    {canAdmin&&<details className={css.details}><summary>Create a new review version</summary><Command token={token} path={`/engineering/workloads/${w.id}/plans/${plan.id}/versions`} version={w.version} label="Save new version" done={done} body={data=>({member_id:p.member_id,objective:String(data.get('objective')),action:p.action,candidate_sku:p.action==='azure.vm.rightsize'?String(data.get('candidate_sku')):null,parent_version:v.version,scan_id:data.get('latest')?scanId:p.scan_id})}>
+    {canAdmin&&<details className={css.details}><summary>Create a new review version</summary><Command token={token} path={`/engineering/workloads/${w.id}/plans/${plan.id}/versions`} version={w.version} label="Save new version" done={()=>done(plan.id)} body={data=>({member_id:p.member_id,objective:String(data.get('objective')),action:p.action,candidate_sku:p.action==='azure.vm.rightsize'?String(data.get('candidate_sku')):null,parent_version:v.version,scan_id:data.get('latest')?scanId:p.scan_id})}>
       <label className={css.wide}>Objective<textarea name="objective" required minLength={10} maxLength={500} defaultValue={p.objective}/></label>
       {p.action==='azure.vm.rightsize'&&<label>Candidate SKU<input name="candidate_sku" required defaultValue={p.candidate_sku||''} maxLength={80}/></label>}
       {scanId&&<label className={css.wide}><span><input type="checkbox" name="latest"/> Use the currently selected saved observation</span></label>}
@@ -111,7 +111,7 @@ function Detail({id,token,revision,refresh,canAdmin,scanId,highlightPlanId}:{id:
   const plans=useRead<Page<Plan>>(`/engineering/workloads/${id}/plans${query(planCursor)}`,token,revision);
   const events=useRead<Page<Event>>(`/engineering/workloads/${id}/events${query(eventCursor)}`,token,revision);
   const resources=useRead<{items:Resource[];total:number}>(canAdmin&&scanId?`/scans/${scanId}/resources?provider=azure&limit=20&offset=${offset}`:null,token);
-  const refreshDetail=()=>{setMemberCursor(null);setPlanCursor(null);setEventCursor(null);setSelected('');refresh();};
+  const refreshDetail=(planId?:string)=>{setMemberCursor(null);setPlanCursor(null);setEventCursor(null);setSelected('');refresh();notifyControlPlanePlanRevision(planId);};
   if(w.error)return <Notice tone="error">{w.error}</Notice>;
   if(!w.value)return <Loading label="Loading workload…"/>;
   const workload=w.value;
