@@ -84,6 +84,24 @@ function showExecutionLadder(state: string) {
   ).includes(state);
 }
 
+function planOutboxStatusCopy(latest: PlanVersionRecord) {
+  if (latest.engineering_outbox_state === 'pending') {
+    return 'Engineering event outbox: pending dispatch. Cloud execution remains disabled in this dashboard.';
+  }
+  if (latest.engineering_outbox_state === 'published') {
+    return 'Engineering event outbox: published. Control-plane execution tracking still does not invoke cloud APIs from this panel.';
+  }
+  return 'Worker outbox dispatch is not surfaced for this plan version. Status reflects control-plane transitions only; no automatic cloud mutations are triggered from this panel.';
+}
+
+function planShareLinks(plan: PlanRecord) {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const governance = `${origin}/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`;
+  if (!plan.engineering_workload_id) return governance;
+  const engineering = `${origin}/workloads?tab=engineering&workload=${encodeURIComponent(plan.engineering_workload_id)}&plan=${encodeURIComponent(plan.id)}`;
+  return `Governance: ${governance}\nEngineering: ${engineering}`;
+}
+
 export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: string}) {
   const {token, canAdmin, workspace} = useWorkspace();
   const humanApprover = canAdmin && workspace?.subject_type === 'user' && !workspace.key_id;
@@ -315,10 +333,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                           ))}
                         </div>
                         {['queued', 'running', 'verification_pending'].includes(latest.state) && (
-                          <p className="inline-help plan-outbox-status">
-                            Worker outbox dispatch is not surfaced in this release. Status reflects control-plane transitions
-                            only; no automatic cloud mutations are triggered from this panel.
-                          </p>
+                          <p className="inline-help plan-outbox-status">{planOutboxStatusCopy(latest)}</p>
                         )}
                       </>
                     )}
@@ -335,6 +350,12 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                           <code>{latest.identity_digest.slice(0, 16)}…</code>
                         </dd>
                       </div>
+                      {latest.engineering_outbox_state && (
+                        <div>
+                          <dt>Engineering outbox</dt>
+                          <dd>{latest.engineering_outbox_state}</dd>
+                        </div>
+                      )}
                     </dl>
                     <div className="button-row">
                       {canAdmin && NEXT_STATE[latest.state] && (
@@ -375,11 +396,16 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                         type="button"
                         className="button secondary small"
                         onClick={() => {
-                          const url = `${window.location.origin}/governance?tab=control-plane&plan=${encodeURIComponent(plan.id)}`;
-                          void navigator.clipboard.writeText(url).then(() => setNotice('Plan deep link copied to clipboard.'));
+                          void navigator.clipboard.writeText(planShareLinks(plan)).then(() =>
+                            setNotice(
+                              plan.engineering_workload_id
+                                ? 'Governance and engineering deep links copied to clipboard.'
+                                : 'Plan deep link copied to clipboard.',
+                            ),
+                          );
                         }}
                       >
-                        Copy plan link
+                        Copy plan link{plan.engineering_workload_id ? 's' : ''}
                       </button>
                     </div>
                     {latest.state === 'approved' && (

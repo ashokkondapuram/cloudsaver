@@ -47,6 +47,7 @@ export type MockControlPlanePlanOptions = {
   targets?: string[];
   engineeringWorkloadId?: string | null;
   engineeringWorkloadName?: string | null;
+  engineeringOutboxState?: 'pending' | 'published' | null;
 };
 
 export async function mockControlPlanePlan(page: Page, options: MockControlPlanePlanOptions) {
@@ -84,6 +85,7 @@ export async function mockControlPlanePlan(page: Page, options: MockControlPlane
             targets,
             parameters: {},
             identity_digest: options.digest,
+            engineering_outbox_state: options.engineeringOutboxState ?? null,
           },
         ],
       },

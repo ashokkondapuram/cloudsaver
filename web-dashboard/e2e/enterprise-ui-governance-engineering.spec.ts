@@ -68,6 +68,28 @@ test.describe('Engineering ↔ governance cross-links', () => {
     await expect(page.getByRole('button', {name: 'Engineering plans', exact: true})).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator(`#engineering-plan-${engineeringPlanId}`)).toHaveClass(/plan-card-highlight/);
   });
+
+  test('copy plan links includes governance and engineering URLs when linked', async ({page, context}) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await mockWorkspace(page, {human: true});
+    await mockGovernanceRoutes(page);
+    await mockControlPlanePlan(page, {
+      planId: engineeringPlanId,
+      versionId: '77777777-7777-4777-8777-777777777777',
+      digest: 'a'.repeat(64),
+      initialState: 'assessed',
+      objective: 'Review disk retention',
+      engineeringWorkloadId: engineeringWorkloadId,
+      engineeringWorkloadName: 'Payments',
+    });
+    await navigate(page, 'Risk & compliance');
+    await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
+    await page.getByRole('button', {name: 'Copy plan links', exact: true}).click();
+    await expect(page.getByText(/Governance and engineering deep links copied/i)).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain('/governance?tab=control-plane');
+    expect(clipboard).toContain('/workloads?tab=engineering');
+  });
 });
 
 test('control-plane plan cards show lifecycle state badge', async ({page}) => {

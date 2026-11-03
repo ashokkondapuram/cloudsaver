@@ -88,6 +88,23 @@ test.describe('Control-plane plan lifecycle', () => {
     expect(transitions).toEqual([{from_state: 'assessed', to_state: 'cancelled'}]);
   });
 
+  test('queued plan surfaces engineering outbox pending state', async ({page}) => {
+    await mockWorkspace(page, {human: true});
+    await mockGovernanceRoutes(page);
+    await mockControlPlanePlan(page, {
+      planId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      versionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      digest: 'c'.repeat(64),
+      initialState: 'queued',
+      objective: 'Outbox pending fixture',
+      engineeringOutboxState: 'pending',
+    });
+    await navigate(page, 'Risk & compliance');
+    await page.getByRole('tab', {name: 'Control-Plane Plans', exact: true}).click();
+    await expect(page.getByText(/Engineering event outbox: pending dispatch/i)).toBeVisible();
+    await expect(page.locator('dt').filter({hasText: 'Engineering outbox'}).locator('..').getByText('pending')).toBeVisible();
+  });
+
   test('admin marks queued plan version expired', async ({page}) => {
     await mockWorkspace(page, {human: true});
     await mockGovernanceRoutes(page);
