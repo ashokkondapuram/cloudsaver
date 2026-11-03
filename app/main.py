@@ -413,7 +413,13 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 validate_finding_scope(finding, tenant)
 
             from app.pricing import attribute_finding_cost
-            enriched_findings = [attribute_finding_cost(finding) for finding in raw_findings]
+            from app.azure_pricing_evidence import enrich_azure_pricing_evidence, index_inventory
+            inventory_index = index_inventory(inventory)
+            priced_findings = []
+            for finding in raw_findings:
+                observation = inventory_index.get(str(finding.get('resource_id', '')).casefold())
+                priced_findings.append(enrich_azure_pricing_evidence(finding, observation))
+            enriched_findings = [attribute_finding_cost(finding) for finding in priced_findings]
 
             from app.dependencies import canonical_inventory, group_opportunities
             inventory = canonical_inventory(inventory, observation_time)

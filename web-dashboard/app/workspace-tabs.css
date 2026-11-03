@@ -84,6 +84,7 @@
 .workspace-tab-shell .automation-principles{margin:8px 0 0}
 .drawer .workspace-tab-shell,
 .drawer .drawer-tabs.workspace-tab-list{border:0;border-radius:0;background:transparent;box-shadow:none}
+.drawer .drawer-tab-shell{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
 .drawer .drawer-tabs.workspace-tab-list{padding:0 18px;background:var(--slate-50);border-bottom:1px solid var(--border)}
 .drawer .tab-lead{padding:14px 24px 0}
 .drawer .tab-panel-stack{padding:0;gap:0}

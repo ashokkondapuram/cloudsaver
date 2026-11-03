@@ -119,5 +119,7 @@ def materialize(existing,inventory,outcomes):
         resource=resources.get(key[:2])
         if resource:
             from app.pricing import attribute_finding_cost
-            result.append(attribute_finding_cost(dict(resource,rule_id=outcome['rule_id'],severity='MEDIUM',details=outcome['reason'],estimated_monthly_waste_usd=None)));seen.add(key)
+            from app.azure_pricing_evidence import enrich_azure_pricing_evidence
+            shaped = enrich_azure_pricing_evidence(dict(resource, rule_id=outcome['rule_id'], severity='MEDIUM', details=outcome['reason'], estimated_monthly_waste_usd=None), resource)
+            result.append(attribute_finding_cost(shaped));seen.add(key)
     return result

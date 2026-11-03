@@ -80,7 +80,7 @@ test('resource drawer separates evidence, rules, dependencies and unknown financ
   const drawer = page.getByRole('dialog', {name: 'Resource details'});
   await expect(drawer.getByRole('tab')).toHaveCount(9);
   await drawer.getByRole('tab', {name: 'Costs', exact: true}).click();
-  await expect(drawer.getByRole('tabpanel',{name:'Costs',exact:true}).locator('.settings-key-values dd').filter({hasText:/^Unknown$/})).toHaveCount(6);
+  await expect(drawer.getByRole('tabpanel',{name:'Costs',exact:true}).locator('.settings-key-values dd').filter({hasText:/^Unknown$/})).toHaveCount(3);
   await drawer.getByRole('tab', {name: 'Evidence', exact: true}).click();
   await expect(drawer.getByText('Retention history is missing.')).toBeVisible();
   await expect(drawer.getByText(/No dependency evidence is available/)).toBeVisible();

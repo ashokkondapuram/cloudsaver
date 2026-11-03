@@ -69,9 +69,8 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
   const {token} = useWorkspace();
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const billedCurrency = detail.costs?.currency || 'USD';
-  const actuals = [['billed_cost_usd', '30-day billed cost', billedCurrency], ['effective_cost_usd', '30-day effective cost', billedCurrency]] as const;
-  const modeled = [['retail_estimate_usd', 'Retail review estimate', 'USD'], ['modeled_future_cost_usd', 'Modeled future cost', 'USD'],
-    ['opportunity_usd', 'Modeled opportunity', 'USD'], ['verified_realized_savings_usd', 'Verified realized savings', 'USD']] as const;
+  const supplemental = [['modeled_future_cost_usd', 'Modeled future cost', 'USD'], ['opportunity_usd', 'Modeled opportunity', 'USD'],
+    ['verified_realized_savings_usd', 'Verified realized savings', 'USD']] as const;
   async function fetchCost() {
     setBusy(true); setError('');
     try {
@@ -82,12 +81,10 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
     finally {setBusy(false);}
   }
   return <div className="drawer-section"><h3>Financial evidence</h3>
+    <p className="inline-help">Billed, effective, and retail measures are in the header strip. Use this tab for billing refresh and supplemental modeled fields.</p>
     {detail.assessment.provider === 'azure' && <p><button className="button secondary" disabled={busy} onClick={fetchCost}>{busy ? 'Fetching cost…' : 'Fetch latest cost for this resource'}</button></p>}
     {error && <Notice tone="error">{error}</Notice>}
-    <div className="drawer-cost-grid">{actuals.map(([key, name, currency]) => <article key={key}><span>{name}</span>
-      <strong className={detail.costs?.[key] == null ? 'metric-unknown' : ''}>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</strong>
-      <small>{currency} / 30 days</small></article>)}</div>
-    <dl className="settings-key-values">{modeled.map(([key, name, currency]) => <div key={key}><dt>{name}</dt>
+    <dl className="settings-key-values">{supplemental.map(([key, name, currency]) => <div key={key}><dt>{name}</dt>
       <dd>{detail.costs?.[key] == null ? 'Unknown' : money(detail.costs[key], currency)}</dd></div>)}</dl>
     <p className="inline-help">{detail.costs?.explanation || 'Billing and target-cost evidence are not attached to this observation.'}</p>
     {!!detail.financial_overlaps?.length && <Notice tone="warning">Overlapping alternatives share a workload opportunity group. Their estimates must not be added together.<ul>{detail.financial_overlaps.map(item => <li key={`${item.resource_id}:${item.rule_id}`}>{item.resource_name || item.resource_id} · {ruleLabel(item.rule_id)}</li>)}</ul></Notice>}</div>;
@@ -271,12 +268,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
-        <dl className="drawer-facts">
-          <div><dt>30-day billed</dt><dd>{current.costs?.billed_cost_usd == null ? 'Unknown' : money(current.costs.billed_cost_usd)}</dd></div>
-          <div><dt>Retail estimate</dt><dd>{a.retail_estimate_usd == null ? 'Unknown' : money(a.retail_estimate_usd)}</dd></div>
-          <div><dt>Evidence coverage</dt><dd>{a.evidence_coverage.total ? `${Math.round(100 * a.evidence_coverage.observed / a.evidence_coverage.total)}%` : '—'}<small> {a.evidence_coverage.observed}/{a.evidence_coverage.total}</small></dd></div>
-          <div><dt>Observed</dt><dd>{a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}</dd></div>
-        </dl>
+        <p className="drawer-header-meta">{a.evidence_coverage.total ? `${Math.round(100 * a.evidence_coverage.observed / a.evidence_coverage.total)}% evidence` : 'Evidence incomplete'} · Observed {a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}</p>
         <FinancialFiveStrip detail={current} token={token} canAdmin={canAdmin}/>
         <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
       </div>

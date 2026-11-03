@@ -71,6 +71,66 @@ class AzurePricingClient:
     def __init__(self, *, transport=None, timeout=5):
         self.transport = transport
         self.timeout = timeout
+        self._discovered: dict[tuple, dict | None] = {}
+
+    def discover_meter(self, *, region, product_name, sku_name, meter_name, unit_of_measure):
+        if not all(isinstance(value, str) and value.strip() and len(value) <= 256 for value in (region, product_name, sku_name, meter_name, unit_of_measure)):
+            return None
+        key = (region, product_name, sku_name, meter_name, unit_of_measure)
+        if key in self._discovered:
+            return self._discovered[key]
+        filters = {'armRegionName': region, 'productName': product_name, 'skuName': sku_name,
+                   'meterName': meter_name, 'priceType': 'Consumption'}
+        query = ' and '.join(k + " eq '" + v.replace("'", "''") + "'" for k, v in filters.items())
+        params = {'$filter': query, 'currencyCode': 'USD'}
+        matches, seen = [], set()
+        url = ENDPOINT
+        try:
+            with httpx.Client(timeout=self.timeout, transport=self.transport, follow_redirects=False) as client:
+                for _ in range(20):
+                    response = client.get(url, params=params)
+                    response.raise_for_status()
+                    data = response.json()
+                    if not isinstance(data.get('Items'), list):
+                        self._discovered[key] = None
+                        return None
+                    for item in data['Items']:
+                        if (all(item.get(k) == v for k, v in filters.items() if k != 'priceType')
+                                and item.get('type') == 'Consumption' and item.get('currencyCode') == 'USD'
+                                and item.get('unitOfMeasure') == unit_of_measure and item.get('tierMinimumUnits') == 0
+                                and item.get('isPrimaryMeterRegion') is True):
+                            start = datetime.fromisoformat(item['effectiveStartDate'].replace('Z', '+00:00'))
+                            if start <= datetime.now(timezone.utc):
+                                matches.append(item)
+                    next_page = data.get('NextPageLink')
+                    if not next_page:
+                        break
+                    parsed = urlparse(next_page)
+                    if (parsed.scheme != 'https' or parsed.hostname != 'prices.azure.com'
+                            or parsed.path != '/api/retail/prices' or parsed.username or parsed.password
+                            or parsed.port not in (None, 443) or parsed.fragment or next_page in seen):
+                        self._discovered[key] = None
+                        return None
+                    seen.add(next_page)
+                    url, params = next_page, None
+        except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
+            self._discovered[key] = None
+            return None
+        meter_ids = {item.get('meterId') for item in matches if isinstance(item.get('meterId'), str) and item['meterId']}
+        if len(meter_ids) != 1:
+            self._discovered[key] = None
+            return None
+        item = matches[0]
+        resolved = dict(
+            region=region,
+            sku_name=item['skuName'],
+            meter_name=item['meterName'],
+            product_name=item['productName'],
+            meter_id=item['meterId'],
+            unit_of_measure=unit_of_measure,
+        )
+        self._discovered[key] = resolved
+        return resolved
 
     def fetch_price(self, evidence):
         required = ('region', 'sku_name', 'meter_name', 'product_name', 'meter_id')
@@ -173,6 +233,10 @@ class AzurePricingClient:
             elif rid == 'AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR':
                 required={'gateway_fixed','gateway_capacity'}
                 if required<=values.keys():amount=sum(values.values())
+            elif rid == 'AZURE_INVENTORY_RETAIL':
+                if 'current' in values:
+                    amount = values['current']
+                    required = {'current'}
             if amount is None or amount<0 or set(values)!=required:return unknown
             item={'unitPrice':0,'unitOfMeasure':'composite regional retail meters','meterId':None}
         if amount>Decimal('1e12'):return unknown
@@ -273,7 +337,8 @@ def regional_attribution(finding):
 pricing_client = AzurePricingClient()
 
 
-def attribute_finding_cost(finding, region=None):
-    attribution = pricing_client.attribute(finding)
+def attribute_finding_cost(finding, region=None, *, client=None):
+    api = client or pricing_client
+    attribution = api.attribute(finding)
     return dict(finding, estimated_monthly_waste_usd=attribution.monthly_waste_usd,
                 cost_attribution=attribution.model_dump(mode='json'))

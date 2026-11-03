@@ -217,12 +217,17 @@ def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] 
                 controls['multi_az'] = row['zoneRedundant']
             findings.append({
                 "rule_id": rule_id, "severity": severity,
+                "cloud_provider": "azure",
                 "resource_name": row["name"], "resource_type": row["type"],
                 "resource_group": row["resourceGroup"],
                 "subscription_id": row["subscriptionId"], "resource_id": row["id"],
+                "region": row.get("resourceLocation") or row.get("location"),
                 "estimated_monthly_waste_usd": None,
                 "evidence": {"source": "Azure Resource Graph", "tags": row.get("tags") or {}, **controls,
-                             **({"size_gb": row["sizeGB"]} if type(row.get("sizeGB")) is int else {})},
+                             **({"size_gb": row["sizeGB"]} if type(row.get("sizeGB")) is int else {}),
+                             **({"sku_name": row["skuName"]} if isinstance(row.get("skuName"), str) and row["skuName"] else {}),
+                             **({"power_state": row["powerState"]} if isinstance(row.get("powerState"), str) and row["powerState"] else {}),
+                             **({"disk_state": row.get("diskState")} if isinstance(row.get("diskState"), str) else {})},
                 "details": explanation + (" Evidence: " + "; ".join(evidence) if evidence else ""),
             })
     return findings

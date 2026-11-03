@@ -138,13 +138,17 @@ def merge_inventory(key, obs, *, observed_at=None, now=None):
         evidence_coverage=dict(observed=0, total=0),
         retail_estimate_usd=None, billed_cost_usd=None, currency=None, realizable_savings_usd=None, automatic_execution=False,
     )
+    from app.azure_pricing_evidence import inventory_retail_usd
+    retail = inventory_retail_usd(obs)
+    if retail is not None:
+        assessment['retail_estimate_usd'] = retail
     context = dict(
         resource_reference=key, provider=provider, service_category=kind, policy_version=POLICY_VERSION,
         findings=[], observation=dict(observed_at=observation.get('observed_at')),
         risk_floor='unknown', checks=[], protected=False, guardrails=['INVENTORY_ONLY'], observed_check_codes=[],
     )
     assessment['evidence_digest'] = hashlib.sha256(json.dumps(
-        dict(context=context, retail_estimate_usd=None), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        dict(context=context, retail_estimate_usd=assessment['retail_estimate_usd']), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return assessment, context
 
 
