@@ -45,6 +45,7 @@ export type MockControlPlanePlanOptions = {
   initialState: string;
   objective?: string;
   targets?: string[];
+  engineeringWorkloadId?: string | null;
 };
 
 export async function mockControlPlanePlan(page: Page, options: MockControlPlanePlanOptions) {
@@ -57,7 +58,16 @@ export async function mockControlPlanePlan(page: Page, options: MockControlPlane
   await page.route('**/api/v1/control-plane/plans*', route => {
     if (route.request().method() !== 'GET') return route.continue();
     return route.fulfill({
-      json: {items: [{id: options.planId, objective, created_at: '2026-10-01T12:00:00Z'}]},
+      json: {
+        items: [
+          {
+            id: options.planId,
+            objective,
+            created_at: '2026-10-01T12:00:00Z',
+            engineering_workload_id: options.engineeringWorkloadId ?? null,
+          },
+        ],
+      },
     });
   });
   await page.route(`**/api/v1/control-plane/plans/${options.planId}/versions*`, route =>

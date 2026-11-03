@@ -281,6 +281,17 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
                 </h3>
                 <p className="inline-help">
                   Created {dateTime(plan.created_at)} · {vers.length} version{vers.length === 1 ? '' : 's'}
+                  {plan.engineering_workload_id && (
+                    <>
+                      {' '}
+                      ·{' '}
+                      <Link
+                        href={`/workloads?tab=engineering&workload=${encodeURIComponent(plan.engineering_workload_id)}&plan=${encodeURIComponent(plan.id)}`}
+                      >
+                        Open linked engineering workload
+                      </Link>
+                    </>
+                  )}
                 </p>
                 {latest && (
                   <>

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useEffect,useState} from 'react';
+import {useSearchParams} from 'next/navigation';
 import {api} from '../../lib/api';
 import {loadWorkloadInputs,type Projection} from '../../lib/workloads.mjs';
 import {Layers} from 'lucide-react';
@@ -10,6 +11,7 @@ import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState,Loading,Notice,SectionTitle} from '../ui/shared';
 import {EngineeringView} from './EngineeringView';
 import {DeclaredWorkloadsPanel} from './DeclaredWorkloadsPanel';
+import {workloadTabFromQuery,type WorkloadTab} from '../../lib/workloads-tabs';
 import css from './Engineering.module.css';
 
 const SIZE=20;
@@ -66,8 +68,10 @@ function Assessment({token,scanId}:{token:string;scanId:string}){
   </>;
 }
 export function WorkloadsView(){
+  const searchParams=useSearchParams();
   const {workspace,token,scan,scans,selectScan,canBill}=useWorkspace();
-  const [view,setView]=useState<'assessments'|'declared'|'engineering'>('assessments');
+  const [view,setView]=useState<WorkloadTab>('assessments');
+  useEffect(()=>{const tab=workloadTabFromQuery(searchParams.get('tab'));if(tab)setView(tab);},[searchParams]);
   const live=!!scan&&scan.status==='completed'&&scan.data_origin!=='legacy_synthetic'&&scan.mode!=='demo';
   return <section aria-label="Workload assessments"><div className="page-heading"><div><div className="eyebrow">DISCOVER & ANALYZE</div><h1>Workload assessments</h1><p>Review mapped applications, saved evidence and guided improvement steps. No cloud changes are made here.</p></div></div>
     <div className={css.tabs} aria-label="Workload views"><button className="button secondary" aria-pressed={view==='assessments'} onClick={()=>setView('assessments')}>Saved assessments</button><button className="button secondary" aria-pressed={view==='declared'} onClick={()=>setView('declared')}>Declared workloads</button><button className="button secondary" aria-pressed={view==='engineering'} onClick={()=>setView('engineering')}>Engineering plans</button></div>

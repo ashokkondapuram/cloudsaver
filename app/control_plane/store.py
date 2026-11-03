@@ -160,10 +160,21 @@ def get_plan_version(store, tenant_id, version_id):
 def list_plans(store, tenant_id, limit=50):
     with store.transaction(tenant_id) as db:
         rows = db.execute(
-            "SELECT id,objective,created_at FROM cp_plans WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s",
+            "SELECT p.id,p.objective,p.created_at,"
+            "(SELECT l.workload_id FROM engineering_plan_links l "
+            "WHERE l.tenant_id=p.tenant_id AND l.plan_id=p.id LIMIT 1) "
+            "FROM cp_plans p WHERE p.tenant_id=%s ORDER BY p.created_at DESC LIMIT %s",
             (tenant_id, limit),
         ).fetchall()
-    return [dict(id=str(r[0]), objective=r[1], created_at=str(r[2])) for r in rows]
+    return [
+        dict(
+            id=str(r[0]),
+            objective=r[1],
+            created_at=str(r[2]),
+            engineering_workload_id=str(r[3]) if r[3] is not None else None,
+        )
+        for r in rows
+    ]
 
 
 def list_plan_versions(store, tenant_id, plan_id, limit=50):

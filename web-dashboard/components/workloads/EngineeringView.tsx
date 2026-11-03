@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
+import {useSearchParams} from 'next/navigation';
 import {api,ApiError} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
@@ -71,10 +72,10 @@ function History({token,planId}:{token:string;planId:string}){
   return <>{error?<Notice tone="error">{error}</Notice>:!value?<Loading label="Loading plan history…"/>:<><ol>{[...value.items].sort((a,b)=>b.version-a.version).map(v=><li key={v.id}>Version {v.version}: {v.parameters.candidate_sku||'Disk review'} · {dateTime(v.parameters.readiness.evaluated_at)}<p className={css.wrap}>Manifest: {v.identity_digest}</p></li>)}</ol><Pages cursor={cursor} next={value.next_cursor} onChange={setCursor} label="Plan history pages"/></>}</>;
 }
 
-function PlanCard({plan,token,w,canAdmin,scanId,done}:{plan:Plan;token:string;w:Workload;canAdmin:boolean;scanId?:string;done:()=>void}){
+function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan;token:string;w:Workload;canAdmin:boolean;scanId?:string;done:()=>void;highlightPlanId?:string}){
   const [history,setHistory]=useState(false);
   const v=plan.latest,p=v.parameters,r=p.readiness;
-  return <article className={css.card}>
+  return <article id={`engineering-plan-${plan.id}`} className={`${css.card}${highlightPlanId===plan.id?' plan-card-highlight':''}`}>
     <h3>{p.objective}</h3>
     <p>
       <span className="state-badge">{sentence(v.state.replaceAll('_', ' '))}</span> · {sentence(r.decision)} · Version {v.version} ·{' '}
@@ -102,7 +103,7 @@ function PlanCard({plan,token,w,canAdmin,scanId,done}:{plan:Plan;token:string;w:
   </article>;
 }
 
-function Detail({id,token,revision,refresh,canAdmin,scanId}:{id:string;token:string;revision:number;refresh:()=>void;canAdmin:boolean;scanId?:string}){
+function Detail({id,token,revision,refresh,canAdmin,scanId,highlightPlanId}:{id:string;token:string;revision:number;refresh:()=>void;canAdmin:boolean;scanId?:string;highlightPlanId?:string}){
   const [memberCursor,setMemberCursor]=useState<string|null>(null),[planCursor,setPlanCursor]=useState<string|null>(null),[eventCursor,setEventCursor]=useState<string|null>(null);
   const [offset,setOffset]=useState(0),[selected,setSelected]=useState('');
   const w=useRead<Workload>(`/engineering/workloads/${id}`,token,revision);
@@ -136,15 +137,24 @@ function Detail({id,token,revision,refresh,canAdmin,scanId}:{id:string;token:str
           {action==='azure.vm.rightsize'&&<label className={css.wide}>Candidate SKU<input name="candidate_sku" required maxLength={80} placeholder="Standard_D2s_v5"/><span className={css.muted}>A candidate for investigation; compatibility has not been verified.</span></label>}
         </Command>}
       </details>}
-      {plans.error?<Notice tone="error">{plans.error}</Notice>:!plans.value?<Loading label="Loading improvement plans…"/>:<div className={css.stack}>{!plans.value.items.length&&<p className={css.empty}>No saved improvement plans yet.</p>}{plans.value.items.map(p=><PlanCard key={p.latest.id} plan={p} token={token} w={workload} canAdmin={canAdmin} scanId={scanId} done={refreshDetail}/>)}<Pages label="Improvement plan pages" cursor={planCursor} next={plans.value.next_cursor} onChange={setPlanCursor}/></div>}
+      {plans.error?<Notice tone="error">{plans.error}</Notice>:!plans.value?<Loading label="Loading improvement plans…"/>:<div className={css.stack}>{!plans.value.items.length&&<p className={css.empty}>No saved improvement plans yet.</p>}{plans.value.items.map(p=><PlanCard key={p.latest.id} plan={p} token={token} w={workload} canAdmin={canAdmin} scanId={scanId} done={refreshDetail} highlightPlanId={highlightPlanId}/>)}<Pages label="Improvement plan pages" cursor={planCursor} next={plans.value.next_cursor} onChange={setPlanCursor}/></div>}
     </section>
     <section className={'panel '+css.panel}><h2>Activity</h2>{events.error?<Notice tone="error">{events.error}</Notice>:!events.value?<Loading label="Loading activity…"/>:<><ul>{events.value.items.map(e=><li key={e.id}>{sentence(e.kind.replaceAll('.','_'))} · {dateTime(e.created_at)}</li>)}</ul><Pages label="Activity pages" cursor={eventCursor} next={events.value.next_cursor} onChange={setEventCursor}/></>}</section>
   </div>;
 }
 
 export function EngineeringView(){
+  const searchParams=useSearchParams();
+  const highlightWorkloadId=searchParams.get('workload')||undefined;
+  const highlightPlanId=searchParams.get('plan')||undefined;
   const {token,workspace,canAdmin,scan}=useWorkspace();
   const [revision,setRevision]=useState(0),[cursor,setCursor]=useState<string|null>(null),[selected,setSelected]=useState(''),[syncNotice,setSyncNotice]=useState('');
+  useEffect(()=>{if(highlightWorkloadId)setSelected(highlightWorkloadId);},[highlightWorkloadId]);
+  useEffect(()=>{
+    if(!highlightPlanId||!selected)return;
+    const el=document.getElementById(`engineering-plan-${highlightPlanId}`);
+    el?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  },[highlightPlanId,selected,revision]);
   useEffect(()=>subscribeControlPlanePlanRevision(()=>{
     setRevision(n=>n+1);
     setSyncNotice('Control-plane plan state changed in governance. Engineering records refreshed to match the shared version record.');
@@ -172,7 +182,7 @@ export function EngineeringView(){
     {capabilities.value&&!capabilities.value.scopes.length&&<Notice>No authorized Azure subscription is available. Review cloud access in Settings.</Notice>}
     {!canAdmin&&<Notice>You can inspect engineering records. A workspace administrator can change workloads and prepare plans.</Notice>}
     <div className={css.layout}><section className={'panel '+css.panel}><h2>Workloads</h2>{workloads.error?<Notice tone="error">{workloads.error}</Notice>:!workloads.value?<Loading label="Loading engineering workloads…"/>:<><ul className={css.list}>{workloads.value.items.map(w=><li key={w.id}><button className="button secondary" aria-pressed={selected===w.id} onClick={()=>setSelected(w.id)}>{w.name} · {w.environment}</button></li>)}</ul>{!workloads.value.items.length&&<p className={css.empty}>No workloads on this page.</p>}<Pages label="Engineering workload pages" cursor={cursor} next={workloads.value.next_cursor} onChange={setCursor}/></>}</section>
-      {selected?<Detail key={selected+':'+(scan?.scan_id||'')} id={selected} token={token} revision={revision} refresh={refresh} canAdmin={canAdmin} scanId={live?scan?.scan_id:undefined}/>:<section className={'panel '+css.panel}><h2>Select a workload</h2><p className={css.empty}>Open a workload to inspect its resources, prepare a versioned plan and review activity.</p></section>}
+      {selected?<Detail key={selected+':'+(scan?.scan_id||'')} id={selected} token={token} revision={revision} refresh={refresh} canAdmin={canAdmin} scanId={live?scan?.scan_id:undefined} highlightPlanId={highlightPlanId}/>:<section className={'panel '+css.panel}><h2>Select a workload</h2><p className={css.empty}>Open a workload to inspect its resources, prepare a versioned plan and review activity.</p></section>}
     </div>
   </section>;
 }

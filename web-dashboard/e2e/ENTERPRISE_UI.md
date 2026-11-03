@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–16 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–17 of the UI/UX program.
 
 ## Run locally
 
@@ -16,8 +16,10 @@ npm run test:e2e                    # both projects (full suite)
 
 | Pattern | Focus |
 | --- | --- |
-| `enterprise-ui-phase*.spec.ts` | Remaining phase-scoped regressions (topology, governance metrics, engineering cross-links, deep links) |
-| `enterprise-ui-control-plane-lifecycle.spec.ts` | Consolidated execution ladder, recovery, cancel/expired, and review rollbacks |
+| `enterprise-ui-finops-surfaces.spec.ts` | Optimization topology, commitment ladder, agent drift, GitOps preview, observability sync |
+| `enterprise-ui-governance-theme.spec.ts` | Data governance metrics and dark-theme control-plane surfaces |
+| `enterprise-ui-governance-engineering.spec.ts` | Engineering↔governance cross-links, tab URL sync, sync notice, deep links |
+| `enterprise-ui-control-plane-lifecycle.spec.ts` | Execution ladder, recovery, cancel/expired, and review rollbacks |
 | `enterprise-ui-foundry-probe.spec.ts` | AI Foundry connection probe failure and inference labeling |
 | `control-plane-*.spec.ts` | Plans, human approval, action-safety firewall |
 | `financial-scenario-absorption.spec.ts` | Five-measure strip + commitment-aware scenarios |

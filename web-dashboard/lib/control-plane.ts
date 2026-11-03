@@ -64,6 +64,7 @@ export interface PlanRecord {
   id: string;
   objective: string;
   created_at: string;
+  engineering_workload_id?: string | null;
 }
 
 export interface PlanVersionRecord {
