@@ -29,13 +29,53 @@ export function ArmDetailBadge({status, hideFromParentName}: {status: ArmDetailS
   </>;
 }
 
-export function Actions({actions}: {actions: Action[]}) {
+const ACTION_CATEGORY_LABELS: Record<string, string> = {
+  priority: 'Prioritize first',
+  risk: 'Risk and exposure',
+  finding: 'Findings and rules',
+  evidence: 'Evidence gaps',
+  guardrail: 'Guardrails before change',
+};
+
+function groupActions(actions: Action[]) {
+  const groups: {category: string; label: string; items: Action[]}[] = [];
+  const index = new Map<string, number>();
+  for (const action of actions) {
+    const category = action.category || 'finding';
+    if (!index.has(category)) {
+      index.set(category, groups.length);
+      groups.push({category, label: ACTION_CATEGORY_LABELS[category] || sentence(category), items: []});
+    }
+    groups[index.get(category)!].items.push(action);
+  }
+  return groups;
+}
+
+function ActionRow({a}: {a: Action}) {
+  return (
+    <li>
+      <div className="action-heading"><strong>{a.title}</strong><span className="action-kind">{sentence(a.kind)}</span></div>
+      <p>{a.rationale}</p>
+      <small><span className="capitalize">{a.pillar}</span> · Effort {sentence(a.effort)} · Change risk {sentence(a.change_risk)} · Confidence {sentence(a.confidence)}</small>
+      {!!a.evidence_codes.length && <small>Evidence: {a.evidence_codes.map(sentence).join(', ')}</small>}
+      {!!a.prerequisites.length && <small>Before you start: {a.prerequisites.join(' · ')}</small>}
+    </li>
+  );
+}
+
+export function Actions({actions, grouped = false}: {actions: Action[]; grouped?: boolean}) {
   if (!actions.length) return <p className="inline-empty">The model didn’t suggest next steps beyond the review questions.</p>;
-  return <ol className="recommended-actions">{actions.map((a, i) => <li key={i}>
-    <div className="action-heading"><strong>{a.title}</strong><span className="action-kind">{sentence(a.kind)}</span></div>
-    <p>{a.rationale}</p>
-    <small><span className="capitalize">{a.pillar}</span> · Effort {sentence(a.effort)} · Change risk {sentence(a.change_risk)} · Confidence {sentence(a.confidence)}</small>
-    {!!a.evidence_codes.length && <small>Evidence: {a.evidence_codes.map(sentence).join(', ')}</small>}
-    {!!a.prerequisites.length && <small>Before you start: {a.prerequisites.join(' · ')}</small>}
-  </li>)}</ol>;
+  if (!grouped || actions.every(a => !a.category)) {
+    return <ol className="recommended-actions">{actions.map((a, i) => <ActionRow key={i} a={a}/>)}</ol>;
+  }
+  return (
+    <div className="action-category-groups">
+      {groupActions(actions).map(group => (
+        <section key={group.category} className="action-category-group" aria-label={group.label}>
+          <h4 className="action-category-title">{group.label}</h4>
+          <ol className="recommended-actions">{group.items.map((a, i) => <ActionRow key={`${group.category}-${i}`} a={a}/>)}</ol>
+        </section>
+      ))}
+    </div>
+  );
 }

@@ -15,7 +15,7 @@ export function isLiveSnapshot(scan: Scan | undefined): boolean {
 export type PillarStatus = 'observed' | 'risk' | 'unknown';
 export type AIStatus = 'not_run' | 'queued' | 'running' | 'completed' | 'stale' | 'failed';
 export type DecisionKind = 'accept' | 'dismiss' | 'defer';
-export type Action = {title: string; rationale: string; kind: string; pillar: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
+export type Action = {title: string; rationale: string; kind: string; pillar: string; category?: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
 export type Decision = {id: string; decision: DecisionKind; note: string; defer_until: string | null; evidence_digest: string; created_at: string; scan_id: string; evidence_changed?: boolean};
 export type AIState = {status: AIStatus; risk_level: string | null; summary: string | null; actions: Action[]; assessment_id: string | null; created_at: string | null; reason: string | null};
 export type ResourceRow = {

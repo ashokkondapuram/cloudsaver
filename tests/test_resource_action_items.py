@@ -11,8 +11,10 @@ def test_derive_action_items_from_risk_and_gaps():
     assessment, _ = merge('k' * 64, [disk], observed_at='2026-10-22T00:00:00+00:00', now='2026-10-22T01:00:00+00:00')
     items = derive_action_items(assessment, [disk])
     kinds = {item['kind'] for item in items}
+    categories = {item['category'] for item in items}
     assert items
     assert 'investigate' in kinds or 'configure' in kinds or 'verify' in kinds
+    assert categories <= {'risk', 'finding', 'evidence', 'guardrail', 'priority'}
     assert all(item['title'] and item['rationale'] for item in items)
 
 
