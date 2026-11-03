@@ -4,6 +4,7 @@ CloudSaver treats **rule evaluation** and **rule matching** as separate problems
 
 1. **Evaluation** — for each `(resource, rule_id)` pair, emit one of eight outcomes with full evidence (`evaluate_inventory`).
 2. **Matching** — when several rules reach `condition_detected` on the same resource, pick **one primary action** and list **alternates** without double-counting savings (`app/rule_match_strategy.py`).
+3. **Conflict surfacing** — per-resource reconciliation drift and finding/evaluation mismatches (`app/rule_detail.py` → `rule_conflicts`, exposed on resource detail as `rule_matches` / `rule_conflicts`).
 
 This document is the operator and architect reference for that second layer, aligned with how **IBM Turbonomic** (Application Resource Management) selects among competing actions.
 
