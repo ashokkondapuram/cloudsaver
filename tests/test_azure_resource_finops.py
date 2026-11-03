@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.azure_resource_finops import (
+from app.azure_json_profile import (
     aggregate_rows,
     booked_savings_delta,
     build_snapshot,

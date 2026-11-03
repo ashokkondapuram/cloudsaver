@@ -204,7 +204,7 @@ def create_router(repository, current_tenant, *, scan_store=None):
             start = end - timedelta(days=30)
         else:
             try:
-                from app.azure_resource_finops import validate_window
+                from app.azure_json_profile import validate_window
 
                 validate_window(start, end)
             except ValueError as error:
