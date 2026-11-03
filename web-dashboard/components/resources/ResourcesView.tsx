@@ -9,7 +9,7 @@ import {resourceCsv} from '../../lib/resource-csv';
 import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
-import {ACTIVE_BATCH, aiStatusLabels, decisionLabels, sentence, useActiveBatch, useResources, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
+import {ACTIVE_BATCH, aiStatusLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, ProviderBadge} from '../ui/shared';
@@ -100,10 +100,11 @@ function matchesDiscovery(row:ResourceRow,related: Finding[], category: Category
 }
 
 export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing}) {
-  const {scan, token, canAdmin, notify, openReview, setSelection, scope} = useWorkspace();
+  const {scan, token, canAdmin, notify, openReview, setSelection, scope, liveScanEpoch} = useWorkspace();
   const router = useRouter(), params = useSearchParams();
-  const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
-  const {page, error, reload} = useResources(scan?.scan_id, token, live);
+  const live = isLiveSnapshot(scan);
+  const inProgress = scan?.status === 'running';
+  const {page, error, reload} = useResources(scan?.scan_id, token, live, liveScanEpoch, {running: inProgress});
   const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
   const [filters, setFilters] = useState<Filters>(empty), [query, setQuery] = useState(''), [selected, setSelected] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<Category | ''>(initialCategory), [intent, setIntent] = useState<Intent>(initialIntent), [pricing, setPricing] = useState<Pricing>(initialPricing);
@@ -156,7 +157,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     catch (cause) {notify((cause as Error).message, 'error');}
   }
   if (!scan) return <EmptyState icon={Server} title="No scan selected">Run a scan to analyze your resources.</EmptyState>;
-  if (!live) return <EmptyState icon={Server} title="A live scan is required">Resource analysis uses saved observations from a completed live scan.</EmptyState>;
+  if (!live) return <EmptyState icon={Server} title="A live scan is required">Resource analysis uses saved observations from a completed or in-progress live scan.</EmptyState>;
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!page) return <Loading label="Merging findings into resource assessments…"/>;
   const summary = page.summary;
@@ -167,6 +168,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
   return <>
+    {inProgress && <Notice tone="info">Scan in progress ({(scan.items_arm_detail_collected ?? 0).toLocaleString()} of {(scan.total_items_found || page?.total || 0).toLocaleString()} with ARM detail saved). Resources refresh every few seconds from the database.</Notice>}
     {page.total > page.items.length && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
     {batchError&&<div role="status"><Notice tone="warning">{batchError} <button className="text-button" onClick={refreshBatch}>Check assessment status</button></Notice></div>}
     <div className="resource-summary">

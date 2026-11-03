@@ -33,11 +33,12 @@ def env_platform_defaults():
     def flag(name):
         return os.getenv(name, 'false').lower() == 'true'
     return {'scheduled_scans_enabled': flag('CLOUDSAVER_SCHEDULED_SCANS'),
-            'automated_alerts_enabled': flag('CLOUDSAVER_AUTOMATED_ALERTS'), 'resource_access': {}}
+            'automated_alerts_enabled': flag('CLOUDSAVER_AUTOMATED_ALERTS'),
+            'resource_access': {}, 'cloudsaver_integration': {}}
 
 
 def normalize_platform(value):
-    keys = ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access')
+    keys = ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration')
     if not isinstance(value, dict) or set(value) - set(keys):
         raise ValueError('Unknown platform setting')
     if not all(isinstance(value.get(k), bool) for k in ('scheduled_scans_enabled', 'automated_alerts_enabled')):
@@ -47,8 +48,14 @@ def normalize_platform(value):
         resource_access = {}
     if not isinstance(resource_access, dict):
         raise ValueError('Platform resource access must be an object')
+    integration = value.get('cloudsaver_integration', {})
+    if integration is None:
+        integration = {}
+    if not isinstance(integration, dict):
+        raise ValueError('CloudSaver integration settings must be an object')
     return {'scheduled_scans_enabled': value['scheduled_scans_enabled'],
-            'automated_alerts_enabled': value['automated_alerts_enabled'], 'resource_access': resource_access}
+            'automated_alerts_enabled': value['automated_alerts_enabled'],
+            'resource_access': resource_access, 'cloudsaver_integration': integration}
 
 
 class BaseRegistry:
@@ -170,8 +177,10 @@ class BaseRegistry:
     def apply_platform(self, value):
         self._ensure_seeded()
         current = self.platform()
-        patch = {k: value[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access') if k in value}
-        merged = normalize_platform({**{k: current[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access')}, **patch})
+        patch = {k: value[k] for k in (
+            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration') if k in value}
+        merged = normalize_platform({**{k: current[k] for k in (
+            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration')}, **patch})
         if merged == {k: current[k] for k in merged}:
             return False
         self._write_platform(merged, current['version'], 'directory')

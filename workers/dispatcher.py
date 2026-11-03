@@ -126,12 +126,27 @@ def run_batch(settings,repository,*,targets,publish_scan,client,jobs,limit=5,sho
     return processed
 
 
+def _idle_until_stopped(*, enabled_label: str):
+    """Keep health checks green when delivery is disabled (Compose --wait)."""
+    from workers.health import WorkerHealth
+
+    health = WorkerHealth().start()
+    stop = threading.Event()
+    for name in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(name, lambda *_: stop.set())
+    logger.warning('%s; process stays ready for health checks', enabled_label)
+    while not stop.is_set():
+        health.touch(True)
+        stop.wait(30)
+    health.close()
+
+
 def main():
-    # Disabled process exits before any DB, broker or HTTP client is created.
-    if not enabled():
-        logger.warning('Durable delivery is disabled by operator configuration')
-        return
     from app.config import Settings
+    settings = Settings.load()
+    if not enabled(settings):
+        _idle_until_stopped(enabled_label='Durable delivery is disabled by operator configuration')
+        return
     from database.delivery import DeliveryRepository
     from workers.storage import JobRepository
     from workers.tasks import execute_subscription_scan

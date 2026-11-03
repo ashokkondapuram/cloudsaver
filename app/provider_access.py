@@ -178,3 +178,11 @@ class ScopedStore:
         if current is None:
             return scans
         return [s for s in (_filter(scan, current, strict=False) for scan in scans) if s is not None]
+
+    def list_light(self, tenant_id, limit=50):
+        list_light = getattr(self.inner, 'list_light', self.inner.list)
+        scans = list_light(tenant_id, limit)
+        current = access.get()
+        if current is None:
+            return scans
+        return [s for s in (_filter(scan, current, strict=False) for scan in scans) if s is not None]

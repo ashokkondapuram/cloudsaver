@@ -12,7 +12,10 @@ export const MAX_EXPIRY_DAYS = 365;
 
 export type Access = {roles: Role[]; allProviders: boolean; providers: Provider[]};
 
-export function defaultAccess(workspace: Workspace): Access {
+export function defaultAccess(workspace: Workspace, environment = 'production'): Access {
+  if (environment === 'development') {
+    return {roles: ['TenantAdmin', 'BillingAdmin', 'Viewer'], allProviders: true, providers: [...workspace.providers]};
+  }
   return {roles: ['Viewer'], allProviders: false, providers: [...workspace.providers]};
 }
 

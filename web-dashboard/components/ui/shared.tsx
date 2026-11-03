@@ -8,7 +8,7 @@ export function ProviderBadge({provider}: {provider: string}) {
 export function PriorityBadge({severity}: {severity: string}) {
   return <span className={`priority-badge priority-${severity.toLowerCase()}`}><span aria-hidden="true"/>{severity.charAt(0) + severity.slice(1).toLowerCase()}</span>;
 }
-export function EmptyState({icon: Icon = Database, title, children, action}: {icon?: LucideIcon; title: string; children: ReactNode; action?: ReactNode}) {
+export function EmptyState({icon: Icon = Database, title, children, action}: {icon?: LucideIcon; title: string; children?: ReactNode; action?: ReactNode}) {
   return <div className="empty-state"><div className="empty-icon"><Icon size={24}/></div><h3>{title}</h3><p>{children}</p>{action}</div>;
 }
 export function Notice({children, tone = 'info'}: {children: ReactNode; tone?: 'info' | 'warning' | 'error' | 'success'}) {

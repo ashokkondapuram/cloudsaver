@@ -350,10 +350,12 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
             params['scan_id'] = str(scan_id)
         return await forward('GET', 'scanner', '/api/v1/trends', authorization, params)
 
-    @app.post('/api/v1/scans/multi-cloud', status_code=201)
+    @app.post('/api/v1/scans/multi-cloud')
     async def multi_cloud(payload: MultiCloudScanRequest, row=Depends(allowed), authorization: str = Header()):
+        scan_timeout = int(os.getenv('CLOUDSAVER_SCAN_UPSTREAM_TIMEOUT_SECONDS', '120'))
         return await upstream('POST', targets['scanner'], '/api/v1/scans/multi-cloud', authorization,
-                              json=payload.model_dump(), transport=transport)
+                              json=payload.model_dump(), transport=transport, timeout_seconds=scan_timeout,
+                              preserve_response=True)
 
     @app.post('/api/v1/scan-jobs', status_code=202)
     async def submit_job(payload: ScanSubmission,
@@ -373,7 +375,8 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
 
     @app.post('/api/v1/scans', status_code=201)
     async def scan(row=Depends(allowed), authorization: str = Header()):
-        return await forward('POST', 'scanner', '/api/v1/scans', authorization)
+        scan_timeout = int(os.getenv('CLOUDSAVER_SCAN_UPSTREAM_TIMEOUT_SECONDS', '3600'))
+        return await upstream('POST', targets['scanner'], '/api/v1/scans', authorization, timeout_seconds=scan_timeout, transport=transport)
 
     @app.get('/api/v1/scans/{scan_id}')
     async def detail(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
@@ -612,6 +615,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     @app.post('/api/v1/settings/access-test')
     async def workspace_access_test(row=Depends(allowed), authorization: str = Header()):
         return await forward('POST', 'tenant', '/api/v1/settings/access-test', authorization)
+
+    @app.get('/api/v1/settings/cloud-status')
+    async def workspace_cloud_status(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'tenant', '/api/v1/settings/cloud-status', authorization)
 
     @app.get('/api/v1/gitops/targets')
     async def gitops_targets(row=Depends(allowed),authorization:str=Header()):

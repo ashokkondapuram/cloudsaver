@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from app.cloud_http import JSONReader, pages
+from app.cloud_http import BearerTokenCache, JSONReader, pages
 from app.cloud_scope import normalize_sources, validate_finding_scope
 from app.multi_cloud import scan_multi_cloud
 from tests.fixtures.synthetic_findings import demo_cloud_findings, demo_workspace
@@ -147,6 +147,20 @@ def test_kubernetes_p95_and_full_window_evidence():
 def test_kubernetes_rejects_bad_or_ambiguous_metrics(options):
     with pytest.raises(ScanError):
         scan_cluster(CLUSTER, reader=metric_reader(**options), now=NOW)
+
+
+def test_bearer_token_cache_reuses_token_until_expiry():
+    calls = []
+
+    class Cred:
+        def get_token(self, scope):
+            calls.append(scope)
+            return type('Access', (), {'token': 'tok-' + str(len(calls)), 'expires_on': time.time() + 3600})()
+
+    cache = BearerTokenCache(Cred(), 'https://management.azure.com/.default', skew_seconds=60)
+    assert cache()['Authorization'] == 'Bearer tok-1'
+    assert cache()['Authorization'] == 'Bearer tok-1'
+    assert len(calls) == 1
 
 
 def test_http_reader_refuses_redirects_and_invalid_payloads():

@@ -43,17 +43,17 @@ def test_refuse_production_configuration(tmp_path,monkeypatch):
 def test_start_orders_migrations_before_workers_and_waits_for_every_project(tmp_path,monkeypatch):
     monkeypatch.delenv('CODEX_PROXY_CERT',raising=False)
     home=setup_root(tmp_path,monkeypatch)
-    stack=start_stack.Stack(tmp_path/'.env',home,180,no_build=True)
+    stack=start_stack.Stack(tmp_path/'.env',home,180,no_build=True,local_creds=True)
     stack.shared_network=lambda:None
     stack.license_configuration=lambda:None
     calls=[]
     stack.run=lambda args,**kwargs:calls.append(args)
-    stack.keycloak=lambda tenant:calls.append(['keycloak-ready',tenant])
     stack.start('11111111-1111-4111-8111-111111111111')
     migration=next(i for i,c in enumerate(calls) if 'run' in c and c[-1]=='migrate')
     seed=next(i for i,c in enumerate(calls) if 'LOCAL_TENANT_ID=11111111-1111-4111-8111-111111111111' in c)
     final=next(i for i,c in enumerate(calls) if c[-5:]==['up','-d','--wait','--wait-timeout','180'] and 'scheduled' in c)
-    assert calls.index(['keycloak-ready','11111111-1111-4111-8111-111111111111'])<migration<seed<final
+    assert not any('keycloak' in str(c) for c in calls)
+    assert migration<seed<final
     assert all('--wait' in c for c in calls if 'up' in c and 'platform-db' not in c)
     assert any('exec' in c and '/docker-entrypoint-initdb.d/00-identity.sh' in c for c in calls)
     assert '--profile' in calls[final] and 'agentic' in calls[final] and 'delivery' in calls[final]
@@ -95,12 +95,22 @@ def test_reject_public_shared_network(tmp_path,monkeypatch):
     with pytest.raises(ValueError,match='must be internal'):stack.shared_network()
 
 
-def test_adopt_existing_keycloak_workspace_on_first_launcher_run(tmp_path,monkeypatch):
+def test_tenant_seed_from_env_on_first_launcher_run(tmp_path,monkeypatch):
+    home=setup_root(tmp_path,monkeypatch)
+    tid='11111111-1111-4111-8111-111111111111'
+    env=tmp_path/'.env'
+    env.write_text('CLOUDSAVER_TENANTS='+json.dumps([{'tenant_id':tid,'name':'Local'}])+'\n')
+    assert start_stack.prepare_settings(env,home)==tid
+
+
+def test_keycloak_bindings_no_longer_set_tenant_id(tmp_path,monkeypatch):
     home=setup_root(tmp_path,monkeypatch)
     config=home/'config';config.mkdir()
-    tid='11111111-1111-4111-8111-111111111111'
-    (config/'cloudsaver.env').write_text('CLOUDSAVER_KEYCLOAK_BINDINGS='+json.dumps([{'tenant_id':tid}])+'\n')
-    assert start_stack.prepare_settings(tmp_path/'.env',home)==tid
+    bound='22222222-2222-4222-8222-222222222222'
+    (config/'cloudsaver.env').write_text('CLOUDSAVER_KEYCLOAK_BINDINGS='+json.dumps([{'tenant_id':bound}])+'\n')
+    tid=start_stack.prepare_settings(tmp_path/'.env',home)
+    assert tid!=bound
+    assert json.loads((home/'settings.json').read_text())['tenant_id']==tid
 
 
 def test_unified_env_contains_generated_secrets_without_logging(tmp_path,monkeypatch,capsys):
@@ -113,7 +123,7 @@ def test_unified_env_contains_generated_secrets_without_logging(tmp_path,monkeyp
     verifier=secrets.token_urlsafe(32)
     (config/'keycloak.env').write_text('KEYCLOAK_ADMIN_PASSWORD='+admin+'\n')
     (config/'cloudsaver.env').write_text('CLOUDSAVER_KEYCLOAK_SECRET_PRIMARY='+verifier+'\n')
-    target=start_stack.sync_secrets(env,home)
+    target=start_stack.sync_secrets(env,home,local_creds=False)
     values=start_stack.env_values(target)
     assert values['KEYCLOAK_ADMIN_PASSWORD']==admin
     assert values['KEYCLOAK_ADMIN_USER']=='bootstrap-admin'
@@ -123,7 +133,7 @@ def test_unified_env_contains_generated_secrets_without_logging(tmp_path,monkeyp
     assert values['CLOUDSAVER_STACK_HOME']==str(home)
     assert target.stat().st_mode&0o777==0o600
     start_stack.prepare_settings(env,home)
-    start_stack.sync_secrets(env,home)
+    start_stack.sync_secrets(env,home,local_creds=False)
     assert start_stack.env_values(target)==values
     platform=start_stack.env_values(tmp_path/'platform/.env')
     import hashlib
@@ -137,6 +147,36 @@ def test_unified_env_refuses_symlink_target(tmp_path,monkeypatch):
     (tmp_path/'.env').symlink_to(other)
     with pytest.raises(ValueError,match='symlink'):start_stack.sync_secrets(tmp_path/'.env',home)
     assert other.read_text()=='preserve'
+
+
+def test_local_creds_compose_uses_only_root_env(tmp_path,monkeypatch):
+    home=setup_root(tmp_path,monkeypatch)
+    env=tmp_path/'.env'
+    env.write_text('CLOUDSAVER_AUTH_MODE=workspace\nCLOUDSAVER_KEY_VERIFIER=identity\nPOSTGRES_PASSWORD=keep\nKEYCLOAK_ADMIN_PASSWORD=drop\nCLOUDSAVER_KEYCLOAK_ISSUER=https://keycloak.localhost\n')
+    stack=start_stack.Stack(env,home,180,local_creds=True)
+    app=stack.compose('app')
+    assert app.count('--env-file')==1
+    assert str(env) in app
+    assert 'runtime.env' not in ' '.join(app)
+    start_stack.sync_secrets(env,home,local_creds=True)
+    assert start_stack.env_values(env)['POSTGRES_PASSWORD']=='keep'
+    assert 'KEYCLOAK_ADMIN_PASSWORD' not in start_stack.env_values(env)
+    assert 'CLOUDSAVER_KEYCLOAK_ISSUER' not in start_stack.env_values(env)
+    assert start_stack.env_values(env)['CLOUDSAVER_AUTH_MODE']=='workspace'
+
+
+def test_workspace_mode_skips_keycloak_and_override(tmp_path,monkeypatch):
+    home=setup_root(tmp_path,monkeypatch)
+    stack=start_stack.Stack(tmp_path/'.env',home,180,auth_mode='workspace',local_creds=True)
+    app=stack.compose('app')
+    assert 'cloudsaver.override.yaml' not in ' '.join(app)
+    assert all('cloudsaver.env' not in part for part in app)
+    bootstrap=start_stack.Stack(tmp_path/'.env',home,180,auth_mode='workspace',local_creds=False)
+    bootstrap.configure_cloudsaver_auth()
+    binding=start_stack.env_values(home/'config/cloudsaver.env')
+    assert binding['CLOUDSAVER_AUTH_MODE']=='workspace'
+    assert binding['CLOUDSAVER_KEY_VERIFIER']=='identity'
+    assert start_stack.env_values(home/'runtime.env')['CLOUDSAVER_KEY_VERIFIER']=='identity'
 
 
 def test_signing_key_generated_once_and_mounted_only_in_issuer(tmp_path,monkeypatch):

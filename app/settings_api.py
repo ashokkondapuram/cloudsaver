@@ -271,6 +271,14 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
         from app.access_probe import run_probe
         return run_probe(tenant, store.platform())
 
+    @router.get('/api/v1/settings/cloud-status')
+    def cloud_status_view(workspace=Depends(current_tenant)):
+        require_workspace_role(workspace, Role.BILLING_ADMIN)
+        store = registry()
+        tenant = store.get(workspace['tenant_id']) or workspace
+        from app.cloud_status import cloud_status
+        return cloud_status(tenant, store.platform() if store is not None else None)
+
     def current_policy(tenant, authorization, *, management=False):
         path = (f'/customer/v1/workspaces/{tenant["tenant_id"]}/analysis-rules' if management else
                 f'/internal/v1/tenants/{tenant["tenant_id"]}/analysis-rules/effective')

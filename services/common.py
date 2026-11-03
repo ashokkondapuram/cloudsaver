@@ -49,10 +49,10 @@ def internal_url(name, default):
     return value
 
 
-async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None, evidence_signature=None, command_headers=None, preserve_response=False):
+async def upstream(method, base, path, authorization, *, params=None, json=None, transport=None, evidence_signature=None, command_headers=None, preserve_response=False, timeout_seconds=120):
     """Only callers supply fixed routes; never proxy visitor-provided URLs."""
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120, connect=5),
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds, connect=5),
                                      follow_redirects=False, transport=transport) as client:
             from app.runtime import CLIENT_IP_HEADER, client_ip, request_id
             headers = {'Authorization': authorization}

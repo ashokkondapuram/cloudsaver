@@ -517,7 +517,8 @@ class MemoryStore:
                       'access_checks': {}, 'plan_change_requests': {}, 'knowledge_publications': {}, 'rule_catalog': rules, 'workspace_rules': {},
 
                       'platform': {'scheduled_scans_enabled': False, 'automated_alerts_enabled': False,
-                                   'resource_access': {}, 'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
+                                   'resource_access': {}, 'cloudsaver_integration': {},
+                                   'version': 1, 'updated_by': 'bootstrap', 'updated_at': now}}
         self._lock = threading.RLock()
 
     @contextmanager

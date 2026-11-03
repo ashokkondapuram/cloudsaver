@@ -96,6 +96,34 @@ When `CLOUDSAVER_LIVE_EVIDENCE_ENABLED=true`, provider collectors add read-only 
 
 Each source is recorded in the source ledger as available or unavailable. Missing telemetry yields `insufficient_evidence`, not a finding.
 
+Azure live enrichment **prioritizes** resources that still list `telemetry_pending_rule_ids` in `evidence.analysis_readiness` when `CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES` caps the pass.
+
+### Configuration evidence (analysis readiness)
+
+After Resource Graph inventory, the Azure scan runs:
+
+1. **Configuration enrichment** ([app/collectors/azure_configuration_evidence.py](../../app/collectors/azure_configuration_evidence.py)) on every row — maps ARG and ARM fields into evidence used by five-pillar assessment and static analysis rules.
+2. **ARM GET** ([app/collectors/azure_arm_detail.py](../../app/collectors/azure_arm_detail.py)) when `CLOUDSAVER_AZURE_ARM_DETAIL_ENABLED=true`, setting `evidence.typed_configuration` and `evidence_schema_version: 3`.
+3. **Live telemetry** when enabled, then a second configuration pass updates **`evidence.analysis_readiness`**.
+
+| Readiness field | Meaning |
+| --- | --- |
+| `configuration` | `complete`, `partial`, or `missing` for type-specific configuration |
+| `telemetry_pending_rule_ids` | Rules still needing Monitor or Activity Log (for example VM rightsizing) |
+
+`GET /api/v1/scans/{scan_id}/resources/{resource_key}` returns **`analysis_readiness`** and **`configuration_detail`** (typed configuration when present).
+
+Recommended local settings for analysis-heavy scans:
+
+```dotenv
+CLOUDSAVER_AZURE_ARM_DETAIL_ENABLED=true
+CLOUDSAVER_AZURE_ARM_DETAIL_MAX=0
+CLOUDSAVER_LIVE_EVIDENCE_ENABLED=true
+CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES=0
+```
+
+Use `0` for unlimited ARM or live caps only when subscription size and Azure throttling limits allow; otherwise set explicit caps (for example `500`).
+
 ### Pricing
 
 [app/pricing.py](../../app/pricing.py):

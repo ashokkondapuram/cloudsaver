@@ -97,7 +97,15 @@ def test_retry_after_is_bounded(value,expected):
 def test_disabled_dispatcher_creates_no_clients(monkeypatch):
     monkeypatch.delenv('CLOUDSAVER_DELIVERY_ENABLED',raising=False)
     monkeypatch.setattr('app.config.Settings.load',lambda:pytest.fail('Disabled process loaded runtime clients'))
+    fired = []
+
+    class Stop:
+        def wait(self, _seconds):
+            fired.append(True)
+
+    monkeypatch.setattr('workers.dispatcher.threading.Event', lambda: Stop())
     main()
+    assert fired
 
 
 def test_failed_tenant_does_not_starve_another_dispatch_cycle(monkeypatch):

@@ -1,8 +1,13 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
 import {api} from './api';
-import {loadResourcePages,readBatchPage} from './resource-pages';
-import type {Finding} from './types';
+import {loadResourcePages,readBatchPage,RUNNING_RESOURCE_PAGE_SIZE} from './resource-pages';
+import type {Finding, Scan} from './types';
+
+/** Live inventory from a real scan, including in-progress snapshots. */
+export function isLiveSnapshot(scan: Scan | undefined): boolean {
+  return !!scan && scan.data_origin !== 'legacy_synthetic' && (scan.status === 'completed' || scan.status === 'running');
+}
 
 export type PillarStatus = 'observed' | 'risk' | 'unknown';
 export type AIStatus = 'not_run' | 'queued' | 'running' | 'completed' | 'stale' | 'failed';
@@ -30,7 +35,10 @@ export type AIResult = {model: string; target_id: string; warning: string; cache
   advice: {summary: string; risk_level: string; pillars: {pillar: string; observation: string; evidence_codes: string[]}[]; review_questions: string[]; recommended_actions?: Action[];}};
 export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; findings: Finding[]; ai_context: Record<string, unknown>; ai: AIState;
   ai_result: AIResult | null; decision: Decision | null; followups: Followup[]; followups_remaining: number;
-  observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
+  analysis_readiness?: {configuration?: string; configuration_observed?: number; configuration_total?: number; telemetry_pending_rule_ids?: string[]};
+  configuration_detail?: Record<string, unknown> | null;
+  evidence_schema_version?: string | null;
+  observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;analysis_readiness?:{configuration?:string;configuration_observed?:number;configuration_total?:number;telemetry_pending_rule_ids?:string[]}};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
   rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean}[];
   costs?: {billed_cost_usd: number | null;effective_cost_usd?:number|null; retail_estimate_usd: number | null; modeled_future_cost_usd: number | null; opportunity_usd: number | null; verified_realized_savings_usd: number | null; explanation: string; currency?: string};
@@ -71,20 +79,35 @@ export async function resourceKeyOf(finding: Finding) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function useResources(scanId: string | undefined, token: string, enabled = true) {
+export function useResources(scanId: string | undefined, token: string, enabled = true, syncEpoch = 0, options: {running?: boolean} = {}) {
   const [state, setState] = useState<{key:string;page:ResourcePage|null;error:string}>({key:'',page:null,error:''});
   const [version, setVersion] = useState(0);
-  const key=JSON.stringify([scanId,token,enabled,version]);
+  const key=JSON.stringify([scanId,token,enabled,syncEpoch,options.running,version]);
   const reload = useCallback(() => setVersion(value => value + 1), []);
   useEffect(() => {
+    if (!options.running || !scanId || !enabled) return;
+    const timer = window.setInterval(() => setVersion(value => value + 1), 3000);
+    return () => window.clearInterval(timer);
+  }, [options.running, scanId, enabled]);
+  useEffect(() => {
     const request = new AbortController();
-    setState({key,page:null,error:''});
-    if (scanId && enabled) loadResourcePages((path,options)=>api(path,token,options),scanId,request.signal)
-      .then(page=>{if(!request.signal.aborted)setState({key,page,error:''});})
-      .catch(cause=>{if(!request.signal.aborted)setState({key,page:null,error:cause instanceof Error?cause.message:'Resource evidence could not be loaded.'});});
+    const loadingKey = key;
+    setState(previous => {
+      if (options.running && previous.page?.scan_id === scanId) return {key: loadingKey, page: previous.page, error: ''};
+      return {key: loadingKey, page: null, error: ''};
+    });
+    if (scanId && enabled) loadResourcePages(
+      (path,opts)=>api(path,token,opts),
+      scanId,
+      request.signal,
+      {partial: options.running, costScope: options.running ? 'all' : 'billable', pageSize: RUNNING_RESOURCE_PAGE_SIZE},
+    )
+      .then(page=>{if(!request.signal.aborted)setState({key:loadingKey,page,error:''});})
+      .catch(cause=>{if(!request.signal.aborted)setState(previous=>({key:loadingKey,page:options.running?previous.page:null,error:cause instanceof Error?cause.message:'Resource evidence could not be loaded.'}));});
     return () => request.abort();
-  }, [scanId,token,enabled,version,key]);
-  return {page:state.key===key?state.page:null,error:state.key===key?state.error:'',reload};
+  }, [scanId,token,enabled,syncEpoch,options.running,version,key]);
+  const showPage = state.key === key ? state.page : (options.running && state.page?.scan_id === scanId ? state.page : null);
+  return {page: showPage, error: state.key === key ? state.error : '', reload};
 }
 
 export function useActiveBatch(scanId: string | undefined, token: string, onSettled: () => void) {

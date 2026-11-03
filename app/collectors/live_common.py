@@ -3,7 +3,9 @@ from datetime import datetime,timedelta,timezone
 import math,os
 from app.telemetry_contract import moment,evaluate_series,TimeSeriesEvidenceContract
 
-def enabled():return os.getenv('CLOUDSAVER_LIVE_EVIDENCE_ENABLED','false').lower()=='true'
+def enabled(settings=None):
+    from app.cloudsaver_platform_settings import integration_flag
+    return integration_flag(settings, 'live_evidence_enabled', 'CLOUDSAVER_LIVE_EVIDENCE_ENABLED')
 
 def window(now):
     end=now.astimezone(timezone.utc).replace(second=0,microsecond=0)

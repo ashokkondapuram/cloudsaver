@@ -80,8 +80,9 @@ def load_targets(settings=None):
     return tuple(result)
 
 
-def enabled():
-    return os.getenv('CLOUDSAVER_DELIVERY_ENABLED','false').lower() == 'true'
+def enabled(settings=None):
+    from app.cloudsaver_platform_settings import integration_flag
+    return integration_flag(settings, 'delivery_enabled', 'CLOUDSAVER_DELIVERY_ENABLED')
 
 
 from urllib.parse import urlsplit

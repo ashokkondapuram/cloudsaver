@@ -11,6 +11,7 @@ import {Loading, Notice, PageHeading, SectionTitle, Switch} from '../ui/shared';
 import {BillingSettingsSection} from './BillingSettingsSection';
 import {ResourceAccessSection} from './ResourceAccessSection';
 import {AIPolicySection} from './AIPolicySection';
+import {CloudSaverIntegrationSection} from './CloudSaverIntegrationSection';
 
 export function PlatformSettingsView() {
   const {canWrite} = useSession();
@@ -42,7 +43,7 @@ export function PlatformSettingsView() {
   }
 
   return <>
-    <PageHeading eyebrow="PLATFORM" title="Platform settings">Switches and billing rules that apply to every workspace.</PageHeading>
+    <PageHeading eyebrow="PLATFORM" title="Platform settings">CloudSaver behavior, resource access, and billing rules for every workspace.</PageHeading>
     {loading && !data ? <Loading label="Loading settings…"/> : !data ? <Notice tone="error">{error || 'Something went wrong. If the issue persists, contact Support.'}</Notice> : <section className="panel">
       <SectionTitle title="Automation"/>
       {saveError && <Notice tone="error">{saveError} {saveError.includes('Refresh') && <button type="button" className="text-button" onClick={() => void reload()}>Refresh</button>}</Notice>}
@@ -61,6 +62,7 @@ export function PlatformSettingsView() {
       </div>
     </section>}
     {data && <ResourceAccessSection settings={data} onSaved={setData}/>}
+    {data && <CloudSaverIntegrationSection settings={data} onSaved={setData}/>}
     <BillingSettingsSection/>
     <AIPolicySection/>
   </>;

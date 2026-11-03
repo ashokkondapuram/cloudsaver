@@ -33,7 +33,7 @@ class WasteFinding(BaseModel):
 class ScanSummary(BaseModel):
     scan_id: str
     timestamp: str
-    status: Literal['completed', 'cancelled', 'failed']
+    status: Literal['completed', 'cancelled', 'failed', 'running']
     mode: Literal['azure', 'multi-cloud']
     cloud_providers: list[Literal['azure', 'aws', 'gcp', 'kubernetes']] = Field(default_factory=lambda: ['azure'])
     subscriptions_scanned: int = Field(ge=0)

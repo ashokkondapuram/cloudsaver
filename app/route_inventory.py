@@ -163,6 +163,8 @@ ROUTES = {
     ('GET', '/api/v1/trends'): 'scoped_read',
     ('GET', '/api/v1/analytics'): 'scoped_read',
     ('GET', '/api/v1/resources/billable-catalog'): 'scoped_read',
+    ('GET', '/api/v1/catalog/azure-resource-types'): 'scoped_read',
+    ('GET', '/api/v1/catalog/typed-resource-tables'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources/export'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources/{resource_key}'): 'scoped_read',

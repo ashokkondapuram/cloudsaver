@@ -62,9 +62,11 @@ def probe_managed_identity(settings):
 
 
 def probe_azure(tenant, settings):
+    from app.cloud_identity import identity_mode
     if not tenant.get('subscription_ids'):
         return _row('azure', 'not_configured')
-    if settings.get('azure_access') == 'federated' and not (tenant.get('identity') or {}).get('azure_app_client_id') \
+    if identity_mode() != 'developer' and settings.get('azure_access') == 'federated' \
+            and not (tenant.get('identity') or {}).get('azure_app_client_id') \
             and not settings.get('azure_app_client_id'):
         return _row('azure', 'not_configured')
     target = str(tenant['subscription_ids'][0])

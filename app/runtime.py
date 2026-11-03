@@ -101,6 +101,8 @@ def install_log_redaction():
 
 def install(app, settings, *, redis_required=False, targets=()):
     install_log_redaction()
+    level = os.getenv('CLOUDSAVER_LOG_LEVEL', 'INFO').upper()
+    logging.basicConfig(level=getattr(logging, level, logging.INFO), format='%(levelname)s %(name)s %(message)s')
     origins = [x.strip() for x in os.getenv('CLOUDSAVER_ALLOWED_ORIGINS', '').split(',') if x.strip()]
     for origin in origins:
         parsed = urlsplit(origin)

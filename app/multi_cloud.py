@@ -15,7 +15,7 @@ def scope_fingerprint(tenant, providers):
     return hashlib.sha256(json.dumps({p: scope[p] for p in sorted(providers)}, sort_keys=True).encode()).hexdigest()
 
 
-def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
+def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None, progress=None):
     if not providers or len(providers) != len(set(providers)) or not set(providers) <= set(configured_providers(tenant)):
         raise ScanError('Provider selection is not configured for this workspace')
     from app.scanner_aws import scan_account
@@ -25,7 +25,7 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None):
     azure_inventory = []
     if 'azure' in providers:
         def collect_azure():
-            findings, inventory = scan_live(tenant, enabled_rule_ids=enabled_rule_ids)
+            findings, inventory = scan_live(tenant, enabled_rule_ids=enabled_rule_ids, progress=progress)
             azure_inventory.extend(inventory)
             return findings
         collectors.append(collect_azure)

@@ -12,14 +12,14 @@ export function watchUnauthorized(token: string, callback: () => void) {
 }
 const unknownOutcome='The request outcome could not be confirmed. Check its status or activity before submitting again.';
 
-export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; idempotencyKey?: string; version?: number} = {}): Promise<T> {
+export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; idempotencyKey?: string; version?: number; timeoutMs?: number} = {}): Promise<T> {
   const hasBody=options.body!==undefined||options.rawBody!==undefined;
   const method=options.method??(hasBody?'POST':'GET'), mutation=method!=='GET';
   const controller=new AbortController();
   const forwardAbort=()=>controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort',forwardAbort,{once:true});
   if(options.signal?.aborted)forwardAbort();
-  const timeout=setTimeout(()=>controller.abort(),125_000);
+  const timeout=setTimeout(()=>controller.abort(),options.timeoutMs ?? 125_000);
   const signal=controller.signal;
   let response:Response, raw:unknown;
   try {

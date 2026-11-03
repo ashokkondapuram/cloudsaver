@@ -34,6 +34,7 @@ export type Scan = {
   total_monthly_waste_usd: number | null;
   realizable_monthly_savings_usd?: number | null;
   findings: Finding[];
+  items_arm_detail_collected?: number;
 };
 
 export type Workspace = {

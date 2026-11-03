@@ -120,7 +120,8 @@ INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
     ', kubernetesVersion=tostring(properties.kubernetesVersion), nodeResourceGroup=tostring(properties.nodeResourceGroup)'
     ', aksPowerState=tostring(properties.powerState.code), fqdn=tostring(properties.fqdn)'
     ', privateCluster=properties.apiServerAccessProfile.enablePrivateCluster'
-    ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles')
+    ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles'
+    ', publicIpConfiguration=properties.ipConfiguration, publicNatGateway=properties.natGateway')
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
@@ -171,6 +172,15 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
                 edge('nic_to_ip', row['id'], ((item.get('properties') or {}).get('publicIPAddress') or {}).get('id'))
         elif kind == 'microsoft.web/sites':
             edge('app_service_to_plan', row['id'], row.get('serverFarmId'))
+        elif kind == 'microsoft.network/publicipaddresses':
+            ip_cfg = row.get('publicIpConfiguration') or row.get('ipConfiguration')
+            nat = row.get('publicNatGateway') or row.get('natGateway')
+            if isinstance(ip_cfg, dict) and ip_cfg.get('id'):
+                evidence['association_verified'] = True
+            elif isinstance(nat, dict) and nat.get('id'):
+                evidence['association_verified'] = True
+            elif ip_cfg is not None or nat is not None:
+                evidence['association_verified'] = False
         rows.append({
             'cloud_provider': 'azure',
             'resource_id': row['id'],
@@ -182,10 +192,9 @@ def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[d
             'evidence': evidence,
             'region': row.get('resourceLocation'), 'dependency_refs': edges,
             'collector_version': 'azure-arg-2026-10-24',
-            'unsupported_rule_ids': ['AZURE_DISK_PROVISIONED_PERFORMANCE', 'AZURE_PUBLIC_IP_ASSOCIATED_IDLE',
-                                     'AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU'],
         })
-    return rows
+    from app.collectors.azure_configuration_evidence import enrich_inventory_configuration
+    return enrich_inventory_configuration(rows)
 
 
 def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
@@ -219,7 +228,7 @@ def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] 
     return findings
 
 
-def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None) -> tuple[list[dict], list[dict]]:
+def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progress=None) -> tuple[list[dict], list[dict]]:
     """Scan only authorized subscriptions with a keyless credential for the customer tenant.
 
     Reader RBAC on each subscription is granted by the customer during onboarding.
@@ -238,11 +247,21 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None) -> tupl
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
             inventory = scan_inventory_observations(client, subscriptions)
-            from app.collectors.live_common import enabled
-            if enabled():
-                from app.collectors.azure_live import enrich
-                from app.cloud_http import JSONReader
-                reader=JSONReader(headers_factory=lambda _: {'Authorization':'Bearer '+credential.get_token('https://management.azure.com/.default').token})
-                try:inventory=enrich(reader,inventory)
-                finally:reader.close()
+            if progress is not None:
+                progress.seed_inventory(inventory)
+            from app.cloud_http import BearerTokenCache, JSONReader
+            arm_auth = BearerTokenCache(credential, 'https://management.azure.com/.default')
+            reader = JSONReader(headers_factory=arm_auth)
+            try:
+                from app.collectors.azure_arm_detail import enabled as arm_detail_enabled, enrich_arm_details
+                from app.config import Settings
+                stack_settings = Settings.load()
+                if arm_detail_enabled(stack_settings):
+                    inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
+                from app.collectors.live_common import enabled
+                if enabled(stack_settings):
+                    from app.collectors.azure_live import enrich
+                    inventory = enrich(reader, inventory, settings=stack_settings)
+            finally:
+                reader.close()
             return _findings(client, subscriptions, enabled_rule_ids), inventory

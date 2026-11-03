@@ -17,9 +17,14 @@ import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {findingKey} from '../../lib/finops';
 
 function Evidence({detail}: {detail: ResourceDetail}) {
-  const text = JSON.stringify(detail.observation?.configuration_snapshot || {}, null, 2);
+  const snapshot = detail.configuration_detail || detail.observation?.configuration_snapshot || {};
+  const text = JSON.stringify(snapshot, null, 2);
+  const readiness = detail.analysis_readiness || detail.observation?.evidence?.analysis_readiness;
   return <div className="drawer-section"><h3>Evidence provenance</h3>
-    <dl className="settings-key-values"><div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div><div><dt>Schema</dt><dd>{detail.observation?.evidence_schema_version || 'Legacy'}</dd></div><div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div></dl>
+    <dl className="settings-key-values"><div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div><div><dt>Schema</dt><dd>{detail.evidence_schema_version || detail.observation?.evidence_schema_version || 'Legacy'}</dd></div><div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div>
+    {readiness && <><div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
+    {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}</>}
+    </dl>
     <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence appears on the Overview tab.</p>
     <details className="drawer-disclosure"><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>
   </div>;

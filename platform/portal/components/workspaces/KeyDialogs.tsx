@@ -15,7 +15,7 @@ import {AccessFields, accessBody, accessError, defaultAccess, expiryError, Expir
 export function IssueKeyDialog({open, workspace, onClose, onIssued}: {open: boolean; workspace: Workspace; onClose: () => void; onIssued: () => void}) {
   const {session} = useSession();
   const [name, setName] = useState('');
-  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace));
+  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace, session?.environment));
   const [expiry, setExpiry] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function IssueKeyDialog({open, workspace, onClose, onIssued}: {open: bool
 
   useEffect(() => {
     if (!open) return;
-    setName(''); setAccess(defaultAccess(workspace)); setExpiry(expiryLimits().fallback); setSubmitted(false); setError(''); setSecret('');
+    setName(''); setAccess(defaultAccess(workspace, session?.environment)); setExpiry(expiryLimits().fallback); setSubmitted(false); setError(''); setSecret('');
     // The workspace reloads after issuing; resetting on that would discard the one-time secret.
   }, [open]);
 
@@ -72,7 +72,7 @@ function accessFromKey(apiKey: ApiKey, workspace: Workspace): Access {
 export function EditKeyDialog({apiKey, workspace, onClose, onSaved}: {apiKey: ApiKey | null; workspace: Workspace; onClose: () => void; onSaved: () => void}) {
   const {session} = useSession();
   const [name, setName] = useState('');
-  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace));
+  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace, session?.environment));
   const [expiry, setExpiry] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -127,7 +127,7 @@ const OVERLAPS = [{hours: 0, label: 'No overlap'}, {hours: 1, label: '1 hour'}, 
 
 export function RotateKeyDialog({apiKey, workspace, onClose, onRotated}: {apiKey: ApiKey | null; workspace: Workspace; onClose: () => void; onRotated: () => void}) {
   const {session} = useSession();
-  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace));
+  const [access, setAccess] = useState<Access>(() => defaultAccess(workspace, session?.environment));
   const [overlap, setOverlap] = useState<number>(24);
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,4 @@
-import type {Task} from './contracts.ts';
+import type {Task} from '../contracts.ts';
 
 export function assertPermitNotDriftAborted(task: Task): void {
   const status = task.payload?.permit_status;

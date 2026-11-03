@@ -44,6 +44,7 @@ def alerts_enabled(settings, workspace, plan=None):
 def workspace_operations(workspace, settings=None):
     from app.delivery_config import target_definitions
     from app.entitlements import entitlements_for
+    from app.cloudsaver_platform_settings import integration_flag
     plan = entitlements_for(workspace)
     scheduled, platform_alerts = platform_flags(settings)
     frequency = effective_frequency(workspace, plan)
@@ -57,5 +58,5 @@ def workspace_operations(workspace, settings=None):
         'automated_alerts_enabled': alerts_enabled(settings, workspace, plan),
         'platform_automated_alerts_enabled': platform_alerts,
         'notification_webhook_configured': webhook,
-        'delivery_dispatcher_enabled': os.getenv('CLOUDSAVER_DELIVERY_ENABLED', 'false').lower() == 'true',
+        'delivery_dispatcher_enabled': integration_flag(settings, 'delivery_enabled', 'CLOUDSAVER_DELIVERY_ENABLED'),
     }

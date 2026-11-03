@@ -14,4 +14,4 @@ CREATE POLICY tenant_isolation ON public.scans
     WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 REVOKE ALL ON public.scans FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO cloudsaver_app;
-GRANT SELECT, INSERT ON public.scans TO cloudsaver_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.scans TO cloudsaver_app;

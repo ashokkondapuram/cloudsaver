@@ -137,9 +137,13 @@ export type Failure = {
 };
 
 export type ResourceAccessEffective = Record<string, {value: string | null; source: 'platform' | 'environment' | 'workspace' | 'unset'}>;
+export type CloudSaverIntegrationEffective = Record<string, {value: string | number | boolean | null; source: 'platform' | 'environment' | 'unset'}>;
 export type PlatformSettings = {
   scheduled_scans_enabled: boolean; automated_alerts_enabled: boolean; resource_access?: Partial<Record<string, string>>;
-  resource_access_effective?: ResourceAccessEffective; version: number; updated_by: string; updated_at: string;
+  cloudsaver_integration?: Partial<Record<string, boolean | number | string>>;
+  resource_access_effective?: ResourceAccessEffective;
+  cloudsaver_integration_effective?: CloudSaverIntegrationEffective;
+  version: number; updated_by: string; updated_at: string;
 };
 
 export type PlanChangeRequest = {

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -30,19 +30,27 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     @asynccontextmanager
     async def lifespan(_):
         projector = None
-        from app.config import directory_mode
-        if directory_mode() == 'cutover':
+        client = None
+        from app.config import directory_mode, key_verifier
+        if settings.registry is not None and (
+            directory_mode() == 'cutover' or key_verifier() == 'identity'
+        ):
             from app.directory_projector import DirectoryProjector
             from app.identity_client import shared_client
             client = identity_client or shared_client()
             projector = DirectoryProjector(settings.registry, client)
             client.directory_listeners.append(projector.nudge)
+            try:
+                projector.resync()
+            except Exception:
+                logger.exception('Initial directory resync failed; change feed will retry')
             api.state.projector = projector.start()
         try:
             yield
         finally:
             if projector:
                 projector.stop()
+            if client is not None and projector is not None:
                 client.directory_listeners.remove(projector.nudge)
         from app.cloud_identity import close_providers
         close_providers()
@@ -178,14 +186,20 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     def history(tenant=Depends(current_tenant), limit: int = 50):
         if not 1 <= limit <= 100:
             raise HTTPException(422, 'limit must be between 1 and 100')
-        return store.list(tenant['tenant_id'], limit)
+        _abandon_other_running_scans(tenant['tenant_id'], only_stale=True)
+        from app.scan_response import scan_for_api
+        return [scan_for_api(item) for item in store.list(tenant['tenant_id'], limit)]
 
     @api.get('/api/v1/scans/{scan_id}', response_model=ScanSummary)
     def scan_detail(scan_id: str, tenant=Depends(current_tenant)):
         result = store.get(tenant['tenant_id'], scan_id)
         if result is None:
             raise HTTPException(404, 'Scan not found')
-        return result
+        if _is_stale_running(result):
+            _abandon_other_running_scans(tenant['tenant_id'], only_stale=True)
+            result = store.get(tenant['tenant_id'], scan_id) or result
+        from app.scan_response import scan_for_api
+        return scan_for_api(result)
 
     @api.post('/api/v1/scans', status_code=201, response_model=ScanSummary)
     def run_scan(tenant=Depends(current_tenant)):
@@ -193,36 +207,170 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             raise HTTPException(422, 'No Azure subscriptions are configured; use the multi-cloud scan endpoint')
         return perform_scan(tenant)
 
-    @api.post('/api/v1/scans/multi-cloud', status_code=201, response_model=ScanSummary)
-    def run_multi_cloud(payload: MultiCloudScanRequest, tenant=Depends(current_tenant)):
-        from app.cloud_scope import configured_providers
-        from app.provider_access import require_providers
-        require_providers(tenant, payload.providers)
-        if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant)):
-            raise HTTPException(422, 'Select unique providers configured for this workspace')
-        return perform_scan(tenant, payload.providers)
+    def _async_scans_enabled(store_inner):
+        return hasattr(store_inner, 'begin_running_scan') and os.getenv('CLOUDSAVER_ASYNC_SCANS', 'true').lower() != 'false'
 
-    def perform_scan(tenant, providers=None):
+    def _prepare_scan(tenant, providers):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
         from app.entitlements import enforce_providers, enforce_resource_quota, enforce_subscription_quota, entitlements_for
         plan = entitlements_for(tenant)
         enforce_providers(plan, providers or ['azure'])
         scope_count = (len(tenant.get('subscription_ids', [])) if not providers else sum(
-            len(tenant.get(key, [])) for p, key in [('azure','subscription_ids'),('aws','aws_accounts'),
-            ('gcp','gcp_projects'),('kubernetes','kubernetes_clusters')] if p in providers))
+            len(tenant.get(key, [])) for p, key in [('azure', 'subscription_ids'), ('aws', 'aws_accounts'),
+            ('gcp', 'gcp_projects'), ('kubernetes', 'kubernetes_clusters')] if p in providers))
         enforce_subscription_quota(plan, scope_count, adding_count=0)
+        return plan
 
+    def _running_scan_payload(scan_id, observation_time, tenant, providers):
+        return dict(
+            scan_id=scan_id,
+            timestamp=observation_time,
+            status='running',
+            mode='multi-cloud' if providers else settings.mode,
+            cloud_providers=sorted(providers or ['azure']),
+            subscriptions_scanned=len(tenant['subscription_ids']) if not providers or 'azure' in providers else 0,
+            total_items_found=0,
+            total_monthly_waste_usd=None,
+            realizable_monthly_savings_usd=None,
+            findings=[],
+        )
+
+    def _clear_distributed_scan_lease(tenant_id):
+        if os.getenv('CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', '').lower() != 'true':
+            return
+        from workers.tasks import RedisLease
+        lease = RedisLease(os.getenv('REDIS_URL', 'redis://redis:6379/1'))
+        try:
+            lease.force_clear(tenant_id)
+            logger.info('Cleared distributed scan lease workspace=%s', tenant_id)
+        except Exception:
+            logger.warning('Could not clear distributed scan lease workspace=%s', tenant_id)
+        finally:
+            lease.close()
+
+    # A worker process can die mid-scan (crash, OOM, redeploy) after status='running' is written but
+    # before any completion/failure write runs; nothing else updates that row afterward. Reap it here
+    # so a dead scan stops reading as "running" forever instead of only being cleaned up when the next
+    # scan starts.
+    STALE_RUNNING_MINUTES = 30
+
+    def _is_stale_running(row):
+        if row.get('status') != 'running':
+            return False
+        started = row.get('timestamp')
+        if not started:
+            return False
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(str(started).replace('Z', '+00:00'))
+        except ValueError:
+            return False
+        return age.total_seconds() > STALE_RUNNING_MINUTES * 60
+
+    def _abandon_other_running_scans(tenant_id, keep_scan_id=None, *, only_stale=False):
+        inner = getattr(store, 'inner', store)
+        if not hasattr(inner, 'abandon_running_scan'):
+            return
+        abandoned = False
+        for row in store.list_light(tenant_id, 20) if hasattr(store, 'list_light') else store.list(tenant_id, 20):
+            if row.get('status') != 'running':
+                continue
+            scan_id = row.get('scan_id')
+            if keep_scan_id and scan_id == keep_scan_id:
+                continue
+            if only_stale and not _is_stale_running(row):
+                continue
+            try:
+                inner.abandon_running_scan(tenant_id, scan_id)
+                abandoned = True
+                logger.info('Abandoned stale running scan scan_id=%s', scan_id)
+            except Exception:
+                logger.warning('Could not abandon stale running scan scan_id=%s', scan_id)
+        if abandoned:
+            _clear_distributed_scan_lease(tenant_id)
+
+    def _start_scan_async(tenant, providers, response: Response):
+        _prepare_scan(tenant, providers)
         tenant_id = tenant['tenant_id']
         lock = locks.setdefault(tenant_id, threading.Lock())
         if not lock.acquire(blocking=False):
             raise HTTPException(409, 'A scan is already running for this workspace')
+        scan_id = str(uuid4())
+        observation_time = datetime.now(timezone.utc).isoformat()
+        _abandon_other_running_scans(tenant_id, keep_scan_id=scan_id)
+        _clear_distributed_scan_lease(tenant_id)
+        preview = _running_scan_payload(scan_id, observation_time, tenant, providers)
+
+        def worker():
+            try:
+                perform_scan(
+                    tenant,
+                    providers,
+                    scan_id=scan_id,
+                    observation_time=observation_time,
+                    lock_held=True,
+                )
+            except HTTPException as exc:
+                logger.warning('Background scan failed: %s', exc.detail)
+            except Exception:
+                logger.exception('Background scan failed')
+
+        threading.Thread(target=worker, name=f'scan-{scan_id[:8]}', daemon=True).start()
+        response.status_code = 202
+        return preview
+
+    @api.post('/api/v1/scans/multi-cloud', status_code=201, response_model=ScanSummary)
+    def run_multi_cloud(payload: MultiCloudScanRequest, response: Response, tenant=Depends(current_tenant)):
+        from app.cloud_scope import configured_providers
+        from app.provider_access import require_providers
+        require_providers(tenant, payload.providers)
+        if len(set(payload.providers)) != len(payload.providers) or not set(payload.providers) <= set(configured_providers(tenant)):
+            raise HTTPException(422, 'Select unique providers configured for this workspace')
+        inner = getattr(store, 'inner', store)
+        if _async_scans_enabled(inner):
+            return _start_scan_async(tenant, payload.providers, response)
+        return perform_scan(tenant, payload.providers)
+
+    def perform_scan(tenant, providers=None, *, scan_id=None, observation_time=None, lock_held=False):
+        plan = _prepare_scan(tenant, providers)
+
+        tenant_id = tenant['tenant_id']
+        lock = locks.setdefault(tenant_id, threading.Lock())
+        if not lock_held and not lock.acquire(blocking=False):
+            raise HTTPException(409, 'A scan is already running for this workspace')
 
         lease, lease_owned, lease_token, heartbeat = None, False, str(uuid4()), None
+        provider_label = sorted(providers or ['azure'])
+        scan_id = scan_id or str(uuid4())
+        observation_time = observation_time or datetime.now(timezone.utc).isoformat()
+        if not lock_held:
+            _abandon_other_running_scans(tenant_id, keep_scan_id=scan_id)
+        progress = None
+        scan_completed = False
+        inner = getattr(store, 'inner', store)
+        if hasattr(inner, 'begin_running_scan'):
+            from app.scan_progress import ScanProgress
+            progress = ScanProgress(
+                inner,
+                tenant,
+                scan_id,
+                observation_time,
+                mode='multi-cloud' if providers else settings.mode,
+                cloud_providers=sorted(providers or ['azure']),
+            )
+        logger.info('Scan starting workspace=%s scan_id=%s providers=%s', tenant_id, scan_id, provider_label)
         try:
             if os.getenv('CLOUDSAVER_DISTRIBUTED_SCAN_LOCK', '').lower() == 'true':
                 from workers.tasks import RedisLease
                 lease = RedisLease(os.getenv('REDIS_URL', 'redis://redis:6379/1'))
                 lease_owned = lease.acquire(tenant_id, lease_token)
+                if not lease_owned:
+                    running = any(
+                        row.get('status') == 'running'
+                        for row in (store.list_light(tenant_id, 5) if hasattr(store, 'list_light') else store.list(tenant_id, 5))
+                    )
+                    if not running:
+                        lease.force_clear(tenant_id)
+                        lease_owned = lease.acquire(tenant_id, lease_token)
                 if not lease_owned:
                     raise HTTPException(409, 'A scan is already running for this workspace (distributed lease held)')
                 from workers.lease import LeaseHeartbeat
@@ -238,7 +386,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             inventory = []
             if providers:
                 from app.multi_cloud import scan_multi_cloud
-                raw_findings, inventory = scan_multi_cloud(tenant, providers, enabled_rule_ids=rule_ids)
+                raw_findings, inventory = scan_multi_cloud(tenant, providers, enabled_rule_ids=rule_ids, progress=progress)
             elif scanner:
                 scanned = scanner(tenant)
                 if isinstance(scanned, tuple):
@@ -246,9 +394,15 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 else:
                     raw_findings = scanned
             else:
-                raw_findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
+                raw_findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids, progress=progress)
 
             resource_count = len(inventory) if inventory else len(raw_findings)
+            logger.info(
+                'Scan collected workspace=%s inventory=%s findings=%s',
+                tenant_id,
+                len(inventory),
+                len(raw_findings),
+            )
             enforce_resource_quota(plan, resource_count)
 
             from app.cloud_scope import validate_finding_scope
@@ -259,7 +413,6 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             enriched_findings = [attribute_finding_cost(finding) for finding in raw_findings]
 
             from app.dependencies import canonical_inventory, group_opportunities
-            observation_time = datetime.now(timezone.utc).isoformat()
             inventory = canonical_inventory(inventory, observation_time)
             from app.collectors.provenance import compact
             source_ledger = compact(inventory, enriched_findings, observation_time)
@@ -288,8 +441,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             realizable_savings=opportunity_totals(enriched_findings,realized=True)['total_monthly_opportunity_usd']
             scope_results = completed_scopes(tenant, providers or ['azure'], source_ledger) if providers or scanner is None else []
             result = dict(
-                scan_id=str(uuid4()),
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                scan_id=scan_id,
+                timestamp=observation_time,
                 status='completed',
                 mode='multi-cloud' if providers else settings.mode,
                 cloud_providers=sorted(providers or ['azure']),
@@ -320,17 +473,26 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
             if heartbeat:
                 heartbeat.ensure_owned()
-            store.save(tenant_id, validated, workspace=tenant)
+            logger.info('Scan persisting workspace=%s scan_id=%s items=%s', tenant_id, scan_id, result['total_items_found'])
+            if progress is not None and hasattr(inner, 'complete_scan'):
+                inner.complete_scan(tenant_id, validated, workspace=tenant)
+                progress.complete()
+            else:
+                store.save(tenant_id, validated, workspace=tenant)
+            logger.info('Scan saved workspace=%s scan_id=%s', tenant_id, scan_id)
+            scan_completed = True
             return validated
         except HTTPException:
             raise
         except ScanError as exc:
-            logger.warning('Scan failed (ScanError)')
+            logger.warning('Scan failed (ScanError): %s', str(exc)[:500])
             raise HTTPException(422, str(exc)[:300] or 'The scan could not start.') from None
         except Exception as exc:
             logger.warning('Scan failed (%s)', type(exc).__name__)
             raise HTTPException(502, f'Scan failed. Check cloud credentials, cloud account access and server configuration: {type(exc).__name__}') from None
         finally:
+            if progress is not None and not scan_completed:
+                progress.abandon()
             if heartbeat:
                 heartbeat.stop()
             if lease_owned and lease:

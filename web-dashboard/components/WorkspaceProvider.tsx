@@ -1,7 +1,7 @@
 'use client';
 
 import {createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode} from 'react';
-import {api,watchUnauthorized} from '../lib/api';
+import {api, watchUnauthorized, ApiError} from '../lib/api';
 import {validateProfile,validateScan,validateWorkspaceEvidence} from '../lib/session-contract';
 import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
@@ -9,7 +9,7 @@ import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types
 type Overlay = 'command' | 'scan' | 'workspace' | 'notifications' | 'finding' | 'review' | null;
 type WorkspaceState = {
   token: string; workspace: Workspace | null; entitlements: Entitlements | null;
-  scans: Scan[]; scan: Scan | undefined; busy: string; error: string;
+  scans: Scan[]; scan: Scan | undefined; busy: string; scanActivity: string; error: string;
   canAdmin: boolean; canBill: boolean; scope: string[]; setScope: (value: string[]) => void;
   overlay: Overlay; setOverlay: (value: Overlay) => void;
   finding: Finding | null; findingFocusKey:string|null; findingContext: Finding[]; openFinding: (finding: Finding, context?: Finding[]) => void;
@@ -19,8 +19,9 @@ type WorkspaceState = {
   notice: {text: string; tone: 'success' | 'error' | 'info'} | null;
   notify: (text: string, tone?: 'success' | 'error' | 'info') => void; clearNotice: () => void;
   connect: (token: string) => Promise<void>; disconnect: () => void;
-  selectScan: (id: string) => void; runScan: (providers: string[]) => Promise<void>;
+  selectScan: (id: string) => void; runScan: (providers: string[]) => void;
   refresh: () => Promise<void>; reloadProfile: () => Promise<void>;
+  liveScanEpoch: number;
   planName: string; planProviders: (providers: string[]) => string[];
 };
 
@@ -61,6 +62,8 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const [selection, setSelection] = useState<Finding[]>([]);
   const [density, updateDensity] = useState<Density>('medium');
   const [notice, setNotice] = useState<WorkspaceState['notice']>(null);
+  const [liveScanEpoch, setLiveScanEpoch] = useState(0);
+  const [scanActivity, setScanActivity] = useState('');
   const findingFocusKey=useRef<string|null>(null);
   const session = useRef(0);
   const activeCredential=useRef('');
@@ -136,21 +139,85 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     session.current++; connecting.current?.abort();
     try {sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);} catch {}
     setToken(''); setWorkspace(null); setEntitlements(null); setScans([]); setSelected('');
-    setBusy(''); setError(''); setOverlay(null); setNotice(null); clearContext();
+    setBusy(''); setScanActivity(''); setError(''); setOverlay(null); setNotice(null); clearContext();
   }
 
-  async function runScan(providers: string[]) {
-    const version = session.current;
-    setBusy('Scanning cloud resources'); setError(''); setOverlay(null);
+  async function syncRunningScan(version: number) {
+    if (version !== session.current) return false;
     try {
-      const result = await api<Scan>('/scans/multi-cloud', token, {body: {providers}});
+      const history = await api<Scan[]>('/scans', token);
+      if (version !== session.current) return false;
+      const running = history.find(entry => entry.status === 'running');
+      setScans(history);
+      if (running) {
+        setSelected(running.scan_id);
+        setLiveScanEpoch(epoch => epoch + 1);
+        return true;
+      }
+      const latest = history[0];
+      if (latest?.status === 'completed') {
+        setSelected(latest.scan_id);
+        clearContext();
+        notify(`Scan completed. ${latest.total_items_found.toLocaleString()} findings ready to review.`);
+      }
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  function runScan(providers: string[]) {
+    const version = session.current;
+    setScanActivity('Scan in progress');
+    setError('');
+    setOverlay(null);
+    notify('Scan started. You can keep working while inventory loads.', 'info');
+    let poll: number | undefined;
+    const stop = () => {
+      if (poll) window.clearInterval(poll);
+      poll = undefined;
+      if (version === session.current) setScanActivity('');
+    };
+    const tick = async () => {
+      const stillRunning = await syncRunningScan(version);
+      if (!stillRunning) stop();
+    };
+    poll = window.setInterval(() => { void tick(); }, 8000);
+    void tick();
+    void api<Scan>('/scans/multi-cloud', token, {body: {providers}, timeoutMs: 120_000}).then(result => {
       if (version !== session.current) return;
       validateScan(result);
       setScans(previous => [result, ...previous.filter(s => s.scan_id !== result.scan_id)]);
-      setSelected(result.scan_id); clearContext(); notify(`Scan completed. ${result.total_items_found.toLocaleString()} findings ready to review.`);
-    } catch (cause) {if (version === session.current) {const message = cause instanceof Error ? cause.message : 'Scan could not be completed.'; setError(message); notify(message, 'error');}}
-    finally {if (version === session.current) setBusy('');}
+      setSelected(result.scan_id);
+      if (result.status === 'completed') {
+        clearContext();
+        notify(`Scan completed. ${result.total_items_found.toLocaleString()} findings ready to review.`);
+        stop();
+      }
+    }).catch(cause => {
+      if (version !== session.current) return;
+      if (cause instanceof ApiError && cause.uncertain) {
+        notify('Scan may still be running. Check scan history before you start another.', 'info');
+        return;
+      }
+      const message = cause instanceof Error ? cause.message : 'Scan could not be completed.';
+      setError(message);
+      notify(message, 'error');
+      stop();
+    });
   }
+
+  useEffect(() => {
+    if (!token || scanActivity || !scans.some(entry => entry.status === 'running')) return;
+    setScanActivity('Scan in progress');
+    const version = session.current;
+    const poll = window.setInterval(() => {
+      void syncRunningScan(version).then(stillRunning => {
+        if (!stillRunning && version === session.current) setScanActivity('');
+      });
+    }, 8000);
+    return () => window.clearInterval(poll);
+  }, [token, scans, scanActivity]);
 
   async function refresh() {
     const version = session.current;
@@ -184,8 +251,8 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const canAdmin = !!workspace?.roles.includes('TenantAdmin');
   const planName = entitlements?.plan_name || workspace?.plan_name || workspace?.plan_tier || '';
   const planProviders = (providers: string[]) => entitlements?.allowed_providers ? providers.filter(p => entitlements.allowed_providers.includes(p)) : providers;
-  return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'), planName, planProviders,
+  return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, scanActivity, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'), planName, planProviders,
     scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, findingContext, findingFocusKey:findingFocusKey.current, openFinding,
     review, openReview, selection, setSelection,
-    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile}}>{children}</Context.Provider>;
+    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, liveScanEpoch}}>{children}</Context.Provider>;
 }

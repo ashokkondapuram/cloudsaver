@@ -1,6 +1,7 @@
 import type {ResourcePage, ResourceRow, Batch} from './resources';
 
 export const RESOURCE_PAGE_SIZE = 1000;
+export const RUNNING_RESOURCE_PAGE_SIZE = 100;
 export const MAX_RESOURCE_ROWS = 10000;
 const invalid = () => new Error('Resource evidence is incomplete or changed during loading. Refresh the workspace before reviewing resources.');
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -24,15 +25,22 @@ function validRow(value: unknown): value is ResourceRow {
 }
 
 /** Assemble one authorized immutable inventory; never return a partial or duplicate rollup. */
-export async function loadResourcePages(request: (path: string, options: {signal?: AbortSignal}) => Promise<unknown>, scanId: string, signal?: AbortSignal): Promise<ResourcePage> {
+export async function loadResourcePages(
+  request: (path: string, options: {signal?: AbortSignal}) => Promise<unknown>,
+  scanId: string,
+  signal?: AbortSignal,
+  options: {partial?: boolean; costScope?: 'billable' | 'all'; pageSize?: number} = {},
+): Promise<ResourcePage> {
+  const costQuery = options.costScope === 'all' ? '&cost_scope=all' : '';
+  const pageSize = options.partial ? (options.pageSize ?? RUNNING_RESOURCE_PAGE_SIZE) : RESOURCE_PAGE_SIZE;
   let first: ResourcePage | null = null;
   const items: ResourceRow[] = [], seen = new Set<string>();
   for (let offset=0; offset<MAX_RESOURCE_ROWS;) {
     signal?.throwIfAborted();
-    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${RESOURCE_PAGE_SIZE}&offset=${offset}`, {signal});
+    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${offset}${costQuery}`, {signal});
     signal?.throwIfAborted();
     if(object(raw)&&Number.isSafeInteger(raw.total)&&Number(raw.total)>MAX_RESOURCE_ROWS)throw new Error('Resource evidence is incomplete: the explorer supports up to 10,000 resources per scan. Select smaller scan scopes before reviewing this estate.');
-    if (!object(raw) || raw.scan_id!==scanId || typeof raw.observed_at!=='string' || !Number.isSafeInteger(raw.total) || Number(raw.total)<0 || Number(raw.total)>MAX_RESOURCE_ROWS || !Array.isArray(raw.items) || raw.items.length>RESOURCE_PAGE_SIZE || !raw.items.every(validRow)) throw invalid();
+    if (!object(raw) || raw.scan_id!==scanId || typeof raw.observed_at!=='string' || !Number.isSafeInteger(raw.total) || Number(raw.total)<0 || Number(raw.total)>MAX_RESOURCE_ROWS || !Array.isArray(raw.items) || raw.items.length>pageSize || !raw.items.every(validRow)) throw invalid();
     const summary=raw.summary;
     if (!object(summary) || summary.total!==raw.total || !['ai_status','ai_risk','decision','review_priority'].every(key=>counts(summary[key]))) throw invalid();
     const page=raw as unknown as ResourcePage;
@@ -44,6 +52,7 @@ export async function loadResourcePages(request: (path: string, options: {signal
       seen.add(row.resource_key); items.push(row);
     }
     offset=items.length;
+    if (options.partial && first) return {...first, items};
     if (offset===page.total) return {...first,items};
   }
   throw invalid();

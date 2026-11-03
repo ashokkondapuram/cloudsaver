@@ -6,9 +6,11 @@
 ./start.sh
 ```
 
-Requires Docker with Compose v2, Python 3.10+ and OpenSSL. The launcher creates private local settings on first use, builds the images, starts Keycloak and its database, the platform portal/identity services, CloudSaver APIs, dashboard, Redis/PostgreSQL, and all scheduled/delivery/agent workers. It applies migrations before starting workers and waits for health checks. `make up` runs the same command.
+Requires Docker with Compose v2, Python 3.10+ and OpenSSL. The launcher creates private local settings on first use, builds the images, starts the platform portal/identity services, CloudSaver APIs, dashboard, Redis/PostgreSQL, and all scheduled/delivery/agent workers. It applies migrations before starting workers and waits for health checks. `make up` runs the same command.
 
-Open the dashboard at `http://127.0.0.1:3000`, platform portal at `http://127.0.0.1:3100`, and Keycloak at `https://keycloak.localhost:8443/admin/`. The Keycloak development certificate needs local browser trust. All generated runtime credentials are collected in the ignored root `.env` file with mode 0600: Keycloak bootstrap admin credentials, platform operator access key, database passwords, key pepper, identity/verifier secrets and worker credentials. TLS private keys remain private files referenced by path. Service configuration is also retained under `.env.local-stack/`. Credentials are generated during `./start.sh`, outside Docker image layers; they are never committed to Git. Subsequent runs preserve secrets, database volumes and the existing license expiry.
+By default, `./start.sh` uses **your root `.env` and `platform/.env`** as the source of truth (workspace keys, database passwords, Azure developer settings). It does not merge generated local-stack secrets into `.env`, and it strips legacy Keycloak variables from `.env` on each run. Use `./start.sh --bootstrap-secrets` only for a fresh generated stack, or `./start.sh --auth-mode keycloak` for the optional Keycloak pilot in `deploy/keycloak/`.
+
+Open the dashboard at `http://127.0.0.1:3000` and the platform portal at `http://127.0.0.1:3100`. Sign in to the dashboard with a **workspace key** from the portal **Keys** tab (include **BillingAdmin** or **TenantAdmin** for finance routes). Runtime credentials live in the ignored root `.env` (mode 0600) and under `.env.local-stack/` when you use bootstrap mode. Credentials are generated during `./start.sh`, outside Docker image layers; they are never committed to Git. Subsequent runs preserve secrets, database volumes and existing licence expiry.
 
 This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
 
@@ -326,9 +328,13 @@ docker compose --profile agentic up -d agent-worker
 The catalog covers 36 resource families across Azure, AWS, GCP and Kubernetes. **Billable vs free** types are defined in [app/billable_resources.py](app/billable_resources.py) and exposed at `GET /api/v1/resources/billable-catalog`. Scope completeness checks use billable collector types only (free NIC/NSG-style objects are documented but not treated as primary cost rows). Rule enablement and threshold delegation stay under platform policy, with customer preview/save in Settings. A catalog entry does not prove every API permission, pricing input or telemetry series is available.
 
 ```dotenv
+CLOUDSAVER_AZURE_ARM_DETAIL_ENABLED=true
+CLOUDSAVER_AZURE_ARM_DETAIL_MAX=500
 CLOUDSAVER_LIVE_EVIDENCE_ENABLED=true
-CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES=25
+CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES=500
 ```
+
+Set **`CLOUDSAVER_AZURE_ARM_DETAIL_MAX=0`** or **`CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES=0`** to enrich all in-scope resources (slower; watch Azure throttling). Each inventory row records **`evidence.analysis_readiness`** (configuration completeness and pending telemetry rules). See [docs/features/scanning-and-analysis-rules.md](docs/features/scanning-and-analysis-rules.md).
 
 Live enrichment is opt-in and bounded. Rules require validated history and fresh observations; missing samples are never zero-filled. No-event audit history does not prove continuous idleness. Rightsizing checks include SLO burn, latency sensitivity, throttling and recovery constraints.
 

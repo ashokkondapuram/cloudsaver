@@ -14,6 +14,14 @@ def arm_url(path: str) -> str:
     return ARM_ROOT + path
 
 
+def validate_arm_resource_path(resource_id: str, *, scope_path_lower: str) -> None:
+    """Reject resource IDs outside the expected subscription or resource-group scope."""
+    path = (resource_id or "").strip().lower()
+    scope = scope_path_lower.lower().rstrip("/")
+    if not path.startswith("/subscriptions/") or not path.startswith(f"{scope}/"):
+        raise ValueError("Invalid Azure resource scope")
+
+
 def validate_arm_https_url(url: str, *, scope_path_lower: str) -> None:
     """Reject token-bearing or off-profile continuation URLs."""
     parsed = urlsplit(url)

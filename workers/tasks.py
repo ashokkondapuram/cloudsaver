@@ -110,6 +110,10 @@ class RedisLease:
     def release(self, tenant_id, token):
         self.client.eval(self.RELEASE, 1, 'cloudsaver:scan-lease:' + tenant_id, token)
 
+    def force_clear(self, tenant_id):
+        """Drop a stale lease after the owning scan was abandoned or the worker died."""
+        self.client.delete('cloudsaver:scan-lease:' + tenant_id)
+
     def close(self):
         self.client.close()
 

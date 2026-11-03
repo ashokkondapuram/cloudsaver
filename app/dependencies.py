@@ -42,7 +42,8 @@ def canonical_inventory(rows, observed_at):
         row.update(provider=key[0], service=category(row), scope_id=row.get('scope_id') or row.get('subscription_id'),
             region=row.get('region'), configuration_snapshot={k: v for k, v in evidence.items() if k not in ('metrics', 'state_history')},
             protection_signals=protection(row), dependency_refs=edges, observed_at=observed_at,
-            collector_version=row.get('collector_version', 'legacy-unspecified'), evidence_schema_version='2')
+            collector_version=row.get('collector_version', 'legacy-unspecified'),
+            evidence_schema_version='3' if evidence.get('typed_configuration') is not None else '2')
         if key in result and result[key] != row:
             raise ValueError('Conflicting observations for one canonical resource')
         result[key] = row

@@ -6,6 +6,6 @@ COPY --chown=node:node package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     npm ci --omit=dev --ignore-scripts && npm cache clean --force
-COPY --chown=node:node src/*.ts ./src/
+COPY --chown=node:node src/ ./src/
 USER node
 CMD ["node", "--disable-proto=throw", "src/main.ts"]

@@ -105,6 +105,16 @@ fieldset.plain-fieldset{border:0;padding:0;margin:0;min-width:0;display:flex;fle
 /* Forms */
 .field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:550;color:var(--slate-700);min-width:0}.field>input,.field>select,.field>textarea{width:100%;font-weight:400}
 .field-hint{font-size:12px;font-weight:400;color:var(--muted);line-height:1.6}
+.field-label{display:flex;flex-direction:column;gap:4px}
+.field-label-row{display:inline-flex;align-items:center;gap:6px}
+.info-button-wrap{position:relative;display:inline-flex;vertical-align:middle}
+.info-button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);cursor:pointer;padding:0}
+.info-button:hover,.info-button[aria-expanded=true]{color:var(--text);border-color:var(--accent)}
+.info-popover{position:absolute;z-index:20;top:calc(100% + 6px);left:0;width:min(320px,calc(100vw - 48px));padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--elevated);box-shadow:0 8px 24px #0f172a18;font-size:13px;line-height:1.55;display:flex;flex-direction:column;gap:8px}
+.info-popover p{margin:0;color:var(--muted)}
+.deployment-config-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.deployment-config-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.integration-list dt{vertical-align:top}
 .field-error{font-size:12px;font-weight:500;color:var(--rose-700)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid .full{grid-column:1/-1}
 fieldset.choice-group{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin:0;display:flex;flex-direction:column;gap:9px}

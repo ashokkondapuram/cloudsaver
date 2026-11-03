@@ -139,11 +139,13 @@
 .grid-filters{flex-wrap:wrap}
 .grid-filters>label:not(.grid-search){flex:1 1 150px}
 .grid-filters select{max-width:none;width:100%}
-.sidebar nav{overflow-x:hidden}
-.nav-group{padding:16px 13px 7px}
-.nav-link{min-height:36px;padding:8px 12px}
+.sidebar nav{overflow-x:hidden;gap:1px}
+.nav-group{padding:12px 13px 5px;font-size:10px}
+.nav-link{min-height:32px;padding:6px 10px}
 .nav-link>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nav-link small{flex-shrink:0}
+.page-heading{margin-bottom:18px}
+.page-heading h1{font-size:19px}
 .page-summary-notice{margin-bottom:16px}
 .workload-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;padding:20px 24px;margin-bottom:20px}
 .workload-toolbar>label{display:grid;gap:6px;font-size:12px;font-weight:600;color:var(--muted);margin:0;flex:1 1 320px}

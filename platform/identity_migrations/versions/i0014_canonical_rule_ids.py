@@ -25,7 +25,7 @@ def upgrade():
     from alembic import op
     for legacy, catalog in _MAP:
         op.execute(
-            f"UPDATE analysis.workspace_rule_overrides SET rule_id = '{catalog}' WHERE rule_id = '{legacy}'"
+            f"UPDATE analysis.workspace_rules SET rule_id = '{catalog}' WHERE rule_id = '{legacy}'"
         )
         op.execute(f"DELETE FROM analysis.rule_catalog WHERE id = '{legacy}'")
 

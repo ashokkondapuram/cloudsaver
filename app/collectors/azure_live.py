@@ -106,15 +106,29 @@ def fetch_backup_replication(reader,subscription):
                     if isinstance(rid,str) and rid.lower().startswith(prefix.lower()):replicated.add(rid.lower())
     return protected,replicated
 
-def enrich(reader,inventory,now=None):
+def _live_resource_limit(settings=None):
+    from app.cloudsaver_platform_settings import integration_int
+    value = integration_int(settings, 'live_evidence_max_resources', 'CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES', default=0)
+    if value == 0:
+        return None
+    if not 1 <= value <= 50000:
+        raise ValueError('Live evidence bound must be 0 (all metric types) or 1–50000')
+    return value
+
+
+def enrich(reader,inventory,now=None,*,settings=None):
     now=now or datetime.now(timezone.utc)
-    import os
-    limit=int(os.getenv('CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES','25'))
-    if not 1<=limit<=100:raise ValueError('Live evidence bound must be 1–100 resources')
+    limit = _live_resource_limit(settings)
     candidates=[r for r in inventory if r['resource_type'].lower() in METRICS]
+    from app.collectors.azure_configuration_evidence import enrich_configuration_evidence, live_collection_priority
+    candidates.sort(key=live_collection_priority)
     recovery={}
-    for r in candidates[limit:]:r.setdefault('evidence',{}).setdefault('live_sources',{})['telemetry']='resource_budget_exceeded'
-    for r in candidates[:limit]:
+    if limit is not None:
+        for r in candidates[limit:]:
+            r.setdefault('evidence', {}).setdefault('live_sources', {})['telemetry'] = 'resource_budget_exceeded'
+            enrich_configuration_evidence(r)
+    selected = candidates if limit is None else candidates[:limit]
+    for r in selected:
         if r['resource_type'].lower() not in METRICS:continue
         e=r.setdefault('evidence',{})
         sub=r['subscription_id']
@@ -126,5 +140,5 @@ def enrich(reader,inventory,now=None):
         values=collect(e,'azure_monitor',lambda:fetch_azure_monitor_series(reader,r,now))
         if values:enrich_metrics(e,values,now)
         e['state_history']=collect(e,'activity_log',lambda:fetch_azure_state_history(reader,r,now))
-        r['unsupported_rule_ids']=[]
+        enrich_configuration_evidence(r)
     return inventory

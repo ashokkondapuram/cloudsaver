@@ -6,6 +6,8 @@ import {errorMessage, portal} from '../../lib/api';
 import type {PlatformSettings} from '../../lib/types';
 import {useSession} from '../SessionProvider';
 import {ConfirmDialog} from '../customers/CustomerDialogs';
+import {RESOURCE_ACCESS_HINTS} from '../../lib/cloudsaverConfigHints';
+import {FieldLabel} from '../ui/InfoButton';
 import {Notice, SectionTitle} from '../ui/shared';
 
 type Props = {settings: PlatformSettings; onSaved: (settings: PlatformSettings) => void};
@@ -102,7 +104,13 @@ export function ResourceAccessSection({settings, onSaved}: Props) {
     {error && <Notice tone={error.includes('ready') ? 'success' : 'error'}>{error}</Notice>}
     <dl className="detail-list">
       {FIELDS.map(field => <div key={field.key}>
-        <dt>{field.label}</dt>
+        <dt>
+          <FieldLabel label={field.label} info={RESOURCE_ACCESS_HINTS[field.key] ? <>
+            <strong>{RESOURCE_ACCESS_HINTS[field.key].summary}</strong>
+            <p>{RESOURCE_ACCESS_HINTS[field.key].detail}</p>
+            {RESOURCE_ACCESS_HINTS[field.key].env && <p className="muted">Env: <code>{RESOURCE_ACCESS_HINTS[field.key].env}</code></p>}
+          </> : undefined}/>
+        </dt>
         <dd>
           {editing ? <input className="input" value={draft[field.key] || ''} onChange={event => setDraft({...draft, [field.key]: event.target.value})}/>
             : <code>{settings.resource_access?.[field.key] || effective[field.key]?.value || <span className="muted">Not set</span>}</code>}

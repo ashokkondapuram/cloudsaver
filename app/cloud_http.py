@@ -1,9 +1,29 @@
 """Bounded read-only JSON transport; redirects and partial provider results fail."""
 import json
+import time
 import httpx
 from urllib.parse import urlsplit
 from app.provider_retry import read_json, ProviderReadError, ProviderDeferred
 from app.scanner import ScanError
+
+
+class BearerTokenCache:
+    """Attach one Authorization header per scan; refresh only when the token is near expiry."""
+
+    def __init__(self, credential, scope, *, skew_seconds=300):
+        self._credential = credential
+        self._scope = scope
+        self._skew = skew_seconds
+        self._token = None
+        self._expires_on = 0.0
+
+    def __call__(self, _url=None):
+        now = time.time()
+        if self._token is None or now >= self._expires_on - self._skew:
+            access = self._credential.get_token(self._scope)
+            self._token = access.token
+            self._expires_on = float(access.expires_on)
+        return {'Authorization': 'Bearer ' + self._token}
 
 
 class JSONReader:

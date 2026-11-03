@@ -11,12 +11,12 @@ type IssuedLicense={token:string;license_id:string;expires_at:string;roles:strin
 export function LicenseTokenDialog({open,workspace,onClose}:{open:boolean;workspace:Workspace;onClose:()=>void}){
   const {session}=useSession();
   const [name,setName]=useState('');
-  const [access,setAccess]=useState(()=>defaultAccess(workspace));
+  const [access,setAccess]=useState(()=>defaultAccess(workspace,session?.environment));
   const [expiry,setExpiry]=useState('');
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
   const [issued,setIssued]=useState<IssuedLicense|null>(null);
-  useEffect(()=>{if(open){setName('');setAccess(defaultAccess(workspace));setExpiry(expiryLimits().fallback);setError('');setIssued(null);}},[open]);
+  useEffect(()=>{if(open){setName('');setAccess(defaultAccess(workspace,session?.environment));setExpiry(expiryLimits().fallback);setError('');setIssued(null);}},[open, session?.environment, workspace]);
   function close(){setIssued(null);onClose();}
   async function submit(event:React.FormEvent){
     event.preventDefault();

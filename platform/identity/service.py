@@ -486,10 +486,14 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
     @staticmethod
     def platform_view(row):
         from identity.resource_access import effective_resource_access
+        from identity.cloudsaver_integration import effective_cloudsaver_integration
         resource_access = row.get('resource_access') or {}
+        integration = row.get('cloudsaver_integration') or {}
         return {**{k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'version', 'updated_by')},
                 'resource_access': resource_access,
                 'resource_access_effective': effective_resource_access(resource_access),
+                'cloudsaver_integration': integration,
+                'cloudsaver_integration_effective': effective_cloudsaver_integration(integration),
                 'updated_at': iso(row['updated_at'])}
 
     def get_platform(self):
@@ -499,6 +503,7 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
     def update_platform(self, payload, actor, request_id=None):
         from identity.domain import normalize_resource_access_bindings
         from identity.resource_access import merge_resource_access
+        from identity.cloudsaver_integration import merge_cloudsaver_integration, normalize_cloudsaver_integration
         version = self._version(payload)
         fields = {}
         for name in ('scheduled_scans_enabled', 'automated_alerts_enabled'):
@@ -509,6 +514,9 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         resource_patch = None
         if 'resource_access' in payload:
             resource_patch = normalize_resource_access_bindings(payload['resource_access'])
+        integration_patch = None
+        if 'cloudsaver_integration' in payload:
+            integration_patch = normalize_cloudsaver_integration(payload['cloudsaver_integration'])
         with self.store.transaction() as tx:
             current = tx.get_platform()
             if current['version'] != version:
@@ -516,10 +524,15 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             if resource_patch is not None:
                 merged = merge_resource_access(current.get('resource_access') or {}, resource_patch)
                 fields['resource_access'] = merged
+            if integration_patch is not None:
+                fields['cloudsaver_integration'] = merge_cloudsaver_integration(
+                    current.get('cloudsaver_integration') or {}, integration_patch)
             row = tx.update_platform(version, dict(fields, updated_at=self.now(), updated_by=actor['actor'][:120]))
             if row is None:
                 raise StaleVersion()
-            snapshot = {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'version')}
+            snapshot = {k: row[k] for k in (
+                'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access',
+                'cloudsaver_integration', 'version')}
             tx.append_change(None, 'platform_updated', row['version'], snapshot)
             changes = sorted(k for k in fields if k != 'resource_access')
             if resource_patch is not None:
