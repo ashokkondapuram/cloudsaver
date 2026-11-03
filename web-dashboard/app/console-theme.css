@@ -180,3 +180,20 @@ html[data-theme=dark] .priority-row:hover{background:#ffffff08}
 .panel-bleed{margin-inline:0!important}
 @media(max-width:1100px){.financial-five-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:720px){.financial-five-strip,.safety-firewall-grid{grid-template-columns:1fr}.financial-five-strip{grid-template-columns:1fr;padding:14px 16px}}
+.topology-split-view{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);gap:20px;padding:0 4px 12px}
+.topology-dag-list{display:flex;flex-direction:column;gap:10px;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--slate-50)}
+.topology-node-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface);width:100%;text-align:left;cursor:pointer}
+.topology-node-card.node-selected{border-color:var(--indigo-600);box-shadow:var(--shadow-xs)}
+.topology-node-card.node-child{margin-left:28px;position:relative;cursor:default}
+.slo-correlation-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;margin:0 0 20px;border:1px solid var(--border);border-radius:9px;background:var(--slate-50)}
+.slo-correlation-banner.blocked-latency{border-color:color-mix(in srgb,var(--rose-700) 40%,var(--border));background:var(--rose-50);color:var(--rose-700)}
+.pearson-readout{font:600 22px/1.2 var(--font-mono);font-variant-numeric:tabular-nums}
+.commitment-ladder-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
+.commitment-ladder-grid article{padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
+.state-badge.expiry-90,.state-badge.expiry-60,.state-badge.expiry-30{margin-left:6px;background:var(--amber-50);color:var(--amber-700)}
+.hcl-diff-container{border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--slate-50);margin:14px 0 18px}
+.hcl-diff-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);font:12px var(--font-mono)}
+.hcl-diff-pre{margin:0;padding:14px 0;overflow-x:auto;font:12px/1.65 var(--font-mono)}
+.hcl-line{display:block;padding:0 16px;white-space:pre}
+.hcl-line.added{background:color-mix(in srgb,var(--emerald-50) 80%,transparent);color:var(--emerald-700)}
+@media(max-width:1100px){.topology-split-view,.commitment-ladder-grid{grid-template-columns:1fr}}

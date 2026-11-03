@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "2971d303660fbf1b9f8f6be29ffb8006a1320fb69d51f7b0cc198665bf47f036",
+  "inventory_sha256": "f15033ed6f42f6bf7e4e59112dce5808c995d8ee378e4bfa7dc7811ce6040327",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -691,8 +691,8 @@
     },
     {
       "path": "app/finops_api.py",
-      "sha256": "f659e14f4545f395aa0b22834da157b7e47f1dcd26d235da42e01fd4ffa94b33",
-      "bytes": 10382
+      "sha256": "364a442343f073968543c04af2a0f3176771f126574b7b743f33a38079e44bf2",
+      "bytes": 11098
     },
     {
       "path": "app/finops_autopilot_api.py",
@@ -1056,8 +1056,8 @@
     },
     {
       "path": "app/route_inventory.py",
-      "sha256": "f4dbc42a51e3f2de7fcb58ec870875653b9657e6a89b4ab2be0c8aa5ec0e4caa",
-      "bytes": 14027
+      "sha256": "51108f7ea93e5e3802b2a6f2e6b5edb0cc9270931892597be33ebf445b1804d7",
+      "bytes": 14096
     },
     {
       "path": "app/rule_id_canonical.py",
@@ -3076,8 +3076,8 @@
     },
     {
       "path": "services/gateway.py",
-      "sha256": "5cbd6907ba359702f0c20afd760d230b2b53328652b677661e9f6adc7c9c1fd6",
-      "bytes": 43104
+      "sha256": "640953d40e129bb0a1f567fadbf4b2c6e9c9f5caf5c408aa02c0e66b171043a6",
+      "bytes": 43502
     },
     {
       "path": "services/governance_routes.py",
@@ -3261,8 +3261,8 @@
     },
     {
       "path": "tests/test_commitments.py",
-      "sha256": "87428dbbc273567bb78bad0acf174a19cba254d81f20839df782f8d691476561",
-      "bytes": 11082
+      "sha256": "a158d93f546153a78fd325155064c116f1e40d68b8077f30ed162c3f38ec0c3f",
+      "bytes": 11697
     },
     {
       "path": "tests/test_compose.py",
@@ -3751,8 +3751,8 @@
     },
     {
       "path": "web-dashboard/app/api/[...path]/route.ts",
-      "sha256": "e18f0b8e6ca4024aec9ce3e76feadb5429d97d9e6765ab807af103a54a86fa18",
-      "bytes": 6532
+      "sha256": "2188ea34066e7db3a0decbd8714e484657a738b3a3c0fbf96aff3c7720425025",
+      "bytes": 6586
     },
     {
       "path": "web-dashboard/app/automation/page.tsx",
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "40254493fdc81d0d9c0292ef089d746aad5d5dcb2e8c0a21590321369780866d",
-      "bytes": 24467
+      "sha256": "061b21b1f47c17bda0f72164c5c8a9b7ece0941439eb3e876c8ac888ef8f3589",
+      "bytes": 26635
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3816,8 +3816,8 @@
     },
     {
       "path": "web-dashboard/app/optimization/page.tsx",
-      "sha256": "09bba482d0bace4cb8d372512838b1a9503d4739863621e50d251bc093449175",
-      "bytes": 131
+      "sha256": "51576e31cdf2dac396e3f892c85cffab21ddd6d705bb2981293038a93ad5ac73",
+      "bytes": 180
     },
     {
       "path": "web-dashboard/app/outcomes/page.tsx",
@@ -3871,8 +3871,8 @@
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
-      "sha256": "2657336e1ebc785c18278eb7fea91dadeebec6a05d7d1c50abffabf75adb9df9",
-      "bytes": 24889
+      "sha256": "471ed85f7f864c9c093423b5a559d6df3e9e7d3cfec6c09ee9b135214dbfdec8",
+      "bytes": 25031
     },
     {
       "path": "web-dashboard/components/EvidenceHealth.tsx",
@@ -3881,8 +3881,8 @@
     },
     {
       "path": "web-dashboard/components/GitOpsPanel.tsx",
-      "sha256": "8e2c784a677cba2de736cb09b6d518666dc7fee5dcc0f4d3d9997164d010f5d7",
-      "bytes": 13822
+      "sha256": "f9cfe14161ace0d284f7248df03db03ec6099d5dfd0045624f61cb53458706a6",
+      "bytes": 13953
     },
     {
       "path": "web-dashboard/components/Overview.module.css",
@@ -3926,8 +3926,8 @@
     },
     {
       "path": "web-dashboard/components/agents/AgentWorkspace.tsx",
-      "sha256": "f90abfad8e0dfd33060d7559c5d023ef9698ba676e246fc9a12644eb614df7b8",
-      "bytes": 15476
+      "sha256": "8e3a2f4014ee6a9b3259ecdb0b53430e6a2740d067b06148ef9d94ea13ac31a1",
+      "bytes": 15815
     },
     {
       "path": "web-dashboard/components/agents/agents.css",
@@ -4051,8 +4051,8 @@
     },
     {
       "path": "web-dashboard/components/settings/ObservabilitySettings.tsx",
-      "sha256": "d71387655d9e86f2c1582f8b601397bb160f7a2236ae63292ab2f7665a56c2ce",
-      "bytes": 15705
+      "sha256": "8445f3f8eb53d33eb6b7b3efb0556bca8c531e7abc6c6a0a5f6eeb6a2ca5a349",
+      "bytes": 16331
     },
     {
       "path": "web-dashboard/components/settings/WorkspaceSettings.tsx",
@@ -4246,8 +4246,8 @@
     },
     {
       "path": "web-dashboard/e2e/workspace-fixture.ts",
-      "sha256": "3e10e3a76f3a84ea4af2b68fd374a838e0ee277ef01df38692c993c6940e0467",
-      "bytes": 19444
+      "sha256": "b3e762158ce608e337380de8f2d9ca2aa717f57430aa6e78dc35659bccc7a16b",
+      "bytes": 19431
     },
     {
       "path": "web-dashboard/lib/api.ts",
@@ -4326,8 +4326,8 @@
     },
     {
       "path": "web-dashboard/next-env.d.ts",
-      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
-      "bytes": 288
+      "sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc",
+      "bytes": 296
     },
     {
       "path": "web-dashboard/next.config.ts",

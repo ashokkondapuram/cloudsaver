@@ -222,6 +222,11 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def billing_commitments(row=Depends(allowed),authorization: str=Header()):
         return await forward('GET','scanner','/api/v1/finops/commitments',authorization)
 
+    @app.get('/api/v1/finops/commitment-ladder/preview')
+    async def finops_commitment_ladder(request: Request, row=Depends(allowed), authorization: str = Header()):
+        params = {k: v for k, v in request.query_params.items() if k in ('raw_p10_hr', 'waste_hr', 'existing_hr')}
+        return await forward('GET', 'scanner', '/api/v1/finops/commitment-ladder/preview', authorization, params)
+
     @app.post('/api/v1/gitops/sync-agent')
     @app.post('/api/v1/gitops/preview-and-evaluate')
     async def linked_gitops(request: Request,row=Depends(allowed),authorization: str=Header()):

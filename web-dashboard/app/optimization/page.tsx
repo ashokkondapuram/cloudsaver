@@ -1,2 +1,2 @@
-import {OptimizationWorkspace} from '../../components/V150Views';
-export default function Page(){return <OptimizationWorkspace/>;}
+import {OptimizationEvidenceWorkspace} from '../../components/optimization/OptimizationEvidenceWorkspace';
+export default function Page(){return <OptimizationEvidenceWorkspace/>;}

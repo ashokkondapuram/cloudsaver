@@ -171,3 +171,15 @@ def test_viewer_cannot_read_commitments(evidence,monkeypatch):
         def verify_token(self,token):return UserClaims(user_id=str(uuid4()),tenant_id=TID,roles=[Role.VIEWER])
     with TestClient(create_app(settings,identity_validator=Validator())) as client:
         assert client.get('/api/v1/finops/commitments',headers=AUTH).status_code==403
+
+
+def test_commitment_ladder_preview_never_authorizes_purchase(evidence):
+    settings,_,_=evidence
+    client=TestClient(create_app(settings))
+    response=client.get('/api/v1/finops/commitment-ladder/preview?raw_p10_hr=10&waste_hr=2&existing_hr=1',headers=AUTH)
+    assert response.status_code==200
+    body=response.json()
+    assert body['status']=='computed' and body['purchase_authorized'] is False
+    assert len(body['steps'])==3
+    assert body['baseline']['recommended_new_commitment_hr']=='7'
+    assert client.get('/api/v1/finops/commitment-ladder/preview?raw_p10_hr=bad',headers=AUTH).status_code==422

@@ -82,6 +82,7 @@ ROUTES = {
     ('POST','/api/v1/control-plane/financial-scenarios'):'full_scope',
     ('GET','/api/v1/finops/sync-status'):'full_scope',
     ('GET','/api/v1/finops/commitments'):'full_scope',
+    ('GET','/api/v1/finops/commitment-ladder/preview'):'full_scope',
     ('GET','/api/v1/observability/connectors'):'full_scope',
     ('POST','/api/v1/observability/connectors'):'full_scope',
     ('POST','/api/v1/observability/connectors/test'):'full_scope',

@@ -175,6 +175,20 @@ def create_router(repository, current_tenant):
         )
         return dict(accepted=len(normalized), **persisted)
 
+    @router.get('/commitment-ladder/preview')
+    def commitment_ladder_preview(
+        raw_p10_hr: str = Query(..., pattern=r'^\d+(\.\d+)?$'),
+        waste_hr: str = Query(..., pattern=r'^\d+(\.\d+)?$'),
+        existing_hr: str = Query(..., pattern=r'^\d+(\.\d+)?$'),
+        tenant=Depends(finance),
+    ):
+        from app.autopilot_commitments import commitment_ladder
+        from app.commitment_arbitrage import calculate_clean_commitment_baseline
+
+        baseline = calculate_clean_commitment_baseline(raw_p10_hr, waste_hr, existing_hr)
+        steps = commitment_ladder(raw_p10_hr, waste_hr, existing_hr)
+        return dict(status='computed', purchase_authorized=False, baseline=baseline, steps=steps)
+
     @router.get('/spot-arbitrage/preview')
     def spot_arbitrage_preview(
         unused_commitment_usd_hr: str = Query(..., max_length=32),

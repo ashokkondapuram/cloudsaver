@@ -13,6 +13,7 @@ import './agents.css';
 type Connector={id:string;provider:string;scope_id:string;kind:string;operations:string[];endpoint:string|null};
 type Step={connector_id:string;operation:string;arguments:Record<string,unknown>;purpose:string;verification:string;rollback:string};
 type Task={id:string;resource_id:string;state:string;version:number;created_at:string;payload:{intent:string;plan_hash:string|null;
+  permit_status?:string;
   data_erased?:boolean;data_content_expired?:boolean;
   plan:{summary:string;steps:Step[]}|null;approval:{expires_at:string;actor:string}|null;
   connector_bindings?:Connector[];steps:{state:string;result?:{code:string}}[]};code?:string;
@@ -98,6 +99,7 @@ export function AgentWorkspace(){
     </section></div>
     {selected&&<section className="panel agent-review" aria-label="Agent plan review"><div className="grid-heading"><div><h2>Plan & execution review</h2><p>{selected.id} · version {selected.version} · {labels(selected.state)}</p></div><span className="status-tag">{labels(selected.state)}</span></div><div className="agent-review-body">
       <p className="agent-resource">{selected.resource_id}</p><p>{selected.payload.intent}</p>
+      {selected.payload.permit_status==='ABORTED_STATE_DRIFT'&&<div className="drift-abort-banner" role="alert"><strong>Pre-mutation drift guard</strong><p>Live cloud state diverged from the approved plan digest. Execution was aborted (ABORTED_STATE_DRIFT). Reconcile drift before approving a new plan.</p></div>}
       {!selected.payload.plan?<Notice tone="info">{selected.payload.data_erased||selected.payload.data_content_expired?'AI task content is unavailable under the data-retention policy. Audit hashes and execution outcomes remain; expired instructions cannot be replayed.':selected.state==='failed'?'Planning stopped. Review AI Foundry policy, worker health and token budgets before requesting another draft.':'The gateway is waiting for a worker to draft the plan. No cloud action is approved.'}</Notice>:<>
         {selected.payload.plan.steps.some(s=>s.operation==='gitops.terraform.sync')&&selected.payload.plan_hash&&<IaCPreview taskId={selected.id} planHash={selected.payload.plan_hash}/>}<h3>{selected.payload.plan.summary}</h3><ol className="agent-steps">{selected.payload.plan.steps.map((s,i)=><li key={i}><div><strong>{s.operation}</strong> <span className="status-tag">{labels(selected.payload.steps[i]?.state||'pending')}</span></div><p>{s.purpose}</p><p><strong>Connector:</strong> {s.connector_id}</p><pre>{JSON.stringify(s.arguments,null,2)}</pre><p><strong>Verify:</strong> {s.verification}</p><p><strong>Recovery:</strong> {s.rollback}</p>{selected.payload.steps[i]?.result&&<p>{selected.payload.steps[i].result?.code}</p>}</li>)}</ol>
         {!!selected.payload.connector_bindings?.length&&<details><summary>Approved connector destinations</summary><pre>{JSON.stringify(selected.payload.connector_bindings,null,2)}</pre></details>}

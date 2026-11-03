@@ -99,8 +99,23 @@ export function ObservabilitySettings() {
     if (result.ok) setNotice(`${c.name}: ${result.message}`); else setError(`${c.name}: ${result.message}`);
   });
   const sync = () => run(async () => {
-    await api('/observability/sync', token, {body: {idempotency_key: crypto.randomUUID()}});
+    const result = await api<{poll_url?: string; job_id?: string; status?: string}>(
+      '/observability/sync',
+      token,
+      {body: {idempotency_key: crypto.randomUUID()}},
+    );
     setNotice('Collection queued. Summaries update as each connector finishes.');
+    const pollPath = result.poll_url?.replace('/api/v1', '') || (result.job_id ? `/observability/sync-jobs/${result.job_id}` : null);
+    if (!pollPath) return;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const job = await api<{status: string}>(pollPath, token);
+      if (['completed', 'failed', 'partial', 'cancelled'].includes(job.status)) {
+        await load();
+        setNotice(`Observability sync ${job.status}.`);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
   });
 
   const metrics = draft && (draft.kind === 'prometheus' || draft.kind === 'rest_metrics');
