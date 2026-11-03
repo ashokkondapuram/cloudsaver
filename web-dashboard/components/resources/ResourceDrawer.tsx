@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from 'react';
 import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck, ShieldAlert} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
-import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
+import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type RuleConflict, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
@@ -60,9 +60,28 @@ function Observability({detail}: {detail: ResourceDetail}) {
   </>;
 }
 
+function conflictTone(severity: RuleConflict['severity']): 'error' | 'warning' | 'info' {
+  return severity === 'block' ? 'error' : severity === 'review' ? 'warning' : 'info';
+}
+
 function Rules({detail}: {detail: ResourceDetail}) {
-  return <div className="drawer-section"><h3>Rule evaluations</h3>{!detail.rule_evaluations?.length ? <Notice>This observation has no per-rule evaluation records. No findings doesn’t mean a rule passed.</Notice> : <div className="drawer-card-list">{detail.rule_evaluations.map(rule => <article key={rule.rule_id} className="drawer-card">
-    <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}</small></article>)}</div>}</div>;
+  const matches = detail.rule_matches;
+  const conflicts = detail.rule_conflicts ?? [];
+  const primary = matches?.primary_match;
+  return <div className="drawer-section"><h3>Rules &amp; matching</h3>
+    {conflicts.length > 0 && <div className="rule-conflict-list">{conflicts.map((conflict, index) => <Notice key={`${conflict.kind}:${conflict.rule_id ?? index}`} tone={conflictTone(conflict.severity)}>{conflict.rule_id ? <><strong>{ruleLabel(conflict.rule_id)}</strong> · </> : null}{conflict.message}</Notice>)}</div>}
+    {(primary || (matches?.alternate_matches?.length ?? 0) > 0) && <div className="rule-match-summary">
+      <p className="inline-help">When several rules fire, one primary recommendation is chosen (Turbonomic-style action market). Alternates stay visible but should not be summed with the primary.</p>
+      {primary && <article className="drawer-card rule-match-primary"><header><h4>Primary match · {ruleLabel(primary.rule_id)}</h4><span className="assessment-state risk">{sentence(primary.match_confidence)} confidence</span></header>
+        <dl className="settings-key-values compact"><div><dt>Action</dt><dd>{sentence(primary.action_class)}</dd></div><div><dt>Channel</dt><dd>{label(primary.display_channel)}</dd></div></dl>
+        {(primary.safety_blocks?.length ?? 0) > 0 && <p className="inline-help">Safety: {primary.safety_blocks!.join(', ')}</p>}
+        {(primary.protected_reasons?.length ?? 0) > 0 && <p className="inline-help">Protected: {primary.protected_reasons!.map(sentence).join(', ')}</p>}
+        <small><code>{primary.rule_id}</code></small></article>}
+      {(matches?.alternate_matches?.length ?? 0) > 0 && <div className="rule-alternate-list"><h4 className="rule-alternate-title">Alternate matches</h4><div className="drawer-card-list">{matches!.alternate_matches.map(alt => <article key={alt.rule_id} className="drawer-card rule-match-alternate"><header><h4>{ruleLabel(alt.rule_id)}</h4><span className="assessment-state unknown">{sentence(alt.match_confidence)}</span></header><p className="inline-help">{alt.suppressed_reason ? label(alt.suppressed_reason) : 'Lower rank in action market'}</p><small>{label(alt.display_channel)} · {sentence(alt.action_class)}</small></article>)}</div></div>}
+    </div>}
+    <h4 className="rule-evaluations-title">Per-rule evaluations</h4>
+    {!detail.rule_evaluations?.length ? <Notice>This observation has no per-rule evaluation records. No findings doesn’t mean a rule passed.</Notice> : <div className="drawer-card-list">{detail.rule_evaluations.map(rule => <article key={rule.rule_id} className="drawer-card">
+    <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}{rule.safety_blocks?.length ? ` · Safety: ${rule.safety_blocks.join(', ')}` : ''}</small></article>)}</div>}</div>;
 }
 
 const utcDayOffset = (days: number) => {

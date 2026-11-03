@@ -157,6 +157,15 @@ def _sort_key(resource: dict, evaluation: dict) -> tuple:
     return (family_rank, conf_rank, channel_rank, action_rank, evaluation["rule_id"])
 
 
+def _evaluation_targets_resource(resource: dict, evaluation: dict) -> bool:
+    provider = resource.get("cloud_provider", "azure")
+    rid = resource["resource_id"]
+    eid = evaluation.get("resource_id") or rid
+    if provider == "azure":
+        return eid.lower() == rid.lower()
+    return eid == rid
+
+
 def resolve_resource_matches(
     resource: dict,
     evaluations: list[dict],
@@ -168,7 +177,7 @@ def resolve_resource_matches(
     detected = [
         row
         for row in evaluations
-        if row.get("resource_id") == rid and row.get("outcome") == "condition_detected"
+        if _evaluation_targets_resource(resource, row) and row.get("outcome") == "condition_detected"
     ]
     if not detected:
         return dict(

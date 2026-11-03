@@ -299,15 +299,35 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         state = repo.item_states(tenant['tenant_id'], scan['scan_id']).get(resource_key)
         decision = repo.latest_decisions(tenant['tenant_id'], {resource_key}).get(resource_key)
         followups = repo.followups(tenant['tenant_id'], scan['scan_id'], resource_key)
-        normalize_id = lambda value: value.lower() if assessment['provider'] == 'azure' else value
-        selected_id = normalize_id(assessment['resource_id'])
-        observation = next((row for row in scan.get('inventory', []) if row.get('cloud_provider', 'azure') == assessment['provider']
-                            and normalize_id(row['resource_id']) == selected_id), None)
-        evaluations = [row for row in scan.get('rule_evaluations', []) if row.get('cloud_provider', 'azure') == assessment['provider']
-                       and normalize_id(row['resource_id']) == selected_id]
+        from app.rule_detail import build_resource_rule_detail, evaluations_for_resource, normalize_resource_id
+
+        provider = assessment['provider']
+        selected_id = normalize_resource_id(provider, assessment['resource_id'])
+        observation = next(
+            (
+                row
+                for row in scan.get('inventory') or []
+                if row.get('cloud_provider', 'azure') == provider
+                and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
+            ),
+            None,
+        )
+        evaluations = evaluations_for_resource(
+            scan.get('rule_evaluations') or [],
+            provider=provider,
+            resource_id=assessment['resource_id'],
+        )
         groups = {row['opportunity_group_id'] for row in findings if row.get('opportunity_group_id')}
+        opportunity_group_id = next(iter(groups), None) if len(groups) == 1 else None
+        rule_detail = build_resource_rule_detail(
+            assessment,
+            findings,
+            evaluations,
+            observation,
+            opportunity_group_id=opportunity_group_id,
+        )
         overlaps = [dict(resource_id=row['resource_id'], resource_name=row.get('resource_name'), rule_id=row['rule_id'])
-                    for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_id(row['resource_id']) != selected_id]
+                    for row in scan['findings'] if row.get('opportunity_group_id') in groups and normalize_resource_id(provider, row['resource_id']) != selected_id]
         from app.pricing import opportunity_totals
         from app.financial_balance import resource_financial_balance
         billed_currency = assessment.get('currency')
@@ -347,6 +367,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     analysis_readiness=obs_evidence.get('analysis_readiness'),
                     evidence_schema_version=obs_evidence.get('evidence_schema_version') or (observation or {}).get('evidence_schema_version'),
                     rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
+                    rule_matches=rule_detail['rule_matches'],
+                    rule_conflicts=rule_detail['rule_conflicts'],
+                    reconciliation_status=rule_detail.get('reconciliation_status'),
                     action_items=action_items,
                     observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
                                         if r.get('evidence', {}).get('observed_signals')), None))

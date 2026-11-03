@@ -37,6 +37,9 @@ export type Followup = {id: string; question: string; created_at: string; answer
 export type AIResult = {model: string; target_id: string; warning: string; cached?: boolean; usage?: {input_tokens: number | null; output_tokens: number | null};
   confidence_band?: string;
   advice: {summary: string; risk_level: string; pillars: {pillar: string; observation: string; evidence_codes: string[]}[]; review_questions: string[]; recommended_actions?: Action[];}};
+export type RuleMatchRow = {rule_id: string; display_channel: string; action_class: string; match_confidence: string; safety_blocks?: string[]; protected_reasons?: string[]; suppressed_reason?: string};
+export type RuleMatches = {resource_id: string; cloud_provider: string; primary_match: RuleMatchRow | null; alternate_matches: RuleMatchRow[]; opportunity_group_id?: string | null; overlap_policy: string; strategy_version?: string};
+export type RuleConflict = {kind: 'source_reconciliation' | 'finding_without_evaluation' | 'outcome_mismatch' | 'evaluation_without_finding'; severity: 'block' | 'review' | 'info'; rule_id: string | null; message: string};
 export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; findings: Finding[]; ai_context: Record<string, unknown>; ai: AIState;
   ai_result: AIResult | null; decision: Decision | null; followups: Followup[]; followups_remaining: number;
   analysis_readiness?: {configuration?: string; configuration_observed?: number; configuration_total?: number; telemetry_pending_rule_ids?: string[]};
@@ -44,7 +47,10 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
   evidence_schema_version?: string | null;
   observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;analysis_readiness?:{configuration?:string;configuration_observed?:number;configuration_total?:number;telemetry_pending_rule_ids?:string[]}};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
-  rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean}[];
+  rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean; safety_blocks?: string[]}[];
+  rule_matches?: RuleMatches;
+  rule_conflicts?: RuleConflict[];
+  reconciliation_status?: string | null;
   costs?: {
     billed_cost_usd: number | null;
     effective_cost_usd?: number | null;
