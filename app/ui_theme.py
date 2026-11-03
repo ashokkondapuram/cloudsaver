@@ -1,7 +1,7 @@
 """Workspace UI theme presets assigned by the platform operator per client workspace."""
 from uuid import UUID
 
-UI_THEME_PRESETS = ('console', 'midnight-neu')
+UI_THEME_PRESETS = ('console', 'midnight-neu', 'aurora-glass')
 DEFAULT_UI_THEME_PRESET = 'console'
 
 

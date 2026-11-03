@@ -1,0 +1,57 @@
+/* Semantic tokens every preset must define. Components consume --surface, --text, etc. */
+html[data-ui-preset=console]{--ui-accent-ring:var(--indigo-600)}
+
+html[data-ui-preset=midnight-neu]{
+  color-scheme:dark;
+  --ui-canvas:#05060c;
+  --ui-accent:#00b4ff;
+  --ui-accent-soft:#38bdf8;
+  --ui-accent-glow:#0080ff59;
+  --ui-accent-ring:#00b4ff;
+  --neu-dark:#030408;
+  --neu-light:#141c2e;
+  --ui-neu-raised:12px 12px 28px var(--neu-dark),-10px -10px 24px var(--neu-light),inset 0 1px 0 #ffffff08;
+  --ui-neu-inset:inset 5px 5px 12px var(--neu-dark),inset -4px -4px 10px var(--neu-light);
+  --ui-neu-inset-soft:inset 3px 3px 8px var(--neu-dark),inset -3px -3px 8px var(--neu-light);
+  --ui-surface-fill:linear-gradient(145deg,#0d121f,#090d16);
+  --ui-chrome-fill:linear-gradient(145deg,#0b101a,#070a12);
+  --ui-primary-fill:linear-gradient(145deg,#00c3ff,#0077e6);
+  --ui-canvas-glow:radial-gradient(1200px 600px at 15% -10%,#0c2844,var(--ui-canvas));
+  --slate-900:#e8eef9;--slate-700:#c5d0e3;--slate-500:#8b9bb8;
+  --slate-100:#141c2e;--slate-50:var(--ui-canvas);--surface:#0a0e18;--elevated:#101827;
+  --border:#1a2438;--divider:#152033;--text:#e8eef9;--muted:#8fa0be;
+  --indigo-600:var(--ui-accent-soft);--indigo-50:#0c2a45;--primary-fill:#009dff;--primary-hover:#0077cc;
+  --emerald-700:#5eead4;--emerald-50:#0a2e2a;--amber-700:#fde047;--amber-50:#2a2410;
+  --rose-700:#fb7185;--rose-50:#2a1520;
+  --chart-grid:#1a2438;--chart-line:var(--ui-accent);--chart-muted:#8fa0be;--known:#5eead4;--risk:#fb7185;
+  --experience-shadow:var(--ui-neu-raised);
+}
+
+html[data-ui-preset=aurora-glass]{
+  color-scheme:dark;
+  --ui-canvas:#030712;
+  --ui-accent:#22d3ee;
+  --ui-accent-soft:#a78bfa;
+  --ui-accent-glow:#22d3ee44;
+  --ui-accent-ring:#22d3ee;
+  --ui-glass-fill:color-mix(in srgb,#0f172a 68%,transparent);
+  --ui-glass-border:color-mix(in srgb,var(--ui-accent) 28%,#334155);
+  --ui-glass-blur:18px;
+  --ui-primary-fill:linear-gradient(135deg,#06b6d4,#7c3aed);
+  --ui-canvas-glow:
+    radial-gradient(900px 520px at 8% -5%,#4c1d9566,transparent),
+    radial-gradient(720px 420px at 92% 8%,#0ea5e955,transparent),
+    radial-gradient(640px 520px at 50% 105%,#7c3aed44,transparent),
+    var(--ui-canvas);
+  --slate-900:#eef2ff;--slate-700:#cbd5e1;--slate-500:#94a3b8;
+  --slate-100:#1e1b4b66;--slate-50:#030712;--surface:#0f172a99;--elevated:#1e1b4b88;
+  --border:var(--ui-glass-border);--divider:#312e8144;--text:#eef2ff;--muted:#a5b4fc;
+  --indigo-600:#a78bfa;--indigo-50:#312e8188;--primary-fill:#0891b2;--primary-hover:#7c3aed;
+  --emerald-700:#6ee7b7;--emerald-50:#064e3b88;--amber-700:#fcd34d;--amber-50:#78350f88;
+  --rose-700:#fda4af;--rose-50:#88133788;
+  --chart-grid:#312e8166;--chart-line:#22d3ee;--chart-muted:#a5b4fc;--known:#6ee7b7;--risk:#fda4af;
+  --experience-shadow:0 8px 32px #00000055,0 0 0 1px color-mix(in srgb,var(--ui-accent) 18%,transparent);
+}
+
+html[data-ui-preset=midnight-neu] body,
+html[data-ui-preset=aurora-glass] body{background:var(--ui-canvas-glow)}

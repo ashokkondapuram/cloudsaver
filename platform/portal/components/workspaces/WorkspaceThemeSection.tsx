@@ -4,7 +4,7 @@ import {useEffect, useState} from 'react';
 import {Loader2, Palette} from 'lucide-react';
 import {ApiError, errorMessage, portal} from '../../lib/api';
 import type {Workspace} from '../../lib/types';
-import {UI_THEME_LABELS, UI_THEME_PRESETS, type UiThemePreset} from '../../lib/ui-theme';
+import {UI_THEME_LABELS, UI_THEME_META, UI_THEME_PRESETS, type UiThemePreset} from '../../lib/ui-theme';
 import {useSession} from '../SessionProvider';
 import {Notice, SectionTitle} from '../ui/shared';
 
@@ -54,7 +54,7 @@ export function WorkspaceThemeSection({workspace, onChange}: Props) {
           aria-pressed={active} onClick={() => {setPreset(id); void save(id);}}>
           <span className={`theme-swatch theme-swatch-${id.replace(/[^a-z0-9]+/g, '-')}`} aria-hidden><Palette size={18}/></span>
           <strong>{UI_THEME_LABELS[id]}</strong>
-          <small>{id === 'midnight-neu' ? 'Midnight black, electric blue accents, soft neumorphic panels.' : 'Default slate console with light/dark toggle.'}</small>
+          <small>{UI_THEME_META[id].description}</small>
         </button>;
       })}
     </div>

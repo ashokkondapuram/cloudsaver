@@ -8,7 +8,7 @@ import {useWorkspace} from './WorkspaceProvider';
 export function UiThemeApplier() {
   const {workspace} = useWorkspace();
   useLayoutEffect(() => {
-    applyUiThemePreset(workspace?.ui_theme_preset);
+    applyUiThemePreset(workspace?.ui_theme_preset ?? 'console');
   }, [workspace?.ui_theme_preset, workspace?.tenant_id]);
   return null;
 }

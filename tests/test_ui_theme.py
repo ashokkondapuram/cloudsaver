@@ -13,6 +13,7 @@ from app.tenant_registry import normalize_platform
 
 def test_normalize_ui_theme_preset():
     assert normalize_ui_theme_preset('midnight-neu') == 'midnight-neu'
+    assert normalize_ui_theme_preset('aurora-glass') == 'aurora-glass'
     assert normalize_ui_theme_preset('console') == 'console'
     with pytest.raises(ValueError, match='supported'):
         normalize_ui_theme_preset('neon')

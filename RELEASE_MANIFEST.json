@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "6bb9b351e8dac1628724e97791c1d5f842e5f965e3f9f45cb5dff775bece16e1",
+  "inventory_sha256": "79ce1653b7a554128cee2302fb33b0ee843e4bda494d7ce525c2b33af9230968",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0016_workspace_ui_themes"
@@ -1200,6 +1200,11 @@
       "bytes": 4105
     },
     {
+      "path": "app/ui_theme.py",
+      "sha256": "07b290d9ae491f40708a98a9f08e53c11977ac4938804e9ed020c4056b69e1b2",
+      "bytes": 1679
+    },
+    {
       "path": "app/unit_economics.py",
       "sha256": "f5313f623e0e96f39219f95ea4659fdfdcfe0eed593a704642dda93f5a44e5a1",
       "bytes": 1734
@@ -2260,6 +2265,11 @@
       "bytes": 3158
     },
     {
+      "path": "platform/identity/ui_theme.py",
+      "sha256": "861dfa97ec8409e969af2aaefa33227b707ac4c103050fd84ac90fc348a15cda",
+      "bytes": 1736
+    },
+    {
       "path": "platform/identity/usage.py",
       "sha256": "fe7532201f7562be0f4fbb1906595f462d38fbe7fba154faf90e7b427389bb6b",
       "bytes": 2973
@@ -2357,6 +2367,11 @@
     {
       "path": "platform/identity_migrations/versions/i0015_cloudsaver_integration.py",
       "sha256": "a0e60534b22ddeff137790f942ffa8a61d38b216bba8a051209ee15f07df7e45",
+      "bytes": 552
+    },
+    {
+      "path": "platform/identity_migrations/versions/i0016_workspace_ui_themes.py",
+      "sha256": "a884bc2cb922badaa2cd562daf49da0d636af41e8382ea93d74dc8336439e4dd",
       "bytes": 552
     },
     {
@@ -2471,8 +2486,8 @@
     },
     {
       "path": "platform/portal/app/globals.css",
-      "sha256": "5424a9977c2e601d0019201a4310216659830ec1372ce06fe89d22f92fa0f2cb",
-      "bytes": 30405
+      "sha256": "62552e2c23da3344207b6053b20f71b8bb248a0fd34fbddcb295d31d56deb65c",
+      "bytes": 30536
     },
     {
       "path": "platform/portal/app/health/live/route.ts",
@@ -2745,6 +2760,11 @@
       "bytes": 1988
     },
     {
+      "path": "platform/portal/components/workspaces/WorkspaceThemeSection.tsx",
+      "sha256": "ca2bac1ffc73e0412caa059088343c1c1dd69f6d272a01e2cd637b3593a9c9f3",
+      "bytes": 2809
+    },
+    {
       "path": "platform/portal/e2e/portal.spec.ts",
       "sha256": "684c1e424e6c53823a13b7dfa4967b25dc0aed59215971ff9e3659a543845b17",
       "bytes": 12275
@@ -2811,8 +2831,13 @@
     },
     {
       "path": "platform/portal/lib/types.ts",
-      "sha256": "a7ee66e13bd8f9f9016273f20c9d87ff27807dffbc658b3706233dc1ae8f72ef",
-      "bytes": 9767
+      "sha256": "4a445dd16f3d83b4452e3a2ccd5ce1641ee650b2c600dd60ac431e3b9effb997",
+      "bytes": 9784
+    },
+    {
+      "path": "platform/portal/lib/ui-theme.ts",
+      "sha256": "46f9c90b26519425a72bd910c99bb4bed5660c9341f301edc20d2e8875f48d71",
+      "bytes": 826
     },
     {
       "path": "platform/portal/lib/useLoad.ts",
@@ -3700,6 +3725,11 @@
       "bytes": 2114
     },
     {
+      "path": "tests/test_ui_theme.py",
+      "sha256": "a580a4e69812f5fee3f8bf0f3e18942673d5fe40555882ff7ae7f503a5ef75fd",
+      "bytes": 1602
+    },
+    {
       "path": "tests/test_unit_economics.py",
       "sha256": "a148ac442ac5b276d656c091ae562c8d9c40e8cb33e7c64050d14d34793a4754",
       "bytes": 1381
@@ -3851,8 +3881,8 @@
     },
     {
       "path": "web-dashboard/app/layout.tsx",
-      "sha256": "c936ca045e724f868dfa885b080eb4c600cdce42b42de125a39ab0b651d0fb56",
-      "bytes": 918
+      "sha256": "3ff7858c6184158f763213ce9dd6c088ac3e770a8414f11bc781a19b8c3fb672",
+      "bytes": 1030
     },
     {
       "path": "web-dashboard/app/optimization/page.tsx",
@@ -3888,6 +3918,21 @@
       "path": "web-dashboard/app/settings/page.tsx",
       "sha256": "e82313b18d189d053bd40c497c6aa2f4a504d945543aaa875591b298ceb4a0d8",
       "bytes": 129
+    },
+    {
+      "path": "web-dashboard/app/theme-preset-dark.css",
+      "sha256": "01a6ec57188d726c68fb117ff0a0ed6989702437a8b4d88c6c9c32790ae66446",
+      "bytes": 4814
+    },
+    {
+      "path": "web-dashboard/app/theme-surfaces.css",
+      "sha256": "51944ca615af047a553257acb1a0e3d1d6cd2f8b93ba61c0d6f5009f100d7857",
+      "bytes": 6170
+    },
+    {
+      "path": "web-dashboard/app/theme-tokens.css",
+      "sha256": "d0e588c4c41a2f1aa77c9725c32a18331003e521306359d0b5e4e174801a7d6f",
+      "bytes": 2982
     },
     {
       "path": "web-dashboard/app/workloads/page.tsx",
@@ -3946,8 +3991,13 @@
     },
     {
       "path": "web-dashboard/components/ThemeProvider.tsx",
-      "sha256": "c3fba1c1d8b626bf92080eea83d6e058a13b1b3d8437f60fda3b22fc170c8022",
-      "bytes": 1213
+      "sha256": "10c7cb0802300f0faf0f93ebbfbb695ef5780d13a8461652968d97e7730a37e5",
+      "bytes": 2133
+    },
+    {
+      "path": "web-dashboard/components/UiThemeApplier.tsx",
+      "sha256": "16aa2c7020b3a3cb2f1b646fed5f1cd41b74e1c8a2398b5e4bd06854aee03935",
+      "bytes": 483
     },
     {
       "path": "web-dashboard/components/V150Views.tsx",
@@ -4461,8 +4511,13 @@
     },
     {
       "path": "web-dashboard/lib/types.ts",
-      "sha256": "00d05c6db8b1815959de51cdc37262cac66fc71d0a05389b3ca4fd35100faeb2",
-      "bytes": 6821
+      "sha256": "2a0db273953cfa54b1f5fd8bc8403d23ec95d3b0c88327e53e4961e595522ed9",
+      "bytes": 6838
+    },
+    {
+      "path": "web-dashboard/lib/ui-theme.ts",
+      "sha256": "3c1a325b07f0f6009482d61d3a7111c2ec691560267febbd8cd5e57dca631812",
+      "bytes": 1979
     },
     {
       "path": "web-dashboard/lib/useUnsavedPolicy.ts",

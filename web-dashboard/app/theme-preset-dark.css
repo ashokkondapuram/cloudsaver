@@ -1,0 +1,100 @@
+/* Preset-specific fixes for rules in console-theme.css that hard-code slate dark colors. */
+html[data-ui-preset=midnight-neu][data-theme=dark] :is(
+  .nav-link,.nav-link>svg
+){color:var(--muted)}
+html[data-ui-preset=midnight-neu][data-theme=dark] .nav-link small{
+  background:color-mix(in srgb,var(--ui-accent) 22%,var(--surface));
+  color:var(--ui-accent-soft);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .state-badge.review-required{color:var(--ui-accent-soft)}
+html[data-ui-preset=midnight-neu][data-theme=dark] .notice{
+  background:color-mix(in srgb,var(--ui-accent) 12%,var(--surface));
+  border-color:color-mix(in srgb,var(--ui-accent) 35%,var(--border));
+  color:var(--ui-accent-soft);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .active-filters>button{
+  background:color-mix(in srgb,var(--ui-accent) 15%,var(--surface));
+  color:var(--ui-accent-soft);
+  border-color:color-mix(in srgb,var(--ui-accent) 40%,var(--border));
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .metric-icon{
+  background:color-mix(in srgb,var(--ui-accent) 12%,var(--surface));
+  color:var(--ui-accent-soft);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .allocation-banner{
+  background:linear-gradient(110deg,color-mix(in srgb,var(--ui-accent) 10%,var(--surface)),var(--surface));
+  border-color:color-mix(in srgb,var(--ui-accent) 25%,var(--border));
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .allocation-banner>span{
+  background:var(--ui-chrome-fill,var(--surface));
+  border-color:var(--border);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .count-badge{
+  background:color-mix(in srgb,var(--ui-accent) 18%,var(--surface));
+  color:var(--ui-accent-soft);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .bulk-toolbar{
+  background:var(--ui-chrome-fill,var(--elevated));
+  border-color:var(--border);
+  box-shadow:var(--ui-neu-raised);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .login-story{background:#03050a}
+html[data-ui-preset=midnight-neu][data-theme=dark] .login-story .brand-symbol{background:var(--ui-primary-fill)}
+
+html[data-ui-preset=aurora-glass][data-theme=dark] :is(.nav-link,.nav-link>svg){color:var(--muted)}
+html[data-ui-preset=aurora-glass][data-theme=dark] .nav-link.active{
+  color:var(--ui-accent-soft);
+  background:color-mix(in srgb,var(--ui-accent) 14%,transparent);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .nav-link small{
+  background:color-mix(in srgb,var(--ui-accent-soft) 25%,transparent);
+  color:var(--text);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .notice{
+  background:color-mix(in srgb,var(--ui-accent) 10%,transparent);
+  border-color:var(--ui-glass-border);
+  color:var(--ui-accent-soft);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .active-filters>button,
+html[data-ui-preset=aurora-glass][data-theme=dark] .command-results button.selected{
+  background:color-mix(in srgb,var(--ui-accent-soft) 20%,transparent);
+  color:var(--text);
+  border-color:var(--ui-glass-border);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .metric-icon{
+  background:color-mix(in srgb,var(--ui-accent) 15%,transparent);
+  color:var(--ui-accent);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .provider-azure{
+  background:color-mix(in srgb,#2563eb 22%,transparent);
+  border-color:color-mix(in srgb,#2563eb 35%,transparent);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .bulk-toolbar{
+  background:var(--ui-glass-fill);
+  backdrop-filter:blur(var(--ui-glass-blur));
+  border-color:var(--ui-glass-border);
+}
+html[data-ui-preset=aurora-glass][data-theme=dark] .count-badge{
+  background:color-mix(in srgb,var(--ui-accent-soft) 22%,transparent);
+  color:var(--text);
+}
+
+html[data-ui-preset=midnight-neu][data-theme=dark] .provider-pills button[aria-pressed=true],
+html[data-ui-preset=midnight-neu][data-theme=dark] .category-pills button[aria-pressed=true],
+html[data-ui-preset=aurora-glass][data-theme=dark] .provider-pills button[aria-pressed=true],
+html[data-ui-preset=aurora-glass][data-theme=dark] .category-pills button[aria-pressed=true]{
+  background:color-mix(in srgb,var(--ui-accent) 16%,var(--surface));
+  border-color:var(--ui-accent-ring);
+  color:var(--ui-accent-soft,var(--text));
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .explorer-quick-views,
+html[data-ui-preset=aurora-glass][data-theme=dark] .explorer-quick-views{
+  background:color-mix(in srgb,var(--ui-accent) 6%,var(--slate-50));
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .radar-area,
+html[data-ui-preset=aurora-glass][data-theme=dark] .radar-area{
+  fill:color-mix(in srgb,var(--ui-accent) 20%,transparent);
+  stroke:var(--ui-accent);
+}
+html[data-ui-preset=midnight-neu][data-theme=dark] .radar-center,
+html[data-ui-preset=aurora-glass][data-theme=dark] .radar-center{fill:var(--ui-accent)}

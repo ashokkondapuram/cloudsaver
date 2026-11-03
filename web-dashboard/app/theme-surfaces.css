@@ -1,0 +1,116 @@
+/* Applies preset surface physics to every card, chrome, and input shell in the dashboard. */
+html[data-ui-surface=neumorphic] :is(
+  .panel,.metric-card,.metric-featured,.explorer-summary article,.resource-summary article,
+  .evidence-radar,.telemetry-metrics article,.cloud-account,.integration-grid>article,
+  .automation-principles>div,.reliability-metrics>div,.identity-grid article,.settings-fieldset,
+  .workspace-evidence-context,.observation-summary>div,.drawer-cost-grid>article,.upload-zone,
+  .policy-issues article,.delivery-audit,.billing-details,.observed-tags-grid>div,.rule-change-list li,
+  .recommended-actions>li,.empty-icon,.history-icon,.review-icon,.resource-symbol,.explorer-metric-icon,
+  .scan-provider-options label,.review-resource-picker,.review-selection,.code-preview-empty,
+  .integration-placeholder,.evidence-unavailable,.menu-surface,.dialog-surface,.toast,.segmented-control,
+  .allocation-banner,.billing-plan,.workspace-progress,.batch-banner,.settings-key-values,.subscription-list>div,
+  .package-files details,.publish-package,.policy-decision,.finding-navigation,.drawer-tabs,
+  .command-dialog .command-search,.active-filters>button,.pin-control.pinned,.priority-list>button,
+  .scan-history-list>button,.checklist-item,.donut-center,.metric-icon,.login-connect
+){
+  background:var(--ui-surface-fill,var(--surface));
+  border-color:var(--border);
+  box-shadow:var(--ui-neu-raised);
+}
+html[data-ui-surface=neumorphic] :is(
+  .sidebar,.topbar,.scope-toolbar,.finding-drawer-header,.grid-footer,.bulk-toolbar,.app-footer
+){
+  background:var(--ui-chrome-fill,var(--surface));
+  border-color:var(--border);
+  box-shadow:var(--ui-neu-raised);
+}
+html[data-ui-surface=neumorphic] :is(
+  input[type=text],input[type=password],input[type=search],select,textarea,.credential-input,
+  .command-trigger,.grid-search,.inline-search input,.rule-catalog-filters :is(input,select)
+){
+  background:var(--ui-chrome-fill,var(--surface));
+  box-shadow:var(--ui-neu-inset);
+  border-color:var(--border);
+}
+html[data-ui-surface=neumorphic] .button.primary{
+  background:var(--ui-primary-fill,var(--primary-fill));
+  border-color:color-mix(in srgb,var(--ui-accent) 70%,#000);
+  box-shadow:0 0 22px var(--ui-accent-glow),6px 6px 14px #00000055,-4px -4px 12px #1a284055;
+  color:#fff;
+}
+html[data-ui-surface=neumorphic] .button.secondary{
+  background:var(--ui-chrome-fill,var(--surface));
+  box-shadow:var(--ui-neu-inset-soft);
+}
+html[data-ui-surface=neumorphic] .brand-symbol{
+  background:var(--ui-primary-fill,var(--primary-fill));
+  box-shadow:0 0 20px var(--ui-accent-glow),4px 4px 10px #0006;
+}
+html[data-ui-surface=neumorphic] .nav-link.active{
+  color:var(--ui-accent);
+  background:linear-gradient(145deg,#0f2a44,#0a1828);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 35%,transparent),0 0 18px var(--ui-accent-glow);
+}
+html[data-ui-surface=neumorphic] .nav-link:hover:not(.active){
+  background:linear-gradient(145deg,#121a2a,#0a0f18);
+  box-shadow:var(--ui-neu-inset-soft);
+}
+html[data-ui-surface=neumorphic] .page-heading .eyebrow,
+html[data-ui-surface=neumorphic] .text-link{color:var(--ui-accent-soft,var(--indigo-600))}
+html[data-ui-surface=neumorphic] .data-table tr.row-selected{background:color-mix(in srgb,var(--ui-accent) 12%,var(--surface))}
+html[data-ui-surface=neumorphic] .login-story{background:#03050a}
+html[data-ui-surface=neumorphic] .dialog::backdrop{background:#000000a8;backdrop-filter:blur(4px)}
+
+html[data-ui-surface=glass] :is(
+  .panel,.metric-card,.metric-featured,.explorer-summary article,.resource-summary article,
+  .evidence-radar,.telemetry-metrics article,.cloud-account,.integration-grid>article,
+  .automation-principles>div,.reliability-metrics>div,.identity-grid article,.settings-fieldset,
+  .workspace-evidence-context,.observation-summary>div,.drawer-cost-grid>article,.upload-zone,
+  .policy-issues article,.delivery-audit,.billing-details,.observed-tags-grid>div,.rule-change-list li,
+  .recommended-actions>li,.empty-icon,.history-icon,.review-icon,.resource-symbol,.explorer-metric-icon,
+  .scan-provider-options label,.review-resource-picker,.review-selection,.menu-surface,.dialog-surface,
+  .toast,.segmented-control,.allocation-banner,.batch-banner,.sidebar,.topbar,.scope-toolbar,
+  .finding-navigation,.command-dialog .command-search,.login-connect
+){
+  background:var(--ui-glass-fill);
+  border-color:var(--ui-glass-border);
+  box-shadow:var(--experience-shadow);
+  backdrop-filter:blur(var(--ui-glass-blur)) saturate(140%);
+  -webkit-backdrop-filter:blur(var(--ui-glass-blur)) saturate(140%);
+}
+html[data-ui-surface=glass] :is(
+  input[type=text],input[type=password],input[type=search],select,textarea,.credential-input,
+  .command-trigger,.grid-search,.rule-catalog-filters :is(input,select)
+){
+  background:color-mix(in srgb,var(--ui-glass-fill) 85%,#00000033);
+  border-color:var(--ui-glass-border);
+  backdrop-filter:blur(12px);
+}
+html[data-ui-surface=glass] .button.primary{
+  background:var(--ui-primary-fill);
+  border-color:transparent;
+  box-shadow:0 0 24px var(--ui-accent-glow),0 8px 24px #00000066;
+  color:#fff;
+}
+html[data-ui-surface=glass] .brand-symbol{
+  background:var(--ui-primary-fill);
+  box-shadow:0 0 28px var(--ui-accent-glow);
+}
+html[data-ui-surface=glass] .nav-link.active{
+  color:var(--ui-accent-soft);
+  background:color-mix(in srgb,var(--ui-accent) 16%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ui-accent) 40%,transparent);
+}
+html[data-ui-surface=glass] .page-heading .eyebrow{color:var(--ui-accent)}
+html[data-ui-surface=glass] .text-link{color:var(--ui-accent-soft)}
+html[data-ui-surface=glass] .explorer-quick-views,
+html[data-ui-surface=glass] .finding-navigation,
+html[data-ui-surface=glass] .data-table th{background:color-mix(in srgb,var(--ui-glass-fill) 90%,#00000022)}
+html[data-ui-surface=glass] .dialog::backdrop{background:#02061799;backdrop-filter:blur(8px)}
+html[data-ui-surface=glass] .login-story{
+  background:linear-gradient(160deg,#1e1b4bcc,#030712);
+  backdrop-filter:blur(20px);
+}
+
+html[data-ui-surface=neumorphic] .panel,
+html[data-ui-surface=glass] .panel{box-shadow:var(--experience-shadow)}

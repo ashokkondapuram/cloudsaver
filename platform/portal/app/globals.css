@@ -239,6 +239,7 @@ html[data-theme=dark] .signin-page{background:radial-gradient(900px 480px at 50%
 .theme-swatch{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:1px solid var(--border);margin-bottom:4px}
 .theme-swatch-console{background:linear-gradient(145deg,#f8fafc,#e2e8f0);color:#4f46e5}
 .theme-swatch-midnight-neu{background:linear-gradient(145deg,#05060c,#0a0e18);color:#00b4ff;box-shadow:inset 4px 4px 10px #000,inset -3px -3px 8px #1a2438}
+.theme-swatch-aurora-glass{background:linear-gradient(135deg,#4c1d95,#0ea5e9,#030712);color:#a78bfa;box-shadow:0 0 16px #22d3ee44}
 
 /* Responsive behavior */
 @media(max-width:1100px){.page-content{padding:28px 24px}.topbar{padding:0 24px}.current-page{display:none}.session-role{display:none}}
