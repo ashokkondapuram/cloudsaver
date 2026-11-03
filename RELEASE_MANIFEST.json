@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "1a179ca65748ed7aea9a2c2be29593015602978780e2236c60d38bec4f5a6f9a",
+  "inventory_sha256": "72d4b4830c2c6056cc4389a66ce9e66cc3b76a587d56ab6748b448f08b2bb778",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3766,8 +3766,8 @@
     },
     {
       "path": "web-dashboard/app/console-theme.css",
-      "sha256": "1ea9aca6e302ce9160e9826d58f7941ea716f2d508f13231b14cd3a0e7257716",
-      "bytes": 28018
+      "sha256": "5d9d89ce57d48a8071a6afa00f0683e6e1d41702c9160436fbff750dda888d67",
+      "bytes": 30433
     },
     {
       "path": "web-dashboard/app/docs/[...path]/page.tsx",
@@ -3971,8 +3971,8 @@
     },
     {
       "path": "web-dashboard/components/governance/ControlPlanePlansPanel.tsx",
-      "sha256": "21f9e095d323f2d6f074b67dd3ffae99f4ffb65f3e1970abd17664999bc14f7b",
-      "bytes": 7429
+      "sha256": "47b6b82b7165fdfe88dc09ca80306fcaf14e15c7894a9a8a5c7751d9be534408",
+      "bytes": 10502
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
@@ -4051,8 +4051,8 @@
     },
     {
       "path": "web-dashboard/components/settings/AIFoundryConfigurationEditor.tsx",
-      "sha256": "f6728a960dad20bafb1bb5d0950cc522e495a47d30fc8e03c06556a1eb76af56",
-      "bytes": 12846
+      "sha256": "f1e33fbf880685e8da6772583c7d87fb335e624bc692376d0dda9d35c90ac132",
+      "bytes": 13370
     },
     {
       "path": "web-dashboard/components/settings/AccessSettings.tsx",
@@ -4130,9 +4130,19 @@
       "bytes": 6363
     },
     {
+      "path": "web-dashboard/e2e/commitment-expiry-badges.spec.ts",
+      "sha256": "002db6ec36fb38a596797853ce9fca0192160f7ba9a2e2a4d05dbfa539cf064a",
+      "bytes": 1337
+    },
+    {
       "path": "web-dashboard/e2e/console-experience.spec.ts",
       "sha256": "60bf0a9be5636792fdd6b9af53d1fb6b7af8a830d9f21e7370a32bd5c49fdf95",
       "bytes": 8138
+    },
+    {
+      "path": "web-dashboard/e2e/control-plane-human-approval.spec.ts",
+      "sha256": "f589faf757ac20d77a94d4eb415b23fdd2a5afae31e9789c536fa729b13881c7",
+      "bytes": 3167
     },
     {
       "path": "web-dashboard/e2e/control-plane-safety-firewall.spec.ts",
@@ -4143,6 +4153,11 @@
       "path": "web-dashboard/e2e/data-governance.spec.ts",
       "sha256": "2c5258df5cd38d3437ea37fd224eb34ef5683b4b1b614b197126708d6f6b9e4f",
       "bytes": 4985
+    },
+    {
+      "path": "web-dashboard/e2e/declared-workloads-if-match.spec.ts",
+      "sha256": "9833b040e42a74d2f64421328e28537e0590d6b8b6e3cc515f7dfaae2e0db0ac",
+      "bytes": 1459
     },
     {
       "path": "web-dashboard/e2e/detail-regression.spec.ts",
@@ -4168,6 +4183,11 @@
       "path": "web-dashboard/e2e/enterprise.spec.ts",
       "sha256": "89470c76ffbada993ae89ce1bd54c5fa0e26a3198c1cde3f4898bed626a0c76f",
       "bytes": 5029
+    },
+    {
+      "path": "web-dashboard/e2e/financial-scenario-absorption.spec.ts",
+      "sha256": "f8752ecb514ef18c8a8f5fedcbf8e7316cd5e22ee2ad7257afe3f2d82d59f4ae",
+      "bytes": 2154
     },
     {
       "path": "web-dashboard/e2e/foundry-fixture.ts",

@@ -8,6 +8,16 @@ import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
 const STEPS = ['draft', 'evidence_required', 'assessed', 'review_requested', 'approved'] as const;
+const NEXT_STATE: Partial<Record<(typeof STEPS)[number], (typeof STEPS)[number]>> = {
+  draft: 'evidence_required',
+  evidence_required: 'assessed',
+  assessed: 'review_requested',
+};
+
+function stepIndex(state: string) {
+  const idx = STEPS.indexOf(state as (typeof STEPS)[number]);
+  return idx < 0 ? 0 : idx;
+}
 
 export function ControlPlanePlansPanel() {
   const {token, canAdmin, workspace} = useWorkspace();
@@ -20,6 +30,7 @@ export function ControlPlanePlansPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [revision, setRevision] = useState(0);
+  const [approvalAck, setApprovalAck] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,6 +99,27 @@ export function ControlPlanePlansPanel() {
         method: 'POST',
         body: {from_state: version.state, to_state: to},
       });
+      setNotice(`Plan version advanced to ${to.replaceAll('_', ' ')}.`);
+      setRevision(r => r + 1);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approveVersion(version: PlanVersionRecord) {
+    if (!humanApprover || !approvalAck[version.id]) return;
+    setBusy(true);
+    setError('');
+    try {
+      const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await api(`/control-plane/plan-versions/${version.id}/approvals`, token, {
+        method: 'POST',
+        body: {identity_digest: version.identity_digest, expires_at: expires},
+      });
+      setNotice('Human approval recorded for this identity digest. Execution remains disabled until separate verification.');
+      setApprovalAck(prev => ({...prev, [version.id]: false}));
       setRevision(r => r + 1);
     } catch (cause) {
       setError((cause as Error).message);
@@ -158,7 +190,7 @@ export function ControlPlanePlansPanel() {
                       {STEPS.map(step => (
                         <span
                           key={step}
-                          className={`plan-step ${latest.state === step ? 'current' : STEPS.indexOf(step as typeof STEPS[number]) < STEPS.indexOf(latest.state as typeof STEPS[number]) ? 'completed' : ''}`}
+                          className={`plan-step ${latest.state === step ? 'current' : stepIndex(latest.state) > stepIndex(step) ? 'completed' : ''}`}
                         >
                           {step.replaceAll('_', ' ')}
                         </span>
@@ -178,10 +210,44 @@ export function ControlPlanePlansPanel() {
                         </dd>
                       </div>
                     </dl>
-                    {canAdmin && latest.state === 'draft' && (
-                      <button type="button" className="button secondary small" disabled={busy} onClick={() => transition(latest, 'evidence_required')}>
-                        Mark evidence required
-                      </button>
+                    <div className="button-row">
+                      {canAdmin && NEXT_STATE[latest.state as (typeof STEPS)[number]] && (
+                        <button
+                          type="button"
+                          className="button secondary small"
+                          disabled={busy}
+                          onClick={() => transition(latest, NEXT_STATE[latest.state as (typeof STEPS)[number]]!)}
+                        >
+                          Advance to {NEXT_STATE[latest.state as (typeof STEPS)[number]]!.replaceAll('_', ' ')}
+                        </button>
+                      )}
+                    </div>
+                    {latest.state === 'review_requested' && humanApprover && (
+                      <div className="plan-approval-box">
+                        <Notice tone="warning">
+                          Bind approval to identity digest <code>{latest.identity_digest.slice(0, 16)}…</code>. A different
+                          approver identity is required server-side; self-approval is rejected.
+                        </Notice>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={!!approvalAck[latest.id]}
+                            onChange={e => setApprovalAck(prev => ({...prev, [latest.id]: e.target.checked}))}
+                          />
+                          I reviewed the exact targets, parameters and identity digest for this plan version.
+                        </label>
+                        <button
+                          type="button"
+                          className="button primary small"
+                          disabled={busy || !approvalAck[latest.id]}
+                          onClick={() => approveVersion(latest)}
+                        >
+                          Record human approval
+                        </button>
+                      </div>
+                    )}
+                    {latest.state === 'review_requested' && !humanApprover && (
+                      <p className="inline-help">Awaiting a verified human session to record approval.</p>
                     )}
                   </>
                 )}

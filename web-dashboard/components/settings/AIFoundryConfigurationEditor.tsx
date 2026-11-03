@@ -93,8 +93,20 @@ export function AIFoundryConfigurationEditor() {
           {candidate && <><dl className="settings-key-values">{Object.entries(candidate.fields).filter(([key, value]) => labels[key] && value !== null).map(([key, value]) => <div key={key}><dt>{labels[key]}</dt><dd><code>{String(value)}</code></dd></div>)}</dl><p className="inline-help">{candidate.privacy_attestation}</p></>}
           {canAdmin && <button type="button" className="button secondary small" disabled={!!busy || dirty || !view.ai_foundry.providers[provider].target_id}
             onClick={() => void test(provider)}>{busy === provider ? 'Checking metadata…' : `Test ${names[provider]} connection`}</button>}
-          {result && <div role="status"><strong>{result.status === 'inconclusive' ? 'Connection check incomplete. Inference permission isn’t verified.' : sentence(result.status)} · {result.latency_ms} ms</strong>
-            <p>{result.remediation_hint}</p><ul>{result.stages.map(stage => <li key={stage.check}>{sentence(stage.check)}: {sentence(stage.status)}{stage.reason ? ` · ${stage.reason}` : ''}</li>)}</ul></div>}
+          {result && <div role="status" className="foundry-probe-result"><strong>{result.status === 'inconclusive' ? 'Connection check incomplete. Inference permission isn’t verified.' : sentence(result.status)} · {result.latency_ms} ms</strong>
+            <p>{result.remediation_hint}</p>
+            <ol className="foundry-probe-stages" aria-label="Four-stage metadata probe">
+              {result.stages.map((stage, index) => (
+                <li key={stage.check} className={`foundry-probe-stage probe-${stage.status.replaceAll('_', '-')}`}>
+                  <span className="probe-index">{index + 1}</span>
+                  <div>
+                    <strong>{sentence(stage.check)}</strong>
+                    <span className="state-badge">{sentence(stage.status)}</span>
+                    {stage.reason ? <small>{stage.reason}</small> : null}
+                  </div>
+                </li>
+              ))}
+            </ol></div>}
         </article>;
       })}</div>
       <fieldset className="settings-fieldset" disabled={!editable}><legend><ShieldCheck size={16}/>Routing, budget and consent</legend>

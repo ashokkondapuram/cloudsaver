@@ -178,6 +178,32 @@ html[data-theme=dark] .drift-abort-banner{background:var(--rose-50);color:var(--
 html[data-theme=dark] .state-badge.expiry-90,html[data-theme=dark] .state-badge.expiry-60,html[data-theme=dark] .state-badge.expiry-30{background:var(--amber-50);color:var(--amber-700)}
 html[data-theme=dark] .session-role{border-color:var(--border);color:var(--muted)}
 
+html[data-theme=dark] .assessment-intro,html[data-theme=dark] .ai-advisory{background:var(--slate-100);border-color:var(--border)}
+html[data-theme=dark] .assessment-state.risk{background:var(--rose-50);color:var(--rose-700)}
+html[data-theme=dark] .assessment-state.observed{background:var(--emerald-50);color:var(--emerald-700)}
+html[data-theme=dark] .assessment-dot.risk{background:var(--rose-700)}
+html[data-theme=dark] .assessment-dot.observed{background:var(--emerald-700)}
+html[data-theme=dark] .pillar-list>details{border-color:var(--border);background:var(--surface)}
+html[data-theme=dark] .pillar-list details>div{background:var(--slate-50)}
+html[data-theme=dark] .drawer-facts{background:var(--border)}
+html[data-theme=dark] .drawer-facts>div{background:var(--surface)}
+html[data-theme=dark] .finding-review[open]>summary{background:var(--slate-100)}
+html[data-theme=dark] .config-snapshot{background:var(--slate-100);color:var(--slate-700)}
+html[data-theme=dark] .safety-firewall-grid .state-badge.legacy{background:var(--slate-100);color:var(--muted)}
+
+.plan-approval-box{margin:16px 0;padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--slate-50);display:flex;flex-direction:column;gap:12px}
+.foundry-probe-stages{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.foundry-probe-stage{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+.foundry-probe-stage .probe-index{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font-size:12px;font-weight:650;background:var(--slate-100);color:var(--muted);flex-shrink:0}
+.foundry-probe-stage strong{display:block;font-size:13px;margin-bottom:4px}
+.foundry-probe-stage small{display:block;font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
+.foundry-probe-stage.probe-verified{border-color:color-mix(in srgb,var(--emerald-700) 35%,var(--border))}
+.foundry-probe-stage.probe-not-tested{border-style:dashed}
+.foundry-probe-stage.probe-not-verified,.foundry-probe-stage.probe-failed{border-color:color-mix(in srgb,var(--rose-700) 35%,var(--border))}
+html[data-theme=dark] .plan-approval-box{background:var(--slate-100)}
+html[data-theme=dark] .foundry-probe-stage{background:var(--surface)}
+html[data-theme=dark] .foundry-probe-stage .probe-index{background:var(--slate-100)}
+
 /* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
 .financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}
 .financial-five-strip article{padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface);min-width:0}

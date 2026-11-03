@@ -43,6 +43,8 @@ test('absorption proven drives commitment-aware scenario on the five-measure str
   await page.getByRole('checkbox', {name: /Absorption proven/}).check();
   await page.getByRole('button', {name: 'Run commitment-aware scenario'}).click();
   await expect(page.locator('.financial-five-strip .highlight-avoidable')).toContainText('$25.00');
-  expect(posted?.absorption_proven).toBe(true);
-  expect(posted?.uncommitted_if_absorbed).toBe('0.00');
+  expect(posted).not.toBeNull();
+  const scenarioBody = posted as unknown as Record<string, unknown>;
+  expect(scenarioBody.absorption_proven).toBe(true);
+  expect(scenarioBody.uncommitted_if_absorbed).toBe('0.00');
 });
