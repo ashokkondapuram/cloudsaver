@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "f15033ed6f42f6bf7e4e59112dce5808c995d8ee378e4bfa7dc7811ce6040327",
+  "inventory_sha256": "4be3ffccf82b3a69a5410a7fe8db0c11541a3cf0d46bb5173b1c8dd04c66a07c",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -3935,6 +3935,16 @@
       "bytes": 2673
     },
     {
+      "path": "web-dashboard/components/allocation/CommitmentLadderPanel.tsx",
+      "sha256": "2b0aa2d5d41f3343813c1792861cf96d6c0108e8f3b32e32f161124d2ab4b709",
+      "bytes": 3482
+    },
+    {
+      "path": "web-dashboard/components/automation/HclMappingViewer.tsx",
+      "sha256": "93febed68bd8a4166aa7ab31e603a907629727976875fcb42962c2e64fe0f480",
+      "bytes": 2125
+    },
+    {
       "path": "web-dashboard/components/datagrid/ExplorerSummary.tsx",
       "sha256": "fa2e5e51210af374294cdad086bae10e65036d0e06c9c16d0d24f33d38b6eafc",
       "bytes": 1890
@@ -3988,6 +3998,11 @@
       "path": "web-dashboard/components/kubernetes/kubernetes.css",
       "sha256": "5cb466defd2e9ad5e3f188ca3c39b645d03b30d06ad0acfc645853ea9502ca40",
       "bytes": 2016
+    },
+    {
+      "path": "web-dashboard/components/optimization/OptimizationEvidenceWorkspace.tsx",
+      "sha256": "51375bf8fa36f4f37f0b68daf86613f4980f0dd90e63d96a5da0b6b570194820",
+      "bytes": 7026
     },
     {
       "path": "web-dashboard/components/outcomes/OutcomesWorkspace.tsx",
@@ -4143,6 +4158,11 @@
       "path": "web-dashboard/e2e/enterprise-fixture.ts",
       "sha256": "9104e3a2e9de83fa0549ca775b59145d101ec2d605838baa42a8bb9dff47ffce",
       "bytes": 3978
+    },
+    {
+      "path": "web-dashboard/e2e/enterprise-ui-phase2.spec.ts",
+      "sha256": "cf9e9d6691019f9f7df18980a49c7ba79295848049709425dd568b9ae0710cec",
+      "bytes": 7305
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
@@ -4326,8 +4346,8 @@
     },
     {
       "path": "web-dashboard/next-env.d.ts",
-      "sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc",
-      "bytes": 296
+      "sha256": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
+      "bytes": 288
     },
     {
       "path": "web-dashboard/next.config.ts",
