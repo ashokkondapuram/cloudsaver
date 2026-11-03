@@ -184,6 +184,16 @@ def assess(finding, *, observed_at=None, now=None):
           'Complete dependency coverage and state history are required. Missing edges are not proof of zero blast radius.')
     if protected:
         check('reliability', 'PROTECTED_INTENT', 'risk', 'Explicit recovery, witness, retention or deletion-protection intent suppresses destructive recommendations.')
+    observation = freshness(observed_at, now)
+    check(
+        'operations',
+        'OBSERVATION_FRESHNESS',
+        'observed' if observation['status'] == 'recent' else 'risk' if observation['status'] == 'invalid' else 'unknown',
+        'Observation timestamp is within the configured freshness window.'
+        if observation['status'] == 'recent'
+        else 'Observation timestamp is missing, invalid, or stale; run a new scan before planning changes.',
+        ['observed_at'],
+    )
     pillars = []
     for pillar in PILLARS:
         items = [c for c in checks if c['pillar'] == pillar]
@@ -192,7 +202,6 @@ def assess(finding, *, observed_at=None, now=None):
     guardrails = ['VERIFY_CURRENT_STATE', 'REVIEW_DEPENDENCIES', 'CONFIRM_OWNER_AND_RETENTION', 'INDEPENDENT_CHANGE_APPROVAL']
     if kind == 'storage':
         guardrails += ['CREATE_PRE_DELETION_SNAPSHOT', 'VERIFY_RESTORE_AND_RETENTION']
-    observation = freshness(observed_at, now)
     if observation['status'] != 'recent':
         guardrails.append('REFRESH_OBSERVATION')
     if protected:

@@ -56,9 +56,17 @@ def merge(key, findings, *, observed_at=None, now=None):
     """Return (assessment, sanitized AI context) for one resource."""
     from app.rule_id_canonical import normalize_finding
 
-    deduped = [normalize_finding(finding) for finding in findings]
+    if not findings:
+        raise ValueError('At least one finding observation is required to merge an assessment')
+    deduped = []
+    for finding in findings:
+        if not isinstance(finding, dict) or not finding.get('resource_id'):
+            raise ValueError('Each finding must include a resource_id')
+        deduped.append(normalize_finding(finding))
     findings = sorted(deduped, key=lambda f: f['rule_id'])
     results = [assess(f, observed_at=observed_at, now=now) for f in findings]
+    if not results:
+        raise ValueError('Assessment produced no results')
     checks = {}
     for result in results:
         for pillar in result['pillars']:
@@ -158,37 +166,21 @@ def inventory_observation(obs):
 
 def merge_inventory(key, obs, *, observed_at=None, now=None):
     """Assessment for a resource present in inventory but without a finding rule hit."""
-    if isinstance(obs.get('evidence'), dict):
-        result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now)
-        result.update(finding_count=0, rule_ids=[], disposition='protected' if result['protected_reasons'] else 'inventory_only')
-        return result, context
-    provider = obs.get('cloud_provider', 'azure')
-    kind = service_category(obs)
-    observation = dict(observed_at=observed_at, source='inventory_scan')
-    pillars = [dict(pillar=name, status='unknown', checks=[]) for name in PILLARS]
-    assessment = dict(
-        resource_key=key, provider=provider, resource_id=obs['resource_id'], resource_name=obs.get('resource_name', ''),
-        resource_type=obs.get('resource_type', ''), resource_group=obs.get('resource_group', ''),
-        scope_id=obs.get('scope_id') or obs.get('subscription_id', ''), service_category=kind,
-        finding_count=0, rule_ids=[], policy_version=POLICY_VERSION, observation=observation,
-        review_priority='evidence_required', disposition='inventory_only', protected_reasons=[],
-        risk_level='unknown', risk_check_codes=[], evidence_gap_codes=[],
-        pillars=pillars, guardrails=['INVENTORY_ONLY'],
-        evidence_coverage=dict(observed=0, total=0),
-        retail_estimate_usd=None, billed_cost_usd=None, currency=None, realizable_savings_usd=None, automatic_execution=False,
+    if not isinstance(obs, dict) or not obs.get('resource_id'):
+        raise ValueError('Inventory observation must include resource_id')
+    result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now)
+    result.update(
+        finding_count=0,
+        rule_ids=[],
+        disposition='protected' if result['protected_reasons'] else 'inventory_only',
     )
     from app.azure_pricing_evidence import inventory_retail_usd
     retail = inventory_retail_usd(obs)
-    if retail is not None:
-        assessment['retail_estimate_usd'] = retail
-    context = dict(
-        resource_reference=key, provider=provider, service_category=kind, policy_version=POLICY_VERSION,
-        findings=[], observation=dict(observed_at=observation.get('observed_at')),
-        risk_floor='unknown', checks=[], protected=False, guardrails=['INVENTORY_ONLY'], observed_check_codes=[],
-    )
-    assessment['evidence_digest'] = hashlib.sha256(json.dumps(
-        dict(context=context, retail_estimate_usd=assessment['retail_estimate_usd']), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-    return assessment, context
+    if retail is not None and result.get('retail_estimate_usd') is None:
+        result['retail_estimate_usd'] = retail
+    if result['disposition'] == 'inventory_only':
+        result['guardrails'] = list(dict.fromkeys([*(result.get('guardrails') or []), 'INVENTORY_ONLY']))
+    return result, context
 
 
 def assessments(scan, *, now=None):

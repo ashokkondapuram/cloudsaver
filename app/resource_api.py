@@ -394,6 +394,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         obs_evidence = ((observation or {}).get('evidence') or {}) if observation else {}
         configuration_detail = obs_evidence.get('typed_configuration') or (observation or {}).get('configuration_snapshot')
         assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation))
+        from app.resource_action_items import derive_action_items
+
+        action_items = derive_action_items(assessment, findings, evaluations)
         return dict(scan_id=scan['scan_id'], assessment=assessment_payload, findings=findings, ai_context=context,
                     ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
                     decision=decision_state(assessment, decision), followups=followups,
@@ -402,6 +405,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     analysis_readiness=obs_evidence.get('analysis_readiness'),
                     evidence_schema_version=obs_evidence.get('evidence_schema_version') or (observation or {}).get('evidence_schema_version'),
                     rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
+                    action_items=action_items,
                     observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
                                         if r.get('evidence', {}).get('observed_signals')), None))
 

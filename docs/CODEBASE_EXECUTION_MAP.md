@@ -84,7 +84,7 @@ Triggered by `POST /api/v1/scans` or `POST /api/v1/scans/multi-cloud` in `app/ma
 |------|-------|----------|
 | **Core** | `main.py`, `store.py`, `auth.py`, `schemas.py`, `runtime.py` | HTTP app, scan CRUD, auth |
 | **Scan** | `scanner.py`, `multi_cloud.py`, `scan_progress.py`, `scan_billing.py`, `scan_response.py` | Cloud collection |
-| **Resources** | `resource_api.py`, `resource_assessment.py`, `assessment.py`, `billable_resources.py`, `resource_catalog.py` | `/resources` API |
+| **Resources** | `resource_api.py`, `resource_assessment.py`, `resource_action_items.py`, `assessment.py` | `/resources` API + deterministic **action_items** |
 | **Azure** | `azure_*`, `collectors/azure_*`, `azure_pricing_evidence.py` | ARM, live evidence, pricing |
 | **FinOps** | `finops_api.py`, `focus.py`, `billing_jobs.py`, `commitment_*`, `finops_autopilot_api.py` | Billing FOCUS, sync jobs |
 | **Outcomes** | `outcome_api.py`, `outcome_store.py`, `outcome_evidence.py`, `outcome_anomalies.py` | Savings cases, reconcile |

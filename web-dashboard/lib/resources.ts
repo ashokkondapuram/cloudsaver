@@ -63,6 +63,7 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
     modeled_payable_reduction_usd?: number | null;
   };
   financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[];
+  action_items?: Action[];
   observability?: ObservedSignals | null};
 export type ObservedMetric = {connector: string; query_id: string; metric: string; unit: string; window_start: string | null; window_end: string | null;
   samples: number; coverage_pct: number; p50: number; p95: number; max: number; avg: number};

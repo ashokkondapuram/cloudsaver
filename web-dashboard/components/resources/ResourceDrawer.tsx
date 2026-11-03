@@ -184,6 +184,7 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
       <div><dt>Retail-modeled waste</dt><dd>{detail.costs?.retail_waste_opportunity_usd == null ? 'Unknown' : money(detail.costs.retail_waste_opportunity_usd)}</dd></div>
       <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
     </dl>
+    {!!detail.action_items?.length && <div className="drawer-section"><h3>Review action items</h3><p className="inline-help">Derived from saved evidence, guardrails, and findings — not from AI.</p><Actions actions={detail.action_items}/></div>}
     <div className="drawer-section overview-radar"><EvidenceRadar pillars={a.pillars} onInspect={() => onOpenTab('evidence')}/></div>
     <div className="drawer-header-actions overview-actions">
       {detail.findings.length > 0 && <button type="button" className="button secondary small" onClick={() => onOpenTab('findings')}><ListChecks size={14}/>Review findings</button>}
