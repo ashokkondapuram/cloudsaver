@@ -21,12 +21,12 @@ def _split_costs(db, tenant_id, resource_ids, *, currency, begin, finish, scopes
             FROM focus_charges fc
             JOIN focus_imports fi ON fi.id = fc.import_id AND fi.tenant_id = fc.tenant_id
             WHERE fc.tenant_id = %s AND fc.currency = %s
-              AND fc.period_start >= %s AND fc.period_end <= %s
+              AND fc.period_start < %s AND fc.period_end > %s
               AND ({fence})
               AND lower(fc.resource_id) IN ({marks})
             ORDER BY fc.id LIMIT 50001
             """,
-            [tenant_id, currency, begin.isoformat(), finish.isoformat(), *scope_args, *batch],
+            [tenant_id, currency, finish.isoformat(), begin.isoformat(), *scope_args, *batch],
         ).fetchall()
         if len(rows) > 50000:
             raise ValueError('Too many billing rows for typed resource persistence; narrow the window')
@@ -73,7 +73,7 @@ def cost_window(scan, *, days=30):
     finish = datetime.fromisoformat(str(scan['timestamp']).replace('Z', '+00:00')).astimezone(timezone.utc)
     finish = finish.replace(hour=0, minute=0, second=0, microsecond=0)
     begin = finish - timedelta(days=days)
-    return begin.date(), finish.date()
+    return begin, finish
 
 
 def load_resource_costs(db, workspace, scan, resource_ids):
@@ -87,4 +87,4 @@ def load_resource_costs(db, workspace, scan, resource_ids):
     allowed = workspace.get('allowed_providers')
     scopes = sorted({pair for pair in scopes if allowed is None or pair[0] in allowed})
     split = _split_costs(db, tenant_id, resource_ids, currency=currency, begin=begin, finish=finish, scopes=scopes)
-    return currency, begin, finish, split
+    return currency, begin.date(), finish.date(), split

@@ -52,6 +52,20 @@ def test_resource_billing_join_is_exact_in_scope_and_currency(evidence):
     assert repo.resource_costs(tenant,[rid],as_of=NOW)[('azure',rid.lower())]['billed_cost_usd']==12.5
 
 
+def test_finding_resource_inherits_inventory_billing(evidence):
+    _, store, _ = evidence
+    repo = FocusRepository(store)
+    tenant = workspace()
+    r = azure_disk_finding(SUB)
+    end = NOW.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=30)
+    repo.import_records(tenant, ImportRequest.model_validate(batch([charge(1, '9', ResourceId=r['resource_id'], ChargePeriodStart=start.isoformat(), ChargePeriodEnd=(start + timedelta(days=1)).isoformat())], source_id='finding-cost', period_start=start.date().isoformat(), period_end=end.date().isoformat())))
+    scan = dict(scan_id=str(uuid4()), timestamp=NOW.isoformat(), findings=[dict(r, evidence={'encrypted': True})], inventory=[dict(r, evidence={'encrypted': True})])
+    attached = repo.attach(tenant, scan)
+    a = next(iter(assessments(attached, now=NOW).values()))[0]
+    assert a['finding_count'] == 1 and a['billed_cost_usd'] == 9
+
+
 def test_inventory_only_resource_displays_billing_and_security(evidence):
     _,store,_=evidence;repo=FocusRepository(store);tenant=workspace();r=azure_disk_finding(SUB)
     end=NOW.replace(hour=0,minute=0,second=0,microsecond=0);start=end-timedelta(days=30)

@@ -200,7 +200,8 @@ class FocusRepository:
         allowed = tenant.get('allowed_providers')
         scopes = sorted(set((p,a) for p,a in scopes if allowed is None or p in allowed))
         if not ids or not scopes:return {}
-        normalized = {v.lower() if v.lower().startswith('/subscriptions/') else v for v in ids}
+        azure_ids = sorted({v.lower() for v in ids if v.lower().startswith('/subscriptions/')})
+        other_ids = sorted({v for v in ids if not v.lower().startswith('/subscriptions/')})
         fence = ' OR '.join('(provider=%s AND sub_account=%s)' for _ in scopes)
         args = [v for pair in scopes for v in pair]
         totals = {}
@@ -213,32 +214,89 @@ class FocusRepository:
                 day=max(date.fromisoformat(str(a)),begin.date());end=min(date.fromisoformat(str(b)),finish.date())
                 while day<end:
                     days.setdefault((provider,account),{})[day]=bool(complete);day+=timedelta(days=1)
-            for offset in range(0,len(normalized),300):
-                selected=sorted(normalized)[offset:offset+300]
-                marks=','.join('%s' for _ in selected)
-                # Each provider account bills in one native currency; charges are never filtered to a
-                # fixed currency here (that assumption previously hid every non-USD subscription's costs).
-                rows=db.execute('SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category,currency FROM focus_charges WHERE tenant_id=%s AND ('+fence+') AND resource_id IN ('+marks+') AND period_start>=%s AND period_end<=%s ORDER BY id LIMIT 50001',
-                    [tenant['tenant_id'],*args,*selected,begin.isoformat(),finish.isoformat()]).fetchall()
-                if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
+
+            def ingest_rows(rows):
                 for provider,account,rid,billed,effective,list_cost,category,currency in rows:
                     key=(provider,rid.lower() if provider=='azure' else rid)
                     value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account,currency=currency))
-                    if value['currency']!=currency:continue  # a resource should not mix currencies; keep the first observed and ignore stray rows
+                    if value['currency']!=currency:
+                        continue
                     value['billed']+=Decimal(billed);value['effective']+=Decimal(effective)
                     if list_cost is None:value['list_complete']=False
                     else:value['list']+=Decimal(list_cost)
                     value['locked'] |= category=='Purchase' or Decimal(effective)>Decimal(billed)
+
+            for offset in range(0, len(azure_ids), 300):
+                batch = azure_ids[offset:offset + 300]
+                marks = ','.join('%s' for _ in batch)
+                rows = db.execute(
+                    'SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category,currency FROM focus_charges '
+                    'WHERE tenant_id=%s AND ('+fence+') AND provider=%s AND lower(resource_id) IN ('+marks+') '
+                    'AND period_start<%s AND period_end>%s ORDER BY id LIMIT 50001',
+                    [tenant['tenant_id'], *args, 'azure', *batch, finish.isoformat(), begin.isoformat()],
+                ).fetchall()
+                if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
+                ingest_rows(rows)
+            for offset in range(0, len(other_ids), 300):
+                batch = other_ids[offset:offset + 300]
+                marks = ','.join('%s' for _ in batch)
+                rows=db.execute('SELECT provider,sub_account,resource_id,billed_cost,effective_cost,list_cost,charge_category,currency FROM focus_charges WHERE tenant_id=%s AND ('+fence+') AND resource_id IN ('+marks+') AND period_start<%s AND period_end>%s ORDER BY id LIMIT 50001',
+                    [tenant['tenant_id'],*args,*batch,finish.isoformat(),begin.isoformat()]).fetchall()
+                if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
+                ingest_rows(rows)
         return {key:dict(billed_cost_usd=float(v['billed']),effective_cost_usd=float(v['effective']),list_cost_usd=float(v['list']) if v['list_complete'] else None,
             commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency=v['currency'],billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
             billing_window_start=begin.isoformat(),billing_window_end=finish.isoformat(),billing_basis='imported_FOCUS_not_provider_reconciled') for key,v in totals.items()}
+
+    def _supplement_resource_costs(self, tenant, scan, resource_ids, costs, *, as_of=None):
+        """Fill gaps using the same join path as typed resource persistence (lower(resource_id) + window)."""
+        missing = []
+        for rid in resource_ids:
+            if not isinstance(rid, str) or not rid.lower().startswith('/subscriptions/'):
+                continue
+            if ('azure', rid.lower()) not in costs:
+                missing.append(rid)
+        if not missing:
+            return
+        try:
+            from app.typed_resources.costs import load_resource_costs, reporting_currency
+            with self.store.transaction(tenant['tenant_id']) as db:
+                currency, begin, finish, split = load_resource_costs(db, tenant, scan, missing)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return
+        for rid in missing:
+            key = ('azure', rid.lower())
+            bucket = split.get(rid.lower()) or split.get(rid)
+            if not bucket:
+                continue
+            billed = (bucket.get('azure_billed') or Decimal(0)) + (bucket.get('cost_center_billed') or Decimal(0))
+            effective = (bucket.get('azure_effective') or Decimal(0)) + (bucket.get('cost_center_effective') or Decimal(0))
+            if not billed and not effective:
+                continue
+            list_total = None
+            if bucket.get('azure_list_ok', True) and bucket.get('cost_center_list_ok', True):
+                list_total = (bucket.get('azure_list') or Decimal(0)) + (bucket.get('cost_center_list') or Decimal(0))
+            costs[key] = dict(
+                billed_cost_usd=float(billed),
+                effective_cost_usd=float(effective),
+                list_cost_usd=float(list_total) if list_total is not None else None,
+                commitment_locked=False,
+                commitment_lock_conflict=False,
+                currency=currency or reporting_currency(tenant, scan),
+                billing_coverage=False,
+                billing_window_start=datetime.combine(begin, time.min, tzinfo=timezone.utc).isoformat(),
+                billing_window_end=datetime.combine(finish, time.min, tzinfo=timezone.utc).isoformat(),
+                billing_basis='imported_FOCUS_not_provider_reconciled',
+            )
 
     def attach(self, tenant, scan):
         from copy import deepcopy
         result=deepcopy(scan)
         rows=[*result.get('inventory',[]),*result.get('findings',[])]
         stamp=utc(scan['timestamp'])
-        costs=self.resource_costs(tenant,[r['resource_id'] for r in rows],as_of=stamp)
+        resource_ids=[r['resource_id'] for r in rows]
+        costs=self.resource_costs(tenant,resource_ids,as_of=stamp)
+        self._supplement_resource_costs(tenant, scan, resource_ids, costs, as_of=stamp)
         inventory={(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id']):r for r in result.get('inventory',[])}
         for r in rows:
             key=(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id'])

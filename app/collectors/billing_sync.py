@@ -124,7 +124,8 @@ def azure_rows(binding, tenant, start, end):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
                 totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
                 totals[field] += Decimal(str(value.get('pretaxcost',value.get('cost'))))
-        result = [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
+        result = [dict(day=day, resource_id=(resource.lower() if isinstance(resource, str) and resource.lower().startswith('/subscriptions/') else resource),
+                         currency=currency, billed=str(v['billed']), effective=str(v['effective']),
                    category='Credit' if v['billed']<0 else 'Usage') for (day,resource,currency),v in merged.items()]
         return result, 'resource', ['Azure ActualCost is imported as billed cost and AmortizedCost as effective cost. Reservation and savings plan purchases are spread across covered usage.']
     finally:

@@ -12,6 +12,26 @@ from app.assessment_policy import POLICY_VERSION,MODEL_BASE_CODES
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
 PRIORITY = ('critical', 'high', 'evidence_required')
 HISTORY_SCANS = 10
+_BILLING_FIELDS = ('billed_cost_usd', 'effective_cost_usd', 'currency', 'commitment_locked', 'billing_coverage')
+
+
+def overlay_inventory_billing(assessment, obs):
+    """Resources with findings skip merge_inventory; copy billed evidence from the inventory row."""
+    if not obs:
+        return assessment
+    evidence = obs.get('evidence') or {}
+    patch = {field: evidence[field] for field in _BILLING_FIELDS if evidence.get(field) is not None and assessment.get(field) is None}
+    if not patch:
+        return assessment
+    updated = dict(assessment, **patch)
+    if updated.get('billed_cost_usd') is not None or updated.get('effective_cost_usd') is not None:
+        for pillar in updated.get('pillars', []):
+            if pillar.get('pillar') != 'cost':
+                continue
+            for check in pillar.get('checks', []):
+                if check.get('code') == 'BILLED_COST' and check.get('status') == 'unknown':
+                    check['status'] = 'risk' if updated.get('commitment_locked') else 'observed'
+    return updated
 
 
 def identity(finding):
@@ -138,10 +158,10 @@ def inventory_observation(obs):
 
 def merge_inventory(key, obs, *, observed_at=None, now=None):
     """Assessment for a resource present in inventory but without a finding rule hit."""
-    if obs.get('evidence'):
-        result,context=merge(key,[inventory_observation(obs)],observed_at=observed_at,now=now)
-        result.update(finding_count=0,rule_ids=[],disposition='protected' if result['protected_reasons'] else 'inventory_only')
-        return result,context
+    if isinstance(obs.get('evidence'), dict):
+        result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now)
+        result.update(finding_count=0, rule_ids=[], disposition='protected' if result['protected_reasons'] else 'inventory_only')
+        return result, context
     provider = obs.get('cloud_provider', 'azure')
     kind = service_category(obs)
     observation = dict(observed_at=observed_at, source='inventory_scan')
@@ -176,6 +196,8 @@ def assessments(scan, *, now=None):
     for obs in scan.get('inventory') or []:
         key = resource_key(inventory_observation(obs))
         if key in merged:
+            assessment, context = merged[key]
+            merged[key] = (overlay_inventory_billing(assessment, obs), context)
             continue
         merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now)
     return merged
