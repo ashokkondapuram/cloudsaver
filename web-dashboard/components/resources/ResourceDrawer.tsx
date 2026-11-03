@@ -10,7 +10,7 @@ import {Dialog} from '../ui/dialog';
 import {PageTabs} from '../ui/PageTabs';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
-import {Actions, AIStatusBadge, PillarDots} from './ResourceParts';
+import {Actions, AIStatusBadge, ArmDetailBadge, PillarDots} from './ResourceParts';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 import {ActionSafetyPanel} from './ActionSafetyPanel';
 import {FinancialFiveStrip} from './FinancialFiveStrip';
@@ -23,8 +23,10 @@ function Evidence({detail}: {detail: ResourceDetail}) {
   const snapshot = detail.configuration_detail || detail.observation?.configuration_snapshot || {};
   const text = JSON.stringify(snapshot, null, 2);
   const readiness = detail.analysis_readiness || detail.observation?.evidence?.analysis_readiness;
+  const armDetail = detail.assessment.arm_detail;
   return <div className="drawer-section"><h3>Evidence provenance</h3>
     <dl className="settings-key-values"><div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div><div><dt>Schema</dt><dd>{detail.evidence_schema_version || detail.observation?.evidence_schema_version || 'Legacy'}</dd></div><div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div>
+    {armDetail && <div><dt>ARM configuration detail</dt><dd><ArmDetailBadge status={armDetail}/></dd></div>}
     {readiness && <><div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
     {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}</>}
     </dl>
@@ -265,7 +267,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
   return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>
     {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current || !a ? <Loading label="Loading resource details…"/> : <>
       <div className="finding-drawer-header resource-drawer-header">
-        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
+        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
         <dl className="drawer-facts">

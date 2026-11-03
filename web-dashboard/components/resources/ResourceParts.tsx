@@ -1,5 +1,5 @@
 'use client';
-import {PILLARS, aiStatusLabels, decisionLabels, label, sentence, type AIState, type Action, type Decision, type PillarStatus} from '../../lib/resources';
+import {PILLARS, aiStatusLabels, armDetailLabels, decisionLabels, label, sentence, type AIState, type Action, type ArmDetailStatus, type Decision, type PillarStatus} from '../../lib/resources';
 
 export function PillarDots({pillars}: {pillars: Record<string, PillarStatus>}) {
   const text = PILLARS.map(p => `${p}: ${pillars[p] === 'risk' ? 'risk observed' : pillars[p] === 'observed' ? 'evidence observed' : 'evidence incomplete'}`).join(', ');
@@ -17,6 +17,12 @@ export function AIRisk({ai}: {ai: AIState}) {
 export function DecisionBadge({decision}: {decision: Decision | null}) {
   if (!decision) return <span className="muted">—</span>;
   return <span className={`decision-badge decision-${decision.decision}`} title={decision.evidence_changed ? 'Evidence changed after this decision' : decision.note || undefined}>{decisionLabels[decision.decision]}{decision.evidence_changed ? ' · review' : ''}</span>;
+}
+
+export function ArmDetailBadge({status, hideFromParentName}: {status: ArmDetailStatus | null | undefined; hideFromParentName?: boolean}) {
+  if (!status) return null;
+  const tone = status === 'collected' ? 'configured' : status === 'unsupported_type' ? 'legacy' : 'review-required';
+  return <span className={`state-badge arm-detail-badge ${tone}`} aria-hidden={hideFromParentName || undefined} title="Azure Resource Manager configuration enrichment">{armDetailLabels[status]}</span>;
 }
 
 export function Actions({actions}: {actions: Action[]}) {

@@ -9,11 +9,11 @@ import {resourceCsv} from '../../lib/resource-csv';
 import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
-import {ACTIVE_BATCH, aiStatusLabels, armDetailLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type ArmDetailStatus, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
+import {ACTIVE_BATCH, aiStatusLabels, armDetailFromQuery, armDetailLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type ArmDetailStatus, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, ProviderBadge} from '../ui/shared';
-import {AIRisk, AIStatusBadge, DecisionBadge, PillarDots} from './ResourceParts';
+import {AIRisk, AIStatusBadge, ArmDetailBadge, DecisionBadge, PillarDots} from './ResourceParts';
 import {ResourceDrawer} from './ResourceDrawer';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
 
@@ -100,7 +100,7 @@ function matchesDiscovery(row:ResourceRow,related: Finding[], category: Category
   return true;
 }
 
-export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing}) {
+export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = '', initialArmDetail = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing; initialArmDetail?: ArmDetailStatus | ''}) {
   const {scan, token, canAdmin, notify, openReview, setSelection, scope, liveScanEpoch} = useWorkspace();
   const router = useRouter(), params = useSearchParams();
   const live = isLiveSnapshot(scan);
@@ -114,7 +114,24 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
   const deferred = useDeferredValue(query);
   const openKey = params.get('resource');
-  useEffect(() => {setFilters(f => {const provider=params.get('provider')||initialProvider||'';return f.provider===provider?f:{...f,provider};}); setCategory(initialCategory); setIntent(initialIntent); setPricing(initialPricing);}, [params, initialProvider, initialCategory, initialIntent, initialPricing]);
+  useEffect(() => {
+    const provider = params.get('provider') || initialProvider || '';
+    const armDetail = armDetailFromQuery(params.get('arm_detail')) || initialArmDetail || '';
+    setFilters(f => (f.provider === provider && f.arm_detail === armDetail) ? f : {...f, provider, arm_detail: armDetail});
+    setCategory(initialCategory);
+    setIntent(initialIntent);
+    setPricing(initialPricing);
+  }, [params, initialProvider, initialCategory, initialIntent, initialPricing, initialArmDetail]);
+  useEffect(() => {
+    const current = params.get('arm_detail') || '';
+    const next = filters.arm_detail || '';
+    if (current === next) return;
+    const nextParams = new URLSearchParams(params.toString());
+    if (next) nextParams.set('arm_detail', next);
+    else nextParams.delete('arm_detail');
+    const search = nextParams.toString();
+    router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
+  }, [filters.arm_detail, params, router]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id,token,scope]);
   const findings = scan?.findings || [];
   const findingIndex=useMemo(()=>{const index=new Map<string,Finding[]>();for(const finding of findings){const key=identityOf(finding.cloud_provider||'azure',finding.resource_id);const group=index.get(key)||[];group.push(finding);index.set(key,group);}return index;},[findings]);
@@ -167,8 +184,8 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const toggleAll = () => setSelected(previous => {const next = new Set(previous); rows.forEach(r => allVisible ? next.delete(r.resource_key) : next.add(r.resource_key)); return next;});
   const toggle = (key: string) => setSelected(previous => {const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next;});
   const select = (name: keyof Filters, options: [string, string][], aria: string) => <label><span className="sr-only">{aria}</span><select aria-label={aria} value={filters[name]} onChange={e => setFilters(f => ({...f, [name]: e.target.value}))}>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>;
-  const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
-  const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: ''}));};
+  const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}, filters.arm_detail && {label: armDetailLabels[filters.arm_detail as ArmDetailStatus], clear: () => setFilters(f => ({...f, arm_detail: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
+  const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: '', arm_detail: ''}));};
   return <>
     {inProgress && <Notice tone="info">Scan in progress ({(scan.items_arm_detail_collected ?? 0).toLocaleString()} of {(scan.total_items_found || page?.total || 0).toLocaleString()} with ARM detail saved). Resources refresh every few seconds from the database.</Notice>}
     {page.total > page.items.length && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
@@ -210,7 +227,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
           <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
           <tbody>{displayed.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key)}>
             <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.resource_name}`} checked={selected.has(r.resource_key)} onChange={() => toggle(r.resource_key)}/></td>
-            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]} {r.lifecycle_delta&&<span className="mini-badge">{r.lifecycle_delta}</span>}</small></button></td>
+            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]} {r.lifecycle_delta && <span className="mini-badge">{r.lifecycle_delta}</span>}{r.arm_detail && <ArmDetailBadge status={r.arm_detail} hideFromParentName/>}</small></button></td>
             <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
             <td className="money-cell">{money(r.billed_cost_usd??null)}</td><td className="money-cell">{money(r.effective_cost_usd??null)}</td>
             <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'}>{money(r.retail_estimate_usd)}</td>

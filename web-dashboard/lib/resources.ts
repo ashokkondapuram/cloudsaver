@@ -15,7 +15,9 @@ export type DecisionKind = 'accept' | 'dismiss' | 'defer';
 export type Action = {title: string; rationale: string; kind: string; pillar: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
 export type Decision = {id: string; decision: DecisionKind; note: string; defer_until: string | null; evidence_digest: string; created_at: string; scan_id: string; evidence_changed?: boolean};
 export type AIState = {status: AIStatus; risk_level: string | null; summary: string | null; actions: Action[]; assessment_id: string | null; created_at: string | null; reason: string | null};
-export type ArmDetailStatus = 'collected' | 'unsupported_type' | 'resource_budget_exceeded' | 'api_version_unresolved' | 'fetch_failed';
+import type {ArmDetailStatus} from './arm-detail';
+export type {ArmDetailStatus} from './arm-detail';
+export {ARM_DETAIL_STATUSES, armDetailFromQuery, armDetailLabels} from './arm-detail';
 export type ResourceRow = {
   resource_key: string; provider: string; resource_id: string; resource_name: string; resource_type: string; resource_group: string; scope_id: string;
   service_category: string; finding_count: number; rule_ids: string[]; review_priority: string; disposition: string; protected_reasons: string[];
@@ -68,13 +70,6 @@ export const label = (value: string) => value.replaceAll('_', ' ').toLowerCase()
 export const sentence = (value: string) => {const text = label(value); return text.charAt(0).toUpperCase() + text.slice(1);};
 export const aiStatusLabels: Record<AIStatus, string> = {not_run: 'Not run', queued: 'Queued', running: 'Running', completed: 'Completed', stale: 'Stale', failed: 'Failed'};
 export const decisionLabels: Record<DecisionKind, string> = {accept: 'Accepted', dismiss: 'Dismissed', defer: 'Deferred'};
-export const armDetailLabels: Record<ArmDetailStatus, string> = {
-  collected: 'ARM detail collected',
-  unsupported_type: 'Unsupported ARM type',
-  resource_budget_exceeded: 'ARM detail budget exceeded',
-  api_version_unresolved: 'ARM API version unresolved',
-  fetch_failed: 'ARM detail fetch failed',
-};
 
 /** Same identity the API uses: provider plus resource ID, with Azure IDs case-insensitive. */
 export function identityOf(provider: string, resourceId: string) {

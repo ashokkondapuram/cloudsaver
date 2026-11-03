@@ -1,6 +1,5 @@
-import type {ArmDetailStatus, ResourcePage, ResourceRow, Batch} from './resources';
-
-const ARM_DETAIL_VALUES: ArmDetailStatus[] = ['collected', 'unsupported_type', 'resource_budget_exceeded', 'api_version_unresolved', 'fetch_failed'];
+import {ARM_DETAIL_STATUSES, type ArmDetailStatus} from './arm-detail';
+import type {Batch, ResourcePage, ResourceRow} from './resources';
 
 export const RESOURCE_PAGE_SIZE = 1000;
 export const RUNNING_RESOURCE_PAGE_SIZE = 100;
@@ -23,7 +22,7 @@ function validRow(value: unknown): value is ResourceRow {
   if (!object(ai) || !['not_run','queued','running','completed','stale','failed'].includes(String(ai.status)) || !nullableString(ai.risk_level) || !nullableString(ai.summary) || !Array.isArray(ai.actions)) return false;
   if (decision !== null && (!object(decision) || !['accept','dismiss','defer','none'].includes(String(decision.decision)) || typeof decision.created_at !== 'string')) return false;
   if(value.retail_estimate_usd===undefined||!/^[a-f0-9]{64}$/.test(String(value.evidence_digest)))return false;
-  if (value.arm_detail != null && value.arm_detail !== undefined && !ARM_DETAIL_VALUES.includes(value.arm_detail as ArmDetailStatus)) return false;
+  if (value.arm_detail != null && value.arm_detail !== undefined && !ARM_DETAIL_STATUSES.includes(value.arm_detail as ArmDetailStatus)) return false;
   return ['billed_cost_usd','effective_cost_usd','retail_estimate_usd'].every(key => finiteMoney(value[key]));
 }
 

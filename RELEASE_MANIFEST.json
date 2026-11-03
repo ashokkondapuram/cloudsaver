@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "31e45656fe7296832a97658a65a77fea5faf75ca888090473d658a4dcb6f9c18",
+  "inventory_sha256": "a47a2a55c8c3303d3269f1a05afa821be43c897de9f67331d7d9b97df87faffd",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -1416,8 +1416,8 @@
     },
     {
       "path": "docs/ENTERPRISE_UI_PROGRAM.md",
-      "sha256": "1cf1b661f3d9aae53b2638fdf954002e437c0293eecd2241a49e6f45f232a044",
-      "bytes": 3894
+      "sha256": "cf98300b10d4331258de6475d1adb1811a83f5b9482779567bf6460885dcc072",
+      "bytes": 4055
     },
     {
       "path": "docs/ENVIRONMENT.md",
@@ -3866,8 +3866,8 @@
     },
     {
       "path": "web-dashboard/app/resources/page.tsx",
-      "sha256": "1cafde046135987401cf34367e736098b4a511dc61f0adc939e186d9011b697c",
-      "bytes": 880
+      "sha256": "c6bde8461940eb9cf84fc5a6d3595a1a5e483538eacb95992a31d66169a19d25",
+      "bytes": 1013
     },
     {
       "path": "web-dashboard/app/resources/report/page.tsx",
@@ -3901,8 +3901,8 @@
     },
     {
       "path": "web-dashboard/components/ConsolePage.tsx",
-      "sha256": "d66b2054369e25d98e8fb2583199340c2ded687137dd589d0d1ca00b57e27a87",
-      "bytes": 3465
+      "sha256": "13858e245bacd7f57853edf49e13f581201c03fec7b45eef85023d8e71c80b19",
+      "bytes": 3656
     },
     {
       "path": "web-dashboard/components/EnterpriseEvidence.tsx",
@@ -4066,18 +4066,18 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
-      "sha256": "d1ae47e86fec6b6b7f7754e7c1af74fe0a9ba46f712571d30e8271bd04a7a3ac",
-      "bytes": 32902
+      "sha256": "c0e3a18c46d76236ba46ad9cfee0d93f55218fa921caa336df0dd729950d752d",
+      "bytes": 33116
     },
     {
       "path": "web-dashboard/components/resources/ResourceParts.tsx",
-      "sha256": "44e8a86a1c85cee572d04ee5fcefdd22f14231e2ec645263d7cdbd73bc854476",
-      "bytes": 2225
+      "sha256": "e8d009dc1240c8546143e82f32616f64508eb92ff555ff16c4dda65d546e2a00",
+      "bytes": 2753
     },
     {
       "path": "web-dashboard/components/resources/ResourcesView.tsx",
-      "sha256": "12ecacabb43867f53089d506963dcfa7ddc30a203300c5d83bd86573d6080243",
-      "bytes": 29496
+      "sha256": "90581f642a17754428f8c896c2562f64c8308512e854fad1f21301e02cd957d8",
+      "bytes": 30498
     },
     {
       "path": "web-dashboard/components/rules/CustomerRuleSettings.tsx",
@@ -4255,6 +4255,11 @@
       "bytes": 1671
     },
     {
+      "path": "web-dashboard/e2e/enterprise-ui-resources-arm-detail.spec.ts",
+      "sha256": "23edcd4c42ac392e2604b11802a9e8c28ef9c99a537af71b5f12fd9fc4521880",
+      "bytes": 2757
+    },
+    {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
       "sha256": "89470c76ffbada993ae89ce1bd54c5fa0e26a3198c1cde3f4898bed626a0c76f",
       "bytes": 5029
@@ -4426,13 +4431,13 @@
     },
     {
       "path": "web-dashboard/lib/resource-pages.ts",
-      "sha256": "ee09774a0ddbd06bd5dbee63843c46f126f5e37b3f01ff6367fdf20ca0109d6b",
-      "bytes": 6625
+      "sha256": "c80e96ad6df3f13396c27005e5a12713b91d49ec7932423281384776431127dd",
+      "bytes": 6531
     },
     {
       "path": "web-dashboard/lib/resources.ts",
-      "sha256": "88da83cd918cdd848d5ce5afc56a924bc23b4dda2979c772b476f921d17ac567",
-      "bytes": 12720
+      "sha256": "b0be9c0a61aef47f7b1eb924f9004a4d88f32a83927d8eec5c0da0007296781a",
+      "bytes": 12465
     },
     {
       "path": "web-dashboard/lib/rule-labels.json",

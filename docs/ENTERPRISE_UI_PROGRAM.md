@@ -39,6 +39,7 @@ Shared libraries: `lib/governance-tabs.ts`, `lib/workloads-tabs.ts`, `lib/contro
 | 25 | Shared `lib/plan-outbox.ts`, expandable audit-only outbox readout on plan cards |
 | 26 | **Program backlog closed:** outbox row read API + UI table, governance workflow fixture migration, CI enterprise slice split (apply `verify.yml` diff below when token has `workflow` scope) |
 | 27 | Resources explorer **`arm_detail`** filter (server query + grid/quick view); typed row field on inventory pages |
+| 28 | Shareable **`arm_detail`** URL param, active-filter chip, grid + drawer **`ArmDetailBadge`**, `armDetailFromQuery` helper |
 
 ## Verification
 
@@ -53,4 +54,4 @@ CI: GitHub Actions `dashboard` job runs the full dashboard Playwright suite via 
 
 ## Program status
 
-**Backlog complete as of phase 26.** Phase **27** adds resources **`arm_detail`** filtering aligned with backend BC-08/09. Future work is product-driven (e.g. worker dispatch controls) and must preserve audit-only dashboard boundaries unless explicitly approved.
+**Backlog complete as of phase 26.** Phases **27–28** add resources **`arm_detail`** filtering and shareable deep links aligned with backend BC-08/09. Future work is product-driven (e.g. worker dispatch controls) and must preserve audit-only dashboard boundaries unless explicitly approved.

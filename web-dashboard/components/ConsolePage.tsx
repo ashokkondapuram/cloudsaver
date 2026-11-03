@@ -17,16 +17,16 @@ const headings:Record<View,string>={
   automation:'Automation & GitOps', activity:'Activity & delivery', settings:'Settings',
 };
 
-function DiscoverResources({provider='',category='',intent='',pricing=''}:{provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing}) {
+function DiscoverResources({provider='',category='',intent='',pricing='',armDetail=''}:{provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing;armDetail?:import('../lib/resources').ArmDetailStatus|''}) {
   const {scan} = useWorkspace();
   const live = isLiveSnapshot(scan);
   return <>
-    {live ? <ResourcesView initialProvider={provider} initialCategory={category} initialIntent={intent} initialPricing={pricing}/>
+    {live ? <ResourcesView initialProvider={provider} initialCategory={category} initialIntent={intent} initialPricing={pricing} initialArmDetail={armDetail}/>
       : <FindingsGrid initialProvider={provider} initialCategory={category} initialIntent={intent} initialPricing={pricing} navigateToResource/>}
   </>;
 }
 
-export function ConsolePage({view,provider='',category='',intent='',pricing=''}:{view:View;provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing}) {
+export function ConsolePage({view,provider='',category='',intent='',pricing='',armDetail=''}:{view:View;provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing;armDetail?:import('../lib/resources').ArmDetailStatus|''}) {
   const {workspace,scan,canAdmin,busy,setOverlay,refresh,notify} = useWorkspace();
   const heading=headings[view];
   function exportSnapshot(format:'json'|'csv') {
@@ -36,6 +36,6 @@ export function ConsolePage({view,provider='',category='',intent='',pricing=''}:
     notify(`${format.toUpperCase()} download is ready.`);
   }
   return <><div className="page-heading">{view!=='overview'&&<h1>{heading}</h1>}<div className="page-heading-actions">{view==='resources'&&<Link className="button secondary" href="/workloads"><Layers size={15}/>Workload assessments</Link>}{['overview','resources','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><RefreshCw size={17}/></button>{view!=='overview'&&<details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15}/><span>Export snapshot</span><ChevronDown size={13}/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>}{canAdmin&&(view!=='overview'||!!scan)&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17}/>Run new scan</button>}</>}</div></div>
-    {view==='overview'?<Overview/>:view==='resources'?<DiscoverResources key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} provider={provider} category={category} intent={intent} pricing={pricing}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
+    {view==='overview'?<Overview/>:view==='resources'?<DiscoverResources key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} provider={provider} category={category} intent={intent} pricing={pricing} armDetail={armDetail}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
   </>;
 }
