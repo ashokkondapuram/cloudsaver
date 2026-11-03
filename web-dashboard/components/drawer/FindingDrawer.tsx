@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {useEffect, useId, useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Activity, ArrowRight, ChevronLeft, ChevronRight, Check, Clipboard, Clock3, Code2, Copy, Database, Download, FileCode2, GitPullRequest, Layers3, Loader2, ShieldCheck, Wallet} from 'lucide-react';
 import {api} from '../../lib/api';
 import {bashRules, dateTime, downloadFile, findingKey, money, observedTags, providerOf, ruleLabel, scopeOf, terraformRules} from '../../lib/finops';
@@ -13,6 +13,8 @@ import {TelemetryEvidence} from './TelemetryEvidence';
 import {protectionSignals} from '../../lib/resource-insights';
 import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {EmptyState, Loading, Notice, PriorityBadge, ProviderBadge} from '../ui/shared';
+import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
+import {findingDrawerTabs} from '../../lib/workspace-tab-leads';
 
 export function CodeReview({findings}: {findings:Finding[]}) {
   const {scan,token,workspace,entitlements,canAdmin,notify} = useWorkspace();
@@ -82,17 +84,20 @@ function FindingActivity() {
 export function FindingDrawer() {
   const {overlay,setOverlay,finding,findingContext,findingFocusKey,openFinding} = useWorkspace();
   const [tab,setTab] = useState('evidence');
-  const id = useId();
   useEffect(()=>{if(overlay==='finding')setTab('evidence');},[overlay]);
   if (!finding) return null;
-  const tabs = [{id:'evidence',label:'Evidence',icon:Layers3},{id:'telemetry',label:'Telemetry',icon:Activity},{id:'assessment',label:'360° assessment',icon:ShieldCheck},{id:'cost',label:'Cost breakdown',icon:Wallet},{id:'code',label:'Review code',icon:FileCode2},{id:'activity',label:'Activity & ITSM',icon:Activity}];
+  const tabs = findingDrawerTabs.map(item => ({
+    ...item,
+    icon: item.id === 'evidence' ? Layers3 : item.id === 'telemetry' || item.id === 'activity' ? Activity : item.id === 'assessment' ? ShieldCheck : item.id === 'cost' ? Wallet : FileCode2,
+  }));
   const position=findingContext.findIndex(item=>findingKey(item)===findingKey(finding));
   const protectedIntent=protectionSignals(finding).length>0;
   return <Dialog open={overlay === 'finding'} onClose={() => setOverlay(null)} title="Finding details" drawer returnFocusKey={findingFocusKey}>
     {findingContext.length>1&&<div className="finding-navigation"><span>Filtered results <code>{position+1} / {findingContext.length.toLocaleString()}</code></span><div><button className="icon-button" aria-label="Previous finding" disabled={position<=0} onClick={()=>openFinding(findingContext[position-1],findingContext)}><ChevronLeft size={15}/></button><button className="icon-button" aria-label="Next finding" disabled={position<0||position>=findingContext.length-1} onClick={()=>openFinding(findingContext[position+1],findingContext)}><ChevronRight size={15}/></button></div></div>}
     <div className="finding-drawer-header"><div className="finding-badges"><ProviderBadge provider={providerOf(finding)}/><PriorityBadge severity={finding.severity}/><span className={`state-badge ${protectedIntent?'protected-intent':'review-required'}`}>{protectedIntent?'Protected intent':'Review required'}</span></div><h2>{finding.resource_name}</h2><p>{ruleLabel(finding.rule_id)}</p></div>
-    <div className="drawer-tabs" role="tablist" aria-label="Finding detail views" onKeyDown={e => {if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.id===tab);const next=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];setTab(next.id);const button=document.getElementById(`${id}-${next.id}-tab`);button?.focus({preventScroll:true});const list=button?.parentElement;if(button&&list){const b=button.getBoundingClientRect(),l=list.getBoundingClientRect();if(b.left<l.left)list.scrollBy({left:b.left-l.left});else if(b.right>l.right)list.scrollBy({left:b.right-l.right});}}}}>{tabs.map(item => <button key={item.id} role="tab" id={`${id}-${item.id}-tab`} aria-controls={`${id}-${item.id}`} aria-selected={tab===item.id} tabIndex={tab===item.id?0:-1} onClick={() => setTab(item.id)}><item.icon size={15}/>{item.label}</button>)}</div>
-    <div className="drawer-tab-content" role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='telemetry'?<TelemetryEvidence finding={finding}/>:tab==='assessment'?<ArchitecturalAssessment finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
+    <TabWorkspaceShell id="finding-drawer" label="Finding detail views" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content">
+      <div key={findingKey(finding)+tab}>{tab==='evidence'?<Evidence finding={finding}/>:tab==='telemetry'?<TelemetryEvidence finding={finding}/>:tab==='assessment'?<ArchitecturalAssessment finding={finding}/>:tab==='cost'?<CostBreakdown finding={finding}/>:tab==='code'?<CodeReview findings={[finding]}/>:<FindingActivity/>}</div>
+    </TabWorkspaceShell>
     <div className="drawer-footer"><ShieldCheck size={15}/>Read-only evidence. All code requires independent review.</div>
   </Dialog>;
 }

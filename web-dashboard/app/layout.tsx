@@ -7,6 +7,7 @@ import './experience.css';
 import './theme-tokens.css';
 import './theme-surfaces.css';
 import './theme-preset-dark.css';
+import './workspace-tabs.css';
 import {ThemeProvider} from '../components/ThemeProvider';
 import {WorkspaceProvider} from '../components/WorkspaceProvider';
 import {AppShell} from '../components/AppShell';

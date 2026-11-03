@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "79ce1653b7a554128cee2302fb33b0ee843e4bda494d7ce525c2b33af9230968",
+  "inventory_sha256": "574ebe2d116af8b2ca5f35992ce63fd5cb6f1c0bbcf1310e2412a477588fa93c",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0016_workspace_ui_themes"
@@ -3881,8 +3881,8 @@
     },
     {
       "path": "web-dashboard/app/layout.tsx",
-      "sha256": "3ff7858c6184158f763213ce9dd6c088ac3e770a8414f11bc781a19b8c3fb672",
-      "bytes": 1030
+      "sha256": "f8c079594dcf7a9e1de4a9edfdae24bc564642306357fe8dbf9ef3ba53ba22b6",
+      "bytes": 1061
     },
     {
       "path": "web-dashboard/app/optimization/page.tsx",
@@ -3938,6 +3938,11 @@
       "path": "web-dashboard/app/workloads/page.tsx",
       "sha256": "f3f9a697d7b608fdedc176e33d6189daed6ccf26d59e93d546604bc756044bb4",
       "bytes": 227
+    },
+    {
+      "path": "web-dashboard/app/workspace-tabs.css",
+      "sha256": "221c6d22d64dcfcc46dd2db852ae516773324d5996aec4c9567904f254ddc1a7",
+      "bytes": 4084
     },
     {
       "path": "web-dashboard/components/AppShell.tsx",
@@ -4011,8 +4016,8 @@
     },
     {
       "path": "web-dashboard/components/WorkspaceViews.tsx",
-      "sha256": "fbca354788c996807b3fce4fc621d6e304526288b3260fad696167c7131134f6",
-      "bytes": 23141
+      "sha256": "7c40dab7cf4ac733c3873b37ed0e04820a2f4d07daa42fd16588b6874e558897",
+      "bytes": 23124
     },
     {
       "path": "web-dashboard/components/agents/AgentWorkspace.tsx",
@@ -4051,8 +4056,8 @@
     },
     {
       "path": "web-dashboard/components/drawer/FindingDrawer.tsx",
-      "sha256": "f5f422a7cd21a14afdc4e1fe0a6b610f5fd8af3dca98cb1139345570a5b9fc78",
-      "bytes": 16831
+      "sha256": "83d298f97c0d2c880e15c385cc3d28a515bc354b3e27f00b9c9bc6fdcb72e754",
+      "bytes": 16014
     },
     {
       "path": "web-dashboard/components/drawer/TelemetryEvidence.tsx",
@@ -4066,13 +4071,13 @@
     },
     {
       "path": "web-dashboard/components/governance/GovernanceWorkspace.tsx",
-      "sha256": "e2e65e2a7649344883c81efb1514e5296b0f395580621eb1febadee2bcc228f0",
-      "bytes": 45085
+      "sha256": "74132147ebcd5e33edeb108d54539a3abffe274928b6ef623cc78aaa34d4e72b",
+      "bytes": 44738
     },
     {
       "path": "web-dashboard/components/governance/governance.css",
-      "sha256": "9e5410b81b21d11eac4af01c6e4570d61cdd081f4aee47b7a691ee23605be35b",
-      "bytes": 3908
+      "sha256": "7d9fbfe043987f5bb1f4f5fba5d5c6e972c3fab1a3cb1d55c542d3974b482f81",
+      "bytes": 3967
     },
     {
       "path": "web-dashboard/components/governance/types.ts",
@@ -4096,8 +4101,8 @@
     },
     {
       "path": "web-dashboard/components/outcomes/OutcomesWorkspace.tsx",
-      "sha256": "45c563331294962899bb54711ae26a4383af84e05b918ccb7791fa223626b272",
-      "bytes": 33516
+      "sha256": "7ab742e415a44d23e94134d64fde14a8ec6c5c30c1ef65b2dc610a479723204a",
+      "bytes": 33022
     },
     {
       "path": "web-dashboard/components/outcomes/outcomes.css",
@@ -4121,8 +4126,8 @@
     },
     {
       "path": "web-dashboard/components/resources/ResourceDrawer.tsx",
-      "sha256": "c0e3a18c46d76236ba46ad9cfee0d93f55218fa921caa336df0dd729950d752d",
-      "bytes": 33116
+      "sha256": "5ff1acdbe0ab1024988671f88a485851dcf646deb200e7e9cc624a339a4febbc",
+      "bytes": 33176
     },
     {
       "path": "web-dashboard/components/resources/ResourceParts.tsx",
@@ -4168,6 +4173,11 @@
       "path": "web-dashboard/components/ui/PageTabs.tsx",
       "sha256": "fd53f5fa8a8b290ffee58f76418cb741f706a53fe6cc963acb779b8cfbb0e1d8",
       "bytes": 1225
+    },
+    {
+      "path": "web-dashboard/components/ui/TabWorkspaceShell.tsx",
+      "sha256": "bde71172b138f0e2202fc0e56bc7b67ad1e09c93617e987a9afb47fd7e4dfb7d",
+      "bytes": 1164
     },
     {
       "path": "web-dashboard/components/ui/button.tsx",
@@ -4538,6 +4548,11 @@
       "path": "web-dashboard/lib/workloads.mjs",
       "sha256": "ab8fd3c0c581ac5eb3f87aa1617ebf85adbfb9dbc754c355de8d9ad42cc58fcc",
       "bytes": 7537
+    },
+    {
+      "path": "web-dashboard/lib/workspace-tab-leads.ts",
+      "sha256": "83141af66653a7ff463534dd739121be1ca5d33b400a779bbc0bee8cb74f9382",
+      "bytes": 5052
     },
     {
       "path": "web-dashboard/next-env.d.ts",

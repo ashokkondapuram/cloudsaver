@@ -7,7 +7,8 @@ import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
 import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
-import {PageTabs} from '../ui/PageTabs';
+import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
+import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, ArmDetailBadge, PillarDots} from './ResourceParts';
@@ -263,7 +264,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
     {id: 'decision', label: 'Decision', icon: CheckCircle2},
     {id: 'history', label: 'History', icon: History},
     {id: 'code', label: 'Code', icon: FileCode2},
-  ] : [];
+  ].map(item => ({...item, lead: resourceDrawerLeads[item.id]})) : [];
   return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>
     {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current || !a ? <Loading label="Loading resource details…"/> : <>
       <div className="finding-drawer-header resource-drawer-header">
@@ -279,8 +280,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         <FinancialFiveStrip detail={current} token={token} canAdmin={canAdmin}/>
         <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
       </div>
-      <PageTabs id="resource-drawer" label="Resource details sections" className="drawer-tabs" tabs={tabs} value={tab} onChange={setTab}/>
-      <div className="drawer-tab-content" role="tabpanel" id={`resource-drawer-${tab}`} aria-labelledby={`resource-drawer-${tab}-tab`} tabIndex={0}>
+      <TabWorkspaceShell id="resource-drawer" label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content">
         {tab === 'overview' && <Overview detail={current}/>}
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
@@ -299,7 +299,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}
         {tab === 'history' && <HistoryTab detail={current}/>}
         {tab === 'code' && <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>}
-      </div>
+      </TabWorkspaceShell>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
     </>}
   </Dialog>;

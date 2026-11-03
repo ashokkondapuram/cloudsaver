@@ -16,7 +16,12 @@ import {ReliabilityPanel} from './ReliabilityPanel';
 import {ExecutionSyncTimeline} from './V150Views';
 import {BillingEvidencePanel,CommitmentsPanel,AIAssessmentHistory} from './EnterpriseEvidence';
 import {EmptyState, Loading, Notice, ProviderBadge, SectionTitle} from './ui/shared';
-import {PageTabs} from './ui/PageTabs';
+import {TabWorkspaceShell} from './ui/TabWorkspaceShell';
+import {
+  activityWorkspaceTabs,
+  automationWorkspaceTabs,
+  settingsWorkspaceTabs,
+} from '../lib/workspace-tab-leads';
 import {AIFoundryConfigurationEditor} from './settings/AIFoundryConfigurationEditor';
 import {CloudScopesEditor, IdentityOnboardingPanel, ResourceAccessIdentityEditor, ScheduleAlertsEditor} from './settings/WorkspaceSettings';
 import {AccessSettings} from './settings/AccessSettings';
@@ -33,7 +38,14 @@ function ScanHistory() {
 export function ActivityView() {
   const {token,canAdmin} = useWorkspace();
   const [tab,setTab] = useState('deliveries');
-  return <><PageTabs id="activity" label="Activity views" value={tab} onChange={setTab} tabs={[{id:'deliveries',label:'Delivery & audit',icon:Activity},{id:'scans',label:'Scan history',icon:History},{id:'ai',label:'AI assessments',icon:BrainCircuit}]}/><div role="tabpanel" id={`activity-${tab}`} aria-labelledby={`activity-${tab}-tab`}>{tab==='deliveries'?<ReliabilityPanel token={token} canAdmin={canAdmin}/>:tab==='ai'?<AIAssessmentHistory/>:<ScanHistory/>}</div></>;
+  const tabs = activityWorkspaceTabs.map(item =>
+    item.id === 'deliveries' ? {...item, icon: Activity} : item.id === 'scans' ? {...item, icon: History} : {...item, icon: BrainCircuit},
+  );
+  return (
+    <TabWorkspaceShell id="activity" label="Activity views" tabs={tabs} value={tab} onChange={setTab}>
+      {tab === 'deliveries' ? <ReliabilityPanel token={token} canAdmin={canAdmin}/> : tab === 'ai' ? <AIAssessmentHistory/> : <ScanHistory/>}
+    </TabWorkspaceShell>
+  );
 }
 
 function CloudAccounts() {
@@ -114,11 +126,21 @@ function Preferences() {
 }
 
 export function SettingsView() {
-  const [tab,setTab]=useState('cloud');
+  const [tab,setTab]=useState('access');
   useEffect(()=>{const value=new URLSearchParams(window.location.search).get('tab');if(value&&['cloud','rules','integrations','ai','access'].includes(value))setTab(value);},[]);
-  const tabs=[{id:'cloud',label:'Cloud scopes and plan',icon:Cloud},{id:'rules',label:'Analysis rules',icon:ShieldCheck},{id:'integrations',label:'Integrations',icon:Activity},{id:'ai',label:'AI & data governance',icon:BrainCircuit},{id:'access',label:'Access & API keys',icon:KeyRound}];
+  const tabs=settingsWorkspaceTabs.map(item=>{
+    if(item.id==='access')return {...item,icon:KeyRound};
+    if(item.id==='cloud')return {...item,icon:Cloud};
+    if(item.id==='rules')return {...item,icon:ShieldCheck};
+    if(item.id==='integrations')return {...item,icon:Activity};
+    return {...item,icon:BrainCircuit};
+  });
   function choose(value:string){setTab(value);const url=new URL(window.location.href);url.searchParams.set('tab',value);window.history.replaceState(null,'',url);}
-  return <><PageTabs id="settings" label="Workspace settings" value={tab} onChange={choose} tabs={tabs}/><div role="tabpanel" tabIndex={0} id={`settings-${tab}`} aria-labelledby={`settings-${tab}-tab`}>{tab==='cloud'?<><CloudAccounts/><ResourceAccessSettings/><ScheduleAlertsEditor/><Plan/><section className="panel"><div className="settings-notice"><Wallet size={17}/><div><p>Cloud billing imports, automatic billing sync and billed-cost reports are on the Cost allocation page. Scan history and delivery status are on the Activity page.</p><p><Link className="text-link" href="/allocation">Open cost allocation<ArrowRight size={14}/></Link> <Link className="text-link" href="/activity">Open activity<ArrowRight size={14}/></Link></p></div></div></section></>:tab==='rules'?<CustomerRuleSettings/>:tab==='integrations'?<ObservabilitySettings/>:tab==='ai'?<><AIFoundryConfigurationEditor/><DataGovernanceWorkspace/></>:<><AccessSettings/><Preferences/></>}</div></>;
+  return (
+    <TabWorkspaceShell id="settings" label="Workspace settings" tabs={tabs} value={tab} onChange={choose}>
+      {tab==='cloud'?<><Plan/><CloudAccounts/><ResourceAccessSettings/><ScheduleAlertsEditor/><section className="panel"><div className="settings-notice"><Wallet size={17}/><div><p>Related workspace pages</p><p><Link className="text-link" href="/allocation">Open cost allocation<ArrowRight size={14}/></Link> <Link className="text-link" href="/activity">Open activity<ArrowRight size={14}/></Link></p></div></div></section></>:tab==='rules'?<CustomerRuleSettings/>:tab==='integrations'?<ObservabilitySettings/>:tab==='ai'?<><AIFoundryConfigurationEditor/><DataGovernanceWorkspace/></>:<><AccessSettings/><Preferences/></>}
+    </TabWorkspaceShell>
+  );
 }
 
 export function Allocation() {
@@ -152,5 +174,13 @@ export function Automation() {
   const {token,scan,canAdmin,workspace,entitlements} = useWorkspace();
   const [tab,setTab] = useState('reviews');
   const terraform = entitlements?.can_export_terraform ?? !!workspace?.can_export_terraform;
-  return <><PageTabs id="automation" label="Automation workflows" value={tab} onChange={setTab} tabs={[{id:'reviews',label:'Review packages',icon:GitPullRequest},{id:'policies',label:'Plan guardrails',icon:ShieldCheck},{id:'execution',label:'Execution history',icon:GitBranch}]}/><div role="tabpanel" id={`automation-${tab}`} aria-labelledby={`automation-${tab}-tab`}>{tab==='reviews'?<GitOpsPanel key={scan?.scan_id||'no-scan'} token={token} scan={scan} canPublish={canAdmin&&terraform} included={terraform}/>:tab==='execution'?<ExecutionSyncTimeline/>:<PlanPolicyPanel token={token}/>}</div><div className="automation-principles"><div><ShieldCheck size={21}/><h3>Evidence first</h3><p>Every review starts from an owned resource snapshot.</p></div><div><FileCode2 size={21}/><h3>Inspect the exact code</h3><p>Preview import artifacts before downloading or publishing.</p></div><div><GitBranch size={21}/><h3>Keep your review process</h3><p>Draft PRs stay within operator-approved repositories.</p></div></div></>;
+  const tabs = automationWorkspaceTabs.map(item =>
+    item.id === 'reviews' ? {...item, icon: GitPullRequest} : item.id === 'policies' ? {...item, icon: ShieldCheck} : {...item, icon: GitBranch},
+  );
+  return (
+    <TabWorkspaceShell id="automation" label="Automation workflows" tabs={tabs} value={tab} onChange={setTab}>
+      {tab==='reviews'?<GitOpsPanel key={scan?.scan_id||'no-scan'} token={token} scan={scan} canPublish={canAdmin&&terraform} included={terraform}/>:tab==='execution'?<ExecutionSyncTimeline/>:<PlanPolicyPanel token={token}/>}
+      <div className="automation-principles"><div><ShieldCheck size={21}/><h3>Evidence first</h3><p>Every review starts from an owned resource snapshot.</p></div><div><FileCode2 size={21}/><h3>Inspect the exact code</h3><p>Preview import artifacts before downloading or publishing.</p></div><div><GitBranch size={21}/><h3>Keep your review process</h3><p>Draft PRs stay within operator-approved repositories.</p></div></div>
+    </TabWorkspaceShell>
+  );
 }

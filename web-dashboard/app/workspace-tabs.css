@@ -1,0 +1,127 @@
+/* Professional tab workspaces — all page tabs, governance, outcomes, and drawer tabs. */
+.workspace-tab-shell{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  margin-bottom:24px;
+  border:1px solid var(--border);
+  border-radius:var(--experience-radius,14px);
+  background:color-mix(in srgb,var(--surface) 92%,var(--slate-50));
+  box-shadow:var(--experience-shadow);
+  overflow:clip;
+}
+.workspace-tab-shell .workspace-tab-list,
+.workspace-tab-shell .page-tabs.gov-tabs,
+.drawer-tabs.workspace-tab-list{
+  display:flex;
+  align-items:stretch;
+  gap:4px;
+  margin:0;
+  padding:10px 12px;
+  border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--slate-50) 55%,var(--surface));
+  overflow-x:auto;
+  scrollbar-width:thin;
+  scrollbar-color:var(--border) transparent;
+}
+.workspace-tab-list>button,
+.workspace-tab-shell .gov-tabs>button,
+.drawer-tabs.workspace-tab-list>button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:40px;
+  padding:8px 14px;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:550;
+  line-height:1.35;
+  white-space:nowrap;
+  flex:0 0 auto;
+}
+.workspace-tab-list>button:hover,
+.workspace-tab-shell .gov-tabs>button:hover,
+.drawer-tabs.workspace-tab-list>button:hover{
+  color:var(--text);
+  background:color-mix(in srgb,var(--surface) 80%,var(--slate-100));
+  border-color:var(--border);
+}
+.workspace-tab-list>button[aria-selected=true],
+.workspace-tab-shell .gov-tabs>button[aria-selected=true],
+.drawer-tabs.workspace-tab-list>button[aria-selected=true]{
+  color:var(--indigo-600);
+  background:var(--surface);
+  border-color:color-mix(in srgb,var(--indigo-600) 28%,var(--border));
+  box-shadow:0 1px 0 color-mix(in srgb,var(--indigo-600) 35%,transparent),0 6px 18px color-mix(in srgb,var(--indigo-600) 8%,transparent);
+}
+.workspace-tab-list>button:focus-visible,
+.drawer-tabs.workspace-tab-list>button:focus-visible{
+  outline:2px solid var(--indigo-600);
+  outline-offset:2px;
+}
+.tab-lead{
+  margin:0;
+  padding:16px 22px 0;
+  max-width:78ch;
+  font-size:13px;
+  line-height:1.75;
+  color:var(--muted);
+}
+.tab-panel-stack{
+  display:flex;
+  flex-direction:column;
+  gap:22px;
+  padding:20px 22px 24px;
+  min-width:0;
+}
+.tab-panel-stack:focus{outline:none}
+.tab-panel-stack:focus-visible{outline:2px solid var(--indigo-600);outline-offset:-2px;border-radius:0 0 var(--experience-radius,14px) var(--experience-radius,14px)}
+.workspace-tab-shell .tab-panel-stack>.panel:first-child{margin-top:0}
+.workspace-tab-shell .automation-principles{margin:8px 0 0}
+.drawer .workspace-tab-shell,
+.drawer .drawer-tabs.workspace-tab-list{border:0;border-radius:0;background:transparent;box-shadow:none}
+.drawer .drawer-tabs.workspace-tab-list{padding:0 18px;background:var(--slate-50);border-bottom:1px solid var(--border)}
+.drawer .tab-lead{padding:14px 24px 0}
+.drawer .tab-panel-stack{padding:0;gap:0}
+.drawer .tab-panel-stack.drawer-tab-content,
+.drawer .tab-panel-stack>.drawer-tab-content{padding:24px}
+
+/* Legacy page-tabs outside the shell keep underline style for any stragglers */
+.page-tabs:not(.workspace-tab-list){
+  display:flex;
+  gap:22px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:24px;
+  overflow-x:auto;
+}
+.page-tabs:not(.workspace-tab-list)>button{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  background:transparent;
+  border:0;
+  border-bottom:2px solid transparent;
+  color:var(--muted);
+  padding:0 2px 14px;
+  font-size:13px;
+  white-space:nowrap;
+}
+.page-tabs:not(.workspace-tab-list)>button[aria-selected=true]{
+  color:var(--indigo-600);
+  font-weight:600;
+  border-bottom-color:var(--indigo-600);
+}
+
+@media(max-width:720px){
+  .workspace-tab-shell .workspace-tab-list,
+  .drawer-tabs.workspace-tab-list{padding:8px 10px}
+  .workspace-tab-list>button,
+  .drawer-tabs.workspace-tab-list>button{min-height:38px;padding:7px 11px;font-size:12px}
+  .tab-lead{padding:14px 16px 0;font-size:12px}
+  .tab-panel-stack{padding:16px 16px 20px;gap:18px}
+}
