@@ -10,9 +10,9 @@ from app.data_policy import DEFAULT_DATA_GOVERNANCE,validate_data_governance
 
 CONTRACT_VERSION=1
 ACTIVE_GRANT=ContextVar('ai_data_processing_grant',default=None)
-DROP_FIELDS={'resource_id','resource_name','tenant_id','subscription_id','account_id','project_id','customer_id',
+DROP_FIELDS={'resource_id','tenant_id','subscription_id','account_id','project_id','customer_id',
     'billing_account','cost_center','application_id','tags','raw_tags','raw_telemetry','connection_string',
-    'email','phone','private_ip','hostname','endpoint','url','billed_cost_usd','invoice','invoice_data'}
+    'email','phone','private_ip','hostname','endpoint','url','invoice','invoice_data'}
 SECRET_FIELDS={'password','secret','client_secret','api_key','access_token','refresh_token','authorization','connection_string'}
 SECRET_KEYS={re.sub(r'[^a-z0-9]','',v) for v in SECRET_FIELDS}
 DROP_KEYS={re.sub(r'[^a-z0-9]','',v) for v in DROP_FIELDS}
@@ -23,7 +23,14 @@ IDENTIFIERS=[re.compile(p,re.I) for p in (
     r'\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b',r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b',
     r'\b[0-9]{3}-[0-9]{2}-[0-9]{4}\b',r'\b(?:[a-z0-9-]+\.)+(?:internal|corp|local)\b')]
 TOP_FIELDS={'assessment':{'resource_reference','provider','service_category','rule_id','facts','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','evidence_gap_codes'},
-    'resource_assessment':{'resource_reference','provider','service_category','findings','policy_version','observation','risk_floor','checks','protected','guardrails','observed_check_codes','evidence_gap_codes'},
+    'resource_assessment':{
+        'resource_reference','provider','resource_name','resource_type','resource_group','scope_id','service_category',
+        'finding_count','rule_ids','findings','policy_version','observation','review_priority','disposition','protected_reasons',
+        'risk_level','risk_check_codes','evidence_gap_codes','evidence_coverage','retail_estimate_usd','billed_cost_usd',
+        'effective_cost_usd','commitment_locked','currency','pillars','rule_evaluations','rule_matches','rule_conflicts',
+        'reconciliation_status','costs','analysis_readiness','configuration_detail','financial_overlaps','risk_floor','checks',
+        'protected','guardrails','observed_check_codes',
+    },
     'followup':{'resource','question','prior_summary','prior_assessment'},'agent_planning':{'instruction','resource_type','connectors'}}
 FACT_FIELDS={'encrypted','multi_az','publicly_accessible','deletion_protection','recent_snapshot_verified','imds_v2_required',
     'public_admin_ingress','monitoring_enabled','tls_required','engine_supported','auto_minor_upgrade','health_probes_enabled',
@@ -59,7 +66,7 @@ def sanitize(value,*,purpose=None,output=False):
                     try:result[key]=str(UUID(child));continue
                     except ValueError:pass
                 result[key]=visit(child,depth+1)
-                if not output and key=='facts' and isinstance(result[key],dict):
+                if not output and key=='facts' and isinstance(result[key],dict) and purpose != 'resource_assessment':
                     counts['removed_fields']+=len(set(result[key])-FACT_FIELDS)
                     result[key]={k:v for k,v in result[key].items() if k in FACT_FIELDS}
             return result

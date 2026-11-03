@@ -7,7 +7,8 @@ import re
 from decimal import Decimal
 
 from app.assessment import PILLARS, ai_context, assess, category as service_category
-from app.assessment_policy import POLICY_VERSION,MODEL_BASE_CODES
+from app.ai_resource_context import build_resource_ai_context
+from app.assessment_policy import POLICY_VERSION
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
 PRIORITY = ('critical', 'high', 'evidence_required')
@@ -126,16 +127,10 @@ def merge(key, findings, *, observed_at=None, now=None):
         billed_cost_usd=_first_cost('billed_cost_usd'), effective_cost_usd=_first_cost('effective_cost_usd'),
         commitment_locked=any(r.get('commitment_locked') for r in results), currency=_first_cost('currency'),
         realizable_savings_usd=None, automatic_execution=False)
-    context = dict(
-        resource_reference=key, provider=provider, service_category=category, policy_version=POLICY_VERSION,
-        findings=[dict(rule_id=f['rule_id'], facts=ai_context(f, r)['facts']) for f, r in zip(findings, results)],
-        observation=observation, risk_floor=assessment['risk_level'],
-        checks=[dict(pillar=c['pillar'], code=c['code'], status=c['status']) for c in merged_checks if c['status']!='unknown' or c['code'] in MODEL_BASE_CODES],
-        protected=bool(protected), guardrails=guardrails,
-        observed_check_codes=sorted({c['code'] for c in merged_checks if c['status'] != 'unknown'}))
-    # Freshness status changes with wall-clock time; only the saved observation time is fingerprinted.
-    stable = dict(context, observation=dict(observed_at=observation['observed_at']),checks=[c for c in context['checks'] if c['code']!='OBSERVATION_FRESHNESS'],
-                  guardrails=[g for g in guardrails if g != 'REFRESH_OBSERVATION'])
+    context = build_resource_ai_context(assessment, findings, per_finding_assessments=results)
+    from app.ai_resource_context import stable_digest_context
+
+    stable = stable_digest_context(context)
     assessment['evidence_digest'] = hashlib.sha256(json.dumps(
         dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
         sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -192,7 +187,20 @@ def assessments(scan, *, now=None):
             merged[key] = (overlay_inventory_billing(assessment, obs), context)
             continue
         merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now)
-    return merged
+    from app.ai_scan_context import augment_ai_context_from_scan
+    from app.ai_resource_context import stable_digest_context
+
+    finished = {}
+    for key, (assessment, context) in merged.items():
+        findings = group(scan['findings']).get(key, [])
+        context = augment_ai_context_from_scan(scan, assessment, findings, context)
+        stable = stable_digest_context(context)
+        assessment = dict(assessment)
+        assessment['evidence_digest'] = hashlib.sha256(json.dumps(
+            dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
+            sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        finished[key] = (assessment, context)
+    return finished
 
 
 def row(assessment):

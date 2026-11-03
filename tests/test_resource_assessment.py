@@ -78,7 +78,7 @@ def test_resource_identity_merges_findings_and_digest_ignores_wall_clock():
     assert merged['finding_count'] == 2 and merged['rule_ids'] == ['AZURE_DISK_UNATTACHED_RETENTION', 'AZURE_DISK_UNATTACHED_RETENTION']
     assert merged['evidence_digest'] == later['evidence_digest'] and merged['observation'] != later['observation']
     assert {p['pillar'] for p in merged['pillars']} == set(PILLARS)
-    assert a['resource_id'] not in json.dumps(context) and 'disk-a' not in json.dumps(context)
+    assert '"resource_id"' not in json.dumps(context) and a['resource_id'] not in json.dumps(context)
     assert 'ENCRYPTION_AT_REST' in context['observed_check_codes']
     risky, _ = merge(resource_key(a), [a, dict(b, evidence=dict(OBSERVED, encrypted=False))])
     assert risky['review_priority'] == 'critical' and 'ENCRYPTION_AT_REST' in risky['risk_check_codes']
