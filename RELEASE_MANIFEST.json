@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "a47a2a55c8c3303d3269f1a05afa821be43c897de9f67331d7d9b97df87faffd",
+  "inventory_sha256": "50636d5ff1f2b33a380c1339fd08b406d1cd513d7f2a5f3f1cbebbd8a900bac4",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -1406,8 +1406,8 @@
     },
     {
       "path": "docs/ENTERPRISE_BACKEND_PROGRAM.md",
-      "sha256": "20c60e2f7b2a9b521c8749b63f221c53ffea801daeaddcd70a7491c83f29bcb4",
-      "bytes": 3808
+      "sha256": "39c77a212d3a6de622b1072a3edb80a4a4783eb706628ecf861306f75062ba20",
+      "bytes": 4356
     },
     {
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
@@ -4383,6 +4383,11 @@
       "path": "web-dashboard/lib/api.ts",
       "sha256": "d2d3d79e35c455d8c7456f46d56f77d0803c14efe2738bc03d2fada25f176ea2",
       "bytes": 3328
+    },
+    {
+      "path": "web-dashboard/lib/arm-detail.ts",
+      "sha256": "c51443fa42477c80a0542931770785168d742f94ce16040df8f451bac880bb70",
+      "bytes": 827
     },
     {
       "path": "web-dashboard/lib/control-plane-sync.ts",

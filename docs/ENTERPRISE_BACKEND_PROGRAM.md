@@ -14,20 +14,22 @@ Living record of the **Enterprise Backend and Contracts** workstream (route pari
 
 ## Contract backlog (BC-01–BC-14)
 
-| ID | Theme | `main` anchor |
-| --- | --- | --- |
-| BC-01 | Engineering outbox read API reachable via gateway/BFF (404 fix) | `36afdc5` |
-| BC-02 | Catalog routes: billable catalog, Azure resource types, typed tables, rules catalog | `36afdc5` |
-| BC-03 | `cost_scope` forwarded on scan resource lists | `36afdc5` |
-| BC-04 | Worker `checkAssignment` for paired `rightsize_sku` GitOps | `54e32ee` |
-| BC-05 | `Task.payload` typing; expected-state guard before step permit | `54e32ee` |
-| BC-06 | `sync-agent` passes `EnterpriseStore` for AST rightsize; `unreconciled()` includes `compute.resize` | `54e32ee` |
-| BC-07 | Scan lease fencing: no async lease steal; `scan-jobs` 409 when lease held | `2c5fd36` |
-| BC-08 | `arm_detail` query filter on scan resource list/export | `8928311` |
-| BC-09 | List rows expose `arm_detail`; gateway forwards filter | `8928311` |
-| BC-10 | `schema_capabilities` on `GET /api/v1/settings/cloud-status` | `8928311` |
-| BC-11 | Worker guard for missing platform outbox lease columns | `8928311` |
-| BC-12–14 | BFF parity: FinOps autopilot, saas-focus import, platform GitOps AST/PR routes | `2c5fd36` + `8928311` |
+| ID | Theme | `main` anchor | Status |
+| --- | --- | --- | --- |
+| BC-01 | Engineering outbox read API reachable via gateway/BFF (404 fix) | `36afdc5` | Done |
+| BC-02 | Catalog routes: billable catalog, Azure resource types, typed tables, rules catalog | `36afdc5` | Done |
+| BC-03 | `cost_scope` forwarded on scan resource lists | `36afdc5` | Done |
+| BC-04 | Worker `checkAssignment` for paired `rightsize_sku` GitOps | `54e32ee` | Done |
+| BC-05 | `Task.payload` typing; expected-state guard before step permit | `54e32ee` | Done |
+| BC-06 | `sync-agent` passes `EnterpriseStore` for AST rightsize; `unreconciled()` includes `compute.resize` | `54e32ee` | Done |
+| BC-07 | Scan lease fencing: no async lease steal; `scan-jobs` 409 when lease held | `2c5fd36` | Done |
+| BC-08 | `arm_detail` query filter on scan resource list/export | `8928311` | Done |
+| BC-09 | List rows expose `arm_detail`; gateway forwards filter | `8928311` | Done |
+| BC-10 | `schema_capabilities` on `GET /api/v1/settings/cloud-status` | `8928311` | Done |
+| BC-11 | Worker guard for missing platform outbox lease columns | `8928311` | Done |
+| BC-12 | BFF parity: FinOps autopilot (`playbooks`, `resize-metrics`, `resize`) | `2c5fd36` | Done |
+| BC-13 | BFF parity: `POST /api/v1/finops/saas-focus/import` | `2c5fd36` | Done |
+| BC-14 | BFF parity: platform GitOps (`pull-requests`, `pre-merge/evaluate`, `ast/sync`, `ast/index-repositories`) | `8928311` | Done |
 
 ## Key modules
 
@@ -44,7 +46,8 @@ Living record of the **Enterprise Backend and Contracts** workstream (route pari
 
 ```bash
 python3 -m pytest tests/test_route_inventory.py tests/test_agent_unreconciled.py \
-  tests/test_scan_concurrency.py tests/test_schema_capabilities.py -q
+  tests/test_scan_concurrency.py tests/test_schema_capabilities.py \
+  tests/test_enterprise_backend_contracts.py -q
 python3 scripts/release_manifest.py --check
 cd agent-worker && node --test tests/*.test.ts
 cd web-dashboard && npm run test:enterprise-ui   # BFF allowlist regressions
@@ -52,4 +55,6 @@ cd web-dashboard && npm run test:enterprise-ui   # BFF allowlist regressions
 
 ## Program status
 
-**BC-01–BC-14 complete on `main` (through `8928311`).** Follow-on work is product-driven: integration tests with mocked ARM enrichment, dashboard `arm_detail` filter UX, optional CI workflow split for enterprise-ui (requires GitHub token with `workflow` scope), and pilot sign-off items in the Azure resource detail spec.
+**BC-01–BC-14: complete on `main`.** Implementation landed in `36afdc5` → `8928311`; dashboard follow-ups for BC-08/09 UX are in Enterprise UI phases 27–28 (`4f90172`, `0e839f1`). CI regression guard: `tests/test_enterprise_backend_contracts.py` (one test per BC item).
+
+Follow-on work is product-driven: integration tests with mocked ARM enrichment in full scan fixtures, optional CI workflow split for enterprise-ui (requires GitHub token with `workflow` scope), and pilot sign-off items in the Azure resource detail spec.
