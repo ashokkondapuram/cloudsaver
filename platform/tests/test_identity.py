@@ -298,6 +298,16 @@ def test_resource_access_validation_and_platform_view(service):
     assert updated['resource_access_effective']['aws_hub_role_arn']['source'] == 'platform'
 
 
+def test_workspace_ui_theme_preset(service):
+    workspace(service)
+    view = service.get_workspace(TID)
+    assert view['ui_theme_preset'] == 'console'
+    updated = service.update_workspace(TID, {'version': view['version'], 'ui_theme_preset': 'midnight-neu'}, OPERATOR)
+    assert updated['ui_theme_preset'] == 'midnight-neu'
+    again = service.get_workspace(TID)
+    assert again['ui_theme_preset'] == 'midnight-neu'
+
+
 def test_node_images_are_pinned():
     froms = [line for line in (ROOT / 'portal/Dockerfile').read_text().splitlines() if line.startswith('FROM ')]
     assert froms and all('node:24.22.1-alpine' in line for line in froms)

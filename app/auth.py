@@ -322,4 +322,17 @@ def workspace_response(workspace, mode, settings=None):
         'can_dispatch_automated_alerts': tier.can_dispatch_automated_alerts,
         'retention_days': tier.retention_days,
         'settings_editable': getattr(settings, 'registry', None) is not None,
+        'ui_theme_preset': _ui_theme_preset(workspace, settings),
     } | workspace_operations(workspace, settings)
+
+
+def _ui_theme_preset(workspace, settings):
+    from app.ui_theme import DEFAULT_UI_THEME_PRESET, effective_ui_theme_preset
+    registry = getattr(settings, 'registry', None) if settings is not None else None
+    if registry is None:
+        return DEFAULT_UI_THEME_PRESET
+    try:
+        themes = registry.platform().get('workspace_ui_themes') or {}
+    except Exception:
+        themes = {}
+    return effective_ui_theme_preset(themes, workspace['tenant_id'])

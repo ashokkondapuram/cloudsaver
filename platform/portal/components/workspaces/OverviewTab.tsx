@@ -14,6 +14,7 @@ import {useSession} from '../SessionProvider';
 import {StepUpPrompt} from '../StepUpPrompt';
 import {Dialog} from '../ui/Dialog';
 import {Notice, ProviderList, SectionTitle, StatusBadge} from '../ui/shared';
+import {WorkspaceThemeSection} from './WorkspaceThemeSection';
 
 type Props = {workspace: Workspace; onChange: (workspace: Workspace) => void; reload: () => Promise<void>};
 
@@ -54,6 +55,7 @@ export function OverviewTab({workspace, onChange, reload}: Props) {
         <div><dt>Last updated</dt><dd>{formatAttribution(workspace.updated_at, workspace.updated_by)}</dd></div>
       </dl>
     </section>
+    <WorkspaceThemeSection workspace={workspace} onChange={onChange}/>
     <EditWorkspaceDialog open={pending === 'edit'} workspace={workspace} onClose={() => setPending(null)} onSaved={updated => {onChange(updated); setPending(null); setMessage('Workspace updated.');}}/>
     <ConfirmDialog open={pending === 'suspend'} title="Suspend this workspace?" confirmLabel="Suspend workspace" destructive
       body="Every key for this workspace stops working right away. Keys aren't revoked, and you can reactivate the workspace later."

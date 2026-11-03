@@ -230,6 +230,16 @@ html[data-theme=dark] .summary-table tbody tr:nth-child(even) td{background:colo
 html[data-theme=dark] .summary-table tr.clickable:hover td{background:color-mix(in srgb,var(--indigo-50) 70%,var(--slate-100))!important}
 html[data-theme=dark] .signin-page{background:radial-gradient(900px 480px at 50% -5%,#1e1b4b,var(--slate-50))}
 
+.theme-preset-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;padding:0 24px 24px}
+.theme-preset-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;border:1px solid var(--border);border-radius:12px;padding:16px;background:var(--surface);cursor:pointer;min-height:130px}
+.theme-preset-card:disabled{opacity:.55;cursor:not-allowed}
+.theme-preset-card.active{border-color:#818cf8;box-shadow:0 0 0 1px #818cf866,inset 0 0 0 1px #818cf822}
+.theme-preset-card strong{font-size:13px;color:var(--slate-700)}
+.theme-preset-card small{font-size:12px;line-height:1.7;color:var(--muted)}
+.theme-swatch{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;border:1px solid var(--border);margin-bottom:4px}
+.theme-swatch-console{background:linear-gradient(145deg,#f8fafc,#e2e8f0);color:#4f46e5}
+.theme-swatch-midnight-neu{background:linear-gradient(145deg,#05060c,#0a0e18);color:#00b4ff;box-shadow:inset 4px 4px 10px #000,inset -3px -3px 8px #1a2438}
+
 /* Responsive behavior */
 @media(max-width:1100px){.page-content{padding:28px 24px}.topbar{padding:0 24px}.current-page{display:none}.session-role{display:none}}
 @media(max-width:800px){:root{--sidebar-width:64px}.sidebar{padding:24px 10px 16px}.sidebar .brand{padding:0;justify-content:center;font-size:0}.sidebar .brand>span:nth-child(2),.sidebar .nav-group,.nav-link>span,.sidebar-safety,.sidebar-version{display:none}.nav-link{justify-content:center;padding:12px;font-size:0}.form-grid{grid-template-columns:1fr}.page-heading{flex-wrap:wrap;align-items:flex-start}.operator-identity>div{display:none}.scope-row.aws,.scope-row.gcp,.scope-row.kubernetes{grid-template-columns:1fr 32px}.scope-row .field:not(:first-child){grid-column:1}}

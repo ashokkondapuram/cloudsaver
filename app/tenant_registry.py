@@ -34,11 +34,13 @@ def env_platform_defaults():
         return os.getenv(name, 'false').lower() == 'true'
     return {'scheduled_scans_enabled': flag('CLOUDSAVER_SCHEDULED_SCANS'),
             'automated_alerts_enabled': flag('CLOUDSAVER_AUTOMATED_ALERTS'),
-            'resource_access': {}, 'cloudsaver_integration': {}}
+            'resource_access': {}, 'cloudsaver_integration': {}, 'workspace_ui_themes': {}}
 
 
 def normalize_platform(value):
-    keys = ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration')
+    from app.ui_theme import normalize_workspace_ui_themes
+    keys = ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration',
+            'workspace_ui_themes')
     if not isinstance(value, dict) or set(value) - set(keys):
         raise ValueError('Unknown platform setting')
     if not all(isinstance(value.get(k), bool) for k in ('scheduled_scans_enabled', 'automated_alerts_enabled')):
@@ -53,9 +55,15 @@ def normalize_platform(value):
         integration = {}
     if not isinstance(integration, dict):
         raise ValueError('CloudSaver integration settings must be an object')
+    themes = value.get('workspace_ui_themes', {})
+    if themes is None:
+        themes = {}
+    if not isinstance(themes, dict):
+        raise ValueError('Workspace UI theme assignments must be an object')
     return {'scheduled_scans_enabled': value['scheduled_scans_enabled'],
             'automated_alerts_enabled': value['automated_alerts_enabled'],
-            'resource_access': resource_access, 'cloudsaver_integration': integration}
+            'resource_access': resource_access, 'cloudsaver_integration': integration,
+            'workspace_ui_themes': normalize_workspace_ui_themes(themes)}
 
 
 class BaseRegistry:
@@ -178,9 +186,11 @@ class BaseRegistry:
         self._ensure_seeded()
         current = self.platform()
         patch = {k: value[k] for k in (
-            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration') if k in value}
+            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration',
+            'workspace_ui_themes') if k in value}
         merged = normalize_platform({**{k: current[k] for k in (
-            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration')}, **patch})
+            'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access', 'cloudsaver_integration',
+            'workspace_ui_themes')}, **patch})
         if merged == {k: current[k] for k in merged}:
             return False
         self._write_platform(merged, current['version'], 'directory')

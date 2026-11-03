@@ -18,7 +18,7 @@ SCOPE_SQL = {
 # jsonb columns; every other list value is a PostgreSQL array (roles, allowed_providers).
 JSON_COLUMNS = frozenset({'identity', 'scope_restrictions', 'details', 'external_customer_refs', 'entitlements',
                           'entitlement_overrides', 'external_price_refs', 'snapshot', 'parameters', 'policy',
-                          'resource_access', 'cloudsaver_integration'})
+                          'resource_access', 'cloudsaver_integration', 'workspace_ui_themes'})
 ENDED_SQL = '(' + ','.join(f"'{s}'" for s in ENDED) + ')'
 
 
@@ -162,13 +162,14 @@ class PostgresTx:
     # platform
     def get_platform(self):
         return dict(self._one('SELECT scheduled_scans_enabled, automated_alerts_enabled, resource_access, '
-                              'cloudsaver_integration, version, updated_by, updated_at '
+                              'cloudsaver_integration, workspace_ui_themes, version, updated_by, updated_at '
                               'FROM directory.platform_settings WHERE id=1'))
 
     def update_platform(self, expected_version, fields):
         row = self._update('directory.platform_settings', 'id', 1, expected_version, fields)
         return {k: row[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access',
-                                     'cloudsaver_integration', 'version', 'updated_by', 'updated_at')} if row else None
+                                     'cloudsaver_integration', 'workspace_ui_themes', 'version', 'updated_by',
+                                     'updated_at')} if row else None
 
     # change feed
     def append_change(self, tenant_id, change_type, version, snapshot):

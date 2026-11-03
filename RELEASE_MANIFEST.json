@@ -1,9 +1,9 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "7852ff8859994b39c3bb85de34d02835b8a15c77dde4dcb78c930b3eaa8a1b92",
+  "inventory_sha256": "6bb9b351e8dac1628724e97791c1d5f842e5f965e3f9f45cb5dff775bece16e1",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
-    "identity": "i0015_cloudsaver_integration"
+    "identity": "i0016_workspace_ui_themes"
   },
   "exclusions": [
     "RELEASE_MANIFEST.json (self-reference)"
@@ -306,8 +306,8 @@
     },
     {
       "path": "app/auth.py",
-      "sha256": "4a27b7ac0848cde5b2724e2484d6f43f34d7eb51189b6c681d14304c9385bfcb",
-      "bytes": 16889
+      "sha256": "72077c65454454f384f709bada817f203b5e6e270941dc5172f5c051fe859809",
+      "bytes": 17419
     },
     {
       "path": "app/autopilot_commitments.py",
@@ -1171,8 +1171,8 @@
     },
     {
       "path": "app/tenant_registry.py",
-      "sha256": "09c38f7ca7fbc548244f9014c73583ef7b9fb1fd0e89b8b80bfdf1d71ad364de",
-      "bytes": 28716
+      "sha256": "a76e3a35d2269d588c0de5b99b1c714047699f3c0276d5ba680f0717d1f5e1a8",
+      "bytes": 29188
     },
     {
       "path": "app/trends.py",
@@ -2241,18 +2241,18 @@
     },
     {
       "path": "platform/identity/service.py",
-      "sha256": "7c4db4485c854b4bffc5c45ab5dffa9697c2842f001b914559727e9084125039",
-      "bytes": 67586
+      "sha256": "204351adfed1b602270054c4bed57881e652dd6092e3cf67bdeec76aa05aa0ed",
+      "bytes": 70470
     },
     {
       "path": "platform/identity/store_memory.py",
-      "sha256": "61c08b9afba81c097ba610c137ee3460d298e197e97d47129249f17fc20d9430",
-      "bytes": 25109
+      "sha256": "aa9996572ae5aae6f4bb107d290c006a8e1edf95f8960fa29e5164eccbd6a579",
+      "bytes": 25136
     },
     {
       "path": "platform/identity/store_postgres.py",
-      "sha256": "320d027d952c6fe3f6a022d3dc5f5529afccd255f919255309bfcc124d7ff3f3",
-      "bytes": 33117
+      "sha256": "bdd8c39f3bd85ab40c4d89d60f64b52584a973f7aaf945414768e8b1264206ca",
+      "bytes": 33221
     },
     {
       "path": "platform/identity/throttle.py",
@@ -2471,8 +2471,8 @@
     },
     {
       "path": "platform/portal/app/globals.css",
-      "sha256": "64c2e6b6dcfbb9ed0fed4195baff15337240eb649c609d1f704bb7f2bf51393e",
-      "bytes": 29374
+      "sha256": "5424a9977c2e601d0019201a4310216659830ec1372ce06fe89d22f92fa0f2cb",
+      "bytes": 30405
     },
     {
       "path": "platform/portal/app/health/live/route.ts",
@@ -2711,8 +2711,8 @@
     },
     {
       "path": "platform/portal/components/workspaces/OverviewTab.tsx",
-      "sha256": "629c6b8f6b1773a9914f59c7df52048349e4cbd23d5c90b22d4fdecab7dcdf79",
-      "bytes": 10171
+      "sha256": "6c7eaae7c7f245566914c7e4e7303a3066a6bd866d338e30874d58afd9e4b167",
+      "bytes": 10305
     },
     {
       "path": "platform/portal/components/workspaces/ResourceAccessTab.tsx",
@@ -2811,8 +2811,8 @@
     },
     {
       "path": "platform/portal/lib/types.ts",
-      "sha256": "273db17c8c3597f2abbae72072006655ac4ce0b6afd752681c3dffcfb3406dc0",
-      "bytes": 9719
+      "sha256": "a7ee66e13bd8f9f9016273f20c9d87ff27807dffbc658b3706233dc1ae8f72ef",
+      "bytes": 9767
     },
     {
       "path": "platform/portal/lib/useLoad.ts",
@@ -2921,8 +2921,8 @@
     },
     {
       "path": "platform/tests/test_identity.py",
-      "sha256": "6975a3229d55c7523495110891ca65dc18fe129d97b713686064136e704f03bd",
-      "bytes": 33840
+      "sha256": "81dd69951a5fac3ca3bcc922419e0ad60042c0f2914d601c230ed7516f52fd6e",
+      "bytes": 34264
     },
     {
       "path": "platform/tests/test_identity_postgres.py",
@@ -3851,8 +3851,8 @@
     },
     {
       "path": "web-dashboard/app/layout.tsx",
-      "sha256": "4ea707a50cb45ac78e48fcbdb66a1791bf41b6e2f08a0db62e101c474f299141",
-      "bytes": 888
+      "sha256": "c936ca045e724f868dfa885b080eb4c600cdce42b42de125a39ab0b651d0fb56",
+      "bytes": 918
     },
     {
       "path": "web-dashboard/app/optimization/page.tsx",
@@ -3956,8 +3956,8 @@
     },
     {
       "path": "web-dashboard/components/WorkspaceProvider.tsx",
-      "sha256": "848c375cc6f6210b0cc6c2826384a1d55e21f58f4a41a353998f7a78b39533c8",
-      "bytes": 13394
+      "sha256": "e1412a6ce42b9a7d22a27b09fb51e5b0efaee7d90e9c55d041875e5ec3b8483f",
+      "bytes": 13460
     },
     {
       "path": "web-dashboard/components/WorkspaceViews.tsx",
@@ -4461,8 +4461,8 @@
     },
     {
       "path": "web-dashboard/lib/types.ts",
-      "sha256": "b2b55a794c89eab2c877ee19083de2c09142be33d7398cc74b926b215ee6b846",
-      "bytes": 6773
+      "sha256": "00d05c6db8b1815959de51cdc37262cac66fc71d0a05389b3ca4fd35100faeb2",
+      "bytes": 6821
     },
     {
       "path": "web-dashboard/lib/useUnsavedPolicy.ts",

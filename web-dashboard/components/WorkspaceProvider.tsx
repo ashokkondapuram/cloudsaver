@@ -5,6 +5,7 @@ import {api, watchUnauthorized, ApiError} from '../lib/api';
 import {validateProfile,validateScan,validateWorkspaceEvidence} from '../lib/session-contract';
 import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
+import {UiThemeApplier} from './UiThemeApplier';
 
 type Overlay = 'command' | 'scan' | 'workspace' | 'notifications' | 'finding' | 'review' | null;
 type WorkspaceState = {
@@ -254,5 +255,5 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, scanActivity, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'), planName, planProviders,
     scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, findingContext, findingFocusKey:findingFocusKey.current, openFinding,
     review, openReview, selection, setSelection,
-    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, liveScanEpoch}}>{children}</Context.Provider>;
+    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, liveScanEpoch}}><UiThemeApplier/>{children}</Context.Provider>;
 }

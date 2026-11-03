@@ -111,6 +111,7 @@ export type Workspace = {
   subscription_ids: string[]; aws_accounts: AwsAccount[]; gcp_projects: GcpProject[]; kubernetes_clusters: KubernetesCluster[];
   providers: Provider[]; version: number; created_at: string; created_by: string; updated_at: string; updated_by: string;
   suspended_at: string | null; deleted_at: string | null; active_keys: number; last_used_at: string | null; next_expiry: string | null;
+  ui_theme_preset?: 'console' | 'midnight-neu';
 };
 
 export type KeyStatus = 'active' | 'expiring_soon' | 'rotating_out' | 'revoked' | 'expired';

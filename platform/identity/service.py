@@ -21,6 +21,7 @@ from identity.domain import (CUSTOMER_DEFAULTS, DEFAULT_EXPIRY_DAYS, EXPIRING_SO
 
 logger = logging.getLogger('cloudsaver.identity')
 SYSTEM = {'actor': 'system', 'actor_type': 'system'}
+_THEME_UNSET = object()
 GRANT_KEYS = ('roles', 'all_providers', 'allowed_providers', 'scope_restrictions')
 
 
@@ -274,8 +275,9 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 raise NotFound('Customer not found.')
             workspaces = tx.list_workspaces(None, None, customer_id, 0, 500)
             stats, counts = tx.key_stats(self.now()), tx.customer_workspace_counts()
+            platform = tx.get_platform()
         return {'customer': self.customer_view(row, counts),
-                'workspaces': [self.workspace_view(w, row, stats) for w in workspaces]}
+                'workspaces': [self.workspace_view(w, row, stats, platform) for w in workspaces]}
 
     def create_customer(self, payload, actor, request_id=None):
         now = self.now()
@@ -332,12 +334,15 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         return self.customer_view(row, counts)
 
     # ----- workspaces -----------------------------------------------------------------------------------
-    def workspace_view(self, row, customer, stats):
+    def workspace_view(self, row, customer, stats, platform=None):
+        from identity.ui_theme import effective_ui_theme_preset
         stat = stats.get(row['tenant_id'], {})
+        themes = (platform or {}).get('workspace_ui_themes') or {}
         return {**{k: row[k] for k in ('tenant_id', 'customer_id', 'name', 'plan_tier', 'status', 'identity', 'version',
                                        'created_by', 'updated_by')},
                 **{key: row[key] for key in SCOPE_KEYS.values()},
                 'customer_name': customer['name'] if customer else '', 'providers': configured_providers(row),
+                'ui_theme_preset': effective_ui_theme_preset(themes, row['tenant_id']),
                 'created_at': iso(row['created_at']), 'updated_at': iso(row['updated_at']),
                 'suspended_at': iso(row['suspended_at']), 'deleted_at': iso(row['deleted_at']),
                 'active_keys': stat.get('active', 0), 'last_used_at': iso(stat.get('last_used_at')),
@@ -351,8 +356,9 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         with self.store.transaction() as tx:
             rows = tx.list_workspaces(q, status, customer_id, offset, limit + 1)
             stats = tx.key_stats(self.now())
+            platform = tx.get_platform()
             customers = {c: tx.get_customer(c) for c in {r['customer_id'] for r in rows}}
-        return {'items': [self.workspace_view(r, customers[r['customer_id']], stats) for r in rows[:limit]],
+        return {'items': [self.workspace_view(r, customers[r['customer_id']], stats, platform) for r in rows[:limit]],
                 'next_cursor': str(offset + limit) if len(rows) > limit else None}
 
     def get_workspace(self, tenant_id):
@@ -361,7 +367,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             row = tx.get_workspace(tenant_id)
             if not row:
                 raise NotFound('Workspace not found.')
-            return self.workspace_view(row, tx.get_customer(row['customer_id']), tx.key_stats(self.now()))
+            platform = tx.get_platform()
+            return self.workspace_view(row, tx.get_customer(row['customer_id']), tx.key_stats(self.now()), platform)
 
     def create_workspace(self, payload, actor, request_id=None, *, scopes=None, status='active', source_action='workspace_created'):
         tenant_id = uuid_text(payload.get('tenant_id'), 'Enter a valid workspace ID.')
@@ -390,7 +397,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             self._event(tx, actor, source_action, tenant_id, details={'name': row['name'], 'customer_id': customer_id},
                         request_id=request_id)
             stats = tx.key_stats(now)
-        return self.workspace_view(row, customer, stats)
+            platform = tx.get_platform()
+        return self.workspace_view(row, customer, stats, platform)
 
     def update_workspace(self, tenant_id, payload, actor, request_id=None):
         tenant_id, version = uuid_text(tenant_id), self._version(payload)
@@ -405,7 +413,12 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             fields['customer_id'] = uuid_text(payload['customer_id'], 'Choose a customer.')
         if 'identity' in payload and payload['identity'] is not None:
             fields['identity'] = normalize_identity_bindings(payload['identity'])
-        return self._workspace_write(tenant_id, version, fields, actor, 'workspace_updated', request_id)
+        ui_theme_preset = _THEME_UNSET
+        if 'ui_theme_preset' in payload:
+            from identity.ui_theme import normalize_ui_theme_preset
+            ui_theme_preset = normalize_ui_theme_preset(payload.get('ui_theme_preset'))
+        return self._workspace_write(tenant_id, version, fields, actor, 'workspace_updated', request_id,
+                                     ui_theme_preset=ui_theme_preset)
 
     def replace_scopes(self, tenant_id, provider, payload, actor, request_id=None):
         tenant_id, version = uuid_text(tenant_id), self._version(payload)
@@ -427,7 +440,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         action = {'suspended': 'workspace_suspended', 'active': 'workspace_reactivated', 'deleted': 'workspace_deleted'}[status]
         return self._workspace_write(tenant_id, version, fields, actor, action, request_id)
 
-    def _workspace_write(self, tenant_id, version, fields, actor, action, request_id, *, scopes=None):
+    def _workspace_write(self, tenant_id, version, fields, actor, action, request_id, *, scopes=None,
+                         ui_theme_preset=_THEME_UNSET):
         messages, now = [], self.now()
         with self.store.transaction() as tx:
             current = tx.get_workspace(tenant_id, lock=True)
@@ -435,6 +449,19 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 raise NotFound('Workspace not found.')
             if current['version'] != version:
                 raise StaleVersion()
+            if ui_theme_preset is not _THEME_UNSET:
+                from identity.ui_theme import merge_workspace_ui_themes
+                platform = tx.get_platform()
+                merged = merge_workspace_ui_themes(platform.get('workspace_ui_themes') or {},
+                                                   {tenant_id: ui_theme_preset})
+                updated_platform = tx.update_platform(platform['version'], dict(
+                    workspace_ui_themes=merged, updated_at=now, updated_by=actor['actor'][:120]))
+                if updated_platform is None:
+                    raise StaleVersion()
+                snapshot = {k: updated_platform[k] for k in (
+                    'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access',
+                    'cloudsaver_integration', 'workspace_ui_themes', 'version')}
+                tx.append_change(None, 'platform_updated', updated_platform['version'], snapshot)
             if 'customer_id' in fields:
                 target = tx.get_customer(fields['customer_id'])
                 if not target or target['status'] == 'deleted':
@@ -445,9 +472,12 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             if scopes:
                 items = normalize_scope_items(scopes[0], scopes[1], *scope_limit(tier))
                 tx.replace_scopes(tenant_id, scopes[0], items, actor['actor'][:120], now)
-            row = tx.update_workspace(tenant_id, version, dict(fields, updated_at=now, updated_by=actor['actor'][:120]))
-            if row is None:
-                raise StaleVersion()
+            if fields or scopes:
+                row = tx.update_workspace(tenant_id, version, dict(fields, updated_at=now, updated_by=actor['actor'][:120]))
+                if row is None:
+                    raise StaleVersion()
+            else:
+                row = current
             if scopes:
                 messages += self._providers_changed(tx, current, row, actor, request_id)
             if fields.get('status') == 'deleted':
@@ -455,16 +485,22 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 messages.append({'tenant_id': tenant_id, 'event': 'workspace_deleted', 'revoked': count})
             elif 'status' in fields:
                 messages.append({'tenant_id': tenant_id, 'event': action})
-            self._changed(tx, row, None, 'workspace_deleted' if fields.get('status') == 'deleted' else 'workspace_upserted')
+            if fields or scopes:
+                self._changed(tx, row, None, 'workspace_deleted' if fields.get('status') == 'deleted' else 'workspace_upserted')
             details = {'name': row['name'], 'changes': sorted(k for k in fields if not k.endswith('_at'))}
             if scopes:
                 details['provider'] = scopes[0]
+            if ui_theme_preset is not _THEME_UNSET:
+                details['ui_theme_preset'] = ui_theme_preset or 'console'
+                self._event(tx, actor, 'workspace_ui_theme_updated', tenant_id, details=details, request_id=request_id)
             if 'identity' in fields:
                 self._event(tx, actor, 'workspace_identity_updated', tenant_id,
                             details={'old': current.get('identity') or {}, 'new': row.get('identity') or {}},
                             request_id=request_id)
-            self._event(tx, actor, action, tenant_id, details=details, request_id=request_id)
-            view = self.workspace_view(row, tx.get_customer(row['customer_id']), tx.key_stats(now))
+            if fields or scopes:
+                self._event(tx, actor, action, tenant_id, details=details, request_id=request_id)
+            platform = tx.get_platform()
+            view = self.workspace_view(row, tx.get_customer(row['customer_id']), tx.key_stats(now), platform)
             self._publish(messages + [{'directory': True, 'event': 'directory_changed'}], tx)
         return view
 
@@ -494,6 +530,7 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 'resource_access_effective': effective_resource_access(resource_access),
                 'cloudsaver_integration': integration,
                 'cloudsaver_integration_effective': effective_cloudsaver_integration(integration),
+                'workspace_ui_themes': row.get('workspace_ui_themes') or {},
                 'updated_at': iso(row['updated_at'])}
 
     def get_platform(self):
@@ -504,6 +541,7 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         from identity.domain import normalize_resource_access_bindings
         from identity.resource_access import merge_resource_access
         from identity.cloudsaver_integration import merge_cloudsaver_integration, normalize_cloudsaver_integration
+        from identity.ui_theme import merge_workspace_ui_themes, normalize_workspace_ui_themes
         version = self._version(payload)
         fields = {}
         for name in ('scheduled_scans_enabled', 'automated_alerts_enabled'):
@@ -517,6 +555,9 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         integration_patch = None
         if 'cloudsaver_integration' in payload:
             integration_patch = normalize_cloudsaver_integration(payload['cloudsaver_integration'])
+        themes_patch = None
+        if 'workspace_ui_themes' in payload:
+            themes_patch = normalize_workspace_ui_themes(payload['workspace_ui_themes'])
         with self.store.transaction() as tx:
             current = tx.get_platform()
             if current['version'] != version:
@@ -527,12 +568,15 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             if integration_patch is not None:
                 fields['cloudsaver_integration'] = merge_cloudsaver_integration(
                     current.get('cloudsaver_integration') or {}, integration_patch)
+            if themes_patch is not None:
+                fields['workspace_ui_themes'] = merge_workspace_ui_themes(
+                    current.get('workspace_ui_themes') or {}, themes_patch)
             row = tx.update_platform(version, dict(fields, updated_at=self.now(), updated_by=actor['actor'][:120]))
             if row is None:
                 raise StaleVersion()
             snapshot = {k: row[k] for k in (
                 'scheduled_scans_enabled', 'automated_alerts_enabled', 'resource_access',
-                'cloudsaver_integration', 'version')}
+                'cloudsaver_integration', 'workspace_ui_themes', 'version')}
             tx.append_change(None, 'platform_updated', row['version'], snapshot)
             changes = sorted(k for k in fields if k != 'resource_access')
             if resource_patch is not None:
@@ -980,7 +1024,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 views.append(snapshot(w, customer, plan))
         return {'seq': seq, 'workspaces': views,
                 'platform': {k: platform[k] for k in ('scheduled_scans_enabled', 'automated_alerts_enabled',
-                                                       'resource_access', 'version')}}
+                                                       'resource_access', 'cloudsaver_integration',
+                                                       'workspace_ui_themes', 'version')}}
 
     # ----- plan change requests (CloudSaver billing admin → operator approval; Stripe-ready) ------------
     def _plan_request_view(self, row, tx=None):
