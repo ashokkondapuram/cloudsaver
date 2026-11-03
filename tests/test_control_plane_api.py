@@ -17,9 +17,15 @@ def test_plan_lifecycle_end_to_end(tmp_path):
     c = client(tmp_path)
     plan = c.post('/api/v1/control-plane/plans', json={'objective': 'Rightsize overprovisioned VMs'}, headers=AUTH).json()
     assert plan['objective'] == 'Rightsize overprovisioned VMs' and plan['id']
+    listed = c.get('/api/v1/control-plane/plans', headers=AUTH).json()
+    assert any(item['id'] == plan['id'] for item in listed['items'])
+    versions = c.get(f'/api/v1/control-plane/plans/{plan["id"]}/versions', headers=AUTH).json()
+    assert versions['items'] == []
     version = c.post(f'/api/v1/control-plane/plans/{plan["id"]}/versions',
                       json={'expected_version': 0, 'targets': ['r1'], 'parameters': {}}, headers=AUTH).json()
     assert version['version'] == 1 and version['state'] == 'draft'
+    versions = c.get(f'/api/v1/control-plane/plans/{plan["id"]}/versions', headers=AUTH).json()
+    assert len(versions['items']) == 1 and versions['items'][0]['id'] == version['id']
     moved = c.post(f'/api/v1/control-plane/plan-versions/{version["id"]}/transitions',
                     json={'from_state': 'draft', 'to_state': 'evidence_required'}, headers=AUTH)
     assert moved.status_code == 200 and moved.json()['state'] == 'evidence_required'

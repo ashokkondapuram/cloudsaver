@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck} from 'lucide-react';
+import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck, ShieldAlert} from 'lucide-react';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
 import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type Targets} from '../../lib/resources';
@@ -12,6 +12,9 @@ import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, PillarDots} from './ResourceParts';
 import {AIProcessingDisclosure} from './AIProcessingDisclosure';
+import {ActionSafetyPanel} from './ActionSafetyPanel';
+import {FinancialFiveStrip} from './FinancialFiveStrip';
+import {actionEvidenceFromResource} from '../../lib/control-plane';
 import {CodeReview} from '../drawer/FindingDrawer';
 import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {findingKey} from '../../lib/finops';
@@ -231,7 +234,7 @@ export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId
 }
 
 function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:string;resourceKey:string;onClose:()=>void;onChange:()=>void}) {
-  const {token} = useWorkspace();
+  const {token, canAdmin} = useWorkspace();
   const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
   useEffect(() => {
     if (!resourceKey) return;
@@ -252,6 +255,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
     {id: 'findings', label: `Findings (${current.findings.length})`, icon: ListChecks},
     {id: 'evidence', label: 'Evidence', icon: Activity},
     {id: 'costs', label: 'Costs', icon: CircleDollarSign},
+    {id: 'safety', label: 'Action safety', icon: ShieldAlert},
     {id: 'observability', label: current.observability?.latency_reasons.length ? 'Observability (latency-sensitive)' : 'Observability', icon: Gauge},
     {id: 'ai', label: 'AI', icon: BrainCircuit},
     {id: 'decision', label: 'Decision', icon: CheckCircle2},
@@ -270,6 +274,7 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
           <div><dt>Evidence coverage</dt><dd>{a.evidence_coverage.total ? `${Math.round(100 * a.evidence_coverage.observed / a.evidence_coverage.total)}%` : '—'}<small> {a.evidence_coverage.observed}/{a.evidence_coverage.total}</small></dd></div>
           <div><dt>Observed</dt><dd>{a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}</dd></div>
         </dl>
+        <FinancialFiveStrip detail={current} token={token} canAdmin={canAdmin}/>
         <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
       </div>
       <PageTabs id="resource-drawer" label="Resource details sections" className="drawer-tabs" tabs={tabs} value={tab} onChange={setTab}/>
@@ -278,6 +283,15 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
         {tab === 'costs' && <Costs detail={current} onFetched={refetch}/>}
+        {tab === 'safety' && (
+          <ActionSafetyPanel
+            token={token}
+            actionId={`resource:${a.resource_id}`}
+            supported={current.findings.some(f => f.estimated_monthly_waste_usd != null && f.estimated_monthly_waste_usd > 0)}
+            evidence={actionEvidenceFromResource(current)}
+            canAdmin={canAdmin}
+          />
+        )}
         {tab === 'observability' && <Observability detail={current}/>}
         {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
         {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}

@@ -5,7 +5,7 @@ requests into those function calls and maps their exceptions to status codes."""
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -62,6 +62,21 @@ def create_router(store, current_tenant):
     def admin(tenant=Depends(current_tenant)):
         require_workspace_role(tenant, Role.TENANT_ADMIN)
         return tenant
+
+    def reader(tenant=Depends(current_tenant)):
+        require_workspace_role(tenant, Role.VIEWER)
+        return tenant
+
+    @router.get('/plans')
+    def list_plans_route(limit: int = Query(50, ge=1, le=200), tenant=Depends(reader)):
+        return {'items': cp_store.list_plans(store, tenant['tenant_id'], limit)}
+
+    @router.get('/plans/{plan_id}/versions')
+    def list_plan_versions_route(plan_id: UUID, limit: int = Query(50, ge=1, le=200), tenant=Depends(reader)):
+        try:
+            return {'items': cp_store.list_plan_versions(store, tenant['tenant_id'], str(plan_id), limit)}
+        except NotFoundError:
+            raise HTTPException(404, 'Plan not found') from None
 
     @router.post('/plans', status_code=201)
     def create_plan(body: PlanRequest, tenant=Depends(admin)):

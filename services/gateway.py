@@ -431,6 +431,16 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         params = {k: v for k, v in request.query_params.items() if k in ('resource_id', 'scope_id')}
         return await forward('POST', 'scanner', '/api/v1/finops/resource-cost', authorization, params)
 
+    @app.get('/api/v1/control-plane/plans')
+    async def control_plane_list_plans(request: Request, row=Depends(allowed), authorization: str = Header()):
+        params = {k: v for k, v in request.query_params.items() if k == 'limit'}
+        return await forward('GET', 'scanner', '/api/v1/control-plane/plans', authorization, params)
+
+    @app.get('/api/v1/control-plane/plans/{plan_id}/versions')
+    async def control_plane_list_plan_versions(plan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        params = {k: v for k, v in request.query_params.items() if k == 'limit'}
+        return await forward('GET', 'scanner', f'/api/v1/control-plane/plans/{plan_id}/versions', authorization, params)
+
     @app.post('/api/v1/control-plane/plans')
     async def control_plane_create_plan(request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json('/api/v1/control-plane/plans', request, authorization)

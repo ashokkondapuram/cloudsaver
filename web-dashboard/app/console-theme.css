@@ -163,3 +163,20 @@ html[data-theme=dark] .bulk-toolbar{background:#1e293b;border-color:#52607b;box-
 }
 html[data-theme=dark] .metric-featured{background:linear-gradient(115deg,var(--surface) 35%,#1d2048);border-color:#353a72}
 html[data-theme=dark] .priority-row:hover{background:#ffffff08}
+
+/* Enterprise control plane: five-measure financial strip, safety firewall, plan stepper */
+.financial-five-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:18px 24px;border-bottom:1px solid var(--border);background:var(--slate-50)}
+.financial-five-strip article{padding:14px;border:1px solid var(--border);border-radius:9px;background:var(--surface);min-width:0}
+.financial-five-strip article.highlight-avoidable{border-color:color-mix(in srgb,var(--indigo-600) 40%,var(--border));background:color-mix(in srgb,var(--indigo-50) 45%,var(--surface))}
+.financial-five-strip .measure-label{font-size:11px;font-weight:550;color:var(--muted);line-height:1.35}
+.financial-five-strip .measure-value{font:600 18px/1.3 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--text);margin:8px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.financial-five-strip .measure-sub{font-size:10px;color:var(--muted);line-height:1.45}
+.overlap-warning-banner{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border:1px solid color-mix(in srgb,var(--amber-700) 35%,var(--border));border-left:4px solid var(--amber-700);border-radius:8px;background:var(--amber-50);color:var(--amber-700);font-size:12px;line-height:1.65}
+.safety-firewall-grid{margin-top:12px}
+.plan-stepper{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:12px}
+.plan-step{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:550;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--slate-50);color:var(--muted);white-space:nowrap}
+.plan-step.current{border-color:var(--indigo-600);background:var(--indigo-50);color:var(--indigo-600)}
+.drift-abort-banner{display:flex;align-items:flex-start;gap:12px;padding:14px 18px;border:1px solid var(--rose-700);border-radius:9px;background:var(--rose-50);color:var(--rose-700);font-size:13px;line-height:1.6}
+.panel-bleed{margin-inline:0!important}
+@media(max-width:1100px){.financial-five-strip{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.financial-five-strip,.safety-firewall-grid{grid-template-columns:1fr}.financial-five-strip{grid-template-columns:1fr;padding:14px 16px}}

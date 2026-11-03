@@ -157,6 +157,40 @@ def get_plan_version(store, tenant_id, version_id):
                 parameters=_load(row[5]), policy_digest=row[6], evidence_digest=row[7], state=row[8])
 
 
+def list_plans(store, tenant_id, limit=50):
+    with store.transaction(tenant_id) as db:
+        rows = db.execute(
+            "SELECT id,objective,created_at FROM cp_plans WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s",
+            (tenant_id, limit),
+        ).fetchall()
+    return [dict(id=str(r[0]), objective=r[1], created_at=str(r[2])) for r in rows]
+
+
+def list_plan_versions(store, tenant_id, plan_id, limit=50):
+    with store.transaction(tenant_id) as db:
+        if db.execute("SELECT 1 FROM cp_plans WHERE tenant_id=%s AND id=%s", (tenant_id, plan_id)).fetchone() is None:
+            raise NotFoundError()
+        rows = db.execute(
+            "SELECT id,plan_id,version,identity_digest,targets,parameters,policy_digest,evidence_digest,state "
+            "FROM cp_plan_versions WHERE tenant_id=%s AND plan_id=%s ORDER BY version DESC LIMIT %s",
+            (tenant_id, plan_id, limit),
+        ).fetchall()
+    return [
+        dict(
+            id=str(r[0]),
+            plan_id=str(r[1]),
+            version=r[2],
+            identity_digest=r[3],
+            targets=_load(r[4]),
+            parameters=_load(r[5]),
+            policy_digest=r[6],
+            evidence_digest=r[7],
+            state=r[8],
+        )
+        for r in rows
+    ]
+
+
 def record_approval(store, tenant_id, version_id, identity_digest, approver_hash, verified_human, expires_at):
     """Refuses unless the digest matches the stored version, so edited plans cannot inherit approval."""
     if verified_human is not True:

@@ -36,6 +36,8 @@ See [analysis and fixing guide](BACKEND_RELIABILITY_GUIDE.md) for required endpo
 | POST | `/api/v1/control-plane/financial-scenarios` | `full_scope` |
 | POST | `/api/v1/control-plane/plan-versions/{version_id}/approvals` | `full_scope` |
 | POST | `/api/v1/control-plane/plan-versions/{version_id}/transitions` | `full_scope` |
+| GET | `/api/v1/control-plane/plans` | `scoped_read` |
+| GET | `/api/v1/control-plane/plans/{plan_id}/versions` | `scoped_read` |
 | POST | `/api/v1/control-plane/plans` | `full_scope` |
 | POST | `/api/v1/control-plane/plans/{plan_id}/versions` | `full_scope` |
 | GET | `/api/v1/customer/access-export` | `agnostic` |
