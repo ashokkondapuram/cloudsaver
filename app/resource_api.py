@@ -166,8 +166,6 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             )
         else:
             full_scan = None
-            if not hasattr(store, 'running_inventory_page'):
-                return None
             snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=offset, limit=limit)
             if snap is None:
                 raise HTTPException(404, 'Scan not found')
@@ -233,56 +231,6 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             items=items,
         )
 
-    def inventory_running_page_legacy(scan, tenant, *, cost_scope, limit, offset):
-        """Fallback when only an in-memory scan payload is available."""
-        merged = assessments(scan)
-        from app.billable_resources import include_in_cost_workspace
-        inventory_by_key = {}
-        for obs in scan.get('inventory') or []:
-            inventory_by_key[resource_key(inventory_observation(obs))] = obs
-        order = {'critical': 0, 'high': 1, 'evidence_required': 2}
-        ranked = []
-        review_priority = {}
-        for key, (assessment, _) in merged.items():
-            if cost_scope == 'billable':
-                candidate = row(assessment)
-                if not include_in_cost_workspace(candidate, observation=inventory_by_key.get(key)):
-                    continue
-            priority = assessment['review_priority']
-            review_priority[priority] = review_priority.get(priority, 0) + 1
-            ranked.append((order[priority], -(assessment.get('retail_estimate_usd') or 0), assessment['resource_name'], key))
-        ranked.sort()
-        ordered_keys = [entry[-1] for entry in ranked]
-        total = len(ordered_keys)
-        page_keys = ordered_keys[offset:offset + limit]
-        items = []
-        for key in page_keys:
-            assessment, _ = merged[key]
-            items.append(dict(
-                row(assessment),
-                lifecycle_delta='new',
-                ai=ai_state(assessment, None, None),
-                decision=None,
-            ))
-        summary_payload = dict(
-            total=total,
-            ai_status={'not_run': total} if total else {},
-            ai_risk={'none': total} if total else {},
-            decision={'none': total} if total else {},
-            review_priority=review_priority,
-            comparison_scan_id=None,
-            resolved_count=None,
-            no_longer_observed_count=None,
-        )
-        return dict(
-            scan_id=scan['scan_id'],
-            observed_at=scan.get('timestamp'),
-            summary=summary_payload,
-            commitment_baseline=planning_summary(scan),
-            total=total,
-            items=items,
-        )
-
     filter_params = dict(
         provider=Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'), service_category=Query(None, max_length=40),
         review_priority=Query(None, pattern=r'^(critical|high|evidence_required)$'),
@@ -325,12 +273,6 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset, arm_detail=arm_detail)
             if page is not None:
                 return page
-            if not arm_detail:
-                if cost_scope == 'all':
-                    page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
-                    if page is not None:
-                        return page
-                return inventory_running_page_legacy(scan, tenant, cost_scope=cost_scope, limit=limit, offset=offset)
         _, items = inventory(scan, tenant, cost_scope=cost_scope)
         selected = filtered(items, filters, q, arm_detail=arm_detail)
         return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summarize_resource_rows(selected),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),

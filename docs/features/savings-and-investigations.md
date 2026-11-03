@@ -223,7 +223,7 @@ Billing evidence comes from the FOCUS ledger. See [Cost allocation and billing](
 ## Related docs
 
 - [Financial outcomes](../FINANCIAL_OUTCOMES.md)
-- [Next-gen implementation](../NEXT_GEN_IMPLEMENTATION.md) (collector grants and signing)
+- [Next-gen implementation](../archive/NEXT_GEN_IMPLEMENTATION.md) (archived; collector grants and signing)
 - [Client-managed users and keys](../CLIENT_MANAGED_USERS_AND_KEYS.md)
 - [Environment reference](../ENVIRONMENT.md)
 - [Cost allocation and billing](cost-allocation-and-billing.md)

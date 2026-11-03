@@ -29,7 +29,7 @@ v1.8.1 adds deployment env documentation and engineering zero-downtime defaults 
 
 Provider-restricted workspace keys can use **scoped_read** routes for FinOps, AI, GitOps history, governance/outcomes reads, and related list endpoints; results are filtered to the key's providers and scope grants. Tenant-wide administration routes remain `full_scope`.
 
-For restoration notes after older snapshots, see the [restoration and compatibility guide](docs/FEATURE_RESTORATION_673C20A.md). The dashboard, multi-cloud analysis, Kubernetes federation, agent execution and governance paths described in the [feature guide index](docs/features/README.md) reflect the current tree unless a guide marks a boundary explicitly.
+The dashboard, multi-cloud analysis, Kubernetes federation, agent execution and governance paths described in the [feature guide index](docs/features/README.md) reflect the current tree unless a guide marks a boundary explicitly. For execution topology and module ownership, see [CODEBASE_EXECUTION_MAP](docs/CODEBASE_EXECUTION_MAP.md).
 
 CloudSaver provides one five-pillar review per cloud resource, separate billing and retail evidence, Kubernetes capacity analysis, and human-approved TypeScript agent tasks. Discovery is read-only. An AI suggestion never authorizes a cloud change. For product positioning and differentiators, see [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md) and the [V2.0 architectural roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md).
 

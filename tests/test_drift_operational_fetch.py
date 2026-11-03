@@ -19,7 +19,7 @@ TENANT = dict(
 
 def test_azure_api_version_for_vm():
     rid = "/subscriptions/x/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm"
-    assert azure_api_version(rid) == "2023-09-01"
+    assert azure_api_version(rid) == "2022-11-01"
 
 
 def test_fetch_azure_operational_parses_vm(monkeypatch):
@@ -66,7 +66,7 @@ def test_fetch_azure_operational_parses_vm(monkeypatch):
     assert state["vm_size"] == "Standard_D4s_v5"
     assert state["tags"]["env"] == "prod"
     assert state["source"] == "azure_arm_live"
-    assert "api-version=2023-09-01" in str(captured["url"])
+    assert "api-version=2022-11-01" in str(captured["url"])
 
 
 def test_v3_finops_store_sqlite(tmp_path):

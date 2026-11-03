@@ -108,8 +108,8 @@ The commitment and topology engines have no feature flags. Their output depends 
 
 ## Related docs
 
-- [Next-gen implementation](../NEXT_GEN_IMPLEMENTATION.md)
-- [Next-gen differentiators](../NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md)
+- [Next-gen implementation](../archive/NEXT_GEN_IMPLEMENTATION.md) (archived)
+- [Next-gen differentiators](../archive/NEXT_GEN_CLOUDSAVER_DIFFERENTIATORS_README.md) (archived)
 - [Lean core implementation](../LEAN_CORE_IMPLEMENTATION.md) (regional price catalog contract)
 - [v1.5.0 implementation](../V1_5_0_IMPLEMENTATION.md)
 - [Kubernetes and containers](kubernetes.md)

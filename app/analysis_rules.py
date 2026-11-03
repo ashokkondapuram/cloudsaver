@@ -19,6 +19,7 @@ RULES = (
     ('AZURE_ASP_EMPTY_PAID_PLAN', 'serverfarms', 'Empty paid App Service plan review', {'minimum_days': (7, 7, 90)}),
     ('AZURE_ASP_UNDERUTILIZED_SKU', 'serverfarms', 'App Service capacity review', {'cpu_percent': (15, 1, 30), 'memory_percent': (30, 1, 40)}),
 )
+LEGACY_AZURE_RULE_IDS = frozenset(rule[0] for rule in RULES)
 
 
 def moment(value):
@@ -75,6 +76,71 @@ def continuous(evidence, expected, minimum_days, now):
     return all(state == expected for _, _, state in intervals)
 
 
+def legacy_azure_detect(rule_id, evidence, params, now):
+    """Shared condition logic for the eight Azure contracts (catalog + unit tests)."""
+    metrics = evidence.get('metrics') or {}
+    known = lambda key: type(evidence.get(key)) is bool
+    detected = None
+    if rule_id == 'AZURE_DISK_UNATTACHED_RETENTION':
+        if evidence.get('disk_state') == 'Unattached':
+            detected = continuous(evidence, 'Unattached', params['minimum_days'], now)
+        elif evidence.get('disk_state') in ('Attached', 'Reserved'):
+            detected = False
+    elif rule_id == 'AZURE_DISK_PROVISIONED_PERFORMANCE':
+        if evidence.get('disk_state') == 'Unattached':
+            if known('recent_snapshot_verified'):
+                detected = not evidence['recent_snapshot_verified']
+        else:
+            io, throughput = series(metrics.get('iops'), now), series(metrics.get('throughput'), now)
+            target = evidence.get('target_disk') or {}
+            if (io and throughput and all(type(target.get(k)) in (int, float) and math.isfinite(target[k]) and target[k] > 0 for k in ('iops', 'throughput'))
+                    and known('target_compatible') and known('throttling_observed')):
+                factor = 1 + params['headroom_percent'] / 100
+                detected = (evidence.get('target_compatible') is True and io['maximum'] * factor <= target['iops']
+                            and throughput['maximum'] * factor <= target['throughput']
+                            and evidence.get('throttling_observed') is False)
+    elif rule_id == 'AZURE_PUBLIC_IP_UNASSOCIATED':
+        if known('association_verified'):
+            detected = False if evidence['association_verified'] else continuous(evidence, 'Unassociated', params['minimum_days'], now)
+    elif rule_id == 'AZURE_PUBLIC_IP_ASSOCIATED_IDLE':
+        traffic = [series(metrics.get(key), now) for key in ('ingress_bytes', 'egress_bytes')]
+        if evidence.get('association_verified') is True and all(traffic):
+            detected = all(item['maximum'] <= params['maximum_bytes'] for item in traffic)
+    elif rule_id == 'AZURE_VM_STOPPED_RESIDUAL_COST':
+        state = evidence.get('power_state')
+        if state == 'PowerState/stopped':
+            detected = True
+        elif state == 'PowerState/deallocated':
+            detected = continuous(evidence, state, params['minimum_days'], now)
+        elif state == 'PowerState/running':
+            detected = False
+    elif rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU'):
+        cpu, memory = series(metrics.get('cpu_percent'), now), series(metrics.get('memory_percent'), now)
+        created = moment(evidence.get('created_at'))
+        if cpu and memory and created and now - created >= timedelta(days=30):
+            detected = cpu['p95'] < params['cpu_percent'] and memory['p95'] < params.get('memory_percent', 40)
+            if rule_id == 'AZURE_VM_RIGHTSIZING_UTILIZATION':
+                if not series(metrics.get('disk_iops'), now) or not series(metrics.get('network_bytes'), now):
+                    return None
+                if not known('burst_credits_depleted'):
+                    return None
+                detected = detected and evidence['burst_credits_depleted'] is False
+    elif rule_id == 'AZURE_ASP_EMPTY_PAID_PLAN':
+        tier, apps, slots = evidence.get('sku_tier'), evidence.get('hosted_app_count'), evidence.get('deployment_slot_count')
+        if tier in ('Free', 'Shared'):
+            return 'not_applicable'
+        if isinstance(tier, str) and type(apps) is int and type(slots) is int:
+            detected = False if apps > 0 or slots > 0 else continuous(evidence, 'Empty', params['minimum_days'], now)
+    if rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU') and detected:
+        from app.multicloud_rules import slo_gate
+        safe = slo_gate(evidence, now)
+        if safe is None:
+            return 'slo_required'
+        if not safe:
+            return 'slo_blocked'
+    return detected
+
+
 def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
     now = now or datetime.now(timezone.utc)
     rule_id, suffix, name, _ = rule
@@ -102,65 +168,13 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
         return output
     p = parameters(rule_id, policy.get('parameters'))
     evidence = resource.get('evidence') or {}
-    metrics = evidence.get('metrics') or {}
-    known = lambda key: type(evidence.get(key)) is bool
-    detected = None
-    if rule_id == 'AZURE_DISK_UNATTACHED_RETENTION':
-        if evidence.get('disk_state') == 'Unattached':
-            detected = continuous(evidence, 'Unattached', p['minimum_days'], now)
-        elif evidence.get('disk_state') in ('Attached', 'Reserved'):
-            detected = False
-    elif rule_id == 'AZURE_DISK_PROVISIONED_PERFORMANCE':
-        if evidence.get('disk_state') == 'Unattached':
-            if known('recent_snapshot_verified'):
-                detected = not evidence['recent_snapshot_verified']
-        else:
-            io, throughput = series(metrics.get('iops'), now), series(metrics.get('throughput'), now)
-            target = evidence.get('target_disk') or {}
-            if (io and throughput and all(type(target.get(k)) in (int, float) and math.isfinite(target[k]) and target[k] > 0 for k in ('iops', 'throughput'))
-                    and known('target_compatible') and known('throttling_observed')):
-                factor = 1 + p['headroom_percent'] / 100
-                detected = (evidence.get('target_compatible') is True and io['maximum'] * factor <= target['iops']
-                            and throughput['maximum'] * factor <= target['throughput']
-                            and evidence.get('throttling_observed') is False)
-    elif rule_id == 'AZURE_PUBLIC_IP_UNASSOCIATED':
-        if known('association_verified'):
-            detected = False if evidence['association_verified'] else continuous(evidence, 'Unassociated', p['minimum_days'], now)
-    elif rule_id == 'AZURE_PUBLIC_IP_ASSOCIATED_IDLE':
-        traffic = [series(metrics.get(key), now) for key in ('ingress_bytes', 'egress_bytes')]
-        if evidence.get('association_verified') is True and all(traffic):
-            detected = all(item['maximum'] <= p['maximum_bytes'] for item in traffic)
-    elif rule_id == 'AZURE_VM_STOPPED_RESIDUAL_COST':
-        state = evidence.get('power_state')
-        if state == 'PowerState/stopped':
-            detected = True
-        elif state == 'PowerState/deallocated':
-            detected = continuous(evidence, state, p['minimum_days'], now)
-        elif state == 'PowerState/running':
-            detected = False
-    elif rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU'):
-        cpu, memory = series(metrics.get('cpu_percent'), now), series(metrics.get('memory_percent'), now)
-        created = moment(evidence.get('created_at'))
-        if cpu and memory and created and now - created >= timedelta(days=30):
-            # Low utilization is a review signal. It cannot establish target compatibility or cash savings.
-            detected = cpu['p95'] < p['cpu_percent'] and memory['p95'] < p.get('memory_percent', 40)
-            if rule_id == 'AZURE_VM_RIGHTSIZING_UTILIZATION':
-                if not series(metrics.get('disk_iops'), now) or not series(metrics.get('network_bytes'), now):
-                    return output
-                if not known('burst_credits_depleted'):
-                    return output
-                detected = detected and evidence['burst_credits_depleted'] is False
-    elif rule_id == 'AZURE_ASP_EMPTY_PAID_PLAN':
-        tier, apps, slots = evidence.get('sku_tier'), evidence.get('hosted_app_count'), evidence.get('deployment_slot_count')
-        if tier in ('Free', 'Shared'):
-            return finish('not_applicable', 'This rule reviews independently billable dedicated plans.')
-        if isinstance(tier, str) and type(apps) is int and type(slots) is int:
-            detected = False if apps > 0 or slots > 0 else continuous(evidence, 'Empty', p['minimum_days'], now)
-    if rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION','AZURE_ASP_UNDERUTILIZED_SKU') and detected:
-        from app.multicloud_rules import slo_gate
-        safe=slo_gate(evidence,now)
-        if safe is None:return dict(output,safety_blocks=['SLO_EVIDENCE_REQUIRED'])
-        if not safe:return dict(finish('condition_not_detected','SLO or saturation evidence blocks capacity reduction.'),safety_blocks=['SLO_ERROR_BUDGET_RISK'])
+    detected = legacy_azure_detect(rule_id, evidence, p, now)
+    if detected == 'not_applicable':
+        return finish('not_applicable', 'This rule reviews independently billable dedicated plans.')
+    if detected == 'slo_required':
+        return dict(output, safety_blocks=['SLO_EVIDENCE_REQUIRED'])
+    if detected == 'slo_blocked':
+        return dict(finish('condition_not_detected', 'SLO or saturation evidence blocks capacity reduction.'), safety_blocks=['SLO_ERROR_BUDGET_RISK'])
     if detected is None:
         return output
     return finish('condition_detected' if detected else 'condition_not_detected',
@@ -169,19 +183,8 @@ def evaluate(resource, rule, *, policy=None, observed_at=None, now=None):
 
 
 def evaluate_inventory(inventory, *, policies=None, observed_at=None, now=None):
-    outcomes = []
-    for resource in inventory:
-        if resource.get('cloud_provider', 'azure') != 'azure':
-            continue
-        for rule in RULES:
-            if resource['resource_type'].lower().rsplit('/', 1)[-1] == rule[1]:
-                try:
-                    outcomes.append(evaluate(resource, rule, policy=(policies or {}).get(rule[0]), observed_at=observed_at, now=now))
-                except (TypeError, ValueError, KeyError, OverflowError):
-                    outcomes.append(dict(rule_id=rule[0], rule_version=VERSION, name=rule[2], cloud_provider='azure',
-                        resource_id=resource['resource_id'], subscription_id=resource.get('subscription_id'),
-                        outcome='evaluation_failed', reason='Invalid evidence or policy; inspection is required.',
-                        automatic_execution=False, estimated_savings=None))
     from app.kubernetes_rules import evaluate_inventory as evaluate_kubernetes
-    from app.multicloud_rules import evaluate_inventory as evaluate_expanded
-    return outcomes + evaluate_kubernetes(inventory, policies=policies, observed_at=observed_at, now=now) + evaluate_expanded(inventory, policies=policies, observed_at=observed_at, now=now)
+    from app.multicloud_rules import evaluate_inventory as evaluate_catalog
+    return evaluate_kubernetes(inventory, policies=policies, observed_at=observed_at, now=now) + evaluate_catalog(
+        inventory, policies=policies, observed_at=observed_at, now=now
+    )

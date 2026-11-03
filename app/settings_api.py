@@ -317,12 +317,13 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
             if row.rule_id not in after or after[row.rule_id]['status'] != 'published':
                 raise HTTPException(422, 'Choose a published rule.')
             try:
-                if row.rule_id in {item[0] for item in RULES}:
+                if row.rule_id in _LEGACY_RULE_IDS:
                     parameters(row.rule_id, row.parameters)
                 else:
-                    from app.resource_catalog import definitions
-                    bounds={r[0]:r[6] for r in definitions()}.get(row.rule_id,{})
-                    if set(row.parameters)-set(bounds) or any(type(v) is not int or not bounds[k][1]<=v<=bounds[k][2] for k,v in row.parameters.items()):
+                    bounds = _RULE_BOUNDS.get(row.rule_id, {})
+                    if set(row.parameters) - set(bounds) or any(
+                        type(v) is not int or not bounds[k][1] <= v <= bounds[k][2] for k, v in row.parameters.items()
+                    ):
                         raise ValueError('Rule parameters are outside published delegated bounds.')
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from None
@@ -344,6 +345,10 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
 
 
 from app.analysis_rules import RULES, evaluate_inventory, parameters
+from app.resource_catalog import definitions
+
+_RULE_BOUNDS = {row[0]: row[6] for row in definitions()}
+_LEGACY_RULE_IDS = {item[0] for item in RULES}
 from app.onboarding_api import _call
 
 class RuleChange(BaseModel):

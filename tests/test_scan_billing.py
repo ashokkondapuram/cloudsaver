@@ -1,7 +1,5 @@
 from uuid import uuid4
 
-import pytest
-
 pytest_plugins = ['tests.test_enterprise']
 
 from app.focus import FocusRepository

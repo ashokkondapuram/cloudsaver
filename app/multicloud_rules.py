@@ -17,7 +17,9 @@ def slo_gate(e,now):
     return burn<=1 and correlation<=.60 and e.get('oom_kill_count_30d',0)==0 and e.get('cfs_throttling_p95_pct',0)<=2
 
 def condition(rid,e,p,now):
-    from app.analysis_rules import series,continuous
+    from app.analysis_rules import series,continuous,legacy_azure_detect,LEGACY_AZURE_RULE_IDS
+    if rid in LEGACY_AZURE_RULE_IDS:
+        return legacy_azure_detect(rid, e, p, now)
     def metric(key,stat='p95'):
         data=series((e.get('metrics') or {}).get(key),now)
         return data[stat] if data else None
@@ -75,13 +77,15 @@ def condition(rid,e,p,now):
     return None
 
 def evaluate_inventory(inventory,*,policies=None,observed_at=None,now=None,providers=None):
-    from app.analysis_rules import RULES as LEGACY
-    now=now or datetime.now(timezone.utc);legacy={r[0] for r in LEGACY};lookup={r[0]:r for r in definitions()};result=[]
+    from app.analysis_rules import LEGACY_AZURE_RULE_IDS, RULES
+    legacy_suffix = {rule[0]: rule[1] for rule in RULES}
+    now=now or datetime.now(timezone.utc);lookup={r[0]:r for r in definitions()};result=[]
     for resource in inventory:
         f=family(resource)
         if not f or f[0]=='kubernetes' or providers and f[0] not in providers:continue
         for rid in f[4]:
-            if rid in legacy:continue
+            if rid in LEGACY_AZURE_RULE_IDS and resource['resource_type'].lower().rsplit('/', 1)[-1] != legacy_suffix[rid]:
+                continue
             rule=lookup[rid];policy=(policies or {}).get(rid,{})
             output=dict(rule_id=rid,rule_version='1.4.0',name=rule[4],cloud_provider=f[0],resource_id=resource['resource_id'],
                 resource_type=resource['resource_type'],subscription_id=resource.get('subscription_id'),scope_id=resource.get('scope_id'),
@@ -95,7 +99,11 @@ def evaluate_inventory(inventory,*,policies=None,observed_at=None,now=None,provi
                     bounds=rule[6];params={k:v[0] for k,v in bounds.items()};supplied=policy.get('parameters') or {}
                     if set(supplied)-set(bounds) or any(type(v) is not int or not bounds[k][1]<=v<=bounds[k][2] for k,v in supplied.items()):raise ValueError('Invalid parameters')
                     params.update(supplied);detected=condition(rid,e,params,now)
-                    if type(detected) is bool:output.update(outcome='condition_detected' if detected else 'condition_not_detected',reason='Evidence supports a review; changes and cash savings require independent approval.' if detected else 'The measured condition was not detected.')
+                    if detected == 'not_applicable':
+                        output.update(outcome='not_applicable', reason='This rule does not apply to this resource configuration.')
+                    elif detected == 'slo_blocked':
+                        output.update(outcome='condition_not_detected', reason='SLO or saturation evidence blocks capacity reduction.')
+                    elif type(detected) is bool:output.update(outcome='condition_detected' if detected else 'condition_not_detected',reason='Evidence supports a review; changes and cash savings require independent approval.' if detected else 'The measured condition was not detected.')
                 except (TypeError,ValueError,KeyError,OverflowError):output.update(outcome='evaluation_failed',reason='Invalid evidence or rule parameter.')
             result.append(output)
     return result

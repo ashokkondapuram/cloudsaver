@@ -433,13 +433,13 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             realizable_savings = opportunity_totals(enriched_findings, realized=True)['total_monthly_opportunity_usd']
 
             from app.multi_cloud import scope_fingerprint
-            from app.analysis_rules import evaluate_inventory, VERSION as rule_version, RULES
+            from app.analysis_rules import evaluate_inventory, VERSION as rule_version
             from app.inventory import coverage, coverage_manifest
             policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
             if rule_ids is not None:
                 from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
                 from app.resource_catalog import definitions
-                for rid, *_ in (*RULES, *KUBERNETES_RULES, *definitions()):
+                for rid, *_ in (*KUBERNETES_RULES, *definitions()):
                     policies.setdefault(rid, {'enabled': rid in rule_ids})
             evaluations = evaluate_inventory(inventory, observed_at=observation_time, policies=policies)
             from app.multicloud_rules import materialize

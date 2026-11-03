@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from typing import Any, Callable
 
-from app.analysis_rules import RULES
+from app.resource_catalog import family
 
 # Rules that require Azure Monitor / Activity Log (not satisfied by configuration alone).
 TELEMETRY_RULE_IDS = frozenset({
@@ -165,8 +165,10 @@ def _apply_type_contract(resource: dict, props: dict) -> tuple[int, int]:
 
 
 def telemetry_rules_for(resource: dict) -> list[str]:
-    suffix = (resource.get('resource_type') or '').lower().rsplit('/', 1)[-1]
-    return [rule[0] for rule in RULES if rule[1] == suffix and rule[0] in TELEMETRY_RULE_IDS]
+    row = family(resource)
+    if not row or row[0] != 'azure':
+        return []
+    return [rule_id for rule_id in row[4] if rule_id in TELEMETRY_RULE_IDS]
 
 
 def enrich_configuration_evidence(resource: dict) -> dict:

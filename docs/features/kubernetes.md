@@ -169,7 +169,7 @@ The `kubernetes_clusters` list in the workspace configuration supplies `cluster_
 ## Related docs
 
 - [Kubernetes multi-source implementation](../KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md)
-- [Kubernetes and multi-source analysis improvements](../KUBERNETES_AND_MULTI_SOURCE_ANALYSIS_IMPROVEMENTS_README.md)
+- [Kubernetes and multi-source analysis improvements](../archive/KUBERNETES_AND_MULTI_SOURCE_ANALYSIS_IMPROVEMENTS_README.md) (archived)
 - [Cloud sources](../CLOUD_SOURCES.md)
 - [Managed identity roles](../MANAGED_IDENTITY_ROLES.md)
 - [Environment reference](../ENVIRONMENT.md)

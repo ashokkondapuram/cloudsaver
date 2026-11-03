@@ -219,7 +219,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         for observation in inventory:
             validate_finding_scope(dict(observation,rule_id=observation.get('inventory_rule_id','INVENTORY')),tenant)
         from app.multi_cloud import scope_fingerprint
-        from app.analysis_rules import evaluate_inventory, RULES, VERSION
+        from app.analysis_rules import evaluate_inventory, VERSION
         from app.inventory import coverage, coverage_manifest
         from app.dependencies import canonical_inventory, group_opportunities
         from app.pricing import opportunity_totals
@@ -233,7 +233,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         if rule_ids is not None:
             from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
             from app.resource_catalog import definitions
-            for rid, *_ in (*RULES, *KUBERNETES_RULES, *definitions()):
+            for rid, *_ in (*KUBERNETES_RULES, *definitions()):
                 policies.setdefault(rid, {'enabled': rid in rule_ids})
         outcomes = evaluate_inventory(inventory, policies=policies, observed_at=observed_at)
         from app.multicloud_rules import materialize

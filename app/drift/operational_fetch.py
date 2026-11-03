@@ -6,14 +6,9 @@ from typing import Any
 
 
 def azure_api_version(resource_id: str) -> str:
-    provider_path = resource_id.split("/providers/", 1)[-1].lower() if "/providers/" in resource_id else ""
-    if provider_path.startswith("microsoft.compute/virtualmachines"):
-        return "2023-09-01"
-    if provider_path.startswith("microsoft.compute/disks"):
-        return "2023-04-02"
-    if provider_path.startswith("microsoft.network/publicipaddresses"):
-        return "2023-05-01"
-    return "2021-04-01"
+    from app.azure_resource_registry import api_version_for_arm_resource_id
+
+    return api_version_for_arm_resource_id(resource_id)
 
 
 def fetch_azure_operational(signal: dict[str, Any], tenant: dict[str, Any]) -> dict[str, Any]:

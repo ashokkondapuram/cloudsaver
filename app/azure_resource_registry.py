@@ -145,6 +145,27 @@ def _pick_api_version(versions: list[str]) -> str | None:
     return (stable or versions)[0]
 
 
+def resource_type_from_arm_id(resource_id: str) -> str | None:
+    """Return lowercase provider/type (e.g. microsoft.compute/virtualmachines) from an ARM resource ID."""
+    if '/providers/' not in (resource_id or ''):
+        return None
+    tail = resource_id.split('/providers/', 1)[-1].lower()
+    parts = tail.split('/')
+    if len(parts) >= 2:
+        return f'{parts[0]}/{parts[1]}'
+    return None
+
+
+def api_version_for_arm_resource_id(resource_id: str, *, fallback: str = '2021-04-01') -> str:
+    """Resolve a stable api-version from the read-only catalog (no live provider metadata)."""
+    rtype = resource_type_from_arm_id(resource_id)
+    if rtype:
+        version = arm_api_version(rtype)
+        if version:
+            return version
+    return fallback
+
+
 def resolve_arm_api_version(reader, subscription_id: str, resource_type: str, cache: dict) -> str | None:
     """Catalog entry first, then subscription provider metadata (Azure Resource Manager)."""
     rtype = (resource_type or '').lower()

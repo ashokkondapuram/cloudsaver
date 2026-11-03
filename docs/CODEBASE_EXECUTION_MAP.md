@@ -162,12 +162,12 @@ Mirror `app/` domains; **`tests/test_route_inventory.py`** guards API surface.
 | Issue | Locations | Action |
 |-------|-----------|--------|
 | ~~Azure finops split~~ | ~~`azure_resource_finops.py`~~ | **Removed** — use `azure_json_profile.py` only |
-| ARM api-version | `azure_resource_registry`, `drift/operational_fetch.py` | **Merge:** drift should call `resolve_arm_api_version` |
+| ARM api-version | `azure_resource_registry` (`api_version_for_arm_resource_id`) | **Done** — drift operational fetch uses catalog resolver |
 | UI theme presets | `app/ui_theme.py`, `platform/identity/ui_theme.py` | **Keep both** (separate deployables); change presets in both or extract shared package later |
-| Rule definitions | `analysis_rules.RULES`, `resource_catalog.definitions()`, `kubernetes_rules` | **Direction:** single catalog; `multicloud_rules` skips legacy RULES ids — delete legacy RULES when parity proven |
-| Running inventory | `inventory_running_page` vs `inventory_running_page_legacy` | **Legacy fallback** for stores without `running_inventory_page` (SQLite tests); remove when SQLite path dropped |
+| Rule evaluation | `resource_catalog` + `kubernetes_rules` via `multicloud_rules` | **Done** — `evaluate_inventory` is catalog + K8s; `analysis_rules.RULES` kept for contract unit tests only |
+| Running inventory | `store.running_inventory_page` | **Done** — legacy in-memory page removed; `./start.sh` uses Postgres |
 | Synthetic scans | `data_origin=legacy_synthetic` in `store.py`, UI guards | **Demo/e2e only** — do not extend; remove feature when e2e uses live fixtures only |
-| Docs sprawl | `docs/*IMPROVEMENTS*`, `NEXT_GEN*`, `FEATURE_RESTORATION*` | **Archive** — point to `docs/features/` + this map |
+| Docs sprawl | `docs/archive/*` | **Done** — not linked from root README; use `docs/features/` + this map |
 | V2 scaffolds | `causal_topology_simulator.py`, autopilot modules | Mark **non-production** in `docs/features/v2-scaffolds.md`; no new product deps |
 
 ---
@@ -175,11 +175,11 @@ Mirror `app/` domains; **`tests/test_route_inventory.py`** guards API surface.
 ## 7. Legacy retirement checklist (no new legacy code)
 
 1. **Scans:** Only persist `data_origin` live (`completed` / `running`); stop seeding `legacy_synthetic` except explicit test fixtures.
-2. **Rules:** One rule source (`resource_catalog` + K8s); drop `analysis_rules.RULES` duplicate IDs.
-3. **ARM versions:** One resolver (`azure_resource_registry.resolve_arm_api_version`).
+2. **Rules:** One evaluation path (`resource_catalog` + K8s); retire duplicate `RULES` tuple when identity seed reads catalog bounds only.
+3. **ARM versions:** One resolver (`azure_resource_registry.api_version_for_arm_resource_id` / `resolve_arm_api_version`).
 4. **Azure cost:** One profile builder (`fetch_azure_resource_profile`); clients consume JSON only.
-5. **Inventory paging:** Require Postgres `running_inventory_page`; delete `inventory_running_page_legacy`.
-6. **Documentation:** Feature truth in `docs/features/`; this file for execution; delete stale roadmap duplicates.
+5. **Inventory paging:** `running_inventory_page` on the scan store (Postgres in `./start.sh`; SQLite test store implements the same contract).
+6. **Documentation:** Feature truth in `docs/features/`; archived historical notes under `docs/archive/` (not linked from README).
 
 ---
 

@@ -119,7 +119,7 @@ Stripe secret env names inside identity-service are `PLATFORM_STRIPE_SECRET_KEY`
 | `CLOUDSAVER_REGISTRY_EXPORT_PASSWORD` | No | Optional; registry export migration (`0011`) |
 | `REDIS_URL` | Compose services | Set in compose per service (`6379/0` gateway, `/1` scanner/workers) |
 
-`CLOUDSAVER_MIGRATION_URL` and `CLOUDSAVER_DATABASE_URL` are composed in `compose.yaml`; export scripts accept either migration or app URL.
+`CLOUDSAVER_MIGRATION_URL` and `CLOUDSAVER_DATABASE_URL` are composed in `compose.yaml`; export scripts accept either migration or app URL. Local `./start.sh` always brings up Postgres — running-scan resource paging uses `running_inventory_page` on that store (no in-memory full-scan fallback).
 
 ---
 
