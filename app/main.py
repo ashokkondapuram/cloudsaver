@@ -406,6 +406,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 len(inventory),
                 len(raw_findings),
             )
+            from app.entitlements import enforce_resource_quota
             enforce_resource_quota(plan, resource_count)
 
             from app.cloud_scope import validate_finding_scope
@@ -503,7 +504,7 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             logger.warning('Scan failed (ScanError): %s', str(exc)[:500])
             raise HTTPException(422, str(exc)[:300] or 'The scan could not start.') from None
         except Exception as exc:
-            logger.warning('Scan failed (%s)', type(exc).__name__)
+            logger.exception('Scan failed (%s)', type(exc).__name__)
             raise HTTPException(502, f'Scan failed. Check cloud credentials, cloud account access and server configuration: {type(exc).__name__}') from None
         finally:
             if progress is not None and not scan_completed:
