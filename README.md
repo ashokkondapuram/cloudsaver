@@ -56,7 +56,7 @@ Every feature has its own detailed guide covering the dashboard workflow, backen
 | Environment and setup | [Environment](docs/ENVIRONMENT.md) · [Cloud sources](docs/CLOUD_SOURCES.md) · [Managed identity roles](docs/MANAGED_IDENTITY_ROLES.md) · [Client-managed users and keys](docs/CLIENT_MANAGED_USERS_AND_KEYS.md) |
 | Operations | [Operations](docs/OPERATIONS.md) · [Delivery](docs/DELIVERY.md) · [Production hardening](docs/PRODUCTION_HARDENING.md) · [Platform billing](docs/PLATFORM_BILLING.md) · [Backend reliability guide](docs/BACKEND_RELIABILITY_GUIDE.md) · [API route register](docs/API_ROUTE_REGISTER.md) |
 | AI and governance | [Assessment AI](docs/ASSESSMENT_AI.md) · [AI data governance](docs/AI_DATA_GOVERNANCE.md) · [Risk and compliance](docs/RISK_AND_COMPLIANCE.md) · [Agentic worker](docs/AGENTIC_WORKER.md) · [GitOps](docs/GITOPS.md) |
-| Product and roadmap | [UI and UX](docs/UI_UX.md) · [Enterprise UI program](docs/ENTERPRISE_UI_PROGRAM.md) · [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md) · [V2.0 roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md) · [Implementation status](docs/IMPLEMENTATION_STATUS.md) · [Release notes](docs/releases) |
+| Product and roadmap | [UI and UX](docs/UI_UX.md) · [Enterprise UI program](docs/ENTERPRISE_UI_PROGRAM.md) · [Enterprise backend program](docs/ENTERPRISE_BACKEND_PROGRAM.md) · [Architectural improvements](docs/ARCHITECTURAL_IMPROVEMENTS.md) · [V2.0 roadmap](docs/V2_0_ARCHITECTURAL_ROADMAP.md) · [Implementation status](docs/IMPLEMENTATION_STATUS.md) · [Release notes](docs/releases) |
 
 ## Customer views
 

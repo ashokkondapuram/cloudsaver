@@ -59,7 +59,7 @@ Paths are the same on the core API ([app/resource_api.py](../../app/resource_api
 | Method | Path | Purpose | Required role/scope |
 | --- | --- | --- | --- |
 | GET | `/api/v1/resources/billable-catalog` | Billable vs free resource types and v1.4 family catalog | Any workspace role; `scoped_read` |
-| GET | `/api/v1/scans/{scan_id}/resources` | Merged resource rows and summary. Query: `provider`, `service_category`, `review_priority`, `ai_status`, `ai_risk`, `decision`, `pillar_status`, `cost_scope` (`billable` default, `all`), `q`, `limit` (1–1,000, default 100), `offset` | Any workspace role; `scoped_read` |
+| GET | `/api/v1/scans/{scan_id}/resources` | Merged resource rows and summary. Query: `provider`, `service_category`, `review_priority`, `ai_status`, `ai_risk`, `decision`, `pillar_status`, `cost_scope` (`billable` default, `all`), `arm_detail` (`collected`, `unsupported_type`, `resource_budget_exceeded`, `api_version_unresolved`, `fetch_failed`), `q`, `limit` (1–1,000, default 100), `offset` | Any workspace role; `scoped_read` |
 | GET | `/api/v1/scans/{scan_id}/resources/export` | CSV content for matching rows (same filters and `q`, no paging). Returns `filename`, `rows`, `content` | Any workspace role; `scoped_read` |
 | GET | `/api/v1/scans/{scan_id}/resources/{resource_key}` | Full detail for one resource | Any workspace role; `scoped_read` |
 | GET | `/api/v1/resources/{resource_key}/history` | Up to 10 scan entries, AI result history and the last 20 decisions | Any workspace role; `scoped_read` |

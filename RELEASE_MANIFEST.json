@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "10eb56ff7bd902f2904791c5d340f81bb258b23c983d371cff184083c53d8acd",
+  "inventory_sha256": "064725b4e21c08f1c4b23c72b433a2a65f7290c925f2c5d5748e3a3c08ff2f47",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -91,8 +91,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "6c2d241a0f0db9a1b4e817f042adab03983d56b9801c6e37d911a1595637975d",
-      "bytes": 34594
+      "sha256": "4ebc251c24765a733800b8c9ee4c5b23a4174a830f67bcf063f30cef2bda073d",
+      "bytes": 34662
     },
     {
       "path": "ROADMAP.md",
@@ -1130,6 +1130,11 @@
       "bytes": 7114
     },
     {
+      "path": "app/schema_capabilities.py",
+      "sha256": "bd50e4924c7e3222bd842391ac36ffb6ca15f38adebffc9f6545f37639f8618a",
+      "bytes": 1609
+    },
+    {
       "path": "app/schemas.py",
       "sha256": "617a5bcb42ca18544a7030270efc50d37f07a9d264f19fd19fe23f926a4abff2",
       "bytes": 4250
@@ -1398,6 +1403,11 @@
       "path": "docs/ENGINEERING_INCREMENT.md",
       "sha256": "3e9f66c7ac0e4f36131e09081f7091257cdcb2960b2d213dc501a2637ce1199b",
       "bytes": 9666
+    },
+    {
+      "path": "docs/ENTERPRISE_BACKEND_PROGRAM.md",
+      "sha256": "20c60e2f7b2a9b521c8749b63f221c53ffea801daeaddcd70a7491c83f29bcb4",
+      "bytes": 3808
     },
     {
       "path": "docs/ENTERPRISE_READINESS_GAPS.md",
@@ -1706,8 +1716,8 @@
     },
     {
       "path": "docs/features/resources.md",
-      "sha256": "194f76585bb20b8714010b09ba59ba09bd95addf60bdb4bb977ae2483d7b2abb",
-      "bytes": 19940
+      "sha256": "9fb698ff6acaef8ce6a2e342575e66ed093da11764cc1524af16c0ada7ba6402",
+      "bytes": 20058
     },
     {
       "path": "docs/features/risk-and-compliance.md",
@@ -3628,6 +3638,11 @@
       "path": "tests/test_scanner.py",
       "sha256": "1d7e823aa0552fd6d16f47da48302215fa77acd06497ac6984b77bec82c870e5",
       "bytes": 4511
+    },
+    {
+      "path": "tests/test_schema_capabilities.py",
+      "sha256": "f9716ab8c0d39ffc37ad2612cd21165c17be64dcbb4043d65d7b95bd1ed23b30",
+      "bytes": 1964
     },
     {
       "path": "tests/test_scoped_finops_routes.py",
