@@ -1,6 +1,6 @@
 # Enterprise UI Playwright slice
 
-Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–22 of the UI/UX program.
+Specs in this slice cover the enterprise control-plane, FinOps ladder, governance, and related dashboard surfaces introduced in phases 1–23 of the UI/UX program.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ npm run test:e2e                    # both projects (full suite)
 | `declared-workloads-if-match.spec.ts` | Engineering workload version fencing |
 | `commitment-expiry-badges.spec.ts` | FinOps commitment expiry badges |
 
-Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `workspace-fixture.ts`.
+Shared fixtures: `control-plane-fixture.ts`, `engineering-fixture.ts`, `governance-theme-fixture.ts`, `workspace-fixture.ts`.
 
 ## Deep links and live refresh
 
@@ -45,4 +45,11 @@ Plan version payloads may include `engineering_outbox_pending_count`, `engineeri
 
 ## CI
 
-GitHub Actions `dashboard` job runs `npm run test:e2e`, which executes both Playwright projects (`enterprise-ui` then `dashboard`) against a production build on port 3099.
+GitHub Actions `dashboard` job currently runs `npm run test:e2e` (both Playwright projects) against a production build on port 3099. To surface enterprise regressions separately in CI logs, split the job after the server is ready:
+
+```bash
+npm run test:enterprise-ui
+npx playwright test --project=dashboard
+```
+
+Local development can still use `npm run test:e2e` for a single combined run.

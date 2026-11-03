@@ -1,6 +1,6 @@
 {
   "version": "1.8.1",
-  "inventory_sha256": "126991667de259db7e337e1e7e1e1088c84577b24e6f487129c8581fc14babb6",
+  "inventory_sha256": "3848ba9d652fe6521550c238d46a784c7fb9d52a2680bcd3a34b480b61bf8d3a",
   "migration_heads": {
     "core": "0037_scans_update_delete_grants",
     "identity": "i0015_cloudsaver_integration"
@@ -4116,8 +4116,8 @@
     },
     {
       "path": "web-dashboard/e2e/ENTERPRISE_UI.md",
-      "sha256": "e6c8d59badbb516e776bea49cce4a2c07ca07dea795a2e0c6bc019b392e4ab60",
-      "bytes": 3342
+      "sha256": "fe94514877c0fd1eea302975267ed1b78d9259ca5fa234c5dc68a4d15bb09498",
+      "bytes": 3591
     },
     {
       "path": "web-dashboard/e2e/agents.spec.ts",
@@ -4216,8 +4216,8 @@
     },
     {
       "path": "web-dashboard/e2e/enterprise-ui-governance-theme.spec.ts",
-      "sha256": "d1ae025cbab78d93624d595608cfa0369f7ea3a9b9ca35670279a21d2fee60d1",
-      "bytes": 4372
+      "sha256": "0bc007e68ba685fb91010d2f91838766ea66ca1e34f881599150a1dd1d523082",
+      "bytes": 1671
     },
     {
       "path": "web-dashboard/e2e/enterprise.spec.ts",
@@ -4238,6 +4238,11 @@
       "path": "web-dashboard/e2e/foundry.spec.ts",
       "sha256": "01be23f984f10e3a309a86b2dd28805af8fc14843eade829fb1ad825c6438697",
       "bytes": 6994
+    },
+    {
+      "path": "web-dashboard/e2e/governance-theme-fixture.ts",
+      "sha256": "edf9918b22fd2962db260e9352b73ca335541b643089164a6771581005e13851",
+      "bytes": 1609
     },
     {
       "path": "web-dashboard/e2e/governance.spec.ts",
