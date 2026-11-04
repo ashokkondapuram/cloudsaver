@@ -136,7 +136,7 @@ def install(app, settings, *, redis_required=False, targets=()):
             try:
                 response = await call_next(request)
             except Exception:
-                logging.getLogger('cloudsaver').error('Unhandled request failure request_id=%s', value)
+                logging.getLogger('cloudsaver').exception('Unhandled request failure request_id=%s', value)
                 response = problem(request, 500, 'The service could not complete the request')
             response.headers['X-Request-ID'] = value
             response.headers['Cache-Control'] = 'no-store'

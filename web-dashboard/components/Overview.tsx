@@ -6,7 +6,7 @@ import {ArrowRight, Blocks, ChevronRight, ShieldCheck} from 'lucide-react';
 import {EvidenceHealth} from './EvidenceHealth';
 import {scopeOf} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
-import {sentence, isLiveSnapshot, useResources} from '../lib/resources';
+import {sentence, isLiveSnapshot, useResources, type Summary} from '../lib/resources';
 import {EmptyState, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 import styles from './Overview.module.css';
 
@@ -15,14 +15,22 @@ export function useScopedFindings() {
   return useMemo(() => (scan?.findings || []).filter(f => !scope.length || scope.includes(scopeOf(f))), [scan, scope]);
 }
 
+function reviewTotal(summary: Summary | undefined, scopedRows: {disposition: string}[]) {
+  if (summary?.review_priority) {
+    const counts = summary.review_priority;
+    return (counts.critical ?? 0) + (counts.high ?? 0) + (counts.evidence_required ?? 0);
+  }
+  return scopedRows.filter(row => row.disposition === 'requires_review').length;
+}
+
 export function Overview() {
   const {scan, scope, canAdmin, setOverlay, token, busy, scanActivity, liveScanEpoch} = useWorkspace();
   const live = isLiveSnapshot(scan);
   const inProgress = scan?.status === 'running';
-  const {page, error, reload} = useResources(scan?.scan_id, token, live, liveScanEpoch, {running: inProgress});
+  const {page, error, reload} = useResources(scan?.scan_id, token, live, inProgress ? liveScanEpoch : 0, {running: inProgress, overview: !inProgress});
   const rows = (page?.items || []).filter(row => !scope.length || scope.includes(row.scope_id));
-  const complete = !!page && (inProgress || page.total === page.items.length);
-  const reviewCount = rows.filter(row => row.disposition === 'requires_review').length;
+  const complete = !!page && (inProgress || page.total === page.items.length || (live && !inProgress));
+  const reviewCount = reviewTotal(page?.summary, rows);
   const priorityOrder: Record<string, number> = {critical:0, high:1, medium:2, low:3, none:4};
   const priorities = rows.filter(row => row.disposition === 'requires_review')
     .sort((a, b) => (priorityOrder[a.review_priority] ?? 5) - (priorityOrder[b.review_priority] ?? 5) || a.resource_name.localeCompare(b.resource_name)).slice(0, 3);
@@ -42,7 +50,7 @@ export function Overview() {
         : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16}/></Link>}
     </section>
 
-    <EvidenceHealth rows={rows} ready={complete} error={error}/>
+    <EvidenceHealth rows={rows} total={page?.total} ready={complete} error={error}/>
     {error && <Notice tone="error">{error}</Notice>}
 
     {scan && <section className="panel priority-panel" aria-label="Resource review queue">

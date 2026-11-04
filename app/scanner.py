@@ -105,30 +105,48 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
     raise ScanError("Azure inventory exceeded the pagination limit.")
 
 
-INVENTORY_QUERY = ("Resources | where isnotempty(id)" + _PROJECTION +
-    ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
-    ', vmSize=tostring(properties.hardwareProfile.vmSize), skuName=tostring(sku.name)'
-    ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)'
-    ', resourceLocation=location, managedBy=tostring(managedBy), osDiskId=tostring(properties.storageProfile.osDisk.managedDisk.id)'
-    ', dataDisks=properties.storageProfile.dataDisks, networkInterfaces=properties.networkProfile.networkInterfaces'
-    ', nicIpConfigurations=properties.ipConfigurations, serverFarmId=tostring(properties.serverFarmId)'
-    ', sizeGB=toint(properties.diskSizeGB), provisionedIops=toint(properties.diskIOPSReadWrite)'
-    ', encryptionType=tostring(properties.encryption.type), minimumTlsVersion=tostring(properties.minimumTlsVersion)'
-    ', backupRetentionDays=toint(properties.backupRetentionDays), highAvailability=properties.highAvailability.mode'
-    ', disableLocalAuth=properties.disableLocalAuth, allowBlobPublicAccess=properties.allowBlobPublicAccess'
-    ', zoneRedundant=properties.zoneRedundant, zones=zones'
-    ', kubernetesVersion=tostring(properties.kubernetesVersion), nodeResourceGroup=tostring(properties.nodeResourceGroup)'
-    ', aksPowerState=tostring(properties.powerState.code), fqdn=tostring(properties.fqdn)'
-    ', privateCluster=properties.apiServerAccessProfile.enablePrivateCluster'
-    ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles'
-    ', publicIpConfiguration=properties.ipConfiguration, publicNatGateway=properties.natGateway')
+def inventory_query(*, settings=None) -> str:
+    """Full ARG inventory query, optionally capped for local pilot scans."""
+    query = (
+        "Resources | where isnotempty(id)" + _PROJECTION
+        + ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
+        + ', vmSize=tostring(properties.hardwareProfile.vmSize), skuName=tostring(sku.name)'
+        + ', hostedAppCount=toint(properties.numberOfSites), skuTier=tostring(sku.tier), createdAt=tostring(properties.timeCreated)'
+        + ', resourceLocation=location, managedBy=tostring(managedBy), osDiskId=tostring(properties.storageProfile.osDisk.managedDisk.id)'
+        + ', dataDisks=properties.storageProfile.dataDisks, networkInterfaces=properties.networkProfile.networkInterfaces'
+        + ', nicIpConfigurations=properties.ipConfigurations, serverFarmId=tostring(properties.serverFarmId)'
+        + ', sizeGB=toint(properties.diskSizeGB), provisionedIops=toint(properties.diskIOPSReadWrite)'
+        + ', encryptionType=tostring(properties.encryption.type), minimumTlsVersion=tostring(properties.minimumTlsVersion)'
+        + ', backupRetentionDays=toint(properties.backupRetentionDays), highAvailability=properties.highAvailability.mode'
+        + ', disableLocalAuth=properties.disableLocalAuth, allowBlobPublicAccess=properties.allowBlobPublicAccess'
+        + ', zoneRedundant=properties.zoneRedundant, zones=zones'
+        + ', kubernetesVersion=tostring(properties.kubernetesVersion), nodeResourceGroup=tostring(properties.nodeResourceGroup)'
+        + ', aksPowerState=tostring(properties.powerState.code), fqdn=tostring(properties.fqdn)'
+        + ', privateCluster=properties.apiServerAccessProfile.enablePrivateCluster'
+        + ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles'
+        + ', publicIpConfiguration=properties.ipConfiguration, publicNatGateway=properties.natGateway'
+    )
+    from app.config import Settings
+    from app.cloudsaver_platform_settings import integration_int
+    settings = settings or Settings.load()
+    limit = integration_int(settings, 'azure_inventory_limit', 'CLOUDSAVER_AZURE_INVENTORY_LIMIT', default=0)
+    if limit == 0:
+        return query
+    if not 1 <= limit <= 10_000:
+        raise ScanError('Azure inventory limit must be 1–10000 when CLOUDSAVER_AZURE_INVENTORY_LIMIT is set.')
+    return f'{query} | limit {limit}'
 
 
-def scan_inventory_observations(client: Any, subscriptions: list[str]) -> list[dict]:
+# Backward-compatible name for tests and docs that reference the uncapped query shape.
+INVENTORY_QUERY = inventory_query()
+
+
+def scan_inventory_observations(client: Any, subscriptions: list[str], *, settings=None) -> list[dict]:
     """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
     rows = []
     observed_at = datetime.now(timezone.utc).isoformat()
-    for row in execute_pages(client, INVENTORY_QUERY, subscriptions):
+    query = inventory_query(settings=settings)
+    for row in execute_pages(client, query, subscriptions):
         evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
         for source, target in (('vmSize', 'vm_size'), ('skuName', 'sku_name'), ('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
             if isinstance(row.get(source), str) and row[source]:
@@ -251,7 +269,9 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
     with credential:
         with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
                                  connection_timeout=10, read_timeout=45) as client:
-            inventory = scan_inventory_observations(client, subscriptions)
+            from app.config import Settings
+            stack_settings = Settings.load()
+            inventory = scan_inventory_observations(client, subscriptions, settings=stack_settings)
             if progress is not None:
                 progress.seed_inventory(inventory)
             from app.cloud_http import BearerTokenCache, JSONReader
@@ -259,8 +279,6 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
             reader = JSONReader(headers_factory=arm_auth)
             try:
                 from app.collectors.azure_arm_detail import enabled as arm_detail_enabled, enrich_arm_details
-                from app.config import Settings
-                stack_settings = Settings.load()
                 if arm_detail_enabled(stack_settings):
                     inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
                 from app.collectors.azure_storage_policy import enrich_storage_management_policies

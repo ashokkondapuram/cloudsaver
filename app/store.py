@@ -89,6 +89,31 @@ class Store:
             findings=list(scan.get('findings') or []),
         )
 
+    def scan_resource_bundle(self, tenant_id, scan_id, provider, resource_id):
+        scan = self.get(tenant_id, scan_id)
+        if scan is None:
+            return None
+        provider = provider or 'azure'
+        target = resource_id.lower() if provider == 'azure' else resource_id
+
+        def matches(row):
+            rid = row.get('resource_id') or ''
+            normalized = rid.lower() if provider == 'azure' else rid
+            return row.get('cloud_provider', 'azure') == provider and normalized == target
+
+        observation = next((obs for obs in (scan.get('inventory') or []) if matches(obs)), None)
+        findings = [f for f in (scan.get('findings') or []) if matches(f)]
+        return dict(
+            scan_id=scan['scan_id'],
+            status=scan.get('status'),
+            timestamp=scan.get('timestamp'),
+            data_origin=scan.get('data_origin'),
+            scope_fingerprint=scan.get('scope_fingerprint'),
+            rule_evaluations=list(scan.get('rule_evaluations') or []),
+            observation=observation,
+            findings=findings,
+        )
+
 
 class PostgresStore:
     """Every request uses a fresh transaction and transaction-local tenant context."""
@@ -368,7 +393,20 @@ class PostgresStore:
                     COALESCE(payload->>'timestamp', payload->>'observed_at') AS observed_at,
                     payload->>'data_origin' AS data_origin,
                     COALESCE(jsonb_array_length(payload->'inventory'), 0) AS inventory_total,
-                    COALESCE(payload->'findings', '[]'::jsonb) AS findings,
+                    (
+                        SELECT COALESCE(jsonb_agg(f.elem ORDER BY f.ord), '[]'::jsonb)
+                        FROM jsonb_array_elements(COALESCE(payload->'findings', '[]'::jsonb))
+                            WITH ORDINALITY AS f(elem, ord)
+                        WHERE EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(COALESCE(payload->'inventory', '[]'::jsonb))
+                                WITH ORDINALITY AS p(elem, ord)
+                            WHERE p.ord > %s AND p.ord <= %s
+                              AND lower(f.elem->>'resource_id') = lower(p.elem->>'resource_id')
+                              AND COALESCE(f.elem->>'cloud_provider', 'azure')
+                                  = COALESCE(p.elem->>'cloud_provider', 'azure')
+                        )
+                    ) AS findings,
                     (
                         SELECT COALESCE(jsonb_agg(sub.elem ORDER BY sub.ord), '[]'::jsonb)
                         FROM (
@@ -381,7 +419,7 @@ class PostgresStore:
                 FROM public.scans
                 WHERE id = %s AND tenant_id = %s
                 """,
-                (offset, offset + limit, scan_id, tenant_id),
+                (offset, offset + limit, offset, offset + limit, scan_id, tenant_id),
             ).fetchone()
         if not row:
             return None
@@ -401,6 +439,70 @@ class PostgresStore:
             inventory_total=int(row[4] or 0),
             inventory=list(inventory),
             findings=list(findings),
+        )
+
+    def scan_resource_bundle(self, tenant_id, scan_id, provider, resource_id):
+        """Load one resource's observation and findings without the full inventory payload."""
+        from uuid import UUID
+        import json
+
+        try:
+            scan_id = str(UUID(scan_id))
+        except ValueError:
+            return None
+        provider = provider or 'azure'
+        with self.connection(tenant_id) as db:
+            row = db.execute(
+                """
+                SELECT
+                    payload->>'status' AS status,
+                    payload->>'scan_id' AS scan_id,
+                    COALESCE(payload->>'timestamp', payload->>'observed_at') AS observed_at,
+                    payload->>'data_origin' AS data_origin,
+                    payload->>'scope_fingerprint' AS scope_fingerprint,
+                    COALESCE(payload->'rule_evaluations', '[]'::jsonb) AS rule_evaluations,
+                    (
+                        SELECT elem
+                        FROM jsonb_array_elements(COALESCE(payload->'inventory', '[]'::jsonb)) elem
+                        WHERE lower(elem->>'resource_id') = lower(%s)
+                          AND COALESCE(elem->>'cloud_provider', 'azure') = %s
+                        LIMIT 1
+                    ) AS observation,
+                    (
+                        SELECT COALESCE(jsonb_agg(f.elem ORDER BY f.ord), '[]'::jsonb)
+                        FROM jsonb_array_elements(COALESCE(payload->'findings', '[]'::jsonb))
+                            WITH ORDINALITY AS f(elem, ord)
+                        WHERE lower(f.elem->>'resource_id') = lower(%s)
+                          AND COALESCE(f.elem->>'cloud_provider', 'azure') = %s
+                    ) AS findings
+                FROM public.scans
+                WHERE id = %s AND tenant_id = %s
+                """,
+                (resource_id, provider, resource_id, provider, scan_id, tenant_id),
+            ).fetchone()
+        if not row:
+            return None
+
+        def decode(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                return json.loads(value)
+            return value
+
+        findings = decode(row[7]) or []
+        if not isinstance(findings, list):
+            findings = list(findings) if findings else []
+        observation = decode(row[6])
+        return dict(
+            scan_id=row[1] or scan_id,
+            status=row[0],
+            timestamp=row[2],
+            data_origin=row[3],
+            scope_fingerprint=row[4],
+            rule_evaluations=list(decode(row[5]) or []),
+            observation=observation,
+            findings=findings,
         )
 
 

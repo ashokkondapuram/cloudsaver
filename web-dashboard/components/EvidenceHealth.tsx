@@ -4,11 +4,12 @@ import type {ResourceRow} from '../lib/resources';
 import {useWorkspace} from './WorkspaceProvider';
 import styles from './Overview.module.css';
 
-export function EvidenceHealth({rows, ready, error}: {rows: ResourceRow[]; ready: boolean; error: string}) {
+export function EvidenceHealth({rows, total, ready, error}: {rows: ResourceRow[]; total?: number; ready: boolean; error: string}) {
   const {scan, scope} = useWorkspace();
   const supported = scan?.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
   const known = supported && ready && !error;
-  const status = !scan ? 'No snapshot' : !supported ? 'Unavailable' : error ? 'Unavailable' : !ready ? 'Loading…' : `${rows.length.toLocaleString()} resources`;
+  const resourceTotal = total ?? rows.length;
+  const status = !scan ? 'No snapshot' : !supported ? 'Unavailable' : error ? 'Unavailable' : !ready ? 'Loading…' : `${resourceTotal.toLocaleString()} resources`;
   const missing = rows.filter(row => row.evidence_coverage.observed < row.evidence_coverage.total || row.evidence_gap_codes.length > 0).length;
   return <section className={styles.evidence} aria-label="Evidence health">
     <div className={styles.metrics}>

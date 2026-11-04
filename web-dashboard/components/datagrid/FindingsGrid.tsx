@@ -12,7 +12,8 @@ import {ExplorerSummary} from './ExplorerSummary';
 import {categories,categoryOf,knownPrice,matchesQuery,matchesTag,protectionSignals,sizingOf,type Category,type Intent,type Pricing} from '../../lib/resource-insights';
 import {EmptyState, PriorityBadge, ProviderBadge} from '../ui/shared';
 import {useRouter} from 'next/navigation';
-import {aiStatusLabels, decisionLabels, findingIdentity, identityOf, useResources, type AIStatus, type DecisionKind, type ResourceRow} from '../../lib/resources';
+import {aiStatusLabels, decisionLabels, findingIdentity, identityOf, type AIStatus, type DecisionKind} from '../../lib/resources';
+import {useFindingResourceSignals} from '../../lib/useFindingResourceSignals';
 import {AIRisk, AIStatusBadge, DecisionBadge} from '../resources/ResourceParts';
 
 function Checkbox({indeterminate = false, ...props}: InputHTMLAttributes<HTMLInputElement> & {indeterminate?: boolean}) {
@@ -38,8 +39,7 @@ export function FindingsGrid({initialProvider = '',initialCategory='',initialInt
   const findings = useScopedFindings();
   const router = useRouter();
   const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
-  const {page:resourcePage} = useResources(scan?.scan_id, token, live);
-  const resources = useMemo(()=>new Map<string,ResourceRow>((resourcePage?.items||[]).map(row=>[identityOf(row.provider,row.resource_id),row])),[resourcePage]);
+  const {resources} = useFindingResourceSignals(scan?.scan_id, token, live, findings);
   const [aiStatus,setAIStatus] = useState<AIStatus|''>(''), [decision,setDecision] = useState<DecisionKind|'none'|''>('');
   const [query,setQuery] = useState(''), [provider,setProvider] = useState(initialProvider), [severity,setSeverity] = useState(''), [type,setType] = useState(''), [tag,setTag] = useState('');
   const [category,setCategory]=useState<Category|''>(initialCategory),[intent,setIntent]=useState<Intent>(initialIntent),[pricing,setPricing]=useState<Pricing>(initialPricing);

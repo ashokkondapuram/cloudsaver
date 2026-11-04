@@ -3,7 +3,11 @@ import type {Batch, ResourcePage, ResourceRow} from './resources';
 
 export const RESOURCE_PAGE_SIZE = 1000;
 export const RUNNING_RESOURCE_PAGE_SIZE = 100;
+/** Matches GET /scans/{id}/resources default limit and explorer incremental page size. */
+export const EXPLORER_RESOURCE_PAGE_SIZE = 100;
 export const MAX_RESOURCE_ROWS = 10000;
+
+export type ResourceLoadProgress = {loaded: number; total: number; complete: boolean};
 const invalid = () => new Error('Resource evidence is incomplete or changed during loading. Refresh the workspace before reviewing resources.');
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const strings = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === 'string');
@@ -31,16 +35,39 @@ export async function loadResourcePages(
   request: (path: string, options: {signal?: AbortSignal}) => Promise<unknown>,
   scanId: string,
   signal?: AbortSignal,
-  options: {partial?: boolean; costScope?: 'billable' | 'all'; pageSize?: number; armDetail?: ArmDetailStatus} = {},
+  options: {
+    partial?: boolean;
+    incremental?: boolean;
+    costScope?: 'billable' | 'all';
+    pageSize?: number;
+    armDetail?: ArmDetailStatus;
+    /** Load only the first API page (dashboard overview); do not walk the full inventory. */
+    overview?: boolean;
+    onProgress?: (page: ResourcePage, progress: ResourceLoadProgress) => void;
+  } = {},
 ): Promise<ResourcePage> {
   const costQuery = options.costScope === 'all' ? '&cost_scope=all' : '';
   const armQuery = options.armDetail ? `&arm_detail=${encodeURIComponent(options.armDetail)}` : '';
-  const pageSize = options.partial ? (options.pageSize ?? RUNNING_RESOURCE_PAGE_SIZE) : RESOURCE_PAGE_SIZE;
+  const pageSize = options.pageSize ?? (options.overview
+    ? RESOURCE_PAGE_SIZE
+    : options.partial
+    ? RUNNING_RESOURCE_PAGE_SIZE
+    : options.incremental
+      ? EXPLORER_RESOURCE_PAGE_SIZE
+      : RESOURCE_PAGE_SIZE);
   let first: ResourcePage | null = null;
   const items: ResourceRow[] = [], seen = new Set<string>();
-  for (let offset=0; offset<MAX_RESOURCE_ROWS;) {
+  const emit = (inventoryOffset: number, forceComplete = false) => {
+    if (!first || !options.onProgress) return;
+    options.onProgress({...first, items: [...items]}, {
+      loaded: items.length,
+      total: first.total,
+      complete: forceComplete || options.overview || inventoryOffset >= first.total,
+    });
+  };
+  for (let inventoryOffset = 0; inventoryOffset < MAX_RESOURCE_ROWS; inventoryOffset += pageSize) {
     signal?.throwIfAborted();
-    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${offset}${costQuery}${armQuery}`, {signal});
+    const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${inventoryOffset}${costQuery}${armQuery}`, {signal});
     signal?.throwIfAborted();
     if(object(raw)&&Number.isSafeInteger(raw.total)&&Number(raw.total)>MAX_RESOURCE_ROWS)throw new Error('Resource evidence is incomplete: the explorer supports up to 10,000 resources per scan. Select smaller scan scopes before reviewing this estate.');
     if (!object(raw) || raw.scan_id!==scanId || typeof raw.observed_at!=='string' || !Number.isSafeInteger(raw.total) || Number(raw.total)<0 || Number(raw.total)>MAX_RESOURCE_ROWS || !Array.isArray(raw.items) || raw.items.length>pageSize || !raw.items.every(validRow)) throw invalid();
@@ -49,16 +76,36 @@ export async function loadResourcePages(
     const page=raw as unknown as ResourcePage;
     if (first && (first.total!==page.total || first.observed_at!==page.observed_at)) throw invalid();
     first ??= page;
-    if (offset+page.items.length>page.total || (!page.items.length && offset<page.total)) throw invalid();
+    if (inventoryOffset > page.total) throw invalid();
+    if (!page.items.length && inventoryOffset < page.total) {
+      const lastSlice = inventoryOffset + pageSize >= page.total;
+      if (lastSlice || options.costScope !== 'billable') throw invalid();
+    }
     for (const row of page.items) {
       if (seen.has(row.resource_key)) throw invalid();
       seen.add(row.resource_key); items.push(row);
     }
-    offset=items.length;
-    if (options.partial && first) return {...first, items};
-    if (offset===page.total) return {...first,items};
+    const nextOffset = inventoryOffset + pageSize;
+    if (options.overview && first) {
+      emit(nextOffset, true);
+      return {...first, items: [...items]};
+    }
+    emit(nextOffset);
+    if (options.partial && first) return {...first, items: [...items]};
+    if (nextOffset >= page.total) return {...first, items: [...items]};
   }
   throw invalid();
+}
+
+/** Incrementally load every page for the explorer, invoking onProgress after each authorized batch. */
+export async function loadResourcePagesIncremental(
+  request: (path: string, options: {signal?: AbortSignal}) => Promise<unknown>,
+  scanId: string,
+  signal: AbortSignal | undefined,
+  onProgress: (page: ResourcePage, progress: ResourceLoadProgress) => void,
+  options: Omit<Parameters<typeof loadResourcePages>[3], 'incremental' | 'onProgress' | 'partial'> = {},
+): Promise<ResourcePage> {
+  return loadResourcePages(request, scanId, signal, {...options, incremental: true, onProgress});
 }
 
 /** A missing progress counter must not become zero, NaN or permission to queue duplicate work. */

@@ -20,7 +20,7 @@ test('provider/category facets, price gaps and protected intent combine without 
   await expect(page.locator('.resource-table tbody tr')).toHaveCount(9);
   await page.getByRole('button',{name:/^Azure \d+$/}).click();
   await expect(page.getByRole('heading',{name:'No matching resources',exact:true})).toBeVisible();
-  await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Protected intent',exact:true}).click();
+  await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Protected',exact:true}).click();
   await expect(page.locator('.resource-table tbody tr')).toHaveCount(1);
   await page.getByRole('button',{name:/^archive-data-01/}).click();
   await page.getByRole('tab',{name:'Code',exact:true}).click();

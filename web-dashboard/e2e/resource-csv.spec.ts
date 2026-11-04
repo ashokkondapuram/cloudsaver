@@ -21,7 +21,7 @@ test('resource CSV follows active quick-view filters instead of exporting hidden
   let serverExports=0;
   await page.route('**/api/v1/scans/*/resources/export*',async route=>{serverExports++;await route.fulfill({status:500});});
   await navigate(page,'Resources');
-  await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Protected intent',exact:true}).click();
+  await page.getByRole('group',{name:'Evidence quick views'}).getByRole('button',{name:'Protected',exact:true}).click();
   await expect(page.locator('.resource-table tbody tr')).toHaveCount(1);
   const downloaded=page.waitForEvent('download');
   await page.getByRole('button',{name:'Export CSV',exact:true}).click();

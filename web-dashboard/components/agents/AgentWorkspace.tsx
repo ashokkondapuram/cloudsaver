@@ -45,9 +45,9 @@ export function AgentWorkspace(){
   },[refresh]);
   useEffect(()=>{
     const request=new AbortController();setResources([]);setResource('');setSelectedConnectors([]);setTarget('');
-    if(scan?.status==='completed'&&scan.mode!=='demo')api<{items:{resource_id:string;resource_name:string;provider:string;scope_id:string}[]}>(`/scans/${scan.scan_id}/resources?limit=1000`,token,{signal:request.signal}).then(r=>{if(!request.signal.aborted){const rows=r.items.map(v=>({...v,cloud_provider:v.provider}));setResources(rows);const prefill=new URLSearchParams(window.location.search).get('resource');if(prefill&&rows.some(v=>v.resource_id===prefill))setResource(prefill);}}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
+    if(canAdmin&&scan?.status==='completed'&&scan.mode!=='demo')api<{items:{resource_id:string;resource_name:string;provider:string;scope_id:string}[]}>(`/scans/${scan.scan_id}/resources?limit=1000`,token,{signal:request.signal}).then(r=>{if(!request.signal.aborted){const rows=r.items.map(v=>({...v,cloud_provider:v.provider}));setResources(rows);const prefill=new URLSearchParams(window.location.search).get('resource');if(prefill&&rows.some(v=>v.resource_id===prefill))setResource(prefill);}}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
     return()=>request.abort();
-  },[scan?.scan_id,scan?.status,scan?.mode,token]);
+  },[canAdmin,scan?.scan_id,scan?.status,scan?.mode,token]);
   useEffect(()=>{
     if(!tasks.some(t=>active.has(t.state)))return;
     const request=new AbortController();let fetching=false;

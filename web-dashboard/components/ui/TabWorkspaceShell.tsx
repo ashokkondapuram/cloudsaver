@@ -14,14 +14,15 @@ type Props = {
   children: ReactNode;
   className?: string;
   panelClassName?: string;
+  tabIcons?: boolean;
 };
 
 /** Shared tab chrome for multi-section workspace pages and drawers. */
-export function TabWorkspaceShell({id, label, tabs, value, onChange, children, className, panelClassName}: Props) {
+export function TabWorkspaceShell({id, label, tabs, value, onChange, children, className, panelClassName, tabIcons = true}: Props) {
   const active = tabs.find(tab => tab.id === value);
   return (
     <div className={`workspace-tab-shell${className ? ` ${className}` : ''}`}>
-      <PageTabs id={id} label={label} tabs={tabs} value={value} onChange={onChange} className="page-tabs workspace-tab-list"/>
+      <PageTabs id={id} label={label} tabs={tabs} value={value} onChange={onChange} className="page-tabs workspace-tab-list" icons={tabIcons}/>
       {active?.lead ? <p className="tab-lead">{active.lead}</p> : null}
       <div
         className={`tab-panel-stack${panelClassName ? ` ${panelClassName}` : ''}`}

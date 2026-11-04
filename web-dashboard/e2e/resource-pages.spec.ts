@@ -1,8 +1,20 @@
 import {test,expect} from './test';
-import {loadResourcePages,MAX_RESOURCE_ROWS} from '../lib/resource-pages';
+import {loadResourcePages,MAX_RESOURCE_ROWS,EXPLORER_RESOURCE_PAGE_SIZE} from '../lib/resource-pages';
 import {buildResourceItems,createFindings,scanId,scanTime} from './workspace-fixture';
 const items=buildResourceItems(createFindings(1001));
 function page(rows=items.slice(0,1000),total=1001){return {scan_id:scanId,observed_at:scanTime,total,items:rows,summary:{total,ai_status:{not_run:total},ai_risk:{none:total},decision:{none:total},review_priority:{high:total}}};}
+
+test('incremental loading reports progress before the inventory is complete', async () => {
+  const sizes: number[] = [];
+  const result = await loadResourcePages(async path => {
+    const offset = Number(/offset=(\d+)/.exec(path)?.[1] || 0);
+    const limit = Number(/limit=(\d+)/.exec(path)?.[1] || EXPLORER_RESOURCE_PAGE_SIZE);
+    return page(items.slice(offset, offset + limit), items.length);
+  }, scanId, undefined, {incremental: true, onProgress: (_page, progress) => sizes.push(progress.loaded)});
+  expect(result.items).toHaveLength(1001);
+  expect(sizes.length).toBeGreaterThan(1);
+  expect(sizes.at(-1)).toBe(1001);
+});
 
 test('inventory reads subsequent pages and includes the last resource exactly once',async()=>{
   const paths:string[]=[];

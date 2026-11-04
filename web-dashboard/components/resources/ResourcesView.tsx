@@ -6,10 +6,11 @@ import {BrainCircuit, ChevronRight, Download, FileCode2, Filter, Loader2, Printe
 import {categories, categoryOf, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
 import {identityOf} from '../../lib/resources';
 import {resourceCsv} from '../../lib/resource-csv';
+import type {ResourceIdentity} from '../../lib/resource-insight';
 import type {Finding} from '../../lib/types';
 import {api} from '../../lib/api';
 import {dateTime, downloadFile, money, providerNames} from '../../lib/finops';
-import {ACTIVE_BATCH, aiStatusLabels, armDetailFromQuery, armDetailLabels, decisionLabels, isLiveSnapshot, sentence, useActiveBatch, useResources, type ArmDetailStatus, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
+import {ACTIVE_BATCH, aiStatusLabels, armDetailFromQuery, armDetailLabels, decisionLabels, isLiveSnapshot, refreshLoadedResourceSignals, sentence, useActiveBatch, useResources, type ArmDetailStatus, type Batch, type ResourceRow, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {EmptyState, Loading, Notice, ProviderBadge} from '../ui/shared';
@@ -21,6 +22,11 @@ type Filters = {service_category:string;pillar_status:string;provider: string; r
 const empty: Filters = {service_category:'',pillar_status:'',provider: '', review_priority: '', ai_status: '', ai_risk: '', decision: '', arm_detail: ''};
 const GRID_PAGE_SIZE=50;
 const priorityRank: Record<string, number> = {critical: 0, high: 1, evidence_required: 2};
+
+function resourceTypeLabel(type: string) {
+  const leaf = type.split('/').pop() || type;
+  return sentence(leaf.replace(/\./g, ' '));
+}
 
 function matches(row: ResourceRow, filters: Filters, query: string) {
   const needle = query.trim().toLowerCase();
@@ -100,20 +106,50 @@ function matchesDiscovery(row:ResourceRow,related: Finding[], category: Category
   return true;
 }
 
+function ResourceLoadProgress({progress}: {progress: {loaded: number; total: number; complete: boolean} | null}) {
+  if (!progress || progress.complete) return null;
+  const percent = Math.round(100 * progress.loaded / Math.max(1, progress.total));
+  return <div className="resource-load-banner batch-banner" role="status" aria-live="polite">
+    <Loader2 size={18} className="spin"/>
+    <div><strong>Loading resources</strong>
+      <span>{progress.loaded.toLocaleString()} of {progress.total.toLocaleString()} loaded</span>
+      <div className="batch-progress" aria-hidden="true"><span style={{width: `${percent}%`}}/></div></div>
+  </div>;
+}
+
 export function ResourcesView({initialProvider = '', initialCategory = '', initialIntent = '', initialPricing = '', initialArmDetail = ''}: {initialProvider?: string; initialCategory?: Category | ''; initialIntent?: Intent; initialPricing?: Pricing; initialArmDetail?: ArmDetailStatus | ''}) {
   const {scan, token, canAdmin, notify, openReview, setSelection, scope, liveScanEpoch} = useWorkspace();
   const router = useRouter(), params = useSearchParams();
   const live = isLiveSnapshot(scan);
   const inProgress = scan?.status === 'running';
   const [filters, setFilters] = useState<Filters>(empty), [query, setQuery] = useState(''), [selected, setSelected] = useState<Set<string>>(new Set());
-  const serverArmDetail = filters.arm_detail as ArmDetailStatus | '';
-  const {page, error, reload} = useResources(scan?.scan_id, token, live, liveScanEpoch, {running: inProgress, armDetail: serverArmDetail || undefined});
-  const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, reload);
+  const {page, error, reload, loading, progress} = useResources(scan?.scan_id, token, live, inProgress ? liveScanEpoch : 0, {running: inProgress});
+  const reloadTimer = useRef<number | undefined>(undefined);
+  const debouncedSignalRefresh = useCallback(() => {
+    if (!scan?.scan_id || !token) return;
+    window.clearTimeout(reloadTimer.current);
+    reloadTimer.current = window.setTimeout(() => {
+      refreshLoadedResourceSignals(scan.scan_id, token, inProgress ? liveScanEpoch : 0, {running: inProgress}).catch(() => reload());
+    }, 2000);
+  }, [scan?.scan_id, token, inProgress, liveScanEpoch, reload]);
+  const {batch, error:batchError,loading:batchLoading,refresh: refreshBatch} = useActiveBatch(live ? scan?.scan_id : undefined, token, debouncedSignalRefresh);
   const [category, setCategory] = useState<Category | ''>(initialCategory), [intent, setIntent] = useState<Intent>(initialIntent), [pricing, setPricing] = useState<Pricing>(initialPricing);
   const [offset,setOffset]=useState(0);
   const [dialog, setDialog] = useState(false), [exporting, setExporting] = useState(false);
   const deferred = useDeferredValue(query);
   const openKey = params.get('resource');
+  const [drawerIdentityHint, setDrawerIdentityHint] = useState<ResourceIdentity | null>(null);
+  const drawerIdentity = useMemo(() => {
+    if (drawerIdentityHint) return drawerIdentityHint;
+    const provider = params.get('provider') || '';
+    const resourceId = params.get('resource_id') || '';
+    if (provider && resourceId) return {provider, resourceId};
+    if (openKey && page?.items.length) {
+      const row = page.items.find(r => r.resource_key === openKey);
+      if (row) return {provider: row.provider, resourceId: row.resource_id};
+    }
+    return null;
+  }, [drawerIdentityHint, params, openKey, page?.items]);
   useEffect(() => {
     const provider = params.get('provider') || initialProvider || '';
     const armDetail = armDetailFromQuery(params.get('arm_detail')) || initialArmDetail || '';
@@ -133,6 +169,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
   }, [filters.arm_detail, params, router]);
   useEffect(() => {
+    if (openKey) return;
     const current = params.get('provider') || '';
     const next = filters.provider || '';
     if (current === next) return;
@@ -141,7 +178,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     else nextParams.delete('provider');
     const search = nextParams.toString();
     router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
-  }, [filters.provider, params, router]);
+  }, [filters.provider, params, router, openKey]);
   useEffect(() => {setSelected(new Set());}, [scan?.scan_id,token,scope]);
   const findings = scan?.findings || [];
   const findingIndex=useMemo(()=>{const index=new Map<string,Finding[]>();for(const finding of findings){const key=identityOf(finding.cloud_provider||'azure',finding.resource_id);const group=index.get(key)||[];group.push(finding);index.set(key,group);}return index;},[findings]);
@@ -158,10 +195,21 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   useEffect(() => {setSelection(reviewFindings); return () => setSelection([]);}, [reviewFindings, setSelection]);
   const providerCounts=useMemo(()=>{const counts:Record<string,number>={};for(const row of page?.items||[])counts[row.provider]=(counts[row.provider]||0)+1;return counts;},[page]);
   const categoryCounts=useMemo(()=>{const counts:Record<string,number>={};for(const row of page?.items||[]){const category=categoryOf(row);counts[category]=(counts[category]||0)+1;}return counts;},[page]);
-  const open = useCallback((key: string | null) => {
+  const open = useCallback((key: string | null, row?: ResourceRow) => {
     const next = new URLSearchParams(params.toString());
-    if (key) next.set('resource', key); else next.delete('resource');
-    next.delete('resource_id');
+    if (key) {
+      next.set('resource', key);
+      if (row) {
+        next.set('resource_id', row.resource_id);
+        next.set('provider', row.provider);
+        setDrawerIdentityHint({provider: row.provider, resourceId: row.resource_id});
+      }
+    } else {
+      next.delete('resource');
+      next.delete('resource_id');
+      next.delete('provider');
+      setDrawerIdentityHint(null);
+    }
     const search = next.toString();
     router.replace(`/resources${search ? `?${search}` : ''}`, {scroll: false});
   }, [params, router]);
@@ -188,7 +236,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   if (!scan) return <EmptyState icon={Server} title="No scan selected">Run a scan to analyze your resources.</EmptyState>;
   if (!live) return <EmptyState icon={Server} title="A live scan is required">Resource analysis uses saved observations from a completed or in-progress live scan.</EmptyState>;
   if (error) return <Notice tone="error">{error}</Notice>;
-  if (!page) return <Loading label="Merging findings into resource assessments…"/>;
+  if (!page) return <><ResourceLoadProgress progress={progress}/><Loading label={progress ? `Loading resources… ${progress.loaded.toLocaleString()} of ${progress.total.toLocaleString()}` : 'Loading resources…'}/></>;
   const summary = page.summary;
   const allVisible = rows.length > 0 && rows.every(r => selected.has(r.resource_key));
   const toggleAll = () => setSelected(previous => {const next = new Set(previous); rows.forEach(r => allVisible ? next.delete(r.resource_key) : next.add(r.resource_key)); return next;});
@@ -198,7 +246,8 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: '', arm_detail: ''}));};
   return <>
     {inProgress && <Notice tone="info">Scan in progress ({(scan.items_arm_detail_collected ?? 0).toLocaleString()} of {(scan.total_items_found || page?.total || 0).toLocaleString()} with ARM detail saved). Resources refresh every few seconds from the database.</Notice>}
-    {page.total > page.items.length && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
+    <ResourceLoadProgress progress={progress}/>
+    {(loading || page.total > page.items.length) && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources{loading ? ' so far' : ''}. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
     {batchError&&<div role="status"><Notice tone="warning">{batchError} <button className="text-button" onClick={refreshBatch}>Check assessment status</button></Notice></div>}
     <div className="resource-summary">
       <article><span>Resources</span><strong>{summary.total.toLocaleString()}</strong><small>From {scan.findings.length.toLocaleString()} findings</small></article>
@@ -209,7 +258,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     {summary.resolved_count != null && summary.no_longer_observed_count != null && <p className="resource-summary-note">Since the previous scan: {summary.resolved_count.toLocaleString()} resources no longer have findings and {summary.no_longer_observed_count.toLocaleString()} are no longer observed. This doesn’t prove deletion or savings.</p>}
     {batch && <BatchBanner batch={batch} onCancel={cancel} canAdmin={canAdmin}/>}
     <section className="panel resources-panel" aria-label="Resources">
-      <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One place per resource — findings, pillars, pricing, AI, and decisions · observed {dateTime(page.observed_at)}</p></div>
+      <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One row per resource · {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
           <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
           <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
@@ -219,10 +268,14 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
         <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{page.items.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
         <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={() => setCategory('')}>All categories</button>{categories.filter(([id]) => (categoryCounts[id] || 0) > 0).map(([id, name]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(category === id ? '' : id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
       </div>
-      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing && !filters.arm_detail} onClick={() => {setIntent(''); setPricing(''); setFilters(f => ({...f, arm_detail: ''}));}}>All evidence</button><button aria-pressed={filters.arm_detail === 'collected'} onClick={() => setFilters(f => ({...f, arm_detail: f.arm_detail === 'collected' ? '' : 'collected', pillar_status: '', ai_status: '', ai_risk: '', decision: ''}))}>ARM detail collected</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected intent</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
+      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing && !filters.arm_detail} onClick={() => {setIntent(''); setPricing(''); setFilters(f => ({...f, arm_detail: ''}));}}>All</button><button aria-pressed={filters.arm_detail === 'collected'} onClick={() => setFilters(f => ({...f, arm_detail: f.arm_detail === 'collected' ? '' : 'collected', pillar_status: '', ai_status: '', ai_risk: '', decision: ''}))}>ARM detail</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
       {!!discoveryChips.length && <div className="active-filters"><Filter size={13}/>{discoveryChips.map(chip => <button key={chip.label} onClick={chip.clear}>{chip.label}<X size={12}/></button>)}<button className="clear-filters" onClick={resetDiscovery}>Clear all</button></div>}
       <div className="grid-filters">
-        <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search resource names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
+        <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
+      </div>
+      <details className="grid-filters-advanced">
+        <summary>More filters</summary>
+        <div className="grid-filters grid-filters-advanced-panel">
         {select('provider', [['', 'All clouds'], ...[...new Set(page.items.map(r => r.provider))].sort().map(p => [p, providerNames[p] || p] as [string, string])], 'Cloud provider')}
         {select('service_category',[['','All services'],...[...new Set(page.items.map(r=>r.service_category))].sort().map(v=>[v,sentence(v)] as [string,string])],'Service category')}
         {select('pillar_status',[['','All pillar statuses'],['observed','Observed'],['risk','Risk'],['unknown','Unknown']],'Pillar status')}
@@ -231,27 +284,29 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
         {select('ai_risk', [['', 'All AI risks'], ['critical', 'Critical'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low'], ['unknown', 'Unknown'], ['none', 'Not assessed']], 'AI risk')}
         {select('decision', [['', 'All decisions'], ...Object.entries(decisionLabels), ['none', 'No decision']], 'Decision')}
         {select('arm_detail', [['', 'All ARM detail statuses'], ...Object.entries(armDetailLabels)], 'ARM configuration detail')}
-      </div>
+        </div>
+      </details>
       <div className="grid-scroll" tabIndex={0} aria-label="Scrollable resource table">
         <table className="data-table resource-table">
-          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
-          <tbody>{displayed.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key)}>
+          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Type</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
+          <tbody>{displayed.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key, r)}>
             <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.resource_name}`} checked={selected.has(r.resource_key)} onChange={() => toggle(r.resource_key)}/></td>
-            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key);}}><strong>{r.resource_name || r.resource_id}</strong><small>{r.resource_type.split('/').slice(-1)[0]} {r.lifecycle_delta && <span className="mini-badge">{r.lifecycle_delta}</span>}{r.arm_detail && <ArmDetailBadge status={r.arm_detail} hideFromParentName/>}</small></button></td>
-            <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
-            <td className="money-cell">{money(r.billed_cost_usd??null)}</td><td className="money-cell">{money(r.effective_cost_usd??null)}</td>
-            <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'}>{money(r.retail_estimate_usd)}</td>
+            <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><strong>{r.resource_name || r.resource_id}</strong>{(r.lifecycle_delta || r.arm_detail) && <small>{r.lifecycle_delta && <span className="mini-badge">{r.lifecycle_delta}</span>}{r.arm_detail && <ArmDetailBadge status={r.arm_detail} hideFromParentName/>}</small>}</button></td>
+            <td className="resource-type-cell" title={r.resource_type}>{resourceTypeLabel(r.resource_type)}</td>
+            <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count.toLocaleString()}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
+            <td className="money-cell">{money(r.billed_cost_usd ?? null)}</td><td className="money-cell">{money(r.effective_cost_usd ?? null)}</td>
+            <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'} title="Azure retail run-rate estimate (USD list); not verified savings">{money(r.retail_estimate_usd)}</td>
             <td><AIRisk ai={r.ai}/></td><td><AIStatusBadge ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
-            <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key);}}><ChevronRight size={16}/></button></td>
+            <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><ChevronRight size={16}/></button></td>
           </tr>)}
-          {!rows.length && <tr><td colSpan={13}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
+          {!rows.length && <tr><td colSpan={14}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
       <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length?`${start+1}–${Math.min(start+GRID_PAGE_SIZE,rows.length)} of `:''}{rows.length.toLocaleString()} matching resources</span>{rows.length>GRID_PAGE_SIZE&&<nav aria-label="Resource pages"><button className="button secondary small" disabled={!start} onClick={()=>setOffset(Math.max(0,start-GRID_PAGE_SIZE))}>Previous resources</button><button className="button secondary small" disabled={start+GRID_PAGE_SIZE>=rows.length} onClick={()=>setOffset(start+GRID_PAGE_SIZE)}>Next resources</button></nav>}{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
       {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode2 size={16}/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17}/></button></div>}
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
-    <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} onClose={() => open(null)} onChange={reload}/>
+    <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} identity={drawerIdentity} onClose={() => open(null)} onChange={reload}/>
   </>;
 }
 

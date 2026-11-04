@@ -20,10 +20,13 @@ class BillingJobs:
         with self.store.transaction(tenant_id) as db:
             return self.public(db.execute('SELECT id,state,payload,created_at,updated_at FROM billing_sync_jobs WHERE tenant_id=%s AND id=%s',(tenant_id,id)).fetchone())
 
-    def submit(self,tenant,key,currency='USD'):
+    def submit(self,tenant,key,currency=None):
         from app.collectors.billing_sync import bindings
         import os
         from app.focus import FocusError
+        if currency is None:
+            from app.typed_resources.costs import reporting_currency
+            currency = reporting_currency(tenant, {})
         if os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true')!='true':raise FocusError('Automatic billing sync is disabled',503)
         selected=bindings(tenant)
         if not selected:raise FocusError('No authorized cloud billing connector is configured',503)

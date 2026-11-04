@@ -1,0 +1,35 @@
+/* Lean login — credential-first on narrow viewports */
+@media (max-width: 1024px) {
+  .login-page { grid-template-columns: 1fr; }
+  .login-story { display: none; }
+  .login-connect { min-height: 100dvh; }
+}
+
+@media (min-width: 1025px) {
+  .login-story-content { padding: 48px 0; }
+  .login-flow { display: none; }
+}
+.login-headline-line { display: block; }
+
+.grid-filters-advanced {
+  margin: 0 24px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--slate-50) 40%, var(--surface));
+}
+.grid-filters-advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--slate-700);
+}
+.grid-filters-advanced > summary::-webkit-details-marker { display: none; }
+.grid-filters-advanced[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.grid-filters-advanced-panel {
+  padding: 14px 16px 16px;
+  margin: 0;
+}

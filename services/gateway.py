@@ -610,6 +610,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
 
 
 
+    @app.post('/api/v1/scans/{scan_id}/resource-signals/lookup')
+    async def resource_signals_lookup(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/scans/{scan_id}/resource-signals/lookup', request, authorization)
+
     @app.get('/api/v1/scans/{scan_id}/resources')
     async def resources(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources', authorization, selected_params(request, resource_filters))
@@ -620,8 +624,9 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
                              selected_params(request, resource_filters[:-2]))
 
     @app.get('/api/v1/scans/{scan_id}/resources/{key}')
-    async def resource_detail(scan_id: UUID, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
-        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources/{key}', authorization)
+    async def resource_detail(scan_id: UUID, request: Request, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):
+        params = {name: request.query_params[name] for name in ('provider', 'resource_id') if name in request.query_params}
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/resources/{key}', authorization, params or None)
 
     @app.post('/api/v1/scans/{scan_id}/resources/{key}/questions')
     async def resource_question(scan_id: UUID, request: Request, key: str = resource_key, row=Depends(allowed), authorization: str = Header()):

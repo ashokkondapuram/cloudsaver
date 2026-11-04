@@ -23,8 +23,12 @@ def _auto_submit(jobs,tenant,now):
         last=db.execute("SELECT updated_at FROM billing_sync_jobs WHERE tenant_id=%s AND state='completed' ORDER BY updated_at DESC LIMIT 1",(tid,)).fetchone()
     if last and datetime.fromisoformat(str(last[0]).replace('Z','+00:00'))>now-interval:return
     key=str(uuid5(NAMESPACE_URL,f'billing-auto:{tid}:{now.strftime("%Y-%m-%d-%H")}'))
-    try:jobs.submit(tenant,key)
-    except WorkflowConflict:pass
+    from app.typed_resources.costs import reporting_currency
+    currency = reporting_currency(tenant, {})
+    try:
+        jobs.submit(tenant, key, currency=currency)
+    except WorkflowConflict:
+        pass
 
 
 def _recover_orphaned_jobs(settings):

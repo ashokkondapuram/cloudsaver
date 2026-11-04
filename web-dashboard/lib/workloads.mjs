@@ -63,12 +63,17 @@ export function groupWorkloads(resources, mappings) {
 }
 /** Fetch every bounded page through existing authorized APIs. Never use a partial rollup. */
 export async function loadWorkloadInputs(request, scanId, signal) {
-  const ownership = await request('/outcomes/ownership',{signal});
+  const ownershipPromise = request('/outcomes/ownership',{signal});
+  const firstPagePromise = request(`/scans/${encodeURIComponent(scanId)}/resources?limit=1000&offset=0`,{signal});
+  const [ownership, firstPage] = await Promise.all([ownershipPromise, firstPagePromise]);
   if (!Array.isArray(ownership.items) || ownership.items.length > MAX_RESOURCES) throw new Error('Ownership data is incomplete or exceeds the pilot limit.');
   const rows=[];let expected=null;let observedAt=null;
+  let page = firstPage;
   for(let offset=0;offset<MAX_RESOURCES;){
     if(signal?.aborted) throw new Error('Workload loading cancelled.');
-    const page=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=1000&offset=${offset}`,{signal});
+    if(offset>0){
+      page=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=1000&offset=${offset}`,{signal});
+    }
     if(page.scan_id!==scanId || !Number.isSafeInteger(page.total) || page.total<0 || page.total>MAX_RESOURCES || !Array.isArray(page.items) || page.items.length>1000) throw new Error('Resource data is incomplete or exceeds the pilot limit.');
     if(expected!==null && (page.total!==expected || page.observed_at!==observedAt)) throw new Error('Assessment changed during pagination. Refresh before reviewing workloads.');
     expected=page.total;observedAt=page.observed_at;

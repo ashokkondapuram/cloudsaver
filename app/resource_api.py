@@ -16,7 +16,7 @@ from app.schemas import bounded_json
 from app.inference_ledger import attribution
 from app.resource_assessment import (FILTERS, ai_state, assessments, csv_report, decision_state, group, history,
                                      inventory_observation, merge, merge_inventory, observation_arm_detail,
-                                     planning_summary, matches, resource_key, row, summarize_resource_rows)
+                                     overlay_inventory_billing, planning_summary, matches, resource_key, row, summarize_resource_rows)
 from app.resource_store import ResourceConflict, ResourceStore
 
 KEY = r'^[a-f0-9]{64}$'
@@ -49,6 +49,17 @@ class DecisionRequest(BaseModel):
     note: str = Field('', max_length=1000)
     defer_until: date | None = None
     evidence_digest: str = Field(pattern=KEY)
+
+
+class SignalIdentity(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    provider: str = Field(pattern=r'^(azure|aws|gcp|kubernetes)$')
+    resource_id: str = Field(min_length=1, max_length=500)
+
+
+class SignalLookupRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    identities: list[SignalIdentity] = Field(min_length=1, max_length=500)
 
 
 async def payload(request, schema):
@@ -86,7 +97,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         return scan
 
     def inventory(scan, tenant, *, cost_scope='billable'):
-        merged = assessments(scan)
+        merged = assessments(scan, list_view=True)
         from app.resource_assessment import lifecycle
         from app.billable_resources import include_in_cost_workspace
         previous = None
@@ -144,157 +155,72 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         if pair is None:raise HTTPException(404,'Resource not found in this scan')
         return group(scan['findings']).get(key,[]), *pair
 
-    def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status):
-        return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)))
-
-    def inventory_running_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
-        """Serve the requested inventory page straight from Postgres (no full-scan assessment)."""
-        if arm_detail:
-            full_scan = store.get(tenant['tenant_id'], str(scan_id))
-            if full_scan is None:
-                raise HTTPException(404, 'Scan not found')
-            if full_scan.get('status') != 'running' or full_scan.get('data_origin') == 'legacy_synthetic':
-                return None
-            snap = dict(
-                scan_id=full_scan['scan_id'],
-                status=full_scan.get('status'),
-                timestamp=full_scan.get('timestamp'),
-                data_origin=full_scan.get('data_origin'),
-                findings=list(full_scan.get('findings') or []),
-                inventory_total=0,
-                inventory=[],
-            )
-        else:
-            full_scan = None
+    def resolve_resource_identity(scan_id, tenant, key):
+        offset = 0
+        limit = 100
+        while offset < 10000:
             snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=offset, limit=limit)
             if snap is None:
-                raise HTTPException(404, 'Scan not found')
-            if snap.get('status') != 'running' or snap.get('data_origin') == 'legacy_synthetic':
                 return None
-        from app.billable_resources import include_in_cost_workspace
-        findings_by_key = group(snap['findings'])
-        observed_at = snap.get('timestamp')
-
-        def observation_rows(observations):
-            rows = []
-            for obs in observations:
+            for obs in snap.get('inventory') or []:
                 pseudo = inventory_observation(obs)
-                key = resource_key(pseudo)
-                if key in findings_by_key:
-                    assessment, _ = merge(key, findings_by_key[key], observed_at=observed_at)
-                else:
-                    assessment, _ = merge_inventory(key, obs, observed_at=observed_at)
-                row_item = dict(
-                    row(assessment),
-                    lifecycle_delta='new',
-                    ai=ai_state(assessment, None, None),
-                    decision=None,
-                    arm_detail=observation_arm_detail(obs),
-                )
-                if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
-                    continue
-                rows.append(row_item)
-            return rows
+                if resource_key(pseudo) == key:
+                    return pseudo.get('cloud_provider', 'azure'), pseudo['resource_id']
+            offset += limit
+            if offset >= snap['inventory_total']:
+                break
+        return None
 
-        if arm_detail:
-            full_inventory = [obs for obs in (full_scan.get('inventory') or []) if observation_arm_detail(obs) == arm_detail]
-            all_items = observation_rows(full_inventory)
-            total = len(all_items)
-            items = all_items[offset:offset + limit]
-            summary_payload = summarize_resource_rows(all_items)
+    def resource_from_bundle(scan_id, tenant, resource_key, provider, resource_id):
+        bundle = store.scan_resource_bundle(tenant['tenant_id'], str(scan_id), provider, resource_id)
+        if bundle is None:
+            raise HTTPException(404, 'Scan not found')
+        if bundle['status'] not in ('completed', 'running') or bundle.get('data_origin') == 'legacy_synthetic':
+            raise HTTPException(409, 'Resource evidence requires a live scan snapshot')
+        observation = bundle.get('observation')
+        findings = list(bundle.get('findings') or [])
+        if not observation and not findings:
+            raise HTTPException(404, 'Resource not found in this scan')
+        if observation:
+            expected = resource_key(inventory_observation(observation))
         else:
-            items = observation_rows(snap['inventory'])
-            total = snap['inventory_total']
-            review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
-            for key, grouped in findings_by_key.items():
-                assessment, _ = merge(key, grouped, observed_at=observed_at)
-                review_priority[assessment['review_priority']] = review_priority.get(assessment['review_priority'], 0) + 1
-            review_priority['evidence_required'] += max(0, snap['inventory_total'] - len(findings_by_key))
-            summary_payload = dict(
-                total=total,
-                ai_status={'not_run': total} if total else {},
-                ai_risk={'none': total} if total else {},
-                decision={'none': total} if total else {},
-                review_priority={k: v for k, v in review_priority.items() if v} or ({'evidence_required': total} if total else {}),
-                comparison_scan_id=None,
-                resolved_count=None,
-                no_longer_observed_count=None,
-            )
-        return dict(
-            scan_id=snap['scan_id'],
-            observed_at=observed_at,
-            summary=summary_payload,
-            commitment_baseline=dict(status='insufficient_evidence', purchase_authorized=False, clean_steady_state_hr=None,
-                                    recommended_new_commitment_hr=None,
-                                    warning='Commitment baseline is available after the scan completes.'),
-            total=total,
-            items=items,
+            expected = resource_key(findings[0])
+        if expected != resource_key:
+            raise HTTPException(404, 'Resource not found in this scan')
+        if bundle['status'] == 'completed':
+            try:
+                for finding in findings:
+                    validate_finding_scope(finding, tenant)
+            except (ValueError, KeyError):
+                raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
+        stub = dict(
+            scan_id=bundle['scan_id'],
+            timestamp=bundle['timestamp'],
+            status=bundle['status'],
+            findings=findings,
+            inventory=[observation] if observation else [],
+            rule_evaluations=bundle.get('rule_evaluations') or [],
         )
+        from app.focus import FocusRepository
+        stub = FocusRepository(evidence_store).attach(tenant, stub)
+        findings = list(stub.get('findings') or [])
+        observation = (stub.get('inventory') or [None])[0] if observation else None
+        grouped = group(findings)
+        observed_at = bundle.get('timestamp')
+        if resource_key in grouped:
+            assessment, context = merge(resource_key, grouped[resource_key], observed_at=observed_at, list_view=True)
+            if observation:
+                assessment = overlay_inventory_billing(assessment, observation)
+            findings = grouped[resource_key]
+        elif observation:
+            assessment, context = merge_inventory(resource_key, observation, observed_at=observed_at, list_view=True)
+            findings = []
+        else:
+            raise HTTPException(404, 'Resource not found in this scan')
+        scan = dict(stub, findings=findings)
+        return scan, findings, assessment, context, observation
 
-    filter_params = dict(
-        provider=Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'), service_category=Query(None, max_length=40),
-        review_priority=Query(None, pattern=r'^(critical|high|evidence_required)$'),
-        ai_status=Query(None, pattern=r'^(not_run|queued|running|completed|stale|failed)$'),
-        ai_risk=Query(None, pattern=r'^(low|medium|high|critical|none)$'),
-        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'),
-        arm_detail=Query(None, pattern=r'^(collected|unsupported_type|resource_budget_exceeded|api_version_unresolved|fetch_failed)$'))
-
-    @router.get('/resources/billable-catalog')
-    def billable_catalog_route(tenant=Depends(current_tenant)):
-        from app.billable_resources import billable_catalog
-        return billable_catalog()
-
-    @router.get('/catalog/azure-resource-types')
-    def azure_resource_type_catalog(tenant=Depends(current_tenant)):
-        from app.azure_resource_registry import catalog_entries
-        return dict(items=catalog_entries(), evidence_schema_version='3')
-
-    @router.get('/catalog/typed-resource-tables')
-    def typed_resource_tables(tenant=Depends(current_tenant)):
-        from app.typed_resources.persist import list_tables
-        return dict(items=list_tables(), cost_columns=[
-            'reporting_currency', 'cost_period_start', 'cost_period_end',
-            'azure_billed', 'azure_effective', 'azure_list',
-            'cost_center_billed', 'cost_center_effective', 'cost_center_list',
-        ])
-
-    @router.get('/scans/{scan_id}/resources')
-    def resources(scan_id: UUID, provider: str | None = filter_params['provider'],
-                  service_category: str | None = filter_params['service_category'],
-                  review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
-                  ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
-                  arm_detail: str | None = filter_params['arm_detail'],
-                  cost_scope: str = Query('billable', pattern=r'^(billable|all)$'),
-                  q: str | None = Query(None, max_length=200), limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0),
-                  tenant=Depends(current_tenant)):
-        filters = query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)
-        scan = owned(scan_id, tenant)
-        if scan['status'] == 'running' and not q and not any(filters.values()):
-            page = inventory_running_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset, arm_detail=arm_detail)
-            if page is not None:
-                return page
-        _, items = inventory(scan, tenant, cost_scope=cost_scope)
-        selected = filtered(items, filters, q, arm_detail=arm_detail)
-        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summarize_resource_rows(selected),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
-                    total=len(selected), items=selected[offset:offset + limit])
-
-    @router.get('/scans/{scan_id}/resources/export')
-    def export(scan_id: UUID, provider: str | None = filter_params['provider'],
-               service_category: str | None = filter_params['service_category'],
-               review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
-               ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
-               arm_detail: str | None = filter_params['arm_detail'],
-               q: str | None = Query(None, max_length=200),
-               cost_scope: str = Query('billable', pattern=r'^(billable|all)$'), tenant=Depends(current_tenant)):
-        scan = owned(scan_id, tenant)
-        _, items = inventory(scan, tenant, cost_scope=cost_scope)
-        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q, arm_detail=arm_detail)
-        return dict(filename=f"cloudsaver-resources-{scan['scan_id']}.csv", rows=len(selected), content=csv_report(selected))
-
-    @router.get('/scans/{scan_id}/resources/{resource_key}')
-    def resource(scan_id: UUID, resource_key: str = Path(pattern=KEY), tenant=Depends(current_tenant)):
-        scan = owned(scan_id, tenant)
-        findings, assessment, context = one(scan, resource_key)
+    def resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant):
         result = repo.results(tenant['tenant_id'], {resource_key}).get(resource_key)
         state = repo.item_states(tenant['tenant_id'], scan['scan_id']).get(resource_key)
         decision = repo.latest_decisions(tenant['tenant_id'], {resource_key}).get(resource_key)
@@ -303,15 +229,6 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
         provider = assessment['provider']
         selected_id = normalize_resource_id(provider, assessment['resource_id'])
-        observation = next(
-            (
-                row
-                for row in scan.get('inventory') or []
-                if row.get('cloud_provider', 'azure') == provider
-                and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
-            ),
-            None,
-        )
         evaluations = evaluations_for_resource(
             scan.get('rule_evaluations') or [],
             provider=provider,
@@ -373,6 +290,295 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     action_items=action_items,
                     observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
                                         if r.get('evidence', {}).get('observed_signals')), None))
+
+    def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status):
+        return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)))
+
+    def inventory_db_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
+        """Serve one inventory slice from Postgres without loading the full scan payload."""
+        from app.billable_resources import include_in_cost_workspace
+
+        def observation_rows(observations, findings_by_key, observed_at):
+            rows = []
+            for obs in observations:
+                pseudo = inventory_observation(obs)
+                key = resource_key(pseudo)
+                if key in findings_by_key:
+                    assessment, _ = merge(key, findings_by_key[key], observed_at=observed_at, list_view=True)
+                else:
+                    assessment, _ = merge_inventory(key, obs, observed_at=observed_at, list_view=True)
+                row_item = dict(
+                    row(assessment),
+                    lifecycle_delta='new',
+                    ai=ai_state(assessment, None, None),
+                    decision=None,
+                    arm_detail=observation_arm_detail(obs),
+                )
+                if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
+                    continue
+                rows.append(row_item)
+            return rows
+
+        def attach_focus(stub):
+            from app.focus import FocusRepository
+            return FocusRepository(evidence_store).attach(tenant, stub)
+
+        if arm_detail:
+            chunk = max(limit, 100)
+            filtered_obs = []
+            snap = None
+            inv_offset = 0
+            inventory_total = 0
+            while inv_offset < 10000:
+                page_snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=inv_offset, limit=chunk)
+                if page_snap is None:
+                    raise HTTPException(404, 'Scan not found')
+                if page_snap.get('status') not in ('running', 'completed') or page_snap.get('data_origin') == 'legacy_synthetic':
+                    return None
+                inventory_total = int(page_snap.get('inventory_total') or 0)
+                if snap is None:
+                    snap = dict(
+                        scan_id=page_snap['scan_id'],
+                        status=page_snap.get('status'),
+                        timestamp=page_snap.get('timestamp'),
+                        data_origin=page_snap.get('data_origin'),
+                        findings=list(page_snap.get('findings') or []),
+                        inventory_total=inventory_total,
+                    )
+                for obs in page_snap.get('inventory') or []:
+                    if observation_arm_detail(obs) == arm_detail:
+                        filtered_obs.append(obs)
+                inv_offset += chunk
+                if inv_offset >= inventory_total:
+                    break
+            if snap is None:
+                raise HTTPException(404, 'Scan not found')
+            if snap['status'] == 'completed':
+                try:
+                    for finding in snap['findings']:
+                        validate_finding_scope(finding, tenant)
+                except (ValueError, KeyError):
+                    raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
+                focused = attach_focus(dict(
+                    scan_id=snap['scan_id'],
+                    timestamp=snap['timestamp'],
+                    status='completed',
+                    findings=snap['findings'],
+                    inventory=filtered_obs,
+                ))
+                snap = dict(snap, findings=focused['findings'])
+            findings_by_key = group(snap['findings'])
+            observed_at = snap.get('timestamp')
+            all_items = observation_rows(filtered_obs, findings_by_key, observed_at)
+            total = len(all_items)
+            items = all_items[offset:offset + limit]
+            summary_payload = summarize_resource_rows(all_items)
+        else:
+            snap = store.running_inventory_page(tenant['tenant_id'], str(scan_id), offset=offset, limit=limit)
+            if snap is None:
+                raise HTTPException(404, 'Scan not found')
+            if snap.get('status') not in ('running', 'completed') or snap.get('data_origin') == 'legacy_synthetic':
+                return None
+            if snap['status'] == 'completed':
+                try:
+                    for finding in snap['findings']:
+                        validate_finding_scope(finding, tenant)
+                except (ValueError, KeyError):
+                    raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
+                focused = attach_focus(dict(
+                    scan_id=snap['scan_id'],
+                    timestamp=snap['timestamp'],
+                    status='completed',
+                    findings=snap['findings'],
+                    inventory=snap['inventory'],
+                ))
+                snap = dict(snap, findings=focused['findings'], inventory=focused.get('inventory') or snap['inventory'])
+            findings_by_key = group(snap['findings'])
+            observed_at = snap.get('timestamp')
+            items = observation_rows(snap['inventory'], findings_by_key, observed_at)
+            total = snap['inventory_total']
+            review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
+            for key, grouped in findings_by_key.items():
+                assessment, _ = merge(key, grouped, observed_at=observed_at, list_view=True)
+                review_priority[assessment['review_priority']] = review_priority.get(assessment['review_priority'], 0) + 1
+            review_priority['evidence_required'] += max(0, snap['inventory_total'] - len(findings_by_key))
+            summary_payload = dict(
+                total=total,
+                ai_status={'not_run': total} if total else {},
+                ai_risk={'none': total} if total else {},
+                decision={'none': total} if total else {},
+                review_priority={k: v for k, v in review_priority.items() if v} or ({'evidence_required': total} if total else {}),
+                comparison_scan_id=None,
+                resolved_count=None,
+                no_longer_observed_count=None,
+            )
+        if snap['status'] == 'completed' and items:
+            keys = {item['resource_key'] for item in items}
+            results = repo.results(tenant['tenant_id'], keys)
+            states = repo.item_states(tenant['tenant_id'], snap['scan_id'])
+            decisions = repo.latest_decisions(tenant['tenant_id'], keys)
+            items = [
+                dict(
+                    item,
+                    ai=ai_state(item, results.get(item['resource_key']), states.get(item['resource_key'])),
+                    decision=decision_state(item, decisions.get(item['resource_key'])),
+                )
+                for item in items
+            ]
+        baseline = (
+            planning_summary(dict(scan_id=snap['scan_id'], timestamp=snap['timestamp'], status='completed'))
+            if snap['status'] == 'completed'
+            else dict(
+                status='insufficient_evidence',
+                purchase_authorized=False,
+                clean_steady_state_hr=None,
+                recommended_new_commitment_hr=None,
+                warning='Commitment baseline is available after the scan completes.',
+            )
+        )
+        return dict(
+            scan_id=snap['scan_id'],
+            observed_at=observed_at,
+            summary=summary_payload,
+            commitment_baseline=baseline,
+            total=total,
+            items=items,
+        )
+
+    def inventory_running_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
+        """Backward-compatible alias for running scans."""
+        return inventory_db_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset, arm_detail=arm_detail)
+
+    filter_params = dict(
+        provider=Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'), service_category=Query(None, max_length=40),
+        review_priority=Query(None, pattern=r'^(critical|high|evidence_required)$'),
+        ai_status=Query(None, pattern=r'^(not_run|queued|running|completed|stale|failed)$'),
+        ai_risk=Query(None, pattern=r'^(low|medium|high|critical|none)$'),
+        decision=Query(None, pattern=r'^(accept|dismiss|defer|none)$'),pillar_status=Query(None,pattern=r'^(observed|risk|unknown)$'),
+        arm_detail=Query(None, pattern=r'^(collected|unsupported_type|resource_budget_exceeded|api_version_unresolved|fetch_failed)$'))
+
+    @router.get('/resources/billable-catalog')
+    def billable_catalog_route(tenant=Depends(current_tenant)):
+        from app.billable_resources import billable_catalog
+        return billable_catalog()
+
+    @router.get('/catalog/azure-resource-types')
+    def azure_resource_type_catalog(tenant=Depends(current_tenant)):
+        from app.azure_resource_registry import catalog_entries
+        return dict(items=catalog_entries(), evidence_schema_version='3')
+
+    @router.get('/catalog/typed-resource-tables')
+    def typed_resource_tables(tenant=Depends(current_tenant)):
+        from app.typed_resources.persist import list_tables
+        return dict(items=list_tables(), cost_columns=[
+            'reporting_currency', 'cost_period_start', 'cost_period_end',
+            'azure_billed', 'azure_effective', 'azure_list',
+            'cost_center_billed', 'cost_center_effective', 'cost_center_list',
+        ])
+
+    @router.post('/scans/{scan_id}/resource-signals/lookup')
+    async def resource_signals_lookup(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):
+        """Lightweight AI and decision state for findings grids without loading the full resource catalog."""
+        scan = owned(scan_id, tenant)
+        body = await payload(request, SignalLookupRequest)
+        merged = assessments(scan, list_view=True)
+        from app.rule_detail import normalize_resource_id
+
+        keyed = {}
+        for ident in body.identities:
+            target = normalize_resource_id(ident.provider, ident.resource_id)
+            match_key = None
+            for key, assessment in merged.items():
+                if assessment['provider'] == ident.provider and normalize_resource_id(ident.provider, assessment['resource_id']) == target:
+                    match_key = key
+                    break
+            if match_key is None:
+                match_key = resource_key(dict(cloud_provider=ident.provider, resource_id=ident.resource_id))
+            keyed[match_key] = dict(provider=ident.provider, resource_id=ident.resource_id)
+
+        key_set = set(keyed)
+        if scan['status'] == 'running':
+            results, states, decisions = {}, {}, {}
+        else:
+            results = repo.results(tenant['tenant_id'], key_set)
+            states = repo.item_states(tenant['tenant_id'], scan['scan_id'])
+            decisions = repo.latest_decisions(tenant['tenant_id'], key_set)
+
+        items = []
+        for key, meta in keyed.items():
+            assessment = merged.get(key) or dict(
+                provider=meta['provider'],
+                resource_id=meta['resource_id'],
+                evidence_digest='0' * 64,
+            )
+            items.append(dict(
+                resource_key=key,
+                provider=meta['provider'],
+                resource_id=assessment.get('resource_id') or meta['resource_id'],
+                ai=ai_state(assessment, results.get(key), states.get(key)),
+                decision=decision_state(assessment, decisions.get(key)),
+            ))
+        return dict(scan_id=str(scan_id), items=items)
+
+    @router.get('/scans/{scan_id}/resources')
+    def resources(scan_id: UUID, provider: str | None = filter_params['provider'],
+                  service_category: str | None = filter_params['service_category'],
+                  review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
+                  ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
+                  arm_detail: str | None = filter_params['arm_detail'],
+                  cost_scope: str = Query('billable', pattern=r'^(billable|all)$'),
+                  q: str | None = Query(None, max_length=200), limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0),
+                  tenant=Depends(current_tenant)):
+        filters = query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)
+        if not q and not any(filters.values()):
+            page = inventory_db_page(scan_id, tenant, cost_scope=cost_scope, limit=limit, offset=offset, arm_detail=arm_detail)
+            if page is not None:
+                return page
+        scan = owned(scan_id, tenant)
+        _, items = inventory(scan, tenant, cost_scope=cost_scope)
+        selected = filtered(items, filters, q, arm_detail=arm_detail)
+        return dict(scan_id=scan['scan_id'], observed_at=scan.get('timestamp'), summary=dict(summarize_resource_rows(selected),**scan.get('_lifecycle_comparison',{})),commitment_baseline=planning_summary(scan),
+                    total=len(selected), items=selected[offset:offset + limit])
+
+    @router.get('/scans/{scan_id}/resources/export')
+    def export(scan_id: UUID, provider: str | None = filter_params['provider'],
+               service_category: str | None = filter_params['service_category'],
+               review_priority: str | None = filter_params['review_priority'], ai_status: str | None = filter_params['ai_status'],
+               ai_risk: str | None = filter_params['ai_risk'], decision: str | None = filter_params['decision'],pillar_status: str | None = filter_params['pillar_status'],
+               arm_detail: str | None = filter_params['arm_detail'],
+               q: str | None = Query(None, max_length=200),
+               cost_scope: str = Query('billable', pattern=r'^(billable|all)$'), tenant=Depends(current_tenant)):
+        scan = owned(scan_id, tenant)
+        _, items = inventory(scan, tenant, cost_scope=cost_scope)
+        selected = filtered(items, query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status), q, arm_detail=arm_detail)
+        return dict(filename=f"cloudsaver-resources-{scan['scan_id']}.csv", rows=len(selected), content=csv_report(selected))
+
+    @router.get('/scans/{scan_id}/resources/{resource_key}')
+    def resource(scan_id: UUID, resource_key: str = Path(pattern=KEY),
+                  provider: str | None = Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'),
+                  resource_id: str | None = Query(None, max_length=500),
+                  tenant=Depends(current_tenant)):
+        identity = (provider, resource_id) if provider and resource_id else resolve_resource_identity(scan_id, tenant, resource_key)
+        if identity:
+            scan, findings, assessment, context, observation = resource_from_bundle(
+                scan_id, tenant, resource_key, identity[0], identity[1],
+            )
+            return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
+        scan = owned(scan_id, tenant)
+        findings, assessment, context = one(scan, resource_key)
+        provider = assessment['provider']
+        from app.rule_detail import normalize_resource_id
+        selected_id = normalize_resource_id(provider, assessment['resource_id'])
+        observation = next(
+            (
+                row
+                for row in scan.get('inventory') or []
+                if row.get('cloud_provider', 'azure') == provider
+                and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
+            ),
+            None,
+        )
+        return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
 
     @router.post('/scans/{scan_id}/ai-batches', status_code=202)
     async def create_batch(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):

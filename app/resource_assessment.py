@@ -53,7 +53,24 @@ def group(findings):
     return groups
 
 
-def merge(key, findings, *, observed_at=None, now=None):
+def _retail_from_saved_evidence(*rows):
+    """Use scan-attached retail meters; avoid live Azure pricing on list reads."""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        evidence = row.get('evidence') or {}
+        for key in ('retail_run_rate_usd', 'monthly_retail_usd', 'estimated_monthly_waste_usd'):
+            value = evidence.get(key)
+            if value is None:
+                continue
+            try:
+                return float(Decimal(str(value)).quantize(Decimal('0.01')))
+            except (ValueError, TypeError, ArithmeticError):
+                continue
+    return None
+
+
+def merge(key, findings, *, observed_at=None, now=None, list_view=False):
     """Return (assessment, sanitized AI context) for one resource."""
     from app.rule_id_canonical import normalize_finding
 
@@ -89,9 +106,12 @@ def merge(key, findings, *, observed_at=None, now=None):
     guardrails = list(dict.fromkeys(g for r in results for g in r['guardrails']))
     protected = sorted({reason for r in results for reason in r['protected_reasons']})
     waste_amounts = [Decimal(str(r['retail_estimate_usd'])) for r in results if r['retail_estimate_usd'] is not None]
-    from app.azure_pricing_evidence import resource_retail_run_rate_usd
+    if list_view:
+        run_rate = _retail_from_saved_evidence(*findings)
+    else:
+        from app.azure_pricing_evidence import resource_retail_run_rate_usd
 
-    run_rate = resource_retail_run_rate_usd(findings)
+        run_rate = resource_retail_run_rate_usd(findings)
     if run_rate is not None:
         retail_estimate = float(Decimal(str(run_rate)).quantize(Decimal('0.01')))
     elif waste_amounts:
@@ -159,34 +179,45 @@ def inventory_observation(obs):
     return result
 
 
-def merge_inventory(key, obs, *, observed_at=None, now=None):
+def merge_inventory(key, obs, *, observed_at=None, now=None, list_view=False):
     """Assessment for a resource present in inventory but without a finding rule hit."""
     if not isinstance(obs, dict) or not obs.get('resource_id'):
         raise ValueError('Inventory observation must include resource_id')
-    result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now)
+    result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now, list_view=list_view)
     result.update(
         finding_count=0,
         rule_ids=[],
         disposition='protected' if result['protected_reasons'] else 'inventory_only',
     )
-    from app.azure_pricing_evidence import inventory_retail_usd
-    retail = inventory_retail_usd(obs)
-    if retail is not None and result.get('retail_estimate_usd') is None:
-        result['retail_estimate_usd'] = retail
+    if list_view:
+        if result.get('retail_estimate_usd') is None:
+            saved = _retail_from_saved_evidence(obs)
+            if saved is not None:
+                result['retail_estimate_usd'] = saved
+    else:
+        from app.azure_pricing_evidence import inventory_retail_usd
+        retail = inventory_retail_usd(obs)
+        if retail is not None and result.get('retail_estimate_usd') is None:
+            result['retail_estimate_usd'] = retail
     if result['disposition'] == 'inventory_only':
         result['guardrails'] = list(dict.fromkeys([*(result.get('guardrails') or []), 'INVENTORY_ONLY']))
     return result, context
 
 
-def assessments(scan, *, now=None):
-    merged = {key: merge(key, items, observed_at=scan.get('timestamp'), now=now) for key, items in group(scan['findings']).items()}
+def assessments(scan, *, now=None, list_view=False):
+    merged = {
+        key: merge(key, items, observed_at=scan.get('timestamp'), now=now, list_view=list_view)
+        for key, items in group(scan['findings']).items()
+    }
     for obs in scan.get('inventory') or []:
         key = resource_key(inventory_observation(obs))
         if key in merged:
             assessment, context = merged[key]
             merged[key] = (overlay_inventory_billing(assessment, obs), context)
             continue
-        merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now)
+        merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now, list_view=list_view)
+    if list_view:
+        return merged
     from app.ai_scan_context import augment_ai_context_from_scan
     from app.ai_resource_context import stable_digest_context
 

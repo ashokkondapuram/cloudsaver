@@ -1,7 +1,8 @@
 'use client';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import {api} from './api';
-import {loadResourcePages,readBatchPage,RUNNING_RESOURCE_PAGE_SIZE} from './resource-pages';
+import {loadResourcePages, readBatchPage, RUNNING_RESOURCE_PAGE_SIZE, type ResourceLoadProgress} from './resource-pages';
+import {lookupResourceSignals} from './resource-signals';
 import type {ArmDetailStatus} from './arm-detail';
 export type {ArmDetailStatus} from './arm-detail';
 export {ARM_DETAIL_STATUSES, armDetailFromQuery, armDetailLabels} from './arm-detail';
@@ -106,35 +107,160 @@ export async function resourceKeyOf(finding: Finding) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function useResources(scanId: string | undefined, token: string, enabled = true, syncEpoch = 0, options: {running?: boolean; armDetail?: import('./resources').ArmDetailStatus} = {}) {
-  const [state, setState] = useState<{key:string;page:ResourcePage|null;error:string}>({key:'',page:null,error:''});
-  const [version, setVersion] = useState(0);
-  const key=JSON.stringify([scanId,token,enabled,syncEpoch,options.running,options.armDetail,version]);
-  const reload = useCallback(() => setVersion(value => value + 1), []);
-  useEffect(() => {
-    if (!options.running || !scanId || !enabled) return;
-    const timer = window.setInterval(() => setVersion(value => value + 1), 3000);
-    return () => window.clearInterval(timer);
-  }, [options.running, scanId, enabled]);
-  useEffect(() => {
-    const request = new AbortController();
-    const loadingKey = key;
-    setState(previous => {
-      if (options.running && previous.page?.scan_id === scanId) return {key: loadingKey, page: previous.page, error: ''};
-      return {key: loadingKey, page: null, error: ''};
+type UseResourcesOptions = {running?: boolean; armDetail?: ArmDetailStatus; overview?: boolean};
+type ResourceHookState = {page: ResourcePage | null; error: string; loading: boolean; progress: ResourceLoadProgress | null};
+
+const emptyResourceState: ResourceHookState = {page: null, error: '', loading: false, progress: null};
+const resourceCache = new Map<string, ResourceHookState>();
+const resourceListeners = new Map<string, Set<() => void>>();
+const resourceInflight = new Map<string, AbortController>();
+
+function resourceCacheKey(scanId: string, token: string, syncEpoch: number, options: UseResourcesOptions) {
+  return JSON.stringify([scanId, token, syncEpoch, !!options.running, options.armDetail ?? '', !!options.overview]);
+}
+
+function publishResourceCache(key: string, next: ResourceHookState) {
+  resourceCache.set(key, next);
+  resourceListeners.get(key)?.forEach(listener => listener());
+}
+
+function subscribeResourceCache(key: string, listener: () => void) {
+  const set = resourceListeners.get(key) ?? new Set();
+  set.add(listener);
+  resourceListeners.set(key, set);
+  return () => {
+    set.delete(listener);
+    if (!set.size) resourceListeners.delete(key);
+  };
+}
+
+function readResourceCache(key: string): ResourceHookState {
+  return resourceCache.get(key) ?? emptyResourceState;
+}
+
+function startResourceLoad(key: string, scanId: string, token: string, options: UseResourcesOptions, force: boolean) {
+  const cached = resourceCache.get(key);
+  if (!force && cached?.progress?.complete && cached.page) return;
+  const existing = resourceInflight.get(key);
+  if (existing && !force) return;
+  existing?.abort();
+
+  const request = new AbortController();
+  resourceInflight.set(key, request);
+  const kept = cached?.page?.scan_id === scanId ? cached.page : null;
+  publishResourceCache(key, {
+    page: kept,
+    error: '',
+    loading: true,
+    progress: kept
+      ? {loaded: kept.items.length, total: kept.total, complete: false}
+      : null,
+  });
+
+  loadResourcePages(
+    (path, opts) => api(path, token, opts),
+    scanId,
+    request.signal,
+    {
+      partial: options.running,
+      incremental: !options.running && !options.overview,
+      overview: options.overview,
+      costScope: options.running ? 'all' : 'billable',
+      pageSize: options.running ? RUNNING_RESOURCE_PAGE_SIZE : undefined,
+      armDetail: options.armDetail,
+      onProgress: (page, progress) => {
+        if (request.signal.aborted) return;
+        publishResourceCache(key, {
+          page,
+          error: '',
+          loading: !progress.complete,
+          progress,
+        });
+      },
+    },
+  )
+    .then(page => {
+      if (request.signal.aborted) return;
+      publishResourceCache(key, {
+        page,
+        error: '',
+        loading: false,
+        progress: {loaded: page.items.length, total: page.total, complete: true},
+      });
+    })
+    .catch(cause => {
+      if (request.signal.aborted) return;
+      publishResourceCache(key, {
+        page: options.running ? kept : null,
+        error: cause instanceof Error ? cause.message : 'Resource evidence could not be loaded.',
+        loading: false,
+        progress: null,
+      });
+    })
+    .finally(() => {
+      if (resourceInflight.get(key) === request) resourceInflight.delete(key);
     });
-    if (scanId && enabled) loadResourcePages(
-      (path,opts)=>api(path,token,opts),
-      scanId,
-      request.signal,
-      {partial: options.running, costScope: options.running ? 'all' : 'billable', pageSize: RUNNING_RESOURCE_PAGE_SIZE, armDetail: options.armDetail},
-    )
-      .then(page=>{if(!request.signal.aborted)setState({key:loadingKey,page,error:''});})
-      .catch(cause=>{if(!request.signal.aborted)setState(previous=>({key:loadingKey,page:options.running?previous.page:null,error:cause instanceof Error?cause.message:'Resource evidence could not be loaded.'}));});
-    return () => request.abort();
-  }, [scanId,token,enabled,syncEpoch,options.running,version,key]);
-  const showPage = state.key === key ? state.page : (options.running && state.page?.scan_id === scanId ? state.page : null);
-  return {page: showPage, error: state.key === key ? state.error : '', reload};
+}
+
+export function useResources(scanId: string | undefined, token: string, enabled = true, syncEpoch = 0, options: UseResourcesOptions = {}) {
+  const running = !!options.running;
+  const overview = !!options.overview;
+  const armDetail = options.armDetail;
+  const key = useMemo(() => (
+    scanId && enabled ? resourceCacheKey(scanId, token, syncEpoch, {running, armDetail, overview}) : ''
+  ), [scanId, token, enabled, syncEpoch, running, armDetail, overview]);
+
+  const subscribe = useCallback((listener: () => void) => (
+    key ? subscribeResourceCache(key, listener) : () => undefined
+  ), [key]);
+
+  const getSnapshot = useCallback(() => (
+    key ? readResourceCache(key) : emptyResourceState
+  ), [key]);
+
+  const state = useSyncExternalStore(subscribe, getSnapshot, () => (key ? readResourceCache(key) : emptyResourceState));
+
+  const reload = useCallback(() => {
+    if (!scanId || !enabled || !key) return;
+    startResourceLoad(key, scanId, token, {running, armDetail, overview}, true);
+  }, [scanId, token, enabled, key, running, armDetail, overview]);
+
+  useEffect(() => {
+    if (!scanId || !enabled || !key) return;
+    startResourceLoad(key, scanId, token, {running, armDetail, overview}, false);
+  }, [scanId, token, enabled, key, running, armDetail, overview]);
+
+  useEffect(() => {
+    if (!running || !scanId || !enabled || !key) return;
+    const timer = window.setInterval(() => startResourceLoad(key, scanId, token, {running, armDetail, overview}, true), 3000);
+    return () => window.clearInterval(timer);
+  }, [running, scanId, enabled, key, token, armDetail, overview]);
+
+  return {page: state.page, error: state.error, reload, loading: state.loading, progress: state.progress};
+}
+
+/** Refresh AI/decision on already-loaded rows after batch progress (avoids full catalog reload). */
+export async function refreshLoadedResourceSignals(
+  scanId: string,
+  token: string,
+  syncEpoch: number,
+  options: UseResourcesOptions,
+) {
+  const key = resourceCacheKey(scanId, token, syncEpoch, options);
+  const cached = resourceCache.get(key);
+  if (!cached?.page?.items.length) return;
+  const signals = await lookupResourceSignals(
+    scanId,
+    token,
+    cached.page.items.map(row => ({provider: row.provider, resource_id: row.resource_id})),
+  );
+  const byIdentity = new Map(signals.map(row => [identityOf(row.provider, row.resource_id), row]));
+  const items = cached.page.items.map(row => {
+    const patch = byIdentity.get(identityOf(row.provider, row.resource_id));
+    if (!patch) return row;
+    return {...row, ai: patch.ai, decision: patch.decision};
+  });
+  publishResourceCache(key, {...cached, page: {...cached.page, items}});
 }
 
 export function useActiveBatch(scanId: string | undefined, token: string, onSettled: () => void) {

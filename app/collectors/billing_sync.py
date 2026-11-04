@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 
 from app.focus import Charge, FocusError, ImportRequest, authorized, digest
+from app.provider_retry import ProviderDeferred
 from app.v150_store import WorkflowStore
 
 MAX_ROWS = 200000
@@ -17,6 +18,21 @@ OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_regio
 
 
 NAME = r'[A-Za-z0-9_-]{1,100}'
+
+
+def _azure_cost_pacing():
+    """Pacing for Cost Management query POSTs.
+
+    Local development uses no artificial spacing so billing import can finish in one pass.
+    Production keeps the configured interval; each HTTP attempt gets a deadline that exceeds
+    the spacing budget so read_json does not defer before the first byte is sent.
+    """
+    if os.getenv('CLOUDSAVER_ENVIRONMENT', '').lower() == 'development':
+        interval = 0.0
+    else:
+        interval = max(0.0, min(float(os.getenv('CLOUDSAVER_AZURE_COST_INTERVAL_SECONDS', '15')), 60.0))
+    deadline_seconds = min(300, max(120, int(interval) + 90))
+    return interval, deadline_seconds
 
 
 def bindings(tenant):
@@ -66,15 +82,19 @@ def _post(url, token, body, scope_id=None):
         expected='/subscriptions/'+scope_id+'/providers/microsoft.costmanagement/query'
         if parsed.path.lower()!=expected:raise ValueError('Unexpected billing scope')
         key='azure:cost:'+scope_id
-        interval=float(os.getenv('CLOUDSAVER_AZURE_COST_INTERVAL_SECONDS','15'))
+        interval, deadline_seconds = _azure_cost_pacing()
+        attempts = int(os.getenv('CLOUDSAVER_AZURE_COST_MANAGEMENT_ATTEMPTS', '8' if os.getenv('CLOUDSAVER_ENVIRONMENT', '').lower() == 'development' else '3'))
+        if not 1 <= attempts <= 12:
+            raise ValueError('CLOUDSAVER_AZURE_COST_MANAGEMENT_ATTEMPTS must be between 1 and 12')
     elif parsed.netloc=='bigquery.googleapis.com' and re.fullmatch(r'/bigquery/v2/projects/[a-z][a-z0-9-]{4,61}[a-z0-9]/queries',parsed.path):
         key='gcp:bigquery:'+parsed.path.split('/')[4]
         interval=0
+        deadline_seconds=30
     else:raise ValueError('Unexpected billing destination')
     with httpx.Client(follow_redirects=False) as client:
         return read_json(client,'POST',url,headers={'Authorization':'Bearer '+token},json=body,
             quota_key=key,interval=interval,read_only_post=True,max_bytes=4_000_000,
-            parse_float=Decimal,attempts=3 if azure else 1)
+            parse_float=Decimal,attempts=attempts,deadline_seconds=deadline_seconds)
 
 
 def _token(credential):
@@ -347,6 +367,11 @@ def sync_workspace_billing(tenant, repository, *, currency='USD', readers=None):
             imported=dict(inserted=sum(x['inserted'] for x in imports),records=sum(x['records'] for x in imports),cached=all(x.get('cached',False) for x in imports))
             results.append(dict(provider=binding['provider'],scope_id=binding['scope_id'],status='completed',
                                 granularity=granularity,coverage_verified=False,warnings=warnings,**imported))
+        except ProviderDeferred as deferred:
+            results.append(dict(
+                provider=binding['provider'], scope_id=binding['scope_id'], status='failed',
+                error_code='BILLING_PROVIDER_THROTTLED', retry_after_seconds=deferred.retry_after,
+            ))
         except Exception:
             # Provider exceptions can include credentials, resource IDs and response bodies.
             results.append(dict(provider=binding['provider'],scope_id=binding['scope_id'],status='failed',error_code='BILLING_SOURCE_UNAVAILABLE_OR_INVALID'))

@@ -3,7 +3,7 @@ import type {ResourceRow} from './resources';
 /** Export exactly the authorized rows displayed by the explorer, preserving unknowns. */
 export function resourceCsv(rows: ResourceRow[]): string {
   const pillars = ['cost', 'reliability', 'performance', 'security', 'operations'] as const;
-  const fields = ['provider', 'scope_id', 'resource_name', 'resource_type', 'resource_group', 'resource_id', 'service_category',
+  const fields = ['provider', 'resource_name', 'resource_type', 'scope_id', 'resource_group', 'resource_id', 'service_category', 'finding_count',
     'rule_ids', 'review_priority', 'disposition', ...pillars, 'billed_cost_usd', 'effective_cost_usd', 'retail_estimate_usd',
     'lifecycle_delta', 'ai_status', 'ai_risk', 'ai_summary', 'decision', 'decision_at', 'evidence_digest'];
   const cell = (value: unknown) => {

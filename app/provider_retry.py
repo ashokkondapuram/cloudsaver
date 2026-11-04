@@ -149,7 +149,7 @@ def read_json(client, method, url, *, quota_key, interval=0, deadline_seconds=30
     """
     if method != 'GET' and not (method == 'POST' and read_only_post):
         raise ValueError('Only registered read operations can retry')
-    if not 1 <= attempts <= 5 or not 0 < deadline_seconds <= 120 or not 0 <= interval <= 60:
+    if not 1 <= attempts <= 5 or not 0 < deadline_seconds <= 300 or not 0 <= interval <= 60:
         raise ValueError('Invalid provider retry policy')
     budget = budget or shared_budget()
     deadline = clock() + deadline_seconds

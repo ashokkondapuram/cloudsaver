@@ -265,6 +265,13 @@ def test_resources_batches_decisions_questions_and_export(app_state):
     assert listing['total'] == 2 and listing['summary']['ai_status'] == {'not_run': 2}
     disk_a = next(i for i in listing['items'] if i['resource_name'] == 'disk-a')
     assert disk_a['finding_count'] == 2 and disk_a['ai']['status'] == 'not_run' and disk_a['decision'] is None
+    signals = client.post(
+        base + '/resource-signals/lookup',
+        headers=auth(),
+        json={'identities': [{'provider': 'azure', 'resource_id': disk_a['resource_id']}]},
+    ).json()
+    assert signals['items'][0]['resource_key'] == disk_a['resource_key']
+    assert signals['items'][0]['ai']['status'] == 'not_run' and signals['items'][0]['decision'] is None
     assert client.get(base + '/resources', headers=auth(OTHER)).status_code == 404
     assert client.get(base + '/resources?ai_status=bogus', headers=auth()).status_code == 422
     detail = client.get(f"{base}/resources/{disk_a['resource_key']}", headers=auth()).json()

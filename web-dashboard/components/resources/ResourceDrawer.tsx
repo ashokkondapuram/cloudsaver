@@ -1,14 +1,15 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck, ShieldAlert} from 'lucide-react';
+import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, ExternalLink, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck, ShieldAlert} from 'lucide-react';
+import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
 import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type RuleConflict, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
-import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
+import {resourceDetailQuery, resourceInsightPageHref, type ResourceIdentity} from '../../lib/resource-insight';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, ArmDetailBadge, PillarDots} from './ResourceParts';
@@ -46,7 +47,7 @@ const unitCost = (value: number) => new Intl.NumberFormat('en-US', {style: 'curr
 
 function Observability({detail}: {detail: ResourceDetail}) {
   const signals = detail.observability;
-  if (!signals) return <div className="drawer-section"><h3>Observability</h3><Notice>No connector metrics or traces are linked to this resource. Workspace admins can add Prometheus, REST metrics, Tempo or Jaeger connectors in Settings, under Integrations.</Notice><p><Link className="text-link" href="/settings?tab=integrations">Open integrations</Link></p></div>;
+  if (!signals) return <div className="drawer-section"><h3>Observability</h3><Notice>No metrics or traces are linked. Add connectors in Settings → Integrations.</Notice><p><Link className="text-link" href="/settings?tab=integrations">Open integrations</Link></p></div>;
   return <>
     {signals.latency_reasons.length > 0 && <Notice tone="warning">Latency-sensitive: {signals.latency_reasons.join('; ')}. Review capacity changes against these signals before you approve them.</Notice>}
     <div className="drawer-section"><h3>Cost per 1,000 requests</h3>
@@ -195,7 +196,7 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
   const balance = detail.costs?.billed_vs_retail_usd;
   return <>
     {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}.</Notice>}
-    {a.observation.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
+    {a.observation?.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
     <dl className="settings-key-values overview-snapshot">
       <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
       <div><dt>Azure retail run-rate</dt><dd>{retail == null ? 'Unknown' : money(retail)}</dd></div>
@@ -339,27 +340,55 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
   </>;
 }
 
-export function ResourceDrawer({scanId, resourceKey, onClose, onChange}: {scanId: string; resourceKey: string | null; onClose: () => void; onChange: () => void}) {
+export function ResourceDrawer({scanId, resourceKey, identity, onClose, onChange}: {
+  scanId: string;
+  resourceKey: string | null;
+  identity?: ResourceIdentity | null;
+  onClose: () => void;
+  onChange: () => void;
+}) {
   const {token} = useWorkspace();
-  return resourceKey ? <ResourceDetailDrawer key={JSON.stringify([scanId,resourceKey,token])} scanId={scanId} resourceKey={resourceKey} onClose={onClose} onChange={onChange}/> : null;
+  return resourceKey ? (
+    <ResourceInsightView
+      key={JSON.stringify([scanId, resourceKey, token, identity?.provider, identity?.resourceId])}
+      scanId={scanId}
+      resourceKey={resourceKey}
+      identity={identity}
+      layout="drawer"
+      onClose={onClose}
+      onChange={onChange}
+    />
+  ) : null;
 }
 
-function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:string;resourceKey:string;onClose:()=>void;onChange:()=>void}) {
+export function ResourceInsightView({scanId, resourceKey, identity, layout, onClose, onChange}: {
+  scanId: string;
+  resourceKey: string;
+  identity?: ResourceIdentity | null;
+  layout: 'drawer' | 'page';
+  onClose: () => void;
+  onChange: () => void;
+}) {
   const {token, canAdmin} = useWorkspace();
   const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
   useEffect(() => {
-    if (!resourceKey) return;
     const request = new AbortController();
+    setDetail(null);
     setError('');
-    api<ResourceDetail>(`/scans/${scanId}/resources/${resourceKey}`, token, {signal: request.signal}).then(result => {if (!request.signal.aborted) setDetail(result);})
+    const query = resourceDetailQuery(identity);
+    api<ResourceDetail>(`/scans/${scanId}/resources/${encodeURIComponent(resourceKey)}${query}`, token, {signal: request.signal})
+      .then(result => {
+        if (request.signal.aborted || result.assessment.resource_key !== resourceKey) return;
+        setDetail(result);
+      })
       .catch(cause => {if (!request.signal.aborted) {setDetail(null); setError((cause as Error).message);}});
     return () => request.abort();
-  }, [scanId, resourceKey, token, version]);
+  }, [scanId, resourceKey, token, version, identity?.provider, identity?.resourceId]);
   const [tab, setTab] = useState('overview');
   useEffect(() => {setTab('overview');}, [resourceKey]);
   const changed = () => {setVersion(v => v + 1); onChange();};
   const refetch = () => setVersion(v => v + 1);
-  const current = detail && detail.assessment.resource_key === resourceKey ? detail : null;
+  const current = detail?.assessment.resource_key === resourceKey ? detail : null;
   const a = current?.assessment;
   const tabs = current ? [
     {id: 'overview', label: 'Overview', icon: LayoutDashboard},
@@ -367,22 +396,40 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
     {id: 'evidence', label: 'Evidence', icon: Activity},
     {id: 'costs', label: 'Costs', icon: CircleDollarSign},
     {id: 'safety', label: 'Action safety', icon: ShieldAlert},
-    {id: 'observability', label: current.observability?.latency_reasons.length ? 'Observability (latency-sensitive)' : 'Observability', icon: Gauge},
+    {id: 'observability', label: 'Observability', icon: Gauge},
     {id: 'ai', label: 'AI', icon: BrainCircuit},
     {id: 'decision', label: 'Decision', icon: CheckCircle2},
     {id: 'history', label: 'History', icon: History},
     {id: 'code', label: 'Code', icon: FileCode2},
   ].map(item => ({...item, lead: resourceDrawerLeads[item.id]})) : [];
-  return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>
-    {error ? <div className="dialog-content"><Notice tone="error">{error}</Notice></div> : !current || !a ? <Loading label="Loading resource details…"/> : <>
-      <div className="finding-drawer-header resource-drawer-header">
-        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected intent' : 'Review required'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
+  const openPageHref = identity ? resourceInsightPageHref(scanId, resourceKey, identity) : null;
+  const body = error ? (
+    <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}><Notice tone="error">{error}</Notice></div>
+  ) : !current || !a ? (
+    <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}>
+      {layout === 'drawer' && openPageHref && (
+        <p className="drawer-quick-actions"><Link className="button secondary small" href={openPageHref}><ExternalLink size={14}/> Open full page</Link></p>
+      )}
+      <Loading label="Loading resource details…"/>
+    </div>
+  ) : (
+    <>
+      <div className={`finding-drawer-header resource-drawer-header${layout === 'page' ? ' resource-insight-header' : ''}`}>
+        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected' : 'Review'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
-        <p className="drawer-header-meta">Observed {a.observation.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{current.findings.length ? ` · ${current.findings.length} finding${current.findings.length === 1 ? '' : 's'}` : ''}</p>
-        <div className="drawer-header-actions"><Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link><button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button></div>
+        <p className="drawer-header-meta">Observed {a.observation?.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{current.findings.length ? ` · ${current.findings.length} finding${current.findings.length === 1 ? '' : 's'}` : ''}</p>
+        <div className="drawer-header-actions">
+          {layout === 'drawer' && (
+            <Link className="button secondary small" href={resourceInsightPageHref(scanId, resourceKey, {provider: a.provider, resourceId: a.resource_id})}>
+              <ExternalLink size={14}/> Open full page
+            </Link>
+          )}
+          <Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link>
+          <button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button>
+        </div>
       </div>
-      <TabWorkspaceShell id="resource-drawer" label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content">
+      <TabWorkspaceShell id={layout === 'page' ? 'resource-insight' : 'resource-drawer'} label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content" tabIcons={false}>
         {tab === 'overview' && <Overview detail={current} onOpenTab={setTab}/>}
         {tab === 'findings' && <Findings detail={current}/>}
         {tab === 'evidence' && <><AssessmentChecks detail={current}/><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
@@ -403,6 +450,10 @@ function ResourceDetailDrawer({scanId,resourceKey,onClose,onChange}:{scanId:stri
         {tab === 'code' && <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>}
       </TabWorkspaceShell>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
-    </>}
-  </Dialog>;
+    </>
+  );
+  if (layout === 'page') {
+    return <div className="resource-insight-shell panel">{body}</div>;
+  }
+  return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>{body}</Dialog>;
 }

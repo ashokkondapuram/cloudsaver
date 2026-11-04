@@ -291,24 +291,29 @@ class FocusRepository:
 
     def attach(self, tenant, scan, *, force=False):
         from copy import deepcopy
-        result=deepcopy(scan)
-        if result.get('billing_materialized') and not force:
-            return result
-        rows=[*result.get('inventory',[]),*result.get('findings',[])]
-        stamp=utc(scan['timestamp'])
-        resource_ids=[r['resource_id'] for r in rows]
-        costs=self.resource_costs(tenant,resource_ids,as_of=stamp)
+        result = deepcopy(scan)
+        skip_side_effects = result.get('billing_materialized') and not force
+        rows = [*result.get('inventory', []), *result.get('findings', [])]
+        stamp = utc(scan['timestamp'])
+        resource_ids = [r['resource_id'] for r in rows]
+        costs = self.resource_costs(tenant, resource_ids, as_of=stamp)
         self._supplement_resource_costs(tenant, scan, resource_ids, costs, as_of=stamp)
-        inventory={(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id']):r for r in result.get('inventory',[])}
+        inventory = {
+            (r.get('cloud_provider', 'azure'), r['resource_id'].lower() if r.get('cloud_provider', 'azure') == 'azure' else r['resource_id']): r
+            for r in result.get('inventory', [])
+        }
         for r in rows:
-            key=(r.get('cloud_provider','azure'),r['resource_id'].lower() if r.get('cloud_provider','azure')=='azure' else r['resource_id'])
+            key = (r.get('cloud_provider', 'azure'), r['resource_id'].lower() if r.get('cloud_provider', 'azure') == 'azure' else r['resource_id'])
             # Findings inherit observed inventory evidence before billing is attached.
-            e=dict((inventory.get(key) or {}).get('evidence') or {},**(r.get('evidence') or {}))
-            e.update(costs.get(key,{}));r['evidence']=e
+            e = dict((inventory.get(key) or {}).get('evidence') or {}, **(r.get('evidence') or {}))
+            e.update(costs.get(key, {}))
+            r['evidence'] = e
+        if skip_side_effects:
+            return result
         from app.observability_store import attach_signals
-        attach_signals(self.store,tenant,rows)
+        attach_signals(self.store, tenant, rows)
         from app.k8s_cost_reconciler import attach_node_costs
-        attach_node_costs(result.get('inventory',[]))
+        attach_node_costs(result.get('inventory', []))
         result['billing_materialized'] = True
         result['billing_materialized_at'] = scan.get('timestamp')
         return result

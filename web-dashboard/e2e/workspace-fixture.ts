@@ -64,10 +64,22 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
     if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
+    else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resource-signals\/lookup$/.test(path)){
+      const body=request.postDataJSON() as {identities?: {provider:string;resource_id:string}[]};
+      const items=buildResourceItems(findings);
+      const byIdentity=new Map(items.map(row=>[identityOf(row.provider,row.resource_id),row]));
+      response={scan_id:path.split('/')[4],items:(body.identities||[]).map(ident=>{
+        const row=byIdentity.get(identityOf(ident.provider,ident.resource_id));
+        return row?{resource_key:row.resource_key,provider:row.provider,resource_id:row.resource_id,ai:row.ai,decision:row.decision}:null;
+      }).filter(Boolean)};
+    }
     else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources$/.test(path)){
       resourceReads++;
       const items=buildResourceItems(findings);
-      response={scan_id:path.split('/')[4],observed_at:scanTime,total:items.length,items,summary:{total:items.length,ai_status:{not_run:items.length},ai_risk:{},decision:{none:items.length},review_priority:{high:items.length},resolved_count:0,no_longer_observed_count:0}};
+      const offset=Number(url.searchParams.get('offset')||0);
+      const limit=Number(url.searchParams.get('limit')||items.length);
+      const slice=items.slice(offset,offset+limit);
+      response={scan_id:path.split('/')[4],observed_at:scanTime,total:items.length,items:slice,summary:{total:items.length,ai_status:{not_run:items.length},ai_risk:{},decision:{none:items.length},review_priority:{high:items.length},resolved_count:0,no_longer_observed_count:0}};
     }
     else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resources\/[a-f0-9]+$/.test(path))response=resourceDetail(path.split('/')[4],findings,path.split('/')[6]);
     else if(path==='/api/v1/rules/effective')response={version:1,items:[]};
@@ -124,7 +136,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(response)});
   });
   await page.goto('/');
-  await page.getByLabel('Workspace access key or identity access token').fill('test-only-browser-credential');
+  await page.getByLabel('Workspace credential').fill('test-only-browser-credential');
   await page.getByRole('button',{name:'Connect workspace',exact:true}).click();
   await expect(page.getByLabel('Selected scan snapshot')).toBeVisible();
   if(!options.legacy)await expect.poll(()=>resourceReads).toBeGreaterThan(0);

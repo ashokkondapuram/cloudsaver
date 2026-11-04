@@ -67,6 +67,8 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   const [scanActivity, setScanActivity] = useState('');
   const findingFocusKey=useRef<string|null>(null);
   const session = useRef(0);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
   const activeCredential=useRef('');
   const connecting = useRef<AbortController | null>(null);
 
@@ -151,13 +153,15 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
       const running = history.find(entry => entry.status === 'running');
       setScans(history);
       if (running) {
-        setSelected(running.scan_id);
-        setLiveScanEpoch(epoch => epoch + 1);
+        const current = selectedRef.current;
+        const next = !current || !history.some(s => s.scan_id === current) ? running.scan_id : current;
+        if (next !== current) setSelected(next);
+        if (next === running.scan_id) setLiveScanEpoch(epoch => epoch + 1);
         return true;
       }
       const latest = history[0];
-      if (latest?.status === 'completed') {
-        setSelected(latest.scan_id);
+      if (latest?.status === 'completed' && scanActivity) {
+        setSelected(current => (current && history.some(s => s.scan_id === current) ? current : latest.scan_id));
         clearContext();
         notify(`Scan completed. ${latest.total_items_found.toLocaleString()} findings ready to review.`);
       }
