@@ -45,9 +45,12 @@ def rule_resource_type_suffix(rule_id: str) -> str | None:
 
 
 def validate_rule_parameters(rule_id, overrides=None):
-    bounds = {row[0]: row[6] for row in definitions()}.get(rule_id)
-    if not bounds:
-        raise ValueError('Unknown rule parameter')
+    if rule_id in _AZURE_CONTRACT_BOUNDS:
+        bounds = _AZURE_CONTRACT_BOUNDS[rule_id]
+    else:
+        bounds = {row[0]: row[6] for row in definitions()}.get(rule_id)
+        if bounds is None:
+            raise ValueError('Unknown rule parameter')
     if not isinstance(overrides or {}, dict) or set(overrides or {}) - set(bounds):
         raise ValueError('Unknown rule parameter')
     result = {}
