@@ -64,12 +64,13 @@ export function CloudScopesEditor() {
   const {data, error, reload} = useSettings();
   const {workspace, planProviders} = useWorkspace();
   const {save, saving, error: saveError} = useSave(data, reload);
-  const [subscriptions, setSubscriptions] = useState('');
+  const [subscriptions, setSubscriptions] = useState<string[]>([]);
   const [aws, setAws] = useState<AwsAccount[]>([]);
   const [gcp, setGcp] = useState<GcpDraft[]>([]);
   useEffect(() => {
     if (!data) return;
-    setSubscriptions(data.settings.subscription_ids.join('\n'));
+    const ids = data.settings.subscription_ids;
+    setSubscriptions(ids.length ? [...ids] : ['']);
     setAws(data.settings.aws_accounts);
     setGcp(data.settings.gcp_projects.map(p => ({project_id: p.project_id, regions: p.regions.join(', ')})));
   }, [data]);
@@ -77,7 +78,7 @@ export function CloudScopesEditor() {
   if (!data) return <Loading label="Loading cloud accounts…"/>;
   const editable = data.scopes_editable ?? data.editable;
   const allowed = planProviders(workspace?.allowed_providers ?? ['azure', 'aws', 'gcp', 'kubernetes']);
-  const subscriptionList = subscriptions.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+  const subscriptionList = subscriptions.map(s => s.trim()).filter(Boolean);
   function submit(event: React.FormEvent) {
     event.preventDefault();
     save({
@@ -93,8 +94,11 @@ export function CloudScopesEditor() {
     {!allowed.length && <Notice tone="warning">This workspace key doesn&apos;t include any cloud providers. Ask your administrator for a new key.</Notice>}
     {allowed.includes('azure') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
       <legend><ProviderBadge provider="azure"/>Azure subscriptions</legend>
-      <label className="field-label" htmlFor="azure-subscriptions">Subscription IDs, one per line</label>
-      <textarea id="azure-subscriptions" rows={4} value={subscriptions} onChange={e => setSubscriptions(e.target.value)} placeholder="00000000-0000-0000-0000-000000000000"/>
+      {subscriptions.map((subscriptionId, index) => <div className="settings-row" key={index}>
+        <label className="wide"><span className="field-label">Subscription ID</span><input type="text" value={subscriptionId} onChange={e => setSubscriptions(subscriptions.map((s, i) => i === index ? e.target.value : s))} placeholder="00000000-0000-0000-0000-000000000000" required={subscriptions.length === 1}/></label>
+        <button type="button" className="icon-button" aria-label={`Remove subscription ${subscriptionId || index + 1}`} onClick={() => setSubscriptions(subscriptions.length > 1 ? subscriptions.filter((_, i) => i !== index) : [''])} disabled={subscriptions.length === 1 && !subscriptionId.trim()}><Trash2 size={16}/></button>
+      </div>)}
+      {editable && subscriptionList.length < data.limits.max_subscriptions && <button type="button" className="button secondary" onClick={() => setSubscriptions([...subscriptions, ''])}><Plus size={15}/>Add subscription</button>}
       <p className="inline-help">{subscriptionList.length} of {data.limits.max_subscriptions} subscriptions allowed on your plan.</p>
     </fieldset>}
     {allowed.includes('aws') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
