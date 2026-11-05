@@ -56,6 +56,7 @@ export function OptimizationEvidenceWorkspace() {
   }, [topology, selected]);
 
   return (
+    <div data-atlas-rollout="optimization">
     <>
       <div className="page-heading">
         <div>
@@ -150,5 +151,6 @@ export function OptimizationEvidenceWorkspace() {
         </>
       )}
     </>
+    </div>
   );
 }

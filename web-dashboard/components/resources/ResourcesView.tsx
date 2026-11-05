@@ -252,7 +252,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const select = (name: keyof Filters, options: [string, string][], aria: string) => <label><span className="sr-only">{aria}</span><select aria-label={aria} value={filters[name]} onChange={e => setFilters(f => ({...f, [name]: e.target.value}))}>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>;
   const discoveryChips = [category && {label: `Category: ${categories.find(([id]) => id === category)?.[1]}`, clear: () => setCategory('')}, intent && {label: intent === 'protected' ? 'Protected intent' : 'Needs assessment', clear: () => setIntent('')}, pricing && {label: pricing === 'unknown' ? 'Price unknown' : 'Price observed', clear: () => setPricing('')}, filters.provider && {label: providerNames[filters.provider] || filters.provider, clear: () => setFilters(f => ({...f, provider: ''}))}, filters.arm_detail && {label: armDetailLabels[filters.arm_detail as ArmDetailStatus], clear: () => setFilters(f => ({...f, arm_detail: ''}))}].filter(Boolean) as {label: string; clear: () => void}[];
   const resetDiscovery = () => {setCategory(''); setIntent(''); setPricing(''); setFilters(f => ({...f, provider: '', arm_detail: ''}));};
-  return <>
+  return <div data-atlas-rollout="resources"><>
     {inProgress && <Notice tone="info">Scan in progress ({(scan.items_arm_detail_collected ?? 0).toLocaleString()} of {(scan.total_items_found || page?.total || 0).toLocaleString()} with ARM detail saved). Resources refresh every few seconds from the database.</Notice>}
     <ResourceLoadProgress progress={progress}/>
     {(loading || page.total > page.items.length) && <Notice tone="warning">This view contains {page.items.length.toLocaleString()} of {page.total.toLocaleString()} resources{loading ? ' so far' : ''}. Filters and CSV export apply to these loaded resources only; this is not a complete estate report.</Notice>}
@@ -315,7 +315,7 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
     <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} identity={drawerIdentity} relatedFindings={drawerRelatedFindings} onClose={() => open(null)} onChange={reload}/>
-  </>;
+  </></div>;
 }
 
 export function ResourceReport() {

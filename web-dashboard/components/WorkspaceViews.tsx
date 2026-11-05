@@ -32,7 +32,7 @@ import {ObservabilitySettings} from './settings/ObservabilitySettings';
 function ScanHistory() {
   const {scans,scan,selectScan,refresh,busy} = useWorkspace();
   const router = useRouter();
-  return <section className="panel"><SectionTitle title="Scan history" action={<button className="button secondary" disabled={!!busy} onClick={refresh}>Refresh history</button>}>Saved observations for this workspace</SectionTitle>{scans.length ? <div className="scan-history-list">{scans.map(item=><button key={item.scan_id} className={item.scan_id===scan?.scan_id?'selected':''} onClick={()=>{selectScan(item.scan_id);router.push('/resources');}}><span className="history-icon"><History size={19}/></span><span className="history-main"><strong>{dateTime(item.timestamp)}</strong><small><code>{item.scan_id.slice(0,8)}</code><span>·</span>{item.total_items_found.toLocaleString()} findings{item.data_origin==='legacy_synthetic'&&<span className="mini-badge amber">Historical synthetic</span>}</small></span><span className="history-providers">{(item.cloud_providers||['azure']).map(p=><ProviderBadge provider={p} key={p}/>)}</span><span className="state-badge">{item.status ? sentence(item.status) : 'Saved'}</span><ChevronRight size={17}/></button>)}</div> : <EmptyState icon={History} title="No saved scans yet">Your completed scans will appear here with their original observations.</EmptyState>}</section>;
+  return <section className="panel" data-atlas-rollout="activity-scans"><SectionTitle title="Scan history" action={<button className="button secondary" disabled={!!busy} onClick={refresh}>Refresh history</button>}>Saved observations for this workspace</SectionTitle>{scans.length ? <div className="scan-history-list">{scans.map(item=><button key={item.scan_id} className={item.scan_id===scan?.scan_id?'selected':''} onClick={()=>{selectScan(item.scan_id);router.push('/resources');}}><span className="history-icon"><History size={19}/></span><span className="history-main"><strong>{dateTime(item.timestamp)}</strong><small><code>{item.scan_id.slice(0,8)}</code><span>·</span>{item.total_items_found.toLocaleString()} findings{item.data_origin==='legacy_synthetic'&&<span className="mini-badge amber">Historical synthetic</span>}</small></span><span className="history-providers">{(item.cloud_providers||['azure']).map(p=><ProviderBadge provider={p} key={p}/>)}</span><span className="state-badge">{item.status ? sentence(item.status) : 'Saved'}</span><ChevronRight size={17}/></button>)}</div> : <EmptyState icon={History} title="No saved scans yet">Your completed scans will appear here with their original observations.</EmptyState>}</section>;
 }
 
 export function ActivityView() {
@@ -42,9 +42,11 @@ export function ActivityView() {
     item.id === 'deliveries' ? {...item, icon: Activity} : item.id === 'scans' ? {...item, icon: History} : {...item, icon: BrainCircuit},
   );
   return (
+    <div data-atlas-rollout="activity">
     <TabWorkspaceShell id="activity" label="Activity views" tabs={tabs} value={tab} onChange={setTab}>
       {tab === 'deliveries' ? <ReliabilityPanel token={token} canAdmin={canAdmin}/> : tab === 'ai' ? <AIAssessmentHistory/> : <ScanHistory/>}
     </TabWorkspaceShell>
+    </div>
   );
 }
 
@@ -137,9 +139,11 @@ export function SettingsView() {
   });
   function choose(value:string){setTab(value);const url=new URL(window.location.href);url.searchParams.set('tab',value);window.history.replaceState(null,'',url);}
   return (
+    <div data-atlas-rollout="settings">
     <TabWorkspaceShell id="settings" label="Workspace settings" tabs={tabs} value={tab} onChange={choose}>
       {tab==='cloud'?<><Plan/><CloudAccounts/><ResourceAccessSettings/><ScheduleAlertsEditor/><section className="panel"><div className="settings-notice"><Wallet size={17}/><div><p>Related workspace pages</p><p><Link className="text-link" href="/allocation">Open cost allocation<ArrowRight size={14}/></Link> <Link className="text-link" href="/activity">Open activity<ArrowRight size={14}/></Link></p></div></div></section></>:tab==='rules'?<CustomerRuleSettings/>:tab==='integrations'?<ObservabilitySettings/>:tab==='ai'?<><AIFoundryConfigurationEditor/><DataGovernanceWorkspace/></>:<><AccessSettings/><Preferences/></>}
     </TabWorkspaceShell>
+    </div>
   );
 }
 
@@ -184,9 +188,11 @@ export function Automation() {
     item.id === 'reviews' ? {...item, icon: GitPullRequest} : item.id === 'policies' ? {...item, icon: ShieldCheck} : {...item, icon: GitBranch},
   );
   return (
+    <div data-atlas-rollout="automation">
     <TabWorkspaceShell id="automation" label="Automation workflows" tabs={tabs} value={tab} onChange={setTab}>
       {tab==='reviews'?<GitOpsPanel key={scan?.scan_id||'no-scan'} token={token} scan={scan} canPublish={canAdmin&&terraform} included={terraform}/>:tab==='execution'?<ExecutionSyncTimeline/>:<PlanPolicyPanel token={token}/>}
       <div className="automation-principles"><div><ShieldCheck size={21}/><h3>Evidence first</h3><p>Every review starts from an owned resource snapshot.</p></div><div><FileCode2 size={21}/><h3>Inspect the exact code</h3><p>Preview import artifacts before downloading or publishing.</p></div><div><GitBranch size={21}/><h3>Keep your review process</h3><p>Draft PRs stay within operator-approved repositories.</p></div></div>
     </TabWorkspaceShell>
+    </div>
   );
 }

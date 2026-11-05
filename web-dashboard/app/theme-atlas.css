@@ -146,3 +146,37 @@ html[data-ui-preset=atlas] .analytics-chart-table {
 html[data-ui-preset=atlas] .analytics-chart-table .summary-table {
   margin-top: 12px;
 }
+
+html[data-ui-preset=atlas] .analytics-chart-compact .section-title {
+  padding-bottom: 8px;
+}
+
+html[data-ui-preset=atlas] .analytics-chart-compact .trend-chart {
+  min-height: 176px;
+}
+
+html[data-ui-preset=atlas] .overview-finops-mini summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 550;
+  list-style: none;
+}
+
+html[data-ui-preset=atlas] .overview-finops-mini summary::-webkit-details-marker {
+  display: none;
+}
+
+html[data-ui-preset=atlas] .overview-finops-actions {
+  padding: 0 20px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.trend-chart[role='presentation'] .recharts-surface,
+.trend-chart[role='presentation'] svg {
+  pointer-events: none;
+}

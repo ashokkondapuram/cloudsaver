@@ -17,7 +17,7 @@ type Props = {series: ChartSeries; height: number; unitLabel: string};
 export function AnalyticsChartRecharts({series, height, unitLabel}: Props) {
   const rows = chartPointsForDisplay(series);
   return (
-    <div className="trend-chart" style={{height}} aria-hidden="true">
+    <div className="trend-chart" style={{height}} role="presentation">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{top: 8, right: 12, left: 0, bottom: 0}}>
           <CartesianGrid stroke="var(--chart-grid)" vertical={false} />

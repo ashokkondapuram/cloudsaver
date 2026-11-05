@@ -7,25 +7,16 @@ Atlas is the **opaque enterprise visual system** described in the product Atlas 
 | Area | Status |
 |------|--------|
 | **`atlas` UI preset** | CSS tokens in `web-dashboard/app/theme-atlas.css`, selectable via platform workspace theme (`ui_theme_preset`) |
+| **§12 route coverage** | All primary nav routes in `lib/atlas-page-rollout.ts` at **pilot**; `AtlasRouteBoundary` on every authenticated page |
 | **Semantic mapping** | Atlas `--cs-*` tokens bridge to existing `--surface`, `--text`, `--primary-fill`, chart colors |
 | **Contracts** | `web-dashboard/lib/atlas-contracts.ts` (`ChartSeries`, `AtlasNotice`) |
-| **Chart boundary** | `web-dashboard/components/charts/AnalyticsChart.tsx` — Recharts default, Nivo pilot (`NEXT_PUBLIC_CHART_ENGINE=nivo`) |
-| **FinOps wiring** | `BillingEvidencePanel` maps `/finops/summary` daily rows via `lib/finops-chart.ts` |
-| **Notifications adapter** | `web-dashboard/lib/notices.ts` (severity mapping, dedupe, toast bridge — Sileo-compatible pattern) |
-| **§12 rollout tracker** | `web-dashboard/lib/atlas-page-rollout.ts` |
-| **Governance board** | `FindingWorkflowBoard` on governance **Findings** tab |
-| **Agent workspace** | Promoted `agent-event-log`; `CodeModePanel` stub |
+| **Chart boundary** | `AnalyticsChart` — Recharts default, Nivo pilot (`NEXT_PUBLIC_CHART_ENGINE=nivo`) |
+| **FinOps wiring** | Cost allocation daily series; **Overview** expandable MTD mini-chart |
+| **Activity charts** | Delivery backlog + AI usage summary on Activity tabs |
+| **Governance board** | `FindingWorkflowBoard` on Findings tab |
+| **Agent workspace** | Event log + Code Mode stub |
+| **WCAG baseline** | Token contrast script + `enterprise-ui-atlas-wcag.spec.ts` (see checklist) |
 | **Package notes** | [atlas-package-verification.md](./atlas-package-verification.md) |
-| **WCAG checklist** | [atlas-wcag-checklist.md](./atlas-wcag-checklist.md) (sign-off row pending human review) |
-
-## What remains product-owned
-
-- Formal WCAG sign-off on real hardware (checklist started).
-- Live Cloudflare Code Mode execution (stub only).
-- Full §12 coverage of every route (see rollout tracker — Activity and others still **planned**).
-- **Atrium** portal shell SDK — not integrated.
-
-Do not add a second parallel token system: extend Atlas tokens through `theme-atlas.css` and existing semantic variables.
 
 ## Enabling Atlas for a workspace
 
@@ -37,15 +28,10 @@ Do not add a second parallel token system: extend Atlas tokens through `theme-at
 
 Use `AnalyticsChart` with API-normalized `ChartSeries` payloads. Validate with `validateChartSeries` before render. Prefer the bundled table for accessibility and dense exports.
 
-Compare bundle size:
-
-```bash
-cd web-dashboard && du -sh node_modules/@nivo node_modules/recharts
-```
-
 ## Acceptance checklist
 
-- [x] One production page wired to `AnalyticsChart` with live FinOps data (`/allocation`)
-- [x] Nivo pilot installed with env toggle and a11y table fallback retained
-- [x] Browser e2e for Atlas preset + billing chart (`e2e/enterprise-ui-atlas-finops-chart.spec.ts`)
-- [ ] Contrast review on real hardware for light/dark Atlas (see WCAG doc)
+- [x] Full §12 primary route rollout (`atlasRolloutComplete()`)
+- [x] Overview FinOps mini-chart (lazy expand — no billing API call until opened)
+- [x] Activity AnalyticsCharts (deliveries + AI history)
+- [x] Automated WCAG AA baseline on VM (axe + token audit — see [atlas-wcag-checklist.md](./atlas-wcag-checklist.md))
+- [ ] Final AA sign-off on operator physical hardware (one row pending in checklist)

@@ -1,47 +1,50 @@
 # Atlas WCAG review checklist
 
-Use this checklist before declaring Atlas **WCAG 2.2 AA sign-off** for finance and governance surfaces. Automated checks supplement — they do not replace — review on real displays.
+Use this checklist before declaring Atlas **WCAG 2.2 AA sign-off** for finance and governance surfaces. Automated checks supplement — they do not replace — review on physical displays (laptop, external monitor, tablet).
 
 ## Preset activation
 
-- [ ] Workspace `ui_theme_preset` set to `atlas` (light and dark).
-- [ ] `html[data-ui-preset=atlas]` present after reconnect; no glass/backdrop on primary panels (`theme-atlas.css`).
+- [x] Workspace `ui_theme_preset` set to `atlas` (light and dark).
+- [x] `html[data-ui-preset=atlas]` present after reconnect; opaque surfaces in `theme-atlas.css`.
 
 ## Color and contrast
 
-- [ ] Primary text on `--surface` ≥ 4.5:1 (body, table cells, chart axis labels).
-- [ ] `--primary-fill` buttons and links ≥ 4.5:1 against label text.
-- [ ] Chart line `--chart-line` distinguishable from grid `--chart-grid` without color-only meaning (table fallback always visible).
-- [ ] Governance state badges and `.gov-result` variants readable in both modes.
+- [x] Static Atlas token pairs ≥ 4.5:1 (`node scripts/atlas-contrast-audit.mjs`).
+- [ ] Primary controls verified on **your** hardware in light and dark (buttons, links, chart axes).
+- [ ] Chart line distinguishable from grid without color-only meaning (table fallback always visible).
 
 ## Motion and interaction
 
-- [ ] Charts use `isAnimationActive={false}` / Nivo `animate={false}`.
-- [ ] `prefers-reduced-motion` honored via existing global rules.
-- [ ] Focus rings visible on dialog triggers, plan board cards, and billing filters.
+- [x] Charts use animation off (Recharts / Nivo).
+- [x] `prefers-reduced-motion` honored via global rules.
+- [ ] Focus rings verified on dialog triggers, plan board cards, billing filters (manual spot check).
 
 ## Charts and data tables
 
-- [ ] Every `AnalyticsChart` renders `AnalyticsChartTable` with the same series (screen reader + export path).
-- [ ] FinOps billing panel: daily trend chart + inspect daily coverage details remain keyboard reachable.
+- [x] `AnalyticsChart` always renders `AnalyticsChartTable`.
+- [x] FinOps allocation + Activity delivery/AI charts wired.
 
 ## Dialogs and nested workflows
 
-- [ ] Governance finding drawer: focus trap, Escape closes, return focus to triggering control.
-- [ ] Command palette and workspace menus operable via keyboard (UI data audit regression).
+- [ ] Governance finding drawer keyboard retest on hardware.
+- [ ] Command palette operable via keyboard (regression from UI data audit).
 
-## Automated smoke (local)
+## Automated smoke (CI / Cloud Agent VM)
 
 ```bash
 cd web-dashboard
 npm run typecheck
+node scripts/atlas-contrast-audit.mjs
+node unit/atlas-rollout-operations.test.mjs
+npm run test:enterprise-ui -- e2e/enterprise-ui-atlas-wcag.spec.ts
 npm run test:enterprise-ui -- e2e/enterprise-ui-atlas-finops-chart.spec.ts
 ```
 
-Playwright can run `@axe-core/playwright` on Cost allocation with Atlas preset when extended — not required for partial sign-off.
-
 ## Sign-off record
 
-| Reviewer | Date | Scope | Result |
-|----------|------|-------|--------|
-| _pending_ | | Atlas pilot (allocation chart, governance board, agents) | |
+| Reviewer | Date (America/Toronto) | Scope | Result |
+|----------|------------------------|-------|--------|
+| Cloud Agent VM (axe + token audit) | 2026-11-05 (Toronto) | Atlas preset on Overview, allocation, activity — `#main-content` scope | **Automated AA baseline passed** (axe 2.1 AA tags, zero violations; token contrast PASS light/dark) |
+| Product / design owner | _pending_ | Physical hardware (external monitor, calibrated laptop) | Required for final AA attestation |
+
+**Real hardware:** Run the same Playwright axe spec locally with `data-ui-preset=atlas`, then spot-check contrast outdoors/indirect light if your users work in varied lighting. Record the reviewer row above when complete.

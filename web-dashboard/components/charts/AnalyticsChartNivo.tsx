@@ -9,7 +9,7 @@ type Props = {series: ChartSeries; height: number; unitLabel: string};
 export function AnalyticsChartNivo({series, height, unitLabel}: Props) {
   const rows = chartPointsForDisplay(series);
   return (
-    <div className="trend-chart nivo-trend-chart" style={{height}} aria-hidden="true">
+    <div className="trend-chart nivo-trend-chart" style={{height}} role="presentation">
       <ResponsiveLine
         animate={false}
         enableSlices={false}

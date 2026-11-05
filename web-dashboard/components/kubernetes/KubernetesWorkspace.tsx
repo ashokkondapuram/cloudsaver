@@ -91,7 +91,7 @@ export function KubernetesWorkspace() {
   const rows=useMemo(()=> (data?.resources||[]).filter(r=>(!cluster||r.cluster_id===cluster)&&(!namespace||r.namespace===namespace)&&(!kind||r.resource_type===kind)&&(!qos||r.evidence.qos_class===qos)&&(!risk||r.evaluations.some(e=>e.outcome==='condition_detected'&&(risk==='review'||e.safety_blocks?.includes(risk))))&&(!query||`${r.resource_name} ${r.evidence.controller?.name||''} ${r.evidence.pod||''}`.toLowerCase().includes(query.toLowerCase()))),[data,cluster,namespace,kind,qos,risk,query]);
   const clusters=(data?.clusters||[]).filter(c=>!cluster||c.cluster_id===cluster);
   const options=(field:'cluster_id'|'namespace'|'resource_type')=>[...new Set((data?.resources||[]).map(r=>r[field]).filter(Boolean))].sort() as string[];
-  return <><SectionTitle eyebrow="MULTI-SOURCE ANALYSIS" title="Kubernetes & containers">Trace workload requests, reliability risks and allocation evidence back to their sources.</SectionTitle>
+  return <><div data-atlas-rollout="kubernetes"><SectionTitle eyebrow="MULTI-SOURCE ANALYSIS" title="Kubernetes & containers">Trace workload requests, reliability risks and allocation evidence back to their sources.</SectionTitle>
     {!scan?<EmptyState icon={Boxes} title="No scan selected">Run a scan with Kubernetes selected to discover your authorized clusters.</EmptyState>:error?<Notice tone="error">{error}</Notice>:!data?<Loading label="Loading Kubernetes evidence…"/>:!data.clusters.length?<EmptyState icon={Boxes} title="No Kubernetes inventory in this scan">Choose a completed Kubernetes scan. An operator API binding enables full discovery; metrics-only discovery cannot prove cluster coverage.</EmptyState>:<>
       <Notice tone="info">Observed {dateTime(data.observed_at)}. {data.financial_note} <Link className="text-link" href="/settings?tab=rules">Manage analysis rules</Link></Notice>
       <section className="panel"><div className="grid-heading"><div><h2>Cluster & source health</h2><p>Unknown metrics retain inventory and block dependent recommendations.</p></div><ShieldCheck size={20}/></div>
@@ -114,5 +114,5 @@ export function KubernetesWorkspace() {
       <section className="panel"><div className="grid-heading"><div><h2>Rule evidence matrix</h2><p>Detected conditions retain their safety blocks; missing history never becomes a pass.</p></div></div><div className="summary-table-scroll"><table className="data-table"><thead><tr><th>Rule</th><th>Pillar</th><th>Saved outcomes</th></tr></thead><tbody>{data.rule_matrix.map(r=><tr key={r.rule_id}><td>{r.name}</td><td>{r.pillar}</td><td>{Object.entries(r.outcomes).map(([state,count])=>`${count} ${label(state).toLowerCase()}`).join(' · ')||'No eligible observations'}</td></tr>)}</tbody></table></div></section>
       <ResourceReview key={selected?.resource_id||'closed'} resource={selected} scanId={data.scan_id} onClose={()=>setSelected(null)}/>
     </>}
-  </>;
+  </div></>;
 }

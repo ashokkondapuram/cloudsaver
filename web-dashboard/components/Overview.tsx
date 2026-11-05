@@ -9,6 +9,7 @@ import {useWorkspace} from './WorkspaceProvider';
 import {sentence, isLiveSnapshot, useResources, type Summary} from '../lib/resources';
 import {EmptyState, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 import styles from './Overview.module.css';
+import {OverviewFinOpsMiniChart} from './OverviewFinOpsMiniChart';
 
 export function useScopedFindings() {
   const {scan, scope} = useWorkspace();
@@ -41,7 +42,7 @@ export function Overview() {
     : !complete ? 'Loading your workspace summary'
     : reviewCount ? `${reviewCount.toLocaleString()} resource${reviewCount === 1 ? '' : 's'} need${reviewCount === 1 ? 's' : ''} a closer look`
     : 'Explore your resource evidence';
-  return <div className={styles.overview}>
+  return <div className={styles.overview} data-atlas-rollout="overview">
     <section className={styles.intro} aria-labelledby="overview-next-step">
       <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
       {error ? <button className="button secondary" onClick={reload}>Retry evidence</button>
@@ -52,6 +53,8 @@ export function Overview() {
 
     <EvidenceHealth rows={rows} total={page?.total} ready={complete} error={error}/>
     {error && <Notice tone="error">{error}</Notice>}
+
+    <OverviewFinOpsMiniChart/>
 
     {scan && <section className="panel priority-panel" aria-label="Resource review queue">
       <SectionTitle title="Review first" action={<Link className="text-link" href="/resources">View all<ArrowRight size={15}/></Link>}/>

@@ -3,6 +3,8 @@
 import {useCallback,useEffect,useState} from 'react';
 import {Button} from './ui/button';
 import {Loading} from './ui/shared';
+import {AnalyticsChart} from './charts/AnalyticsChart';
+import {deliveryCountsToChartSeries} from '../lib/operations-chart';
 import {dateTime} from '../lib/finops';
 import {sentence} from '../lib/resources';
 
@@ -53,10 +55,11 @@ export function ReliabilityPanel({token,canAdmin}:{token:string;canAdmin:boolean
     catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   const count=(status:string)=>summary?.counts.filter(c=>c.status===status).reduce((sum,c)=>sum+c.count,0)||0;
-  return <section className="panel reliability-panel" id="reliability" aria-labelledby="reliability-title">
+  return <section className="panel reliability-panel" id="reliability" aria-labelledby="reliability-title" data-atlas-rollout="activity-deliveries">
     <div className="section-title"><div><h2 id="reliability-title">Delivery status</h2><p>Durable scan handoff and workspace integration delivery · updates every 30 seconds</p></div><Button className="secondary" disabled={busy} onClick={()=>refresh().catch(()=>setError('Delivery status could not be refreshed.'))}>Refresh status</Button></div>
     {error&&<p role="alert" className="error">{error}</p>}
     {!summary?<Loading label="Loading delivery status…"/>:!summary.available?<p>Configure PostgreSQL to enable durable delivery and its audit history.</p>:<>
+      {summary.counts.length>0&&<AnalyticsChart title="Delivery backlog" periodLabel="Current queue" interpretation="Counts from durable delivery storage; refreshes with the panel." series={deliveryCountsToChartSeries(summary.counts, summary.dispatcher?.last_poll_at)} height={200}/>}
       <div className="reliability-metrics">{['pending','leased','published','dead_letter'].map(status=><div key={status}><span>{labels[status]}</span><strong>{count(status)}</strong></div>)}</div>
       <dl className="ops-grid"><div><dt>Operator switch</dt><dd>{summary.dispatcher_enabled?'Enabled':'Disabled'}</dd></div><div><dt>Last dispatcher poll</dt><dd>{timestamp(summary.dispatcher?.last_poll_at)}</dd></div><div><dt>Last successful cycle</dt><dd>{timestamp(summary.dispatcher?.last_success_at)}</dd></div><div><dt>Oldest due item</dt><dd>{summary.oldest_due_seconds===null?'No due backlog':`${Math.floor(summary.oldest_due_seconds/60)} min overdue`}</dd></div><div><dt>Approved integrations</dt><dd>{summary.targets.length?summary.targets.map(t=>`${t.target_id} (${sentence(t.channel)})`).join(', '):'None configured'}</dd></div></dl>
       <p className="security-note">Broker acceptance is followed by execution reconciliation. Webhook acknowledgment means the provider returned success; it does not prove a person received it. Delivery can repeat after a lost response.</p>
