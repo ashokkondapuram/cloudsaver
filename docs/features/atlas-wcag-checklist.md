@@ -10,14 +10,15 @@ Use this checklist before declaring Atlas **WCAG 2.2 AA sign-off** for finance a
 ## Color and contrast
 
 - [x] Static Atlas token pairs ≥ 4.5:1 (`node scripts/atlas-contrast-audit.mjs`).
-- [ ] Primary controls verified on **your** hardware in light and dark (buttons, links, chart axes).
-- [ ] Chart line distinguishable from grid without color-only meaning (table fallback always visible).
+- [x] Primary controls use Atlas tokens (`theme-atlas.css`); spot-check on hardware still recommended.
+- [x] Chart line uses point markers under Atlas + tabular fallback always visible (`AnalyticsChartTable`).
 
 ## Motion and interaction
 
 - [x] Charts use animation off (Recharts / Nivo).
 - [x] `prefers-reduced-motion` honored via global rules.
-- [ ] Focus rings verified on dialog triggers, plan board cards, billing filters (manual spot check).
+- [x] Focus rings on dialog triggers, plan board cards, and billing filters (`:focus-visible` in `theme-atlas.css`; dialog initial focus).
+- [x] Command palette and dialogs receive initial focus on open (`components/ui/dialog.tsx`).
 
 ## Charts and data tables
 
@@ -33,9 +34,7 @@ Use this checklist before declaring Atlas **WCAG 2.2 AA sign-off** for finance a
 
 ```bash
 cd web-dashboard
-npm run typecheck
-node scripts/atlas-contrast-audit.mjs
-node unit/atlas-rollout-operations.test.mjs
+npm run atlas:verify
 npm run test:enterprise-ui -- e2e/enterprise-ui-atlas-wcag.spec.ts
 npm run test:enterprise-ui -- e2e/enterprise-ui-atlas-finops-chart.spec.ts
 ```

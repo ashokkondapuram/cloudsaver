@@ -30,6 +30,8 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
     const focusKey = returnKey.current||previous?.getAttribute('data-focus-return');
     element.showModal();
     lockBodyScroll();
+    const closeButton = element.querySelector<HTMLElement>('.dialog-heading .icon-button');
+    closeButton?.focus({preventScroll: true});
     return () => {
       element.close();
       unlockBodyScroll();

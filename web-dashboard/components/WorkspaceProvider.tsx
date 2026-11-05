@@ -17,8 +17,8 @@ type WorkspaceState = {
   review: Finding[]; openReview: (findings: Finding[]) => void;
   selection: Finding[]; setSelection: (findings: Finding[]) => void;
   density: Density; setDensity: (value: Density) => void;
-  notice: {text: string; tone: 'success' | 'error' | 'info'} | null;
-  notify: (text: string, tone?: 'success' | 'error' | 'info') => void; clearNotice: () => void;
+  notice: {text: string; tone: 'success' | 'error' | 'info' | 'warning'} | null;
+  notify: (text: string, tone?: 'success' | 'error' | 'info' | 'warning') => void; clearNotice: () => void;
   connect: (token: string) => Promise<void>; disconnect: () => void;
   selectScan: (id: string) => void; runScan: (providers: string[]) => void;
   refresh: () => Promise<void>; reloadProfile: () => Promise<void>;
@@ -97,7 +97,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     return () => {events.forEach(name => window.removeEventListener(name, markActive)); clearInterval(interval);};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-  const notify = useCallback((text: string, tone: 'success' | 'error' | 'info' = 'success') => setNotice({text, tone}), []);
+  const notify = useCallback((text: string, tone: 'success' | 'error' | 'info' | 'warning' = 'success') => setNotice({text, tone}), []);
   const setDensity = (value: Density) => {updateDensity(value); try {localStorage.setItem('cloudsaver:ui:density', value);} catch {}};
 
   function clearContext() {findingFocusKey.current=null;setFinding(null);setFindingContext([]); setReview([]); setSelection([]); setScope([]);}

@@ -19,7 +19,7 @@ type Props = {
 /** Board-style treatment queue (BoardUI pattern) with table-equivalent cards per column. */
 export function FindingWorkflowBoard({findings, onOpen}: Props) {
   return (
-    <section className="panel plan-workflow-board" aria-label="Finding treatment workflow">
+    <section className="panel plan-workflow-board" aria-label="Finding treatment workflow" data-atlas-rollout="governance-board">
       <div className="plan-workflow-board-head">
         <h2>Treatment workflow</h2>
         <p className="inline-help">Counts by saved governance state — not a separate workflow engine.</p>

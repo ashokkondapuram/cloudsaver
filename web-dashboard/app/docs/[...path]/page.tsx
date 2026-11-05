@@ -26,7 +26,7 @@ export default async function RepoDocPage({params}: PageProps) {
   const title = docTitle(filename);
 
   return (
-    <div className="page-content doc-guide-page">
+    <div className="page-content doc-guide-page" data-atlas-rollout="docs">
       <header className="page-heading">
         <div>
           <span className="eyebrow">Setup guide</span>

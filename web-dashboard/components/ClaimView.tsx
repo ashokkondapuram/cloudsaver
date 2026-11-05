@@ -34,7 +34,7 @@ export function ClaimView() {
     }
   }
 
-  return <div className="login-page claim-page"><section className="login-connect">
+  return <div className="login-page claim-page" data-atlas-rollout="claim"><section className="login-connect">
     {claimed ? <div className="claim-form">
       <span className="pretitle">YOU’RE ALL SET</span>
       <h1>Welcome, {claimed.user.display_name}</h1>

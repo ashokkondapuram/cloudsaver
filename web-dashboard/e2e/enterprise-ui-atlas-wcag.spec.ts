@@ -13,16 +13,23 @@ const ATLAS_PAGES: {nav: string; route: RegExp; rollout: string}[] = [
 
 async function applyAtlasPreset(page: import('@playwright/test').Page) {
   await page.addInitScript(() => {
-    document.documentElement.dataset.uiPreset = 'atlas';
+    const apply = () => {
+      if (document.documentElement) document.documentElement.dataset.uiPreset = 'atlas';
+    };
+    if (document.documentElement) apply();
+    else document.addEventListener('DOMContentLoaded', apply, {once: true});
   });
 }
 
 test('Atlas §12 routes expose rollout markers', async ({page}) => {
+  await applyAtlasPreset(page);
   await mockWorkspace(page, {uiTheme: 'atlas'});
   await mockGovernanceRoutes(page);
-  await applyAtlasPreset(page);
   for (const entry of ATLAS_PAGES) {
     await navigate(page, entry.nav);
+    if (entry.nav === 'Risk & compliance') {
+      await expect(page.locator('.governance-workspace')).toBeVisible({timeout: 15000});
+    }
     await expect(page.locator('.atlas-route-boundary')).toHaveAttribute('data-atlas-rollout', entry.rollout);
     await expect(page.locator('.atlas-route-boundary')).toHaveAttribute('data-atlas-status', 'pilot');
     await expect(page).toHaveURL(entry.route);

@@ -601,6 +601,70 @@ html[data-ui-preset=atlas] .page-content {
   padding-top: 28px;
 }
 
+/* WCAG — visible focus (dialogs, board cards, filters) */
+html[data-ui-preset=atlas] :focus-visible {
+  outline: 2px solid var(--cs-primary);
+  outline-offset: 2px;
+}
+
+html[data-ui-preset=atlas] .plan-workflow-board {
+  border-left: 3px solid var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .plan-workflow-column {
+  border-radius: var(--cs-radius-control);
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .plan-workflow-card:focus-visible {
+  border-color: var(--cs-primary);
+  box-shadow: 0 0 0 1px var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .agent-event-log {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  background: var(--cs-surface);
+  padding: 16px 20px;
+  margin-top: 16px;
+}
+
+html[data-ui-preset=atlas] .agent-event-log ol {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+html[data-ui-preset=atlas] .code-mode-panel,
+html[data-ui-preset=atlas] .billing-evidence,
+html[data-ui-preset=atlas] .reliability-panel {
+  border-left: 3px solid var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .analytics-chart .summary-table caption {
+  font-size: 12px;
+  color: var(--cs-muted);
+  text-align: left;
+  padding: 8px 0 0;
+}
+
+html[data-ui-preset=atlas] .atlas-notice-banner {
+  border-radius: var(--cs-radius-control);
+  border-color: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .claim-page .login-connect,
+html[data-ui-preset=atlas] .doc-guide-page .doc-guide-content {
+  border-radius: var(--cs-radius);
+  border-color: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .inline-search input,
+html[data-ui-preset=atlas] .billing-evidence select {
+  border-radius: var(--cs-radius-control);
+  border-color: var(--cs-border);
+}
+
 .trend-chart[role='presentation'] .recharts-surface,
 .trend-chart[role='presentation'] svg,
 .nivo-trend-chart[role='presentation'] svg {

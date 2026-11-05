@@ -14,9 +14,9 @@ import {rechartsChartStyle} from '../../lib/chart-theme';
 import type {ChartSeries} from '../../lib/atlas-contracts';
 import {chartPointsForDisplay} from '../../lib/atlas-contracts';
 
-type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens};
+type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens; emphasizeLine?: boolean};
 
-export function AnalyticsChartRecharts({series, height, unitLabel, tokens}: Props) {
+export function AnalyticsChartRecharts({series, height, unitLabel, tokens, emphasizeLine = false}: Props) {
   const rows = chartPointsForDisplay(series);
   const style = rechartsChartStyle(tokens);
   return (
@@ -37,8 +37,9 @@ export function AnalyticsChartRecharts({series, height, unitLabel, tokens}: Prop
             type="linear"
             dataKey="y"
             stroke={style.lineStroke}
-            strokeWidth={2}
-            dot={false}
+            strokeWidth={emphasizeLine ? 2.5 : 2}
+            dot={emphasizeLine ? {r: 3, fill: style.lineStroke, strokeWidth: 0} : false}
+            activeDot={emphasizeLine ? {r: 5} : undefined}
             isAnimationActive={false}
             connectNulls={false}
           />

@@ -6,7 +6,6 @@ import {ArrowRight, Wallet} from 'lucide-react';
 import {api} from '../lib/api';
 import {AnalyticsChart} from './charts/AnalyticsChart';
 import {billingDailyToChartSeries, finopsPeriodLabel} from '../lib/finops-chart';
-import {activeUiThemePreset} from '../lib/ui-theme';
 import {useWorkspace} from './WorkspaceProvider';
 import {Loading, Notice} from './ui/shared';
 
@@ -60,15 +59,13 @@ function OverviewFinOpsChartBody() {
 
 /** Lazy FinOps headline — loads only after the user expands the panel (keeps overview free of billing API calls by default). */
 export function OverviewFinOpsMiniChart() {
-  const {canBill, workspace} = useWorkspace();
-  const atlas = activeUiThemePreset(workspace?.ui_theme_preset) === 'atlas';
-  const [open, setOpen] = useState(atlas);
+  const {canBill} = useWorkspace();
+  const [open, setOpen] = useState(false);
   if (!canBill) return null;
   return (
     <details
       className="panel overview-finops-mini cs-panel"
       data-atlas-rollout="overview-finops"
-      open={open}
       onToggle={event => setOpen((event.target as HTMLDetailsElement).open)}
     >
       <summary>
@@ -81,7 +78,7 @@ export function OverviewFinOpsMiniChart() {
           <ArrowRight size={14}/>
         </Link>
       </p>
-      {open ? <OverviewFinOpsChartBody/> : atlas ? <p className="inline-help overview-finops-hint">Expand to load month-to-date billing chart (Nivo, tabular export below).</p> : null}
+      {open ? <OverviewFinOpsChartBody/> : null}
     </details>
   );
 }

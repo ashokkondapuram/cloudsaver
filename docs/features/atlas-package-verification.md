@@ -4,7 +4,7 @@
 |-----------|---------------|----------------------|
 | **Nivo** | `@nivo/core`, `@nivo/line`, `@nivo/scales` | Atlas preset uses Nivo with shared `lib/chart-theme.ts` (`--cs-*` tokens only) |
 | **Recharts** | `recharts` | Default chart engine behind `AnalyticsChart` |
-| **Sileo** | No verified OSS package matching spec | Use `lib/notices.ts` + AppShell toast (`atlasNoticeToToast`) |
+| **Sileo** | No verified OSS package matching spec | `lib/notices.ts` + `lib/atlas-workspace-notices.ts` + AppShell `KeyNotices` (`atlasNoticeToToast`) |
 | **Arc UI** | No separate install | Map to shared `components/ui/dialog`, `PageTabs`, command palette |
 | **Fleetflow AI** | No verified npm workspace package | Agent workspace chronological `agent-event-log` |
 | **BoardUI** | No verified npm package | `FindingWorkflowBoard` on governance Findings tab |

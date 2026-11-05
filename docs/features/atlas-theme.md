@@ -15,6 +15,7 @@ Atlas is the **opaque enterprise visual system** described in the product Atlas 
 | **Activity charts** | Delivery backlog + AI usage summary on Activity tabs |
 | **Governance board** | `FindingWorkflowBoard` on Findings tab |
 | **Agent workspace** | Event log + Code Mode worker bridge |
+| **Sileo notices** | `workspaceAtlasNotices` + `KeyNotices` + `atlasNoticeToToast` |
 | **WCAG baseline** | Token contrast script + `enterprise-ui-atlas-wcag.spec.ts` (see checklist) |
 | **Package notes** | [atlas-package-verification.md](./atlas-package-verification.md) |
 

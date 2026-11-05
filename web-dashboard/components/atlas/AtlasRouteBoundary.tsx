@@ -7,7 +7,12 @@ import {atlasRolloutForRoute} from '../../lib/atlas-page-rollout';
 export function AtlasRouteBoundary({children}: {children: React.ReactNode}) {
   const pathname = usePathname() || '/';
   const rollout = atlasRolloutForRoute(pathname);
-  const slug = rollout?.route === '/' ? 'overview' : rollout?.route.replace(/^\//, '').replace(/\//g, '-') || 'unknown';
+  const slug =
+    rollout?.route === '/'
+      ? 'overview'
+      : rollout
+        ? rollout.route.replace(/^\//, '').replace(/\//g, '-')
+        : 'unknown';
   return (
     <div
       className="atlas-route-boundary"

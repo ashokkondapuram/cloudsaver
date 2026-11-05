@@ -6,9 +6,9 @@ import {nivoChartTheme} from '../../lib/chart-theme';
 import type {ChartSeries} from '../../lib/atlas-contracts';
 import {chartPointsForDisplay} from '../../lib/atlas-contracts';
 
-type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens; labelledBy: string};
+type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens; labelledBy: string; emphasizeLine?: boolean};
 
-export function AnalyticsChartNivo({series, height, unitLabel, tokens, labelledBy}: Props) {
+export function AnalyticsChartNivo({series, height, unitLabel, tokens, labelledBy, emphasizeLine = false}: Props) {
   const rows = chartPointsForDisplay(series);
   return (
     <div className="trend-chart nivo-trend-chart" style={{height}} role="presentation">
@@ -17,7 +17,11 @@ export function AnalyticsChartNivo({series, height, unitLabel, tokens, labelledB
         ariaLabelledBy={labelledBy}
         animate={false}
         enableSlices={false}
-        enablePoints={false}
+        enablePoints={emphasizeLine}
+        pointSize={emphasizeLine ? 8 : 0}
+        pointBorderWidth={emphasizeLine ? 2 : 0}
+        pointBorderColor={tokens.surface}
+        pointColor={tokens.line}
         enableGridX={false}
         useMesh
         curve="linear"

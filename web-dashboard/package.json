@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
+    "atlas:verify": "npm run typecheck && node scripts/atlas-contrast-audit.mjs && node unit/atlas-rollout-operations.test.mjs && node unit/atlas-contracts.test.mjs && node unit/atlas-workspace-notices.test.mjs",
     "test:e2e": "playwright test",
     "test:enterprise-ui": "playwright test --project=enterprise-ui",
     "ui:edge": "playwright open --browser msedge http://127.0.0.1:3000/resources"

@@ -38,6 +38,7 @@ export function AnalyticsChart({
   const rows = chartPointsForDisplay(series);
   const unitLabel = series.currency ? `${series.currency} ${series.unit}` : series.unit;
   const chartEngine = resolveChartEngine(uiPreset, engine);
+  const emphasizeLine = uiPreset === 'atlas';
 
   if (error || series.status === 'unavailable') {
     return (
@@ -59,9 +60,9 @@ export function AnalyticsChart({
 
   const ChartBody =
     chartEngine === 'nivo' ? (
-      <AnalyticsChartNivo series={series} height={height} unitLabel={unitLabel} tokens={tokens} labelledBy={`${series.id}-title`} />
+      <AnalyticsChartNivo series={series} height={height} unitLabel={unitLabel} tokens={tokens} labelledBy={`${series.id}-title`} emphasizeLine={emphasizeLine} />
     ) : (
-      <AnalyticsChartRecharts series={series} height={height} unitLabel={unitLabel} tokens={tokens} />
+      <AnalyticsChartRecharts series={series} height={height} unitLabel={unitLabel} tokens={tokens} emphasizeLine={emphasizeLine} />
     );
 
   return (

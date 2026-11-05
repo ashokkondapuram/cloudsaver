@@ -7,7 +7,8 @@ import {ClipboardCheck, AlertCircle, BrainCircuit, Database, Activity, ArrowDown
 import {api} from '../lib/api';
 import {dateTime, providerNames, providerOf, scopeOf, ruleLabel, shortDate} from '../lib/finops';
 import {scopeFilterOptions} from '../lib/workspace-scopes';
-import {billingBanner} from '../lib/plan';
+import {workspaceAtlasNotices} from '../lib/atlas-workspace-notices';
+import {atlasNoticeToToast} from '../lib/notices';
 import type {Reliability} from '../lib/types';
 import {useWorkspace} from './WorkspaceProvider';
 import {ThemeToggle, useUiThemePreset} from './ThemeProvider';
@@ -164,28 +165,48 @@ function CommandPalette() {
 }
 
 const NO_PROVIDERS = "This workspace key doesn't include any cloud providers. Ask your administrator for a new key.";
-const EXPIRY_WARNING_DAYS = 14;
 
 function KeyNotices() {
-  const {workspace} = useWorkspace();
-  if (!workspace) return null;
-  const expires = workspace.key_expires_at ? new Date(workspace.key_expires_at) : null;
-  const soon = expires && !Number.isNaN(expires.valueOf()) && expires.getTime() - Date.now() <= EXPIRY_WARNING_DAYS * 86400000;
-  return <>
-    <BillingBanner/>
-    {soon && <Notice tone="warning">This workspace key expires on {shortDate(workspace.key_expires_at!)}. Ask your administrator for a new key.</Notice>}
-    {workspace.allowed_providers && !workspace.allowed_providers.length && <Notice tone="warning">{NO_PROVIDERS}</Notice>}
-  </>;
-}
+  const {workspace, entitlements} = useWorkspace();
+  const [dismissed, setDismissed] = useState('');
+  const notices = workspace ? workspaceAtlasNotices(workspace, entitlements) : [];
+  const billing = notices.find(n => n.id.startsWith('billing:'));
+  const dismissKey = billing ? `cloudsaver:billing-banner:${billing.id}` : '';
 
-function BillingBanner() {
-  const {entitlements} = useWorkspace();
-  const text = billingBanner(entitlements);
-  const key = text && entitlements ? `cloudsaver:billing-banner:${entitlements.tenant_id}:${text}` : '';
-  const [dismissed,setDismissed] = useState('');
-  useEffect(() => {try {setDismissed(key && sessionStorage.getItem(key) ? key : '');} catch {}}, [key]);
-  if (!text || dismissed === key) return null;
-  return <div className="notice notice-warning billing-banner" role="status"><AlertCircle size={17}/><div>{text}</div><button className="icon-button" aria-label="Dismiss billing notice" onClick={() => {setDismissed(key); try {sessionStorage.setItem(key,'1');} catch {}}}><X size={16}/></button></div>;
+  useEffect(() => {
+    try {
+      setDismissed(dismissKey && sessionStorage.getItem(dismissKey) ? dismissKey : '');
+    } catch {}
+  }, [dismissKey]);
+
+  if (!workspace) return null;
+
+  return <>
+    {billing && dismissed !== dismissKey && (
+      <div className="notice notice-warning billing-banner atlas-notice-banner" role="status">
+        <AlertCircle size={17}/>
+        <div>{billing.description}</div>
+        <button
+          className="icon-button"
+          aria-label="Dismiss billing notice"
+          onClick={() => {
+            setDismissed(dismissKey);
+            try {
+              sessionStorage.setItem(dismissKey, '1');
+            } catch {}
+          }}
+        >
+          <X size={16}/>
+        </button>
+      </div>
+    )}
+    {notices
+      .filter(n => !n.id.startsWith('billing:'))
+      .map(n => {
+        const toast = atlasNoticeToToast(n);
+        return <Notice key={n.id} tone={toast.tone}>{toast.text}</Notice>;
+      })}
+  </>;
 }
 
 function ScanDialog() {
