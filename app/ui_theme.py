@@ -44,6 +44,12 @@ def merge_workspace_ui_themes(current, patch):
 
 
 def effective_ui_theme_preset(platform_themes, tenant_id):
+    import os
     themes = platform_themes or {}
-    preset = themes.get(str(tenant_id), DEFAULT_UI_THEME_PRESET)
+    preset = themes.get(str(tenant_id))
+    if preset is None:
+        env_default = os.getenv('CLOUDSAVER_DEFAULT_UI_THEME_PRESET', '').strip()
+        if env_default in UI_THEME_PRESETS:
+            return env_default
+        return DEFAULT_UI_THEME_PRESET
     return preset if preset in UI_THEME_PRESETS else DEFAULT_UI_THEME_PRESET

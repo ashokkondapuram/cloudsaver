@@ -46,15 +46,52 @@ export function normalizeUiThemePreset(value: unknown): UiThemePreset {
   return 'console';
 }
 
-/** Workspace profile wins; fall back to the DOM preset set by `UiThemeApplier` (Playwright init scripts). */
-export function activeUiThemePreset(workspacePreset: unknown): UiThemePreset {
-  if (workspacePreset === 'atlas' || workspacePreset === 'midnight-neu' || workspacePreset === 'aurora-glass') {
-    return workspacePreset;
+const PRESET_OVERRIDE_KEY = 'cloudsaver:ui:preset-override';
+
+function isUiThemePreset(value: unknown): value is UiThemePreset {
+  return typeof value === 'string' && (UI_THEME_PRESETS as readonly string[]).includes(value);
+}
+
+/** Per-browser dashboard skin override (Settings → Display). */
+export function readUiThemePresetOverride(): UiThemePreset | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(PRESET_OVERRIDE_KEY);
+    return isUiThemePreset(saved) ? saved : null;
+  } catch {
+    return null;
   }
+}
+
+export function writeUiThemePresetOverride(preset: UiThemePreset | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (preset) localStorage.setItem(PRESET_OVERRIDE_KEY, preset);
+    else localStorage.removeItem(PRESET_OVERRIDE_KEY);
+  } catch {}
+}
+
+function presetFromEnv(): UiThemePreset | null {
+  const raw = process.env.NEXT_PUBLIC_DEFAULT_UI_THEME_PRESET;
+  return isUiThemePreset(raw) ? raw : null;
+}
+
+/** Override → workspace assignment → build default → console. */
+export function resolveUiThemePreset(workspacePreset: unknown): UiThemePreset {
+  const override = readUiThemePresetOverride();
+  if (override) return override;
+  if (isUiThemePreset(workspacePreset)) return workspacePreset;
+  const fromEnv = presetFromEnv();
+  if (fromEnv) return fromEnv;
   if (typeof document !== 'undefined' && document.documentElement.dataset.uiPreset) {
     return normalizeUiThemePreset(document.documentElement.dataset.uiPreset);
   }
-  return normalizeUiThemePreset(workspacePreset);
+  return 'console';
+}
+
+/** Workspace profile wins; fall back to the DOM preset set by `UiThemeApplier` (Playwright init scripts). */
+export function activeUiThemePreset(workspacePreset: unknown): UiThemePreset {
+  return resolveUiThemePreset(workspacePreset);
 }
 
 export function getThemeMeta(preset: UiThemePreset): ThemeMeta {
@@ -63,7 +100,7 @@ export function getThemeMeta(preset: UiThemePreset): ThemeMeta {
 
 export function applyUiThemePreset(preset: UiThemePreset | null | undefined) {
   if (typeof document === 'undefined') return;
-  const resolved = normalizeUiThemePreset(preset);
+  const resolved = preset == null ? 'console' : isUiThemePreset(preset) ? preset : normalizeUiThemePreset(preset);
   const meta = getThemeMeta(resolved);
   const root = document.documentElement;
   root.dataset.uiPreset = resolved;

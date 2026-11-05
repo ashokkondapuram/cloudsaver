@@ -31,6 +31,12 @@ def test_workspace_theme_map_and_merge():
     assert effective_ui_theme_preset(merged, other) == 'midnight-neu'
 
 
+def test_effective_ui_theme_preset_env_default(monkeypatch):
+    tid = '00000000-0000-4000-8000-000000000099'
+    monkeypatch.setenv('CLOUDSAVER_DEFAULT_UI_THEME_PRESET', 'atlas')
+    assert effective_ui_theme_preset({}, tid) == 'atlas'
+
+
 def test_platform_settings_accepts_workspace_ui_themes():
     base = normalize_platform({'scheduled_scans_enabled': False, 'automated_alerts_enabled': False})
     tid = '00000000-0000-4000-8000-000000000003'

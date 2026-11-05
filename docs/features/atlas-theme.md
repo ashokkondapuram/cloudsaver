@@ -20,9 +20,10 @@ Atlas is the **opaque enterprise visual system** described in the product Atlas 
 
 ## Enabling Atlas for a workspace
 
-1. Platform operator sets `ui_theme_preset` to `atlas` on the client workspace (portal **Dashboard appearance**).
-2. Users reconnect or refresh the web dashboard; `UiThemeApplier` sets `data-ui-preset="atlas"`.
-3. Users can still toggle light/dark unless a preset locks appearance (Atlas supports both).
+1. **In the dashboard:** Settings → **Access & API keys** → **Dashboard appearance** → choose **CloudSaver Atlas (enterprise)**. The choice is saved in this browser and applies immediately (Nivo charts, `--cs-*` tokens, Atlas shell).
+2. **Platform operator:** set `ui_theme_preset` to `atlas` on the client workspace (portal **Dashboard appearance**).
+3. **Deployment default:** set `CLOUDSAVER_DEFAULT_UI_THEME_PRESET=atlas` on the API and/or `NEXT_PUBLIC_DEFAULT_UI_THEME_PRESET=atlas` for the web build when no workspace assignment exists.
+4. Users can still toggle light/dark unless a preset locks appearance (Atlas supports both).
 
 ## Charts
 

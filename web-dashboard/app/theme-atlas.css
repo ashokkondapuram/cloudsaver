@@ -183,6 +183,267 @@ html[data-ui-preset=atlas] .overview-finops-actions {
   font-size: 12px;
 }
 
+/* —— Atlas shell & navigation —— */
+html[data-ui-preset=atlas] .app-shell.ui-preset-atlas {
+  --sidebar-width: 252px;
+  font-feature-settings: 'tnum' 1;
+}
+
+html[data-ui-preset=atlas] .sidebar {
+  background: var(--cs-bg);
+  border-right: 1px solid var(--cs-border);
+  box-shadow: none;
+}
+
+html[data-ui-preset=atlas] .brand-symbol,
+html[data-ui-preset=atlas] .brand svg rect:first-of-type {
+  box-shadow: none;
+  border-radius: var(--cs-radius-control);
+}
+
+html[data-ui-preset=atlas] .nav-group {
+  color: var(--cs-muted);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  font-weight: 650;
+  margin-top: 14px;
+}
+
+html[data-ui-preset=atlas] .nav-link {
+  border-radius: var(--cs-radius-control);
+  border: 1px solid transparent;
+  font-weight: 520;
+}
+
+html[data-ui-preset=atlas] .nav-link.active,
+html[data-ui-preset=atlas] .nav-link[aria-current='page'] {
+  background: var(--cs-surface-muted);
+  border-color: var(--cs-border);
+  box-shadow: inset 3px 0 0 var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .topbar {
+  background: var(--cs-surface);
+  border-bottom: 1px solid var(--cs-border);
+  box-shadow: none;
+  min-height: 56px;
+}
+
+html[data-ui-preset=atlas] .atlas-workspace-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 28px;
+  background: linear-gradient(90deg, var(--cs-surface-muted), var(--cs-surface));
+  border-bottom: 1px solid var(--cs-border);
+  font-size: 13px;
+  color: var(--cs-text);
+}
+
+html[data-ui-preset=atlas] .atlas-strip-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .atlas-strip-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .atlas-strip-muted {
+  color: var(--cs-muted);
+  font-size: 12px;
+}
+
+html[data-ui-preset=atlas] .scope-toolbar {
+  background: var(--cs-surface-muted);
+  border-bottom: 1px solid var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .scope-picker summary,
+html[data-ui-preset=atlas] .snapshot-selector select {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-control);
+}
+
+html[data-ui-preset=atlas] .page-content {
+  background: var(--cs-bg);
+}
+
+html[data-ui-preset=atlas] .page-heading {
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .page-heading h1,
+html[data-ui-preset=atlas] .panel .section-title h2,
+html[data-ui-preset=atlas] .analytics-chart h2 {
+  letter-spacing: -0.02em;
+  font-weight: 650;
+}
+
+html[data-ui-preset=atlas] .eyebrow {
+  color: var(--cs-primary);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+html[data-ui-preset=atlas] .panel {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  box-shadow: none;
+}
+
+html[data-ui-preset=atlas] .panel .section-title {
+  padding: 16px 22px;
+  margin: 0;
+  border-bottom: 1px solid var(--cs-border);
+  background: var(--cs-surface-muted);
+}
+
+html[data-ui-preset=atlas] .metric-card {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  box-shadow: none;
+  border-left: 3px solid var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .metric-card > strong {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-ui-preset=atlas] .analytics-chart[data-chart-theme='atlas-cs'] {
+  overflow: hidden;
+}
+
+html[data-ui-preset=atlas] .analytics-chart .trend-chart,
+html[data-ui-preset=atlas] .analytics-chart .nivo-trend-chart {
+  padding: 8px 16px 0;
+  background: var(--cs-bg);
+  border-top: 1px solid var(--cs-border);
+  border-bottom: 1px solid var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .overview-finops-mini {
+  border-left: 3px solid var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .priority-row:hover {
+  background: var(--cs-surface-muted);
+}
+
+html[data-ui-preset=atlas] .app-footer {
+  border-top: 1px solid var(--cs-border);
+  background: var(--cs-surface);
+}
+
+html[data-ui-preset=atlas] .workspace-tabs [role='tablist'] {
+  border-bottom: 1px solid var(--cs-border);
+  gap: 4px;
+}
+
+html[data-ui-preset=atlas] .workspace-tabs [role='tab'][aria-selected='true'] {
+  border-color: var(--cs-border);
+  border-bottom-color: var(--cs-surface);
+  background: var(--cs-surface);
+  color: var(--cs-primary);
+  font-weight: 600;
+}
+
+/* Settings appearance picker */
+html[data-ui-preset=atlas] .appearance-grid,
+.appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  padding: 0 22px 22px;
+}
+
+.appearance-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.appearance-card:hover {
+  border-color: var(--primary-fill);
+}
+
+.appearance-card.selected {
+  border-color: var(--primary-fill);
+  box-shadow: 0 0 0 1px var(--primary-fill);
+}
+
+.appearance-preview {
+  display: flex;
+  height: 52px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.appearance-preview i {
+  flex: 1;
+}
+
+.appearance-copy strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.appearance-copy span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.appearance-selected,
+.appearance-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-fill);
+}
+
+html[data-ui-preset=atlas] .appearance-card {
+  border-radius: var(--cs-radius);
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .command-trigger {
+  border: 1px solid var(--cs-border);
+  background: var(--cs-surface-muted);
+  border-radius: var(--cs-radius-control);
+}
+
+html[data-ui-preset=atlas] .session-role {
+  font-size: 11px;
+  color: var(--cs-muted);
+  border: 1px solid var(--cs-border);
+  padding: 4px 8px;
+  border-radius: var(--cs-radius-tag);
+}
+
 .trend-chart[role='presentation'] .recharts-surface,
 .trend-chart[role='presentation'] svg,
 .nivo-trend-chart[role='presentation'] svg {

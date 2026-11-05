@@ -39,6 +39,11 @@ export function ThemeProvider({children}:{children:ReactNode}){
   return <ThemeContext.Provider value={{theme,toggle,appearanceLocked,preset}}>{children}</ThemeContext.Provider>;
 }
 
+export function useUiThemePreset(){
+  const context=useContext(ThemeContext);
+  return context?.preset ?? 'console';
+}
+
 export function ThemeToggle(){
   const context=useContext(ThemeContext);
   if(!context||context.appearanceLocked)return null;

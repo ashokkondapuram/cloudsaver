@@ -1,14 +1,14 @@
 'use client';
 
 import {useLayoutEffect} from 'react';
-import {applyUiThemePreset} from '../lib/ui-theme';
+import {applyUiThemePreset, resolveUiThemePreset} from '../lib/ui-theme';
 import {useWorkspace} from './WorkspaceProvider';
 
-/** Applies the platform-assigned client theme preset from the connected workspace. */
+/** Applies workspace, operator, env, and local display overrides for the dashboard skin. */
 export function UiThemeApplier() {
   const {workspace} = useWorkspace();
   useLayoutEffect(() => {
-    applyUiThemePreset(workspace?.ui_theme_preset ?? 'console');
+    applyUiThemePreset(resolveUiThemePreset(workspace?.ui_theme_preset));
   }, [workspace?.ui_theme_preset, workspace?.tenant_id]);
   return null;
 }
