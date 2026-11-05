@@ -142,6 +142,74 @@ def _azure_query(url, credential, kind, start, end, scope_id):
     raise ValueError('Billing pagination limit exceeded')
 
 
+def _cost_merge_key(value, resource_id):
+    day = datetime.strptime(str(value['usagedate']), '%Y%m%d').date()
+    resource = value.get('resourceid') or resource_id
+    return day, resource, value['currency']
+
+
+def _accumulate_cost_amount(merged, key, field, amount):
+    totals = merged.setdefault(
+        key,
+        dict(billed=None, effective=None, billed_present=False, effective_present=False),
+    )
+    current = totals[field] or Decimal(0)
+    totals[field] = current + amount
+    totals[f'{field}_present'] = True
+
+
+def _cost_row_from_totals(day, resource, currency, totals):
+    billed = totals['billed']
+    return dict(
+        day=day,
+        resource_id=resource.lower() if isinstance(resource, str) and resource.lower().startswith('/subscriptions/') else resource,
+        currency=currency,
+        billed=str(billed) if totals['billed_present'] else None,
+        effective=str(totals['effective']) if totals['effective_present'] else None,
+        billed_present=totals['billed_present'],
+        effective_present=totals['effective_present'],
+        category='Credit' if totals['billed_present'] and billed is not None and billed < 0 else 'Usage',
+    )
+
+
+def _azure_resource_query(url, credential, kind, start, end, scope_id, resource_id):
+    body = dict(
+        type=kind,
+        timeframe='Custom',
+        timePeriod={
+            'from': start.isoformat() + 'T00:00:00Z',
+            'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z',
+        },
+        dataset={
+            'granularity': 'Daily',
+            'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
+            'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}},
+        },
+    )
+    rows, page, seen = [], url, {url}
+    from urllib.parse import urlsplit
+
+    expected = '/subscriptions/' + str(UUID(scope_id)) + '/providers/microsoft.costmanagement/query'
+    for _ in range(100):
+        properties = _post(page, _token(credential), body, scope_id)['properties']
+        names = [c['name'].lower() for c in properties['columns']]
+        rows.extend(dict(zip(names, row)) for row in properties['rows'])
+        page = properties.get('nextLink')
+        if not page:
+            return rows
+        parsed = urlsplit(page)
+        if (
+            page in seen
+            or parsed.scheme != 'https'
+            or parsed.netloc != 'management.azure.com'
+            or parsed.fragment
+            or parsed.path.lower() != expected
+        ):
+            raise ValueError('Unexpected billing pagination host, scope or repeated cursor')
+        seen.add(page)
+    raise ValueError('Billing pagination limit exceeded')
+
+
 def azure_rows(binding, tenant, start, end):
     import time
     from app.cloud_identity import azure_credential
@@ -152,11 +220,12 @@ def azure_rows(binding, tenant, start, end):
         for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
             for value in _azure_query(url, credential, kind, start, end, binding['scope_id']):
                 key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or None, value['currency'])
-                totals = merged.setdefault(key, {'billed':Decimal(0),'effective':Decimal(0)})
-                totals[field] += Decimal(str(value.get('pretaxcost',value.get('cost'))))
-        result = [dict(day=day, resource_id=(resource.lower() if isinstance(resource, str) and resource.lower().startswith('/subscriptions/') else resource),
-                         currency=currency, billed=str(v['billed']), effective=str(v['effective']),
-                   category='Credit' if v['billed']<0 else 'Usage') for (day,resource,currency),v in merged.items()]
+                amount = Decimal(str(value.get('pretaxcost', value.get('cost'))))
+                _accumulate_cost_amount(merged, key, field, amount)
+        result = [
+            _cost_row_from_totals(day, resource, currency, v)
+            for (day, resource, currency), v in merged.items()
+        ]
         return result, 'resource', ['Azure ActualCost is imported as billed cost and AmortizedCost as effective cost. Reservation and savings plan purchases are spread across covered usage.']
     finally:
         credential.close()
@@ -172,20 +241,12 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
     try:
         url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
         merged = {}
-        for i, (kind, field) in enumerate((('ActualCost', 'billed'), ('AmortizedCost', 'effective'))):
-            body = dict(type=kind, timeframe='Custom',
-                timePeriod={'from': start.isoformat() + 'T00:00:00Z', 'to': (end - timedelta(days=1)).isoformat() + 'T23:59:59Z'},
-                dataset={'granularity': 'Daily', 'aggregation': {'cost': {'name': 'PreTaxCost', 'function': 'Sum'}},
-                         'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}}})
-            properties = _post(url, _token(credential), body, scope_id)['properties']
-            if properties.get('nextLink'):raise ValueError('Resource billing response is incomplete')
-            names = [c['name'].lower() for c in properties['columns']]
-            for value in (dict(zip(names, row)) for row in properties['rows']):
-                key = (datetime.strptime(str(value['usagedate']), '%Y%m%d').date(), value.get('resourceid') or resource_id, value['currency'])
-                totals = merged.setdefault(key, {'billed': Decimal(0), 'effective': Decimal(0)})
-                totals[field] += Decimal(str(value.get('pretaxcost', value.get('cost'))))
-        return [dict(day=day, resource_id=resource, currency=currency, billed=str(v['billed']), effective=str(v['effective']),
-                    category='Credit' if v['billed'] < 0 else 'Usage') for (day, resource, currency), v in merged.items()]
+        for kind, field in (('ActualCost', 'billed'), ('AmortizedCost', 'effective')):
+            for value in _azure_resource_query(url, credential, kind, start, end, scope_id, resource_id):
+                key = _cost_merge_key(value, resource_id)
+                amount = Decimal(str(value.get('pretaxcost', value.get('cost'))))
+                _accumulate_cost_amount(merged, key, field, amount)
+        return [_cost_row_from_totals(day, resource, currency, v) for (day, resource, currency), v in merged.items()]
     finally:
         credential.close()
 
@@ -315,7 +376,10 @@ def _import_snapshot(repository, tenant, binding, observations, start, end, curr
         key=(row['day'],row.get('resource_id'),row['category'])
         totals=grouped.setdefault(key,[Decimal(0),Decimal(0)])
         for i,field in enumerate(('billed','effective')):
-            value=Decimal(str(row[field]))
+            raw=row.get(field)
+            if raw is None:
+                continue
+            value=Decimal(str(raw))
             if not value.is_finite() or abs(value)>Decimal('1e15'): raise ValueError('Invalid provider amount')
             totals[i]+=value
     from contextlib import nullcontext

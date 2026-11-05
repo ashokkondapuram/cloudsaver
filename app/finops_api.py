@@ -127,7 +127,7 @@ def create_router(repository, current_tenant, *, scan_store=None):
         tenant=Depends(finance),
     ):
         from app.azure_json_profile import fetch_azure_resource_profile
-        from app.collectors.billing_sync import azure_resource_rows, _import_snapshot
+        from app.collectors.billing_sync import azure_resource_rows
 
         _azure_resource_binding(tenant, scope_id, resource_id)
         if (baseline_start is None) ^ (baseline_end is None):
@@ -167,24 +167,11 @@ def create_router(repository, current_tenant, *, scan_store=None):
         except Exception:
             raise HTTPException(503, 'Azure resource billing is unavailable right now') from None
         if persist:
-            binding = _azure_resource_binding(tenant, scope_id, resource_id)
-            currency = snapshot['cost_management']['observation'].get('currency') or 'USD'
-            obs_rows = await run_in_threadpool(
-                azure_resource_rows, scope_id, resource_id, tenant, start, end
+            raise HTTPException(
+                400,
+                'persist on GET is deprecated; use POST /api/v1/finops/resource-cost or POST /api/v1/finops/sync to import billing',
             )
-            imported = await run_in_threadpool(
-                _import_snapshot,
-                repository,
-                tenant,
-                binding,
-                [row for row in obs_rows if row['currency'] == currency],
-                start,
-                end,
-                currency,
-            )
-            snapshot['persisted'] = dict(inserted=imported['inserted'], currency=currency)
-        else:
-            snapshot['persisted'] = None
+        snapshot['persisted'] = None
         return snapshot
 
     @router.post('/resource-cost')

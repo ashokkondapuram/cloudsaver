@@ -39,25 +39,29 @@ def aggregate_rows(rows, *, expected_days: int):
             day_count=0,
             expected_days=expected_days,
             coverage_complete=False,
+            coverage_basis='distinct_billing_days_in_cost_management_response',
         )
-    billed = effective = Decimal(0)
+    billed = effective = None
     currency = rows[0]['currency']
     days = set()
     for row in rows:
         if row['currency'] != currency:
             raise ValueError('Multiple currencies in one resource billing response')
         days.add(row['day'])
-        billed += Decimal(str(row['billed']))
-        effective += Decimal(str(row['effective']))
+        if row.get('billed') is not None:
+            billed = (billed or Decimal(0)) + Decimal(str(row['billed']))
+        if row.get('effective') is not None:
+            effective = (effective or Decimal(0)) + Decimal(str(row['effective']))
     quantize = lambda value: float(value.quantize(Decimal('0.01')))
     day_count = len(days)
     return dict(
-        billed_cost_usd=quantize(billed),
-        effective_cost_usd=quantize(effective),
+        billed_cost_usd=quantize(billed) if billed is not None else None,
+        effective_cost_usd=quantize(effective) if effective is not None else None,
         currency=currency,
         day_count=day_count,
         expected_days=expected_days,
         coverage_complete=day_count == expected_days,
+        coverage_basis='distinct_billing_days_in_cost_management_response',
     )
 
 
@@ -86,7 +90,9 @@ def retail_monthly_from_scan(scan_store, tenant, scan_id, provider, resource_id)
             key = rid.lower() if provider == 'azure' else rid
             if key != normalize:
                 continue
-            candidate = row.get('retail_estimate_usd') or row.get('estimated_monthly_waste_usd')
+            candidate = row.get('retail_estimate_usd')
+            if candidate is None:
+                candidate = row.get('estimated_monthly_waste_usd')
             if candidate is not None:
                 retail = candidate
     basis = 'azure_retail_meters_from_scan' if retail is not None else None
@@ -100,7 +106,15 @@ def booked_savings_delta(baseline_billed, observation_billed):
     return float(delta.quantize(Decimal('0.01')))
 
 
-def finance_reconciled_benefit(store, tenant_id, provider, resource_id):
+def finance_reconciled_benefit(
+    store,
+    tenant_id,
+    provider,
+    resource_id,
+    *,
+    observation_start: date | None = None,
+    observation_end: date | None = None,
+):
     if store is None:
         return None
     rid = resource_id.lower() if provider == 'azure' else resource_id
@@ -122,7 +136,15 @@ def finance_reconciled_benefit(store, tenant_id, provider, resource_id):
         payload = row[0] if isinstance(row[0], dict) else __import__('json').loads(row[0])
     except (TypeError, ValueError):
         return None
-    benefit = (payload or {}).get('reconciled_financial_benefit')
+    verification = payload or {}
+    if observation_start is not None and observation_end is not None:
+        period_start = verification.get('period_start')
+        period_end = verification.get('period_end')
+        if period_start and period_start != observation_start.isoformat():
+            return None
+        if period_end and period_end != observation_end.isoformat():
+            return None
+    benefit = verification.get('reconciled_financial_benefit')
     if benefit is None:
         return None
     try:
@@ -158,6 +180,7 @@ def build_financial_snapshot(
 
     baseline = None
     booked = None
+    booked_comparable = False
     if baseline_start is not None and baseline_end is not None:
         base_days = validate_window(baseline_start, baseline_end, label='Baseline window')
         base_rows = fetch_rows(scope_id, resource_id, tenant, baseline_start, baseline_end)
@@ -167,10 +190,23 @@ def build_financial_snapshot(
             end=baseline_end.isoformat(),
             source='azure_cost_management',
         )
-        booked = booked_savings_delta(
-            baseline.get('billed_cost_usd'),
-            observation.get('billed_cost_usd'),
-        )
+        obs_cur = observation.get('currency')
+        base_cur = baseline.get('currency')
+        booked_skip_reason = None
+        if obs_cur and base_cur and obs_cur != base_cur:
+            booked_skip_reason = 'Booked savings omitted because baseline and observation currencies differ.'
+        elif base_days != obs_days:
+            booked_skip_reason = 'Booked savings omitted because baseline and observation windows differ in length.'
+        elif baseline.get('billed_cost_usd') is None or observation.get('billed_cost_usd') is None:
+            booked_skip_reason = 'Booked savings omitted because billed cost is incomplete in one or both windows.'
+        else:
+            booked = booked_savings_delta(
+                baseline.get('billed_cost_usd'),
+                observation.get('billed_cost_usd'),
+            )
+            booked_comparable = booked is not None
+    else:
+        booked_skip_reason = None
 
     provider = 'azure'
     monthly_retail, retail_scan_id, retail_basis = retail_monthly_from_scan(
@@ -186,9 +222,16 @@ def build_financial_snapshot(
     )
 
     reconciled = finance_reconciled_benefit(
-        evidence_store, tenant['tenant_id'], provider, resource_id
+        evidence_store,
+        tenant['tenant_id'],
+        provider,
+        resource_id,
+        observation_start=observation_start,
+        observation_end=observation_end,
     )
     warnings = []
+    if booked_skip_reason:
+        warnings.append(booked_skip_reason)
     if not observation.get('coverage_complete'):
         warnings.append('Observation billing window has missing days in Cost Management.')
     if baseline and not baseline.get('coverage_complete'):
@@ -214,8 +257,9 @@ def build_financial_snapshot(
         ),
         balance=balance,
         booked_savings_usd=booked,
+        booked_savings_comparable=booked_comparable,
         booked_savings_basis='baseline_minus_observation_billed'
-        if baseline is not None
+        if booked_comparable
         else None,
         finance_reconciled_benefit_usd=reconciled,
         warning=' '.join(warnings) if warnings else None,
@@ -246,10 +290,17 @@ def _fetch_arm_json(tenant, scope_id: str, resource_id: str) -> dict[str, Any]:
     rtype = parse_arm_resource_type(resource_id)
     if not rtype:
         return dict(status='unsupported_type', reason='Not a Microsoft.* ARM resource ID')
-    credential = azure_credential(tenant)
-    reader = JSONReader(headers_factory=BearerTokenCache(credential, 'https://management.azure.com/.default'))
     calls: list[dict] = []
+    reader = credential = None
+
+    def _safe_reason(error: Exception) -> str:
+        if isinstance(error, ValueError):
+            return str(error)
+        return 'ARM request failed'
+
     try:
+        credential = azure_credential(tenant)
+        reader = JSONReader(headers_factory=BearerTokenCache(credential, 'https://management.azure.com/.default'))
         version_cache: dict = {}
         version = resolve_arm_api_version(reader, scope_id, rtype, version_cache)
         if not version:
@@ -294,10 +345,12 @@ def _fetch_arm_json(tenant, scope_id: str, resource_id: str) -> dict[str, Any]:
         )
     except Exception as error:
         logger.warning('ARM JSON fetch failed resource=%s', resource_id, exc_info=True)
-        return dict(status='error', resource_type=rtype, reason=str(error), calls=calls)
+        return dict(status='error', resource_type=rtype, reason=_safe_reason(error), calls=calls)
     finally:
-        reader.close()
-        credential.close()
+        if reader is not None:
+            reader.close()
+        if credential is not None:
+            credential.close()
 
 
 def fetch_azure_resource_profile(
@@ -362,6 +415,7 @@ def fetch_azure_resource_profile(
         financial=dict(
             balance=financial['balance'],
             booked_savings_usd=financial['booked_savings_usd'],
+            booked_savings_comparable=financial.get('booked_savings_comparable'),
             booked_savings_basis=financial.get('booked_savings_basis'),
             finance_reconciled_benefit_usd=financial.get('finance_reconciled_benefit_usd'),
         ),

@@ -75,9 +75,8 @@ def catalog_operations():
 def parse_arm_resource_type(resource_id: str) -> str | None:
     """Return lowercase ARM type (microsoft.compute/disks) from a resource ID."""
     parts = (resource_id or '').split('/')
-    try:
-        idx = parts.index('providers')
-    except ValueError:
+    idx = next((i for i, part in enumerate(parts) if part.lower() == 'providers'), None)
+    if idx is None:
         return None
     if idx + 2 >= len(parts):
         return None

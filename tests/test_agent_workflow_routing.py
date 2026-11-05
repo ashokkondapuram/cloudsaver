@@ -47,7 +47,7 @@ def test_engineering_capabilities_actions_align_with_readiness():
         assert rule_code.startswith("CS-AZ-")
         route = route_for_rule(rule_by_action[action])
         if route.engineering_action == action:
-            assert route.zero_downtime is True
+            assert route.zero_downtime is None
 
 
 @pytest.mark.parametrize("rule_id,finops_action", list(FINOPS_RULE_TO_ACTION.items()))

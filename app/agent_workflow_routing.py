@@ -72,7 +72,7 @@ class AgentWorkflowRoute:
     finops_action: str | None = None
     engineering_action: str | None = None
     agent_operations: tuple[str, ...] = ()
-    zero_downtime: bool = False
+    zero_downtime: bool | None = None
 
 
 def _catalog_rule_ids() -> frozenset[str]:
@@ -96,7 +96,6 @@ def route_for_rule(rule_id: str) -> AgentWorkflowRoute:
             finops_action=action,
             engineering_action=eng,
             agent_operations=ops,
-            zero_downtime=eng == "azure.vm.rightsize",
         )
 
     if rule_id in ENGINEERING_ACTION_BY_RULE:
@@ -104,7 +103,6 @@ def route_for_rule(rule_id: str) -> AgentWorkflowRoute:
             primary="engineering_review_plan",
             engineering_action=ENGINEERING_ACTION_BY_RULE[rule_id],
             agent_operations=("manual_review",),
-            zero_downtime=True,
         )
 
     if rule_id in KUBERNETES_PATCH_PREVIEW_RULES:

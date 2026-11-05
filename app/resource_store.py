@@ -140,29 +140,54 @@ class ResourceStore:
 
     # AI results
 
+    _RESULTS_SQL = '''SELECT metadata->>'resource_reference',id,response,created_at,scan_id FROM ai_inference_attempts
+        WHERE tenant_id=%s AND status='completed' AND response IS NOT NULL AND metadata->>'kind'='resource_assessment'
+        AND metadata->>'resource_reference'=%s
+        AND NOT EXISTS(SELECT 1 FROM ai_data_retention d WHERE d.tenant_id=ai_inference_attempts.tenant_id AND d.attempt_id=ai_inference_attempts.id AND d.expires_at<=%s)
+        ORDER BY created_at DESC,id DESC LIMIT 1'''
+
+    def _result_row(self, row):
+        key, attempt_id, response, created_at, scan_id = row
+        response = decode(response)
+        advice = response['advice']
+        return key, dict(
+            assessment_id=str(attempt_id),
+            scan_id=str(scan_id),
+            created_at=iso(created_at),
+            evidence_digest=response['evidence_digest'],
+            risk_level=advice['risk_level'],
+            summary=advice['summary'],
+            actions=advice.get('recommended_actions', []),
+            response=response,
+        )
+
     def results(self, tenant_id, keys=None, *, limit=5000):
         """Latest completed resource assessment per resource key, across scans."""
-        from app.data_retention import DataRetention
-        DataRetention(self.store).purge(tenant_id)
+        now_iso = utcnow().isoformat()
         with self.store.transaction(tenant_id) as db:
-            rows = db.execute('''SELECT metadata->>'resource_reference',id,response,created_at,scan_id FROM ai_inference_attempts
+            if keys is not None:
+                latest = {}
+                for key in keys:
+                    row = db.execute(self._RESULTS_SQL, (tenant_id, key, now_iso)).fetchone()
+                    if row:
+                        resource_key, payload = self._result_row(row)
+                        latest[resource_key] = payload
+                return latest
+            rows = db.execute(
+                '''SELECT metadata->>'resource_reference',id,response,created_at,scan_id FROM ai_inference_attempts
                 WHERE tenant_id=%s AND status='completed' AND response IS NOT NULL AND metadata->>'kind'='resource_assessment'
                 AND NOT EXISTS(SELECT 1 FROM ai_data_retention d WHERE d.tenant_id=ai_inference_attempts.tenant_id AND d.attempt_id=ai_inference_attempts.id AND d.expires_at<=%s)
-                ORDER BY created_at DESC,id DESC LIMIT %s''', (tenant_id,utcnow().isoformat(), limit)).fetchall()
+                ORDER BY created_at DESC,id DESC LIMIT %s''',
+                (tenant_id, now_iso, limit),
+            ).fetchall()
         latest = {}
-        for key, attempt_id, response, created_at, scan_id in rows:
-            if key in latest or (keys is not None and key not in keys):
-                continue
-            response = decode(response)
-            advice = response['advice']
-            latest[key] = dict(assessment_id=str(attempt_id), scan_id=str(scan_id), created_at=iso(created_at),
-                               evidence_digest=response['evidence_digest'], risk_level=advice['risk_level'],
-                               summary=advice['summary'], actions=advice.get('recommended_actions', []), response=response)
+        for row in rows:
+            key, payload = self._result_row(row)
+            if key not in latest:
+                latest[key] = payload
         return latest
 
     def result_history(self, tenant_id, key, limit=20):
-        from app.data_retention import DataRetention
-        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             rows = db.execute('''SELECT id,scan_id,created_at,response FROM ai_inference_attempts WHERE tenant_id=%s AND status='completed' AND response IS NOT NULL
                 AND metadata->>'kind'='resource_assessment' AND metadata->>'resource_reference'=%s
@@ -174,8 +199,6 @@ class ResourceStore:
     # Follow-up questions
 
     def followups(self, tenant_id, scan_id, key):
-        from app.data_retention import DataRetention
-        DataRetention(self.store).purge(tenant_id)
         with self.store.transaction(tenant_id) as db:
             rows = db.execute('''SELECT f.id,f.question,f.created_at,a.response FROM ai_followups f
                 JOIN ai_inference_attempts a ON a.id=f.attempt_id AND a.tenant_id=f.tenant_id

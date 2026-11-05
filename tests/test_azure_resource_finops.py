@@ -64,7 +64,7 @@ def test_build_snapshot_with_mock_fetch():
         scope_id=str(uuid4()),
         resource_id=resource,
         observation_start=date(2026, 9, 1),
-        observation_end=date(2026, 10, 1),
+        observation_end=date(2026, 10, 2),
         baseline_start=date(2026, 8, 1),
         baseline_end=date(2026, 9, 1),
         scan_id=scan_id,
@@ -73,11 +73,11 @@ def test_build_snapshot_with_mock_fetch():
         findings=[dict(estimated_monthly_waste_usd=10.0)],
         fetch_rows=fetch,
     )
-    assert snapshot['observation']['billed_cost_usd'] == 25.0 * 30
+    assert snapshot['observation']['billed_cost_usd'] == 25.0 * 31
     assert snapshot['baseline']['billed_cost_usd'] == 40.0 * 31
     assert snapshot['booked_savings_usd'] == snapshot['baseline']['billed_cost_usd'] - snapshot['observation']['billed_cost_usd']
     assert snapshot['retail']['monthly_run_rate_usd'] == 30.0
-    assert snapshot['retail']['window_run_rate_usd'] == scale_retail_monthly(30.0, 30)
+    assert snapshot['retail']['window_run_rate_usd'] == scale_retail_monthly(30.0, 31)
     assert snapshot['balance']['billed_vs_retail_usd'] is not None
     assert len(calls) == 2
 
