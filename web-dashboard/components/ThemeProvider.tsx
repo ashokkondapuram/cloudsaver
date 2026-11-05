@@ -9,7 +9,7 @@ const ThemeContext=createContext<{theme:Theme;toggle:()=>void;appearanceLocked:b
 
 export function ThemeProvider({children}:{children:ReactNode}){
   const [theme,setTheme]=useState<Theme>('dark');
-  const [preset,setPreset]=useState<UiThemePreset>('console');
+  const [preset,setPreset]=useState<UiThemePreset>('atlas');
   useLayoutEffect(()=>{
     const root=document.documentElement;
     const syncPreset=()=>setPreset(normalizeUiThemePreset(root.dataset.uiPreset));

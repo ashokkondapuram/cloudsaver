@@ -42,8 +42,8 @@ export function Overview() {
     : !complete ? 'Loading your workspace summary'
     : reviewCount ? `${reviewCount.toLocaleString()} resource${reviewCount === 1 ? '' : 's'} need${reviewCount === 1 ? 's' : ''} a closer look`
     : 'Explore your resource evidence';
-  return <div className={styles.overview} data-atlas-rollout="overview">
-    <section className={styles.intro} aria-labelledby="overview-next-step">
+  return <div className={`${styles.overview} atlas-overview`} data-atlas-rollout="overview">
+    <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
       <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
       {error ? <button className="button secondary" onClick={reload}>Retry evidence</button>
         : !scan && canAdmin ? <button className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16}/></button>

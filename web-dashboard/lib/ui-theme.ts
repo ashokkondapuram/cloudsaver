@@ -1,6 +1,6 @@
 export const UI_THEME_PRESETS = ['console', 'atlas', 'midnight-neu', 'aurora-glass'] as const;
 export type UiThemePreset = typeof UI_THEME_PRESETS[number];
-export const DEFAULT_UI_THEME_PRESET: UiThemePreset = 'console';
+export const DEFAULT_UI_THEME_PRESET: UiThemePreset = 'atlas';
 
 export type UiSurfaceStyle = 'flat' | 'neumorphic' | 'glass';
 
@@ -76,17 +76,18 @@ function presetFromEnv(): UiThemePreset | null {
   return isUiThemePreset(raw) ? raw : null;
 }
 
-/** Override → workspace assignment → build default → console. */
+/** Override → non-console workspace assignment → build default → Atlas. */
 export function resolveUiThemePreset(workspacePreset: unknown): UiThemePreset {
   const override = readUiThemePresetOverride();
   if (override) return override;
-  if (isUiThemePreset(workspacePreset)) return workspacePreset;
+  if (isUiThemePreset(workspacePreset) && workspacePreset !== 'console') return workspacePreset;
   const fromEnv = presetFromEnv();
   if (fromEnv) return fromEnv;
   if (typeof document !== 'undefined' && document.documentElement.dataset.uiPreset) {
-    return normalizeUiThemePreset(document.documentElement.dataset.uiPreset);
+    const fromDom = normalizeUiThemePreset(document.documentElement.dataset.uiPreset);
+    if (fromDom !== 'console') return fromDom;
   }
-  return 'console';
+  return DEFAULT_UI_THEME_PRESET;
 }
 
 /** Workspace profile wins; fall back to the DOM preset set by `UiThemeApplier` (Playwright init scripts). */

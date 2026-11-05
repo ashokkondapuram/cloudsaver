@@ -16,4 +16,4 @@ import {WorkspaceProvider} from '../components/WorkspaceProvider';
 import {AppShell} from '../components/AppShell';
 export const dynamic='force-dynamic';
 export const metadata: Metadata = { title: 'CloudSaver | Multi-cloud FinOps workspace', description: 'Understand cloud resource signals, review cost evidence, and govern change in one isolated workspace.' };
-export default function RootLayout({children}:{children:React.ReactNode}) {return <html lang="en" data-theme="dark" data-ui-preset="console" data-ui-surface="flat" suppressHydrationWarning><body><ThemeProvider><WorkspaceProvider><AppShell>{children}</AppShell></WorkspaceProvider></ThemeProvider></body></html>;}
+export default function RootLayout({children}:{children:React.ReactNode}) {return <html lang="en" data-theme="dark" data-ui-preset="atlas" data-ui-surface="flat" suppressHydrationWarning><body><ThemeProvider><WorkspaceProvider><AppShell>{children}</AppShell></WorkspaceProvider></ThemeProvider></body></html>;}

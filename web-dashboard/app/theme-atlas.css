@@ -444,6 +444,163 @@ html[data-ui-preset=atlas] .session-role {
   border-radius: var(--cs-radius-tag);
 }
 
+/* Brand — Atlas enterprise (replaces console purple) */
+html[data-ui-preset=atlas] .brand-mark-bg {
+  fill: var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .brand-accent {
+  color: var(--cs-primary);
+}
+
+html[data-ui-preset=atlas] .brand-rest {
+  color: var(--cs-text);
+}
+
+html[data-ui-preset=atlas] .brand-wordmark small,
+html[data-ui-preset=atlas] .brand small {
+  color: var(--cs-muted);
+}
+
+/* Overview (matches live Overview layout in screenshot) */
+html[data-ui-preset=atlas] .atlas-overview {
+  gap: 20px;
+}
+
+html[data-ui-preset=atlas] .cs-overview-hero {
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-border);
+  border-left: 4px solid var(--cs-primary);
+  border-radius: var(--cs-radius);
+  box-shadow: none;
+  padding: 18px 22px;
+}
+
+html[data-ui-preset=atlas] .cs-overview-hero h2 {
+  font-size: clamp(17px, 1.8vw, 22px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  color: var(--cs-text);
+}
+
+html[data-ui-preset=atlas] .cs-overview-hero .button.primary {
+  min-height: 44px;
+  padding: 0 18px;
+  font-weight: 600;
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health {
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+  background: var(--cs-surface);
+  box-shadow: none;
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health .metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health .metrics article {
+  padding: 18px 22px;
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health .metrics h3 {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cs-muted);
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health .metrics strong {
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 700;
+  color: var(--cs-text);
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-ui-preset=atlas] .cs-evidence-health .metrics p {
+  color: var(--cs-muted);
+  font-size: 12px;
+}
+
+html[data-ui-preset=atlas] .priority-panel {
+  border-radius: var(--cs-radius);
+  overflow: hidden;
+}
+
+html[data-ui-preset=atlas] .priority-panel .section-title {
+  background: var(--cs-surface-muted);
+}
+
+html[data-ui-preset=atlas] .priority-row {
+  padding: 16px 22px;
+  border-top-color: var(--cs-border);
+  min-height: 68px;
+}
+
+html[data-ui-preset=atlas] .priority-row .priority-resource strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html[data-ui-preset=atlas] .priority-row .priority-resource small {
+  color: var(--cs-muted);
+}
+
+html[data-ui-preset=atlas] .resource-symbol {
+  border-radius: var(--cs-radius-control);
+}
+
+/* Beat console-theme dark nav when Atlas is active */
+html[data-ui-preset=atlas][data-theme=dark] .nav-link {
+  color: var(--cs-muted);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] .nav-link:hover {
+  color: var(--cs-text);
+  background: var(--cs-surface-muted);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] .nav-link.active,
+html[data-ui-preset=atlas][data-theme=dark] .nav-link[aria-current='page'] {
+  color: var(--cs-text);
+  background: var(--cs-surface-muted);
+  box-shadow: inset 3px 0 0 var(--cs-primary);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] .sidebar {
+  background: var(--cs-bg);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] .app-main {
+  background: var(--cs-bg);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] .button.primary {
+  background: var(--cs-primary);
+  border-color: var(--cs-primary);
+  color: var(--cs-primary-fg);
+}
+
+html[data-ui-preset=atlas][data-theme=light] .button.primary {
+  color: var(--cs-primary-fg);
+}
+
+html[data-ui-preset=atlas] .workspace-avatar {
+  background: var(--cs-primary);
+  color: var(--cs-primary-fg);
+}
+
+html[data-ui-preset=atlas] .current-page {
+  font-weight: 600;
+  color: var(--cs-text);
+}
+
+html[data-ui-preset=atlas] .page-content {
+  padding-top: 28px;
+}
+
 .trend-chart[role='presentation'] .recharts-surface,
 .trend-chart[role='presentation'] svg,
 .nivo-trend-chart[role='presentation'] svg {
