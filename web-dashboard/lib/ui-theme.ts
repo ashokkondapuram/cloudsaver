@@ -1,4 +1,4 @@
-export const UI_THEME_PRESETS = ['console', 'midnight-neu', 'aurora-glass'] as const;
+export const UI_THEME_PRESETS = ['console', 'atlas', 'midnight-neu', 'aurora-glass'] as const;
 export type UiThemePreset = typeof UI_THEME_PRESETS[number];
 export const DEFAULT_UI_THEME_PRESET: UiThemePreset = 'console';
 
@@ -16,6 +16,11 @@ export const UI_THEME_META: Record<UiThemePreset, ThemeMeta> = {
   console: {
     label: 'CloudSaver console (slate)',
     description: 'Default operational console with light and dark modes.',
+    surface: 'flat',
+  },
+  atlas: {
+    label: 'CloudSaver Atlas (enterprise)',
+    description: 'Opaque Atlas tokens for finance and operator workflows; light and dark modes.',
     surface: 'flat',
   },
   'midnight-neu': {
@@ -37,7 +42,7 @@ export const UI_THEME_LABELS: Record<UiThemePreset, string> = Object.fromEntries
 ) as Record<UiThemePreset, string>;
 
 export function normalizeUiThemePreset(value: unknown): UiThemePreset {
-  if (value === 'midnight-neu' || value === 'aurora-glass') return value;
+  if (value === 'atlas' || value === 'midnight-neu' || value === 'aurora-glass') return value;
   return 'console';
 }
 

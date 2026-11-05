@@ -1,0 +1,148 @@
+/* CloudSaver Atlas — opaque enterprise tokens (maps --cs-* onto existing semantic vars). */
+html[data-ui-preset=atlas] {
+  --cs-radius: 10px;
+  --cs-radius-control: 6px;
+  --cs-radius-tag: 4px;
+  --ui-accent-ring: var(--cs-primary);
+}
+
+html[data-ui-preset=atlas][data-theme=light] {
+  color-scheme: light;
+  --cs-bg: #f5f7fa;
+  --cs-surface: #ffffff;
+  --cs-surface-muted: #eef2f7;
+  --cs-text: #172033;
+  --cs-muted: #475569;
+  --cs-border: #d6dee9;
+  --cs-primary: #1d4ed8;
+  --cs-primary-fg: #ffffff;
+  --cs-success: #166534;
+  --cs-warning: #92400e;
+  --cs-danger: #b91c1c;
+  --slate-50: var(--cs-bg);
+  --slate-100: var(--cs-surface-muted);
+  --surface: var(--cs-surface);
+  --elevated: var(--cs-surface);
+  --border: var(--cs-border);
+  --divider: var(--cs-border);
+  --text: var(--cs-text);
+  --muted: var(--cs-muted);
+  --indigo-600: var(--cs-primary);
+  --indigo-50: #eff6ff;
+  --primary-fill: var(--cs-primary);
+  --primary-hover: #1e40af;
+  --emerald-700: var(--cs-success);
+  --emerald-50: #ecfdf5;
+  --amber-700: var(--cs-warning);
+  --amber-50: #fffbeb;
+  --rose-700: var(--cs-danger);
+  --rose-50: #fff1f2;
+  --chart-grid: var(--cs-border);
+  --chart-line: var(--cs-primary);
+  --chart-muted: var(--cs-muted);
+  --known: var(--cs-success);
+  --risk: var(--cs-danger);
+}
+
+html[data-ui-preset=atlas][data-theme=dark] {
+  color-scheme: dark;
+  --cs-bg: #0b1220;
+  --cs-surface: #111c2e;
+  --cs-surface-muted: #18263b;
+  --cs-text: #f1f5f9;
+  --cs-muted: #cbd5e1;
+  --cs-border: #334155;
+  --cs-primary: #93c5fd;
+  --cs-primary-fg: #10213b;
+  --cs-success: #86efac;
+  --cs-warning: #fcd34d;
+  --cs-danger: #fca5a5;
+  --slate-50: var(--cs-bg);
+  --slate-100: var(--cs-surface-muted);
+  --surface: var(--cs-surface);
+  --elevated: #152238;
+  --border: var(--cs-border);
+  --divider: #293449;
+  --text: var(--cs-text);
+  --muted: var(--cs-muted);
+  --indigo-600: var(--cs-primary);
+  --indigo-50: #1e3a5f;
+  --primary-fill: #2563eb;
+  --primary-hover: #1d4ed8;
+  --emerald-700: var(--cs-success);
+  --emerald-50: #0d302b;
+  --amber-700: var(--cs-warning);
+  --amber-50: #332a17;
+  --rose-700: var(--cs-danger);
+  --rose-50: #371e2c;
+  --chart-grid: var(--cs-border);
+  --chart-line: var(--cs-primary);
+  --chart-muted: var(--cs-muted);
+  --known: var(--cs-success);
+  --risk: var(--cs-danger);
+}
+
+html[data-ui-preset=atlas] body {
+  background: var(--cs-bg);
+}
+
+html[data-ui-preset=atlas] .panel,
+html[data-ui-preset=atlas] .metric-card,
+html[data-ui-preset=atlas] .dialog-surface {
+  border-radius: var(--cs-radius);
+  box-shadow: none;
+}
+
+html[data-ui-preset=atlas] .button,
+html[data-ui-preset=atlas] input[type=text],
+html[data-ui-preset=atlas] input[type=search],
+html[data-ui-preset=atlas] input[type=password],
+html[data-ui-preset=atlas] select {
+  border-radius: var(--cs-radius-control);
+}
+
+html[data-ui-preset=atlas] .button.primary {
+  color: var(--cs-primary-fg);
+}
+
+html[data-ui-preset=atlas] .dialog::backdrop {
+  background: #0f172a88;
+  backdrop-filter: none;
+}
+
+html[data-ui-preset=atlas] .metric-featured,
+html[data-ui-preset=atlas] .billing-plan,
+html[data-ui-preset=atlas] .allocation-banner {
+  background: var(--cs-surface);
+  border-color: var(--cs-border);
+}
+
+html[data-ui-preset=atlas] .cs-panel {
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius);
+}
+
+html[data-ui-preset=atlas] .cs-financial,
+html[data-ui-preset=atlas] .money-cell,
+html[data-ui-preset=atlas] .chart-summary strong {
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-ui-preset=atlas] .data-table th {
+  font-size: 13px;
+}
+
+html[data-ui-preset=atlas] .data-table td {
+  font-size: 13px;
+  min-height: 44px;
+}
+
+html[data-ui-preset=atlas] .analytics-chart-table {
+  padding: 0 24px 20px;
+}
+
+html[data-ui-preset=atlas] .analytics-chart-table .summary-table {
+  margin-top: 12px;
+}

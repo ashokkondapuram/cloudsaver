@@ -3,7 +3,7 @@ from uuid import UUID
 
 from identity.domain import IdentityError
 
-UI_THEME_PRESETS = ('console', 'midnight-neu', 'aurora-glass')
+UI_THEME_PRESETS = ('console', 'atlas', 'midnight-neu', 'aurora-glass')
 DEFAULT_UI_THEME_PRESET = 'console'
 
 

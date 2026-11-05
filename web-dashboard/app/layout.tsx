@@ -9,6 +9,7 @@ import './theme-surfaces.css';
 import './theme-preset-dark.css';
 import './workspace-tabs.css';
 import './login-surfaces.css';
+import './theme-atlas.css';
 import './console-polish.css';
 import {ThemeProvider} from '../components/ThemeProvider';
 import {WorkspaceProvider} from '../components/WorkspaceProvider';

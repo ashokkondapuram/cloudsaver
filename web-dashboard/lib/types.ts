@@ -73,7 +73,7 @@ export type Workspace = {
   customer_roles?: CustomerRole[];
   subject_type?: 'operator' | 'user' | 'service_account';
   subject_id?: string | null;
-  ui_theme_preset?: 'console' | 'midnight-neu' | 'aurora-glass';
+  ui_theme_preset?: 'console' | 'atlas' | 'midnight-neu' | 'aurora-glass';
 };
 
 export type CustomerRole = 'CustomerOwner' | 'CustomerAdmin' | 'CustomerAuditor';
