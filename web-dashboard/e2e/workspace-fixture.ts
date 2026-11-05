@@ -132,6 +132,8 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
       else response={decision:'fail',resources_checked:3,issues:[{code:'DELETION_BLOCKED',address:'azurerm_managed_disk.archive',message:'Deletion requires independent review.'}],cost:{status:'unknown',monthly_increase_usd:null}};
     }
     else if(path==='/api/v1/scans/multi-cloud'){status=201;response={...current,scan_id:'44444444-4444-4444-8444-444444444444',cloud_providers:request.postDataJSON().providers};}
+    else if(path==='/api/v1/code-mode/status')response={enabled:false,bridge_configured:false,bridge_host:null,runtime:'cloudflare-worker-isolate',max_snippet_bytes:16384,max_input_bytes:8192,requires_human_admin:true,stub_mode:false};
+    else if(path==='/api/v1/code-mode/runs')response={items:[]};
     else throw new Error('Unmocked API call: '+request.method()+' '+path);
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(response)});
   });
