@@ -84,7 +84,7 @@ test('overview billing mini-chart loads only after expand', async ({page}) => {
   page.on('request', req => {
     if (req.url().includes('/api/v1/finops/summary')) finopsReads.push(req.url());
   });
-  await mockWorkspace(page);
+  await mockWorkspace(page, {uiTheme: 'atlas'});
   await applyAtlasPreset(page);
   await navigate(page, 'Overview');
   expect(finopsReads.length).toBe(0);
