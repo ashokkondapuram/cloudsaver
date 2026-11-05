@@ -8,7 +8,7 @@ def billing_scope_rows(tenant):
     from app.focus import authorized
 
     try:
-        configured = bindings(tenant)
+        configured = bindings(tenant, require_workspace_scope=False)
     except Exception as exc:
         return {'status': 'error', 'message': str(exc), 'scopes': []}
     rows = []

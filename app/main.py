@@ -41,9 +41,10 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             projector = DirectoryProjector(settings.registry, client)
             client.directory_listeners.append(projector.nudge)
             try:
-                projector.resync()
+                # Replay the change feed on startup; full snapshot resync runs only after a 410.
+                projector.run_once()
             except Exception:
-                logger.exception('Initial directory resync failed; change feed will retry')
+                logger.exception('Initial directory projection failed; change feed will retry')
             api.state.projector = projector.start()
         try:
             yield

@@ -35,7 +35,7 @@ def _azure_cost_pacing():
     return interval, deadline_seconds
 
 
-def bindings(tenant):
+def bindings(tenant, *, require_workspace_scope=True):
     try:raw = json.loads(os.getenv('CLOUDSAVER_BILLING_CONNECTORS', '[]'))
     except ValueError:raise FocusError('Invalid operator billing connector configuration',503) from None
     if not isinstance(raw, list) or len(raw) > 200:
@@ -54,7 +54,9 @@ def bindings(tenant):
         if item['provider']=='azure':
             try:item['scope_id']=str(UUID(item['scope_id']))
             except ValueError:raise FocusError('Invalid Azure billing scope',503) from None
-        if item.get('provider') not in ('azure','aws','gcp') or not authorized(item['provider'], item.get('scope_id',''), tenant):
+        if item.get('provider') not in ('azure','aws','gcp'):
+            continue
+        if require_workspace_scope and not authorized(item['provider'], item.get('scope_id',''), tenant):
             continue
         if item['provider'] == 'gcp' and not all(re.fullmatch(NAME, item.get(k,'')) for k in ('billing_project','dataset','table')):
             raise FocusError('GCP billing requires an approved BigQuery project, dataset and table', 503)
