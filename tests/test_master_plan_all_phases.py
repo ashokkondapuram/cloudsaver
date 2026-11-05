@@ -97,6 +97,17 @@ def test_ai_foundry_requires_purpose():
         client.complete({"ai_enabled": True, "ai_purposes": ["investigation"]}, purpose="drift_classification", payload={})
 
 
+def test_ai_foundry_enabled_does_not_claim_queued_job():
+    client = AzureAIFoundryClient(enabled=True)
+    result = client.complete(
+        {"ai_enabled": True, "ai_purposes": ["investigation"]},
+        purpose="investigation",
+        payload={"summary": "ok"},
+    )
+    assert result["status"] == "not_implemented"
+    assert "inference ledger" in result["reason"]
+
+
 def test_live_reader_factory():
     assert reader_for_provider("azure")({})["source"] == "azure_live_stub"
 

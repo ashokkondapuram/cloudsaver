@@ -84,3 +84,53 @@ def test_enrich_arm_details_attaches_configuration():
     evidence = inventory[0]['evidence']
     assert evidence['arm_detail'] == 'collected'
     assert evidence['typed_configuration']['diskSizeGB'] == 64
+    assert evidence.get('arm_fetched_at')
+
+
+def test_enrich_arm_details_metadata_failure_stays_per_resource(monkeypatch):
+    from app.collectors.azure_arm_detail import enrich_arm_details
+
+    inventory = [{
+        'resource_id': '/subscriptions/s/resourceGroups/r/providers/Microsoft.Custom/widgets/w1',
+        'resource_type': 'Microsoft.Custom/widgets',
+        'subscription_id': 's',
+        'evidence': {},
+    }]
+
+    class Reader:
+        def get(self, url, params=None):
+            raise RuntimeError('provider metadata unavailable')
+
+    enrich_arm_details(Reader(), inventory, settings={'integrations': {'azure_arm_detail_max': 5}})
+    assert inventory[0]['evidence']['arm_detail'] == 'fetch_failed'
+
+
+def test_enrich_arm_details_attempt_budget_counts_metadata_calls(monkeypatch):
+    from app.collectors import azure_arm_detail
+
+    monkeypatch.setattr(azure_arm_detail, '_max_attempts', lambda settings=None: 1)
+
+    inventory = [
+        {
+            'resource_id': '/subscriptions/s/resourceGroups/r/providers/Microsoft.Custom/widgets/w1',
+            'resource_type': 'Microsoft.Custom/widgets',
+            'subscription_id': 's',
+            'evidence': {},
+        },
+        {
+            'resource_id': '/subscriptions/s/resourceGroups/r/providers/Microsoft.Custom/widgets/w2',
+            'resource_type': 'Microsoft.Custom/widgets',
+            'subscription_id': 's',
+            'evidence': {},
+        },
+    ]
+
+    class Reader:
+        def get(self, url, params=None):
+            return {'resourceTypes': []}
+
+    from app.collectors.azure_arm_detail import enrich_arm_details
+
+    enrich_arm_details(Reader(), inventory)
+    assert inventory[0]['evidence']['arm_detail'] == 'api_version_unresolved'
+    assert inventory[1]['evidence']['arm_detail'] == 'resource_budget_exceeded'

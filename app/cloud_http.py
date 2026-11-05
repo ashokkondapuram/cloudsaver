@@ -1,10 +1,18 @@
 """Bounded read-only JSON transport; redirects and partial provider results fail."""
 import json
+import os
 import time
 import httpx
 from urllib.parse import urlsplit
 from app.provider_retry import read_json, ProviderReadError, ProviderDeferred
 from app.scanner import ScanError
+
+
+def _json_reader_pacing_interval() -> float:
+    if os.getenv('CLOUDSAVER_ENVIRONMENT', '').lower() == 'development':
+        return 0.0
+    raw = os.getenv('CLOUDSAVER_JSON_READER_INTERVAL_SECONDS', '0.25')
+    return max(0.0, min(float(raw), 60.0))
 
 
 class BearerTokenCache:
@@ -44,7 +52,15 @@ class JSONReader:
             from google.auth.transport.requests import Request
             self.credentials.before_request(Request(), 'GET', url, headers)
         try:
-            result = read_json(self.client,'GET',url,params=params,headers=headers,quota_key=self.quota_key(url))
+            result = read_json(
+                self.client,
+                'GET',
+                url,
+                params=params,
+                headers=headers,
+                quota_key=self.quota_key(url),
+                interval=_json_reader_pacing_interval(),
+            )
             if not isinstance(result, dict):
                 raise ScanError('Cloud inventory returned an invalid object')
             return result
@@ -79,7 +95,16 @@ class JSONReader:
             from google.auth.transport.requests import Request
             self.credentials.before_request(Request(),'POST',url,headers)
         if self.token:headers['Authorization']='Bearer '+self.token
-        value=read_json(self.client,'POST',url,json=body,headers=headers,quota_key=self.quota_key(url),read_only_post=True)
+        value=read_json(
+            self.client,
+            'POST',
+            url,
+            json=body,
+            headers=headers,
+            quota_key=self.quota_key(url),
+            read_only_post=True,
+            interval=_json_reader_pacing_interval(),
+        )
         if not isinstance(value,dict) or value.get('error'):raise ScanError('Invalid cloud audit response')
         return value
 

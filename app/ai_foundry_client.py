@@ -14,4 +14,12 @@ class AzureAIFoundryClient:
         assert_processor_allowed(tenant, purpose=purpose, payload=payload)
         if not self.enabled:
             return dict(status="disabled", advisory_only=True)
-        return dict(status="queued", purpose=purpose, tokens=0, advisory_only=True)
+        return dict(
+            status="not_implemented",
+            purpose=purpose,
+            advisory_only=True,
+            reason=(
+                "Direct Foundry completion is not available on this boundary. "
+                "Use governed AI advisory or resource assessment APIs backed by the inference ledger."
+            ),
+        )

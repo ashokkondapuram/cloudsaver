@@ -23,13 +23,19 @@ def series(points,now,*,bucket_start=False,scale=1):
     return dict(window_start=start.isoformat(),window_end=end.isoformat(),points=[dict(at=t.isoformat(),value=v) for t,v in sorted(seen.items())])
 
 def summary(value,name,now):
+    meta = {}
+    if isinstance(value, dict):
+        if value.get('source_aggregation'):
+            meta['source_aggregation'] = value['source_aggregation']
+        if value.get('azure_metric_name'):
+            meta['azure_metric_name'] = value['azure_metric_name']
     results={stat:evaluate_series(value,TimeSeriesEvidenceContract(name,agg),now=now,require_resource_age=False)
         for stat,agg in (('p95','P95'),('p99','P99'),('maximum','MAX'))}
     r=results['p95']
     return dict(sufficient=all(v.is_sufficient for v in results.values()),coverage_ratio=r.coverage_ratio,
         window_start=r.window_start.isoformat() if r.window_start else None,window_end=r.window_end.isoformat() if r.window_end else None,
         samples=r.valid_samples,step_seconds=300,max_gap_seconds=r.max_observed_gap_minutes*60 if r.max_observed_gap_minutes is not None else None,
-        gap_reason=r.gap_reason,**{k:v.observed_value for k,v in results.items()})
+        gap_reason=r.gap_reason,**{k:v.observed_value for k,v in results.items()},**meta)
 
 def collect(evidence,plane,fn):
     try:

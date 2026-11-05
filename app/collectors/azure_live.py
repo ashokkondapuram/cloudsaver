@@ -7,18 +7,50 @@ from app.telemetry_contract import moment
 
 ARM=ARM_ROOT
 METRICS={
- 'microsoft.compute/virtualmachines':{'cpu_percent':'Percentage CPU','memory_free_bytes':'Available Memory Bytes','disk_iops':'Disk Read Operations/Sec','network_bytes':'Network In Total','burst_credits':'CPU Credits Remaining'},
- 'microsoft.compute/disks':{'iops':'Composite Disk Read Operations/sec','throughput':'Composite Disk Read Bytes/sec','burst_credits':'Disk Paid Burst IO Percentage'},
- 'microsoft.network/publicipaddresses':{'ingress_bytes':'ByteCount'},
- 'microsoft.network/natgateways':{'network_bytes':'ByteCount','connections':'SNATConnectionCount'},
- 'microsoft.network/applicationgateways':{'requests':'TotalRequests','healthy_targets':'HealthyHostCount','capacity_units':'CapacityUnits','latency':'BackendLastByteResponseTime'},
- 'microsoft.web/serverfarms':{'cpu_percent':'CpuPercentage','memory_percent':'MemoryPercentage','http_queue':'HttpQueueLength'},
- 'microsoft.dbforpostgresql/flexibleservers':{'cpu_percent':'cpu_percent','memory_percent':'memory_percent','connections':'active_connections','iops':'iops'},
- 'microsoft.sql/servers/databases':{'cpu_percent':'cpu_percent','connections':'connection_successful'},
- 'microsoft.documentdb/databaseaccounts':{'normalized_ru_consumption':'NormalizedRUConsumption'},
- 'microsoft.cache/redis':{'memory_percent':'usedmemorypercentage','cpu_percent':'serverLoad','connections':'connectedclients','evictions':'evictedkeys'},
- 'microsoft.storage/storageaccounts':{'bytes':'UsedCapacity','requests':'Transactions'},
- 'microsoft.cognitiveservices/accounts':{'ptu_utilization':'ProvisionedManagedUtilizationV2','invocations':'AzureOpenAIRequests'},
+ 'microsoft.compute/virtualmachines':{
+  'cpu_percent':('Percentage CPU','Maximum'),
+  'memory_free_bytes':('Available Memory Bytes','Minimum'),
+  'disk_iops':('Disk Read Operations/Sec','Maximum'),
+  'network_bytes':('Network In Total','Maximum'),
+  'burst_credits':('CPU Credits Remaining','Maximum'),
+ },
+ 'microsoft.compute/disks':{
+  'iops':('Composite Disk Read Operations/sec','Maximum'),
+  'throughput':('Composite Disk Read Bytes/sec','Maximum'),
+  'burst_credits':('Disk Paid Burst IO Percentage','Maximum'),
+ },
+ 'microsoft.network/publicipaddresses':{'ingress_bytes':('ByteCount','Maximum')},
+ 'microsoft.network/natgateways':{'network_bytes':('ByteCount','Maximum'),'connections':('SNATConnectionCount','Maximum')},
+ 'microsoft.network/applicationgateways':{
+  'requests':('TotalRequests','Maximum'),
+  'healthy_targets':('HealthyHostCount','Maximum'),
+  'capacity_units':('CapacityUnits','Maximum'),
+  'latency':('BackendLastByteResponseTime','Maximum'),
+ },
+ 'microsoft.web/serverfarms':{
+  'cpu_percent':('CpuPercentage','Maximum'),
+  'memory_percent':('MemoryPercentage','Maximum'),
+  'http_queue':('HttpQueueLength','Maximum'),
+ },
+ 'microsoft.dbforpostgresql/flexibleservers':{
+  'cpu_percent':('cpu_percent','Maximum'),
+  'memory_percent':('memory_percent','Maximum'),
+  'connections':('active_connections','Maximum'),
+  'iops':('iops','Maximum'),
+ },
+ 'microsoft.sql/servers/databases':{'cpu_percent':('cpu_percent','Maximum'),'connections':('connection_successful','Maximum')},
+ 'microsoft.documentdb/databaseaccounts':{'normalized_ru_consumption':('NormalizedRUConsumption','Maximum')},
+ 'microsoft.cache/redis':{
+  'memory_percent':('usedmemorypercentage','Maximum'),
+  'cpu_percent':('serverLoad','Maximum'),
+  'connections':('connectedclients','Maximum'),
+  'evictions':('evictedkeys','Maximum'),
+ },
+ 'microsoft.storage/storageaccounts':{'bytes':('UsedCapacity','Average'),'requests':('Transactions','Total')},
+ 'microsoft.cognitiveservices/accounts':{
+  'ptu_utilization':('ProvisionedManagedUtilizationV2','Maximum'),
+  'invocations':('AzureOpenAIRequests','Total'),
+ },
 }
 
 def pages(reader,url,params=None):
@@ -34,10 +66,29 @@ def pages(reader,url,params=None):
         seen.add(token);url,params=token,None
     raise ValueError('Azure page bound exceeded')
 
+_AZURE_AGG_VALUE = {
+    'Maximum': 'maximum',
+    'Minimum': 'minimum',
+    'Average': 'average',
+    'Total': 'total',
+}
+
+
 def fetch_azure_monitor_series(reader,resource,now):
     start,end=window(now);rid=resource['resource_id'];result={}
-    for key,name in METRICS.get(resource['resource_type'].lower(),{}).items():
-        data=reader.get(ARM+rid+'/providers/microsoft.insights/metrics',dict(**{'api-version':'2023-10-01'},timespan=start.isoformat()+'/'+end.isoformat(),interval='PT5M',metricnames=name,aggregation='Maximum'))
+    for key,spec in METRICS.get(resource['resource_type'].lower(),{}).items():
+        name, aggregation = spec if isinstance(spec, tuple) else (spec, 'Maximum')
+        agg_key = _AZURE_AGG_VALUE.get(aggregation, aggregation.lower())
+        data=reader.get(
+            ARM+rid+'/providers/microsoft.insights/metrics',
+            dict(
+                **{'api-version':'2023-10-01'},
+                timespan=start.isoformat()+'/'+end.isoformat(),
+                interval='PT5M',
+                metricnames=name,
+                aggregation=aggregation,
+            ),
+        )
         values=data.get('value')
         if not isinstance(values,list) or len(values)!=1:continue
         metric=values[0]
@@ -45,8 +96,16 @@ def fetch_azure_monitor_series(reader,resource,now):
         streams=metric.get('timeseries') or []
         # Unspecified dimensions cannot be collapsed by max and treated as a total.
         if len(streams)!=1 or streams[0].get('metadatavalues'):continue
-        points=[(p.get('timeStamp'),p.get('maximum')) for p in streams[0].get('data',[]) if p.get('maximum') is not None]
-        result[key]=series(points,now,bucket_start=True)
+        points=[
+            (p.get('timeStamp'), p.get(agg_key))
+            for p in streams[0].get('data', [])
+            if p.get(agg_key) is not None
+        ]
+        result[key]=dict(
+            **series(points, now, bucket_start=True),
+            source_aggregation=aggregation,
+            azure_metric_name=name,
+        )
     return result
 
 def fetch_azure_state_history(reader,resource,now):
