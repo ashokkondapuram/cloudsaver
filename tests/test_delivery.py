@@ -99,11 +99,10 @@ def test_disabled_dispatcher_creates_no_clients(monkeypatch):
     monkeypatch.setattr('app.config.Settings.load',lambda:pytest.fail('Disabled process loaded runtime clients'))
     fired = []
 
-    class Stop:
-        def wait(self, _seconds):
-            fired.append(True)
+    def idle(**_kwargs):
+        fired.append(True)
 
-    monkeypatch.setattr('workers.dispatcher.threading.Event', lambda: Stop())
+    monkeypatch.setattr('workers.dispatcher._idle_until_stopped', idle)
     main()
     assert fired
 

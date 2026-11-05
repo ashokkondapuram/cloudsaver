@@ -1,4 +1,5 @@
 """Provider adapters are exercised offline with paged, malformed and foreign data."""
+import time
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 

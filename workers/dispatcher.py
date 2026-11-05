@@ -142,15 +142,14 @@ def _idle_until_stopped(*, enabled_label: str):
 
 
 def main():
-    from app.config import Settings
-    settings = Settings.load()
-    if not enabled(settings):
+    if not enabled():
         _idle_until_stopped(enabled_label='Durable delivery is disabled by operator configuration')
         return
+    from app.config import Settings
     from database.delivery import DeliveryRepository
     from workers.storage import JobRepository
     from workers.tasks import execute_subscription_scan
-    settings=Settings.load()
+    settings = Settings.load()
     from workers.health import WorkerHealth
     health=WorkerHealth().start()
     configured={t['tenant_id'] for t in settings.tenants}

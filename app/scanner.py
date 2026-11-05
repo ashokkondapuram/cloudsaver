@@ -131,9 +131,7 @@ def inventory_query_body() -> str:
 def inventory_query(*, settings=None) -> str:
     """Full ARG inventory query, optionally capped for local pilot scans."""
     query = inventory_query_body()
-    from app.config import Settings
     from app.cloudsaver_platform_settings import integration_int
-    settings = settings or Settings.load()
     limit = integration_int(settings, 'azure_inventory_limit', 'CLOUDSAVER_AZURE_INVENTORY_LIMIT', default=0)
     if limit == 0:
         return query
