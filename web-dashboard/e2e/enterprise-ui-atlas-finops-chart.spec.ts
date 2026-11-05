@@ -2,7 +2,7 @@ import {test, expect} from './test';
 import {mockWorkspace, navigate, subscriptionId} from './workspace-fixture';
 
 test('cost allocation renders AnalyticsChart from finops daily series', async ({page}) => {
-  await mockWorkspace(page);
+  await mockWorkspace(page, {uiTheme: 'atlas'});
   await page.route('**/api/v1/finops/summary*', route =>
     route.fulfill({
       json: {
@@ -30,6 +30,8 @@ test('cost allocation renders AnalyticsChart from finops daily series', async ({
   await navigate(page, 'Cost allocation');
   const chart = page.locator('.analytics-chart');
   await expect(chart).toBeVisible();
+  await expect(chart).toHaveAttribute('data-chart-engine', 'nivo');
+  await expect(chart).toHaveAttribute('data-chart-theme', 'atlas-cs');
   await expect(chart.getByRole('heading', {name: 'Daily billed cost trend'})).toBeVisible();
   await expect(chart.locator('.analytics-chart-table table')).toBeVisible();
   await expect(chart.locator('tbody tr')).toHaveCount(2);

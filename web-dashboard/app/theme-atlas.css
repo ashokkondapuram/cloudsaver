@@ -177,6 +177,7 @@ html[data-ui-preset=atlas] .overview-finops-actions {
 }
 
 .trend-chart[role='presentation'] .recharts-surface,
-.trend-chart[role='presentation'] svg {
+.trend-chart[role='presentation'] svg,
+.nivo-trend-chart[role='presentation'] svg {
   pointer-events: none;
 }

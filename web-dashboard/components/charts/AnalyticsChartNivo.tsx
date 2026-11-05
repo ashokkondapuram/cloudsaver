@@ -1,12 +1,14 @@
 'use client';
 
 import {ResponsiveLine} from '@nivo/line';
+import type {ChartVisualTokens} from '../../lib/chart-theme';
+import {nivoChartTheme} from '../../lib/chart-theme';
 import type {ChartSeries} from '../../lib/atlas-contracts';
 import {chartPointsForDisplay} from '../../lib/atlas-contracts';
 
-type Props = {series: ChartSeries; height: number; unitLabel: string};
+type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens};
 
-export function AnalyticsChartNivo({series, height, unitLabel}: Props) {
+export function AnalyticsChartNivo({series, height, unitLabel, tokens}: Props) {
   const rows = chartPointsForDisplay(series);
   return (
     <div className="trend-chart nivo-trend-chart" style={{height}} role="presentation">
@@ -22,12 +24,8 @@ export function AnalyticsChartNivo({series, height, unitLabel}: Props) {
         yScale={{type: 'linear', min: 'auto', max: 'auto', stacked: false}}
         axisBottom={{tickSize: 0, tickPadding: 8, tickRotation: 0}}
         axisLeft={{tickSize: 0, tickPadding: 8}}
-        colors={['var(--chart-line)']}
-        theme={{
-          axis: {ticks: {text: {fill: 'var(--chart-muted)', fontSize: 11}}, domain: {line: {stroke: 'transparent'}}},
-          grid: {line: {stroke: 'var(--chart-grid)'}},
-          tooltip: {container: {background: 'var(--surface)', color: 'var(--text)', fontSize: 12, borderRadius: 8, border: '1px solid var(--border)'}},
-        }}
+        colors={[tokens.line]}
+        theme={nivoChartTheme(tokens)}
         data={[
           {
             id: series.label,

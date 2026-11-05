@@ -1,7 +1,11 @@
 export type ChartEngine = 'recharts' | 'nivo';
 
-/** Default Recharts; set `NEXT_PUBLIC_CHART_ENGINE=nivo` for the Nivo bundle pilot. */
-export function resolveChartEngine(override?: ChartEngine): ChartEngine {
+/**
+ * Atlas uses Nivo only (Atlas `--cs-*` theme via `chart-theme.ts`).
+ * Other presets default to Recharts unless `NEXT_PUBLIC_CHART_ENGINE=nivo`.
+ */
+export function resolveChartEngine(uiPreset: string | undefined | null, override?: ChartEngine): ChartEngine {
   if (override) return override;
+  if (uiPreset === 'atlas') return 'nivo';
   return process.env.NEXT_PUBLIC_CHART_ENGINE === 'nivo' ? 'nivo' : 'recharts';
 }

@@ -46,6 +46,17 @@ export function normalizeUiThemePreset(value: unknown): UiThemePreset {
   return 'console';
 }
 
+/** Workspace profile wins; fall back to the DOM preset set by `UiThemeApplier` (Playwright init scripts). */
+export function activeUiThemePreset(workspacePreset: unknown): UiThemePreset {
+  if (workspacePreset === 'atlas' || workspacePreset === 'midnight-neu' || workspacePreset === 'aurora-glass') {
+    return workspacePreset;
+  }
+  if (typeof document !== 'undefined' && document.documentElement.dataset.uiPreset) {
+    return normalizeUiThemePreset(document.documentElement.dataset.uiPreset);
+  }
+  return normalizeUiThemePreset(workspacePreset);
+}
+
 export function getThemeMeta(preset: UiThemePreset): ThemeMeta {
   return UI_THEME_META[preset];
 }

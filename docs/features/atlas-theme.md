@@ -10,7 +10,7 @@ Atlas is the **opaque enterprise visual system** described in the product Atlas 
 | **§12 route coverage** | All primary nav routes in `lib/atlas-page-rollout.ts` at **pilot**; `AtlasRouteBoundary` on every authenticated page |
 | **Semantic mapping** | Atlas `--cs-*` tokens bridge to existing `--surface`, `--text`, `--primary-fill`, chart colors |
 | **Contracts** | `web-dashboard/lib/atlas-contracts.ts` (`ChartSeries`, `AtlasNotice`) |
-| **Chart boundary** | `AnalyticsChart` — Recharts default, Nivo pilot (`NEXT_PUBLIC_CHART_ENGINE=nivo`) |
+| **Chart boundary** | `AnalyticsChart` — **Atlas: Nivo + `--cs-*` only**; other presets: Recharts (Nivo via `NEXT_PUBLIC_CHART_ENGINE=nivo`) |
 | **FinOps wiring** | Cost allocation daily series; **Overview** expandable MTD mini-chart |
 | **Activity charts** | Delivery backlog + AI usage summary on Activity tabs |
 | **Governance board** | `FindingWorkflowBoard` on Findings tab |

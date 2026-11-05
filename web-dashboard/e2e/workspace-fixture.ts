@@ -52,7 +52,7 @@ export function createFindings(count=12){
   });
 }
 
-export async function mockWorkspace(page:Page,options:{role?:string;human?:boolean;count?:number;legacy?:boolean;publishing?:boolean;ai?:boolean;protected?:boolean;zeroPrice?:boolean}={}){
+export async function mockWorkspace(page:Page,options:{role?:string;human?:boolean;count?:number;legacy?:boolean;publishing?:boolean;ai?:boolean;protected?:boolean;zeroPrice?:boolean;uiTheme?:'console'|'atlas'|'midnight-neu'|'aurora-glass'}={}){
   const findings=createFindings(options.count??12);
   if(options.zeroPrice)findings[0].estimated_monthly_waste_usd=0;
   if(options.protected)(findings[0].evidence.tags as Record<string,string>).Role='DR-Standby';
@@ -63,7 +63,7 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     const request=route.request(),url=new URL(request.url()),path=url.pathname;
     if(request.method()==='POST')mutations.push({path,body:request.postDataJSON(),raw:request.postData()||''});
     let response:unknown,status=200;
-    if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false};
+    if(path==='/api/v1/me')response={...(options.human?{subject_type:'user',subject_id:'qa-human',key_id:null}:{}),name:'Interface QA workspace',tenant_id:tenantId,subscription_ids:[subscriptionId],roles:[options.role||'TenantAdmin'],mode:'azure',plan_tier:'GROWTH',plan_name:'Growth',billing_state:'active',providers:['azure','aws','gcp','kubernetes'],configured_scope_count:4,max_scopes_per_scan:20,can_export_terraform:true,allowed_scan_frequencies:['manual','daily'],scheduled_scans_enabled:false,automated_alerts_enabled:false,ui_theme_preset:options.uiTheme||'console'};
     else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/resource-signals\/lookup$/.test(path)){
       const body=request.postDataJSON() as {identities?: {provider:string;resource_id:string}[]};
       const items=buildResourceItems(findings);

@@ -18,7 +18,7 @@ async function applyAtlasPreset(page: import('@playwright/test').Page) {
 }
 
 test('Atlas §12 routes expose rollout markers', async ({page}) => {
-  await mockWorkspace(page);
+  await mockWorkspace(page, {uiTheme: 'atlas'});
   await mockGovernanceRoutes(page);
   await applyAtlasPreset(page);
   for (const entry of ATLAS_PAGES) {
@@ -32,7 +32,7 @@ test('Atlas §12 routes expose rollout markers', async ({page}) => {
 test('Atlas preset passes axe WCAG 2.1 AA on primary finance and activity surfaces', async ({page}) => {
   test.setTimeout(180000);
   await page.emulateMedia({reducedMotion: 'reduce'});
-  await mockWorkspace(page);
+  await mockWorkspace(page, {uiTheme: 'atlas'});
   await applyAtlasPreset(page);
   await page.route('**/api/v1/finops/summary*', route =>
     route.fulfill({

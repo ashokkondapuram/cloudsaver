@@ -2,7 +2,7 @@
 
 | Reference | npm / product | Status in CloudSaver |
 |-----------|---------------|----------------------|
-| **Nivo** | `@nivo/core`, `@nivo/line`, `@nivo/scales` | Installed; opt-in via `NEXT_PUBLIC_CHART_ENGINE=nivo` on `AnalyticsChart` |
+| **Nivo** | `@nivo/core`, `@nivo/line`, `@nivo/scales` | Atlas preset uses Nivo with shared `lib/chart-theme.ts` (`--cs-*` tokens only) |
 | **Recharts** | `recharts` | Default chart engine behind `AnalyticsChart` |
 | **Sileo** | No verified OSS package matching spec | Use `lib/notices.ts` + AppShell toast (`atlasNoticeToToast`) |
 | **Arc UI** | No separate install | Map to shared `components/ui/dialog`, `PageTabs`, command palette |
