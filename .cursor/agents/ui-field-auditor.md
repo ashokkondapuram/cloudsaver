@@ -126,6 +126,7 @@ After **ui-fixer**, always run a **short re-audit** yourself (don’t re-delegat
 - **docker-log-analyst** — Log evidence when UI errors.
 - **backend-fixer** — API/store/gateway fixes when fields fail due to 500 or empty API payloads.
 - **ui-fixer** — CSS/layout/stale dashboard image when fields are **missing** without API errors.
+- **atlas-wcag-auditor** — Atlas axe + token contrast when chart/table a11y is in scope.
 
 ## Policy
 
