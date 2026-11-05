@@ -4,21 +4,22 @@ from __future__ import annotations
 from app.ai_resource_context import build_resource_ai_context
 
 
-def augment_ai_context_from_scan(scan, assessment, findings, context):
+def augment_ai_context_from_scan(scan, assessment, findings, context, *, observation=None):
     from app.assessment import assess
     from app.rule_detail import build_resource_rule_detail, evaluations_for_resource, normalize_resource_id
 
     provider = assessment['provider']
     selected_id = normalize_resource_id(provider, assessment['resource_id'])
-    observation = next(
-        (
-            row
-            for row in scan.get('inventory') or []
-            if row.get('cloud_provider', 'azure') == provider
-            and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
-        ),
-        None,
-    )
+    if observation is None:
+        observation = next(
+            (
+                row
+                for row in scan.get('inventory') or []
+                if row.get('cloud_provider', 'azure') == provider
+                and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
+            ),
+            None,
+        )
     evaluations = evaluations_for_resource(
         scan.get('rule_evaluations') or [],
         provider=provider,

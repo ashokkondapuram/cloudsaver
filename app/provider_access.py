@@ -239,3 +239,11 @@ class ScopedStore:
             return findings
         providers, _, scopes = current
         return [f for f in findings if f.get('cloud_provider', 'azure') in providers and finding_in_scope(f, scopes)]
+
+    def findings_for_resource(self, tenant_id, scan_id, provider, resource_id):
+        findings = self.inner.findings_for_resource(tenant_id, scan_id, provider, resource_id)
+        current = access.get()
+        if current is None:
+            return findings
+        providers, _, scopes = current
+        return [f for f in findings if f.get('cloud_provider', 'azure') in providers and finding_in_scope(f, scopes)]

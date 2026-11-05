@@ -122,6 +122,24 @@ class Store:
             return []
         return [f for f in (scan.get('findings') or []) if rk(f) == key]
 
+    def findings_for_resource(self, tenant_id, scan_id, provider, resource_id):
+        provider = provider or 'azure'
+        scan = self.get(tenant_id, scan_id)
+        if not scan:
+            return []
+        target = resource_id.lower() if provider == 'azure' else resource_id
+        matched = []
+        for finding in scan.get('findings') or []:
+            if finding.get('cloud_provider', 'azure') != provider:
+                continue
+            rid = finding.get('resource_id') or ''
+            if provider == 'azure':
+                if rid.lower() == target:
+                    matched.append(finding)
+            elif rid == target:
+                matched.append(finding)
+        return matched
+
 
 class PostgresStore:
     """Every request uses a fresh transaction and transaction-local tenant context."""
@@ -530,10 +548,42 @@ class PostgresStore:
             return []
         raw = row[0]
         if isinstance(raw, str):
+            import json
             raw = json.loads(raw)
         if not isinstance(raw, list):
             return []
         return [f for f in raw if rk(f) == key]
+
+    def findings_for_resource(self, tenant_id, scan_id, provider, resource_id):
+        from uuid import UUID
+        import json
+
+        try:
+            scan_id = str(UUID(scan_id))
+        except ValueError:
+            return []
+        provider = provider or 'azure'
+        with self.connection(tenant_id) as db:
+            row = db.execute(
+                """
+                SELECT COALESCE(jsonb_agg(f.elem ORDER BY f.ord), '[]'::jsonb)
+                FROM public.scans,
+                    jsonb_array_elements(COALESCE(payload->'findings', '[]'::jsonb))
+                        WITH ORDINALITY AS f(elem, ord)
+                WHERE id = %s AND tenant_id = %s
+                  AND lower(f.elem->>'resource_id') = lower(%s)
+                  AND COALESCE(f.elem->>'cloud_provider', 'azure') = %s
+                """,
+                (scan_id, tenant_id, resource_id, provider),
+            ).fetchone()
+        if not row or row[0] is None:
+            return []
+        raw = row[0]
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        if not isinstance(raw, list):
+            return []
+        return list(raw)
 
 
 def _analysis_audit(finding):

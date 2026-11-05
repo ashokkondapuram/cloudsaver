@@ -13,7 +13,7 @@ from app.config import Settings
 from app.enterprise_store import EnterpriseStore
 from app.inference_ledger import InferenceLedger
 from app.main import create_app
-from app.resource_assessment import assessments, changes, csv_report, history, merge, resource_key
+from app.resource_assessment import assessments, assess_resource, changes, csv_report, history, merge, resource_key, scan_indexes
 from app.resource_batches import process_batches
 from app.resource_store import ResourceStore
 from app.store import Store
@@ -77,6 +77,24 @@ def test_list_and_detail_assessments_share_evidence_digest():
     list_pair = assessments(scan, list_view=True)[key]
     detail_pair = assessments(scan, list_view=False)[key]
     assert list_pair[0]['evidence_digest'] == detail_pair[0]['evidence_digest']
+
+
+def test_assess_resource_matches_full_assessments_for_one_key():
+    a = disk('disk-a')
+    b = disk('disk-b')
+    scan = dict(
+        scan_id=str(uuid4()),
+        status='completed',
+        timestamp='2026-10-22T00:00:00+00:00',
+        findings=[a, b],
+        inventory=[],
+    )
+    key = resource_key(a)
+    full = assessments(scan)[key]
+    single = assess_resource(scan, key)
+    assert single is not None
+    assert single[0]['evidence_digest'] == full[0]['evidence_digest']
+    assert single[0]['rule_ids'] == full[0]['rule_ids']
 
 
 def test_merge_inventory_observation_enriches_thin_finding_evidence():

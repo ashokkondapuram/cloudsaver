@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from app.assessment import PILLARS, ai_context, assess, category as service_category
 from app.ai_resource_context import build_resource_ai_context
+from app.ai_scan_context import augment_ai_context_from_scan
 from app.assessment_policy import POLICY_VERSION
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
@@ -120,6 +121,69 @@ def group(findings):
     for finding in findings:
         groups.setdefault(resource_key(finding), []).append(finding)
     return groups
+
+
+def scan_indexes(scan):
+    """Build keyed indexes once per scan payload (findings + inventory)."""
+    findings_by_key = group(scan.get('findings') or [])
+    inventory_by_key = {
+        resource_key(inventory_observation(obs)): obs for obs in (scan.get('inventory') or [])
+    }
+    return findings_by_key, inventory_by_key
+
+
+def _apply_evidence_digest(assessment, context):
+    from app.ai_resource_context import stable_digest_context
+
+    stable = stable_digest_context(context)
+    assessment = dict(assessment)
+    assessment['evidence_digest'] = hashlib.sha256(
+        json.dumps(
+            dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
+            sort_keys=True,
+            separators=(',', ':'),
+        ).encode()
+    ).hexdigest()
+    return assessment, context
+
+
+def assess_resource(scan, key, *, now=None, list_view=False, findings_by_key=None, inventory_by_key=None):
+    """Assess one resource without building assessments for the entire scan."""
+    if findings_by_key is None or inventory_by_key is None:
+        findings_by_key, inventory_by_key = scan_indexes(scan)
+    observed_at = scan.get('timestamp')
+    observation = inventory_by_key.get(key)
+    if key in findings_by_key:
+        assessment, context = merge(
+            key,
+            findings_by_key[key],
+            observed_at=observed_at,
+            now=now,
+            list_view=list_view,
+            observation=observation,
+        )
+        if observation:
+            assessment = overlay_inventory_billing(assessment, observation)
+        findings = findings_by_key[key]
+    elif observation:
+        assessment, context = merge_inventory(
+            key,
+            observation,
+            observed_at=observed_at,
+            now=now,
+            list_view=list_view,
+        )
+        findings = []
+    else:
+        return None
+    context = augment_ai_context_from_scan(
+        scan,
+        assessment,
+        findings,
+        context,
+        observation=observation,
+    )
+    return _apply_evidence_digest(assessment, context)
 
 
 def _retail_from_saved_evidence(*rows):
@@ -289,9 +353,7 @@ def merge_inventory(key, obs, *, observed_at=None, now=None, list_view=False):
 
 
 def assessments(scan, *, now=None, list_view=False):
-    inventory_by_key = {
-        resource_key(inventory_observation(obs)): obs for obs in (scan.get('inventory') or [])
-    }
+    findings_by_key, inventory_by_key = scan_indexes(scan)
     merged = {
         key: merge(
             key,
@@ -301,28 +363,31 @@ def assessments(scan, *, now=None, list_view=False):
             list_view=list_view,
             observation=inventory_by_key.get(key),
         )
-        for key, items in group(scan['findings']).items()
+        for key, items in findings_by_key.items()
     }
-    for obs in scan.get('inventory') or []:
-        key = resource_key(inventory_observation(obs))
+    for key, obs in inventory_by_key.items():
         if key in merged:
             assessment, context = merged[key]
             merged[key] = (overlay_inventory_billing(assessment, obs), context)
             continue
-        merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now, list_view=list_view)
-    from app.ai_scan_context import augment_ai_context_from_scan
-    from app.ai_resource_context import stable_digest_context
-
+        merged[key] = merge_inventory(
+            key,
+            obs,
+            observed_at=scan.get('timestamp'),
+            now=now,
+            list_view=list_view,
+        )
     finished = {}
     for key, (assessment, context) in merged.items():
-        findings = group(scan['findings']).get(key, [])
-        context = augment_ai_context_from_scan(scan, assessment, findings, context)
-        stable = stable_digest_context(context)
-        assessment = dict(assessment)
-        assessment['evidence_digest'] = hashlib.sha256(json.dumps(
-            dict(context=stable, retail_estimate_usd=assessment['retail_estimate_usd']),
-            sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        finished[key] = (assessment, context)
+        findings = findings_by_key.get(key, [])
+        context = augment_ai_context_from_scan(
+            scan,
+            assessment,
+            findings,
+            context,
+            observation=inventory_by_key.get(key),
+        )
+        finished[key] = _apply_evidence_digest(assessment, context)
     return finished
 
 
@@ -398,9 +463,10 @@ def history(scans, key):
                                 rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},
                                 evidence_digest=merged['evidence_digest'], retail_estimate_usd=merged['retail_estimate_usd']))
             continue
-        inventory_rows = [obs for obs in scan.get('inventory') or [] if resource_key(inventory_observation(obs)) == key]
-        if inventory_rows:
-            merged, _ = merge_inventory(key, inventory_rows[0], observed_at=scan.get('timestamp'))
+        _, inventory_by_key = scan_indexes(scan)
+        observation = inventory_by_key.get(key)
+        if observation:
+            merged, _ = merge_inventory(key, observation, observed_at=scan.get('timestamp'))
             entries.append(dict(scan_id=scan['scan_id'], timestamp=scan.get('timestamp'), present=True,
                                 review_priority=merged['review_priority'], risk_level=merged['risk_level'],
                                 rule_ids=merged['rule_ids'], pillars={p['pillar']: p['status'] for p in merged['pillars']},

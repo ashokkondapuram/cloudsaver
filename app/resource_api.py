@@ -14,9 +14,10 @@ from app.auth import Role, require_workspace_role
 from app.cloud_scope import validate_finding_scope
 from app.schemas import bounded_json
 from app.inference_ledger import attribution
-from app.resource_assessment import (FILTERS, ai_state, assessments, csv_report, decision_state, group, history,
+from app.resource_assessment import (FILTERS, ai_state, assessments, assess_resource, csv_report, decision_state, group, history,
                                      inventory_observation, merge, merge_inventory, observation_arm_detail,
-                                     overlay_inventory_billing, planning_summary, matches, resource_key, row, summarize_resource_rows)
+                                     overlay_inventory_billing, planning_summary, matches, resource_key, row, scan_indexes,
+                                     summarize_resource_rows)
 from app.resource_store import ResourceConflict, ResourceStore
 
 KEY = r'^[a-f0-9]{64}$'
@@ -151,9 +152,11 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         return selected
 
     def one(scan, key):
-        pair=assessments(scan).get(key)
-        if pair is None:raise HTTPException(404,'Resource not found in this scan')
-        return group(scan['findings']).get(key,[]), *pair
+        pair = assess_resource(scan, key, list_view=False)
+        if pair is None:
+            raise HTTPException(404, 'Resource not found in this scan')
+        findings_by_key, _ = scan_indexes(scan)
+        return findings_by_key.get(key, []), *pair
 
     def resolve_resource_identity(scan_id, tenant, key):
         offset = 0
@@ -179,7 +182,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             raise HTTPException(409, 'Resource evidence requires a live scan snapshot')
         observation = bundle.get('observation')
         findings = list(bundle.get('findings') or [])
-        if not findings and hasattr(store, 'findings_for_resource_key'):
+        if not findings and hasattr(store, 'findings_for_resource'):
+            findings = store.findings_for_resource(tenant['tenant_id'], str(scan_id), provider, resource_id)
+        elif not findings and hasattr(store, 'findings_for_resource_key'):
             findings = store.findings_for_resource_key(tenant['tenant_id'], str(scan_id), key)
         if not observation and not findings:
             raise HTTPException(404, 'Resource not found in this scan')
@@ -207,25 +212,12 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         stub = FocusRepository(evidence_store).attach(tenant, stub)
         findings = list(stub.get('findings') or [])
         observation = (stub.get('inventory') or [None])[0] if observation else None
-        grouped = group(findings)
-        observed_at = bundle.get('timestamp')
-        if key in grouped:
-            assessment, context = merge(
-                key,
-                grouped[key],
-                observed_at=observed_at,
-                list_view=False,
-                observation=observation,
-            )
-            if observation:
-                assessment = overlay_inventory_billing(assessment, observation)
-            findings = grouped[key]
-        elif observation:
-            assessment, context = merge_inventory(key, observation, observed_at=observed_at, list_view=False)
-            assessment = overlay_inventory_billing(assessment, observation)
-            findings = []
-        else:
+        pair = assess_resource(stub, key, list_view=False)
+        if pair is None:
             raise HTTPException(404, 'Resource not found in this scan')
+        assessment, context = pair
+        findings_by_key, _ = scan_indexes(stub)
+        findings = findings_by_key.get(key, [])
         scan = dict(stub, findings=findings)
         return scan, findings, assessment, context, observation
 
@@ -507,22 +499,25 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
     @router.post('/scans/{scan_id}/resource-signals/lookup')
     async def resource_signals_lookup(scan_id: UUID, request: Request, tenant=Depends(current_tenant)):
         """Lightweight AI and decision state for findings grids without loading the full resource catalog."""
-        scan = owned(scan_id, tenant)
         body = await payload(request, SignalLookupRequest)
-        merged = assessments(scan, list_view=True)
-        from app.rule_detail import normalize_resource_id
-
+        scan = owned(scan_id, tenant)
+        findings_by_key, inventory_by_key = scan_indexes(scan)
         keyed = {}
         for ident in body.identities:
-            target = normalize_resource_id(ident.provider, ident.resource_id)
-            match_key = None
-            for key, (assessment, _context) in merged.items():
-                if assessment['provider'] == ident.provider and normalize_resource_id(ident.provider, assessment['resource_id']) == target:
-                    match_key = key
-                    break
-            if match_key is None:
-                match_key = resource_key(dict(cloud_provider=ident.provider, resource_id=ident.resource_id))
-            keyed[match_key] = dict(provider=ident.provider, resource_id=ident.resource_id)
+            key = resource_key(dict(cloud_provider=ident.provider, resource_id=ident.resource_id))
+            keyed[key] = dict(provider=ident.provider, resource_id=ident.resource_id)
+
+        merged = {}
+        for key in keyed:
+            pair = assess_resource(
+                scan,
+                key,
+                list_view=False,
+                findings_by_key=findings_by_key,
+                inventory_by_key=inventory_by_key,
+            )
+            if pair is not None:
+                merged[key] = pair
 
         key_set = set(keyed) & set(merged)
         if scan['status'] == 'running':
@@ -597,18 +592,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
         scan = owned(scan_id, tenant)
         findings, assessment, context = one(scan, resource_key)
-        provider = assessment['provider']
-        from app.rule_detail import normalize_resource_id
-        selected_id = normalize_resource_id(provider, assessment['resource_id'])
-        observation = next(
-            (
-                row
-                for row in scan.get('inventory') or []
-                if row.get('cloud_provider', 'azure') == provider
-                and normalize_resource_id(provider, row.get('resource_id', '')) == selected_id
-            ),
-            None,
-        )
+        _, inventory_by_key = scan_indexes(scan)
+        observation = inventory_by_key.get(resource_key)
         return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
 
     @router.post('/scans/{scan_id}/ai-batches', status_code=202)
@@ -623,13 +608,25 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         if body.target_id not in targets:
             raise HTTPException(404, 'AI target is unavailable for this workspace')
         scan = owned(scan_id, tenant)
-        merged = assessments(scan)
         if body.all:
+            merged = assessments(scan)
             keys = sorted(merged)
         else:
             keys = list(dict.fromkeys(body.resource_keys))
-            if any(not re.fullmatch(KEY, k) or k not in merged for k in keys):
+            if any(not re.fullmatch(KEY, k) for k in keys):
                 raise HTTPException(404, 'One or more selected resources are not in this scan')
+            findings_by_key, inventory_by_key = scan_indexes(scan)
+            merged = {}
+            for key in keys:
+                pair = assess_resource(
+                    scan,
+                    key,
+                    findings_by_key=findings_by_key,
+                    inventory_by_key=inventory_by_key,
+                )
+                if pair is None:
+                    raise HTTPException(404, 'One or more selected resources are not in this scan')
+                merged[key] = pair
         if not 1 <= len(keys) <= MAX_BATCH:
             raise HTTPException(422, f'A batch must include between 1 and {MAX_BATCH} resources')
         allowed = set(targets[body.target_id]['allowed_source_providers'])
