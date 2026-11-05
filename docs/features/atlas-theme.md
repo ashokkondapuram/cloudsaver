@@ -9,12 +9,21 @@ Atlas is the **opaque enterprise visual system** described in the product Atlas 
 | **`atlas` UI preset** | CSS tokens in `web-dashboard/app/theme-atlas.css`, selectable via platform workspace theme (`ui_theme_preset`) |
 | **Semantic mapping** | Atlas `--cs-*` tokens bridge to existing `--surface`, `--text`, `--primary-fill`, chart colors |
 | **Contracts** | `web-dashboard/lib/atlas-contracts.ts` (`ChartSeries`, `AtlasNotice`) |
-| **Chart boundary** | `web-dashboard/components/charts/AnalyticsChart.tsx` (Recharts pilot, animation off, table fallback) |
-| **Notifications adapter** | `web-dashboard/lib/notices.ts` (severity mapping + dedupe by id) |
+| **Chart boundary** | `web-dashboard/components/charts/AnalyticsChart.tsx` — Recharts default, Nivo pilot (`NEXT_PUBLIC_CHART_ENGINE=nivo`) |
+| **FinOps wiring** | `BillingEvidencePanel` maps `/finops/summary` daily rows via `lib/finops-chart.ts` |
+| **Notifications adapter** | `web-dashboard/lib/notices.ts` (severity mapping, dedupe, toast bridge — Sileo-compatible pattern) |
+| **§12 rollout tracker** | `web-dashboard/lib/atlas-page-rollout.ts` |
+| **Governance board** | `FindingWorkflowBoard` on governance **Findings** tab |
+| **Agent workspace** | Promoted `agent-event-log`; `CodeModePanel` stub |
+| **Package notes** | [atlas-package-verification.md](./atlas-package-verification.md) |
+| **WCAG checklist** | [atlas-wcag-checklist.md](./atlas-wcag-checklist.md) (sign-off row pending human review) |
 
-## What is not integrated (by design)
+## What remains product-owned
 
-The specification names **Nivo, Sileo, Arc UI, Fleetflow AI, BoardUI, Atrium, Cloudflare Code Mode** as references or future integrations. None of those packages are installed until official packages, licenses, and React compatibility are verified.
+- Formal WCAG sign-off on real hardware (checklist started).
+- Live Cloudflare Code Mode execution (stub only).
+- Full §12 coverage of every route (see rollout tracker — Activity and others still **planned**).
+- **Atrium** portal shell SDK — not integrated.
 
 Do not add a second parallel token system: extend Atlas tokens through `theme-atlas.css` and existing semantic variables.
 
@@ -24,13 +33,19 @@ Do not add a second parallel token system: extend Atlas tokens through `theme-at
 2. Users reconnect or refresh the web dashboard; `UiThemeApplier` sets `data-ui-preset="atlas"`.
 3. Users can still toggle light/dark unless a preset locks appearance (Atlas supports both).
 
-## Pilot charts
+## Charts
 
 Use `AnalyticsChart` with API-normalized `ChartSeries` payloads. Validate with `validateChartSeries` before render. Prefer the bundled table for accessibility and dense exports.
 
-## Acceptance checklist (partial)
+Compare bundle size:
 
-- [ ] Contrast review on real hardware for light/dark Atlas
-- [ ] One production page wired to `AnalyticsChart` with live FinOps data
-- [ ] Nivo pilot only after bundle and a11y comparison with Recharts
-- [ ] Browser e2e for Atlas preset + nested dialogs (see UI data audit doc)
+```bash
+cd web-dashboard && du -sh node_modules/@nivo node_modules/recharts
+```
+
+## Acceptance checklist
+
+- [x] One production page wired to `AnalyticsChart` with live FinOps data (`/allocation`)
+- [x] Nivo pilot installed with env toggle and a11y table fallback retained
+- [x] Browser e2e for Atlas preset + billing chart (`e2e/enterprise-ui-atlas-finops-chart.spec.ts`)
+- [ ] Contrast review on real hardware for light/dark Atlas (see WCAG doc)

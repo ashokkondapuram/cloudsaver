@@ -7,6 +7,7 @@ import {dateTime,providerNames} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
 import {IaCPreview} from '../V150Views';
 import {useWorkspace} from '../WorkspaceProvider';
+import {CodeModePanel} from '../code-mode/CodeModePanel';
 import {EmptyState,Notice,SectionTitle} from '../ui/shared';
 import './agents.css';
 
@@ -80,7 +81,7 @@ export function AgentWorkspace(){
       if(!request.signal.aborted){setTasks(old=>old.map(t=>t.id===value.id?value:t));if(selection.current===value.id)setSelected(value);setConfirmed(false);}}
     catch(cause){if(!request.signal.aborted)setError((cause as Error).message);}finally{if(!request.signal.aborted)setBusy(false);}
   }
-  return <><SectionTitle eyebrow="HUMAN-GOVERNED EXECUTION" title="Agent workspace">Turn a resource task into an AI-drafted plan, review every connector call, and follow the worker’s execution.</SectionTitle>
+  return <div className="agent-workspace" data-atlas-rollout="agent-workspace"><SectionTitle eyebrow="HUMAN-GOVERNED EXECUTION" title="Agent workspace">Turn a resource task into an AI-drafted plan, review every connector call, and follow the worker’s execution.</SectionTitle>
     {error&&<Notice tone="error">{error}</Notice>}
     {catalog&&!catalog.enabled&&<Notice tone="warning">Agent execution is disabled. Your platform operator must configure worker and connector grants before enabling it.</Notice>}
     <div className="agent-process" aria-label="Agent task lifecycle">{[[Bot,'1. AI drafts'],[FileCode2,'2. You review'],[ShieldCheck,'3. You approve'],[Check,'4. Worker executes']].map(([Icon,label])=>{const I=Icon as typeof Bot;return <span key={String(label)}><I size={18}/>{String(label)}</span>;})}</div>
@@ -97,6 +98,7 @@ export function AgentWorkspace(){
     </section><section className="panel agent-queue"><div className="grid-heading"><div><h2>Task queue</h2><p>Active assignments refresh every five seconds.</p></div><button className="icon-button" aria-label="Refresh agent tasks" onClick={()=>refresh(pending.current?.signal).catch(cause=>setError((cause as Error).message))}><RefreshCw size={18}/></button></div>
       {!tasks.length?<EmptyState icon={Bot} title="No agent tasks yet">Assign a task to start a reviewable plan.</EmptyState>:<ul>{tasks.map(t=><li key={t.id}><button aria-pressed={selected?.id===t.id} onClick={()=>open(t)}><span>{t.payload.intent}<small>{dateTime(t.created_at)}</small></span><span className="status-tag">{labels(t.state)}</span></button></li>)}</ul>}
     </section></div>
+    <CodeModePanel/>
     {selected&&<section className="panel agent-review" aria-label="Agent plan review"><div className="grid-heading"><div><h2>Plan & execution review</h2><p>{selected.id} · version {selected.version} · {labels(selected.state)}</p></div><span className="status-tag">{labels(selected.state)}</span></div><div className="agent-review-body">
       <p className="agent-resource">{selected.resource_id}</p><p>{selected.payload.intent}</p>
       {selected.payload.permit_status==='ABORTED_STATE_DRIFT'&&<div className="drift-abort-banner" role="alert"><strong>Pre-mutation drift guard</strong><p>Live cloud state diverged from the approved plan digest. Execution was aborted (ABORTED_STATE_DRIFT). Reconcile drift before approving a new plan.</p></div>}
@@ -115,7 +117,7 @@ export function AgentWorkspace(){
         {['awaiting_approval','rejected','failed','approval_expired'].includes(selected.state)&&<button className="button secondary" disabled={busy||!catalog?.enabled} onClick={()=>review('redraft')}>Request new AI draft</button>}
         {!['succeeded','failed','rejected','cancelled','needs_reconciliation','approval_expired'].includes(selected.state)&&<button className="button secondary" disabled={busy||selected.state==='cancel_requested'} onClick={()=>review('cancel')}>Cancel task</button>}
       </div>}
-      {!!selected.events?.length&&<details><summary>Approval & execution audit</summary><ol>{selected.events.map(e=><li key={e.version}>{labels(e.action)} · {dateTime(e.created_at)} · version {e.version}</li>)}</ol></details>}
+      {!!selected.events?.length&&<section className="agent-event-log" aria-label="Agent task event log" aria-live="polite"><h3>Event log</h3><ol>{selected.events.map(e=><li key={e.version}><time dateTime={e.created_at}>{dateTime(e.created_at)}</time> · {labels(e.action)} · version {e.version}</li>)}</ol></section>}
     </div></section>}
-  </>;
+  </div>;
 }

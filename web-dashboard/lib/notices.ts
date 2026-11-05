@@ -15,3 +15,11 @@ export function dedupeNotices(items: AtlasNotice[]): AtlasNotice[] {
   }
   return out;
 }
+
+/** Sileo-style surface: map Atlas notices onto AppShell toasts (no third-party Sileo package). */
+export type NoticePublisher = (notice: AtlasNotice) => void;
+
+export function atlasNoticeToToast(notice: AtlasNotice): {tone: ReturnType<typeof noticeTone>; text: string} {
+  const text = notice.description ? `${notice.title} — ${notice.description}` : notice.title;
+  return {tone: noticeTone(notice.severity), text};
+}
