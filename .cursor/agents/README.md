@@ -15,7 +15,9 @@ User report / UI change
         │
         ├─► backend-fixer ────────► Python/API/store/gateway fix + rebuild + verify
         │
-        └─► ui-fixer ─────────────► Code + CSS (+ hand off API issues to backend-fixer)
+        ├─► ui-fixer ─────────────► Code + CSS (+ hand off API issues to backend-fixer)
+        │
+        └─► atlas-wcag-auditor ───► Atlas token contrast + Playwright axe + chart a11y smoke
 ```
 
 | Agent | Role | Triggers | Does not |
@@ -25,6 +27,7 @@ User report / UI change
 | **docker-log-analyst** | Compose logs + health snapshot | After deploy/rebuild; UI shows upstream/502/500; scan or API failures; user asks for Docker logs | Fix code unless parent asked |
 | **backend-fixer** | Scanner, gateway, store, workers — minimal Python fixes | 500/502 tracebacks; missing API data; resource/scan endpoints; migrations | Frontend/CSS (ui-fixer) |
 | **ui-fixer** | End-to-end fix in `web-dashboard/` | Layout/CSS bugs; tabs not clickable; drawer issues; stale dashboard image | Backend-only bugs (backend-fixer) |
+| **atlas-wcag-auditor** | Atlas WCAG smoke: contrast script, rollout unit, axe Playwright specs | Atlas/theme/chart changes; WCAG sign-off; Nivo a11y regressions | General tab audit (browser-tab-auditor); Docker logs |
 
 ## Recommended chains
 
@@ -36,6 +39,7 @@ User report / UI change
 | “502 / upstream error” | **docker-log-analyst** → **backend-fixer** → **ui-fixer** or **ui-field-auditor** if UI still wrong |
 | “Fix the backend / API” | **backend-fixer** (logs first if unknown) |
 | “Shipped drawer/CSS change” | **ui-fixer** (build + Docker) → **browser-tab-auditor** |
+| “Atlas / charts / WCAG baseline” | **atlas-wcag-auditor** → **ui-fixer** on fail → re-run auditor |
 | “Is the stack healthy?” | **docker-log-analyst** only |
 
 ## Defaults (CloudSaver)
