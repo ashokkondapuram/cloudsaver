@@ -161,6 +161,8 @@ def _filter(scan, current, strict=None):
 class ScopedStore:
     """Read-side wrapper; writes and other attributes go straight to the underlying store."""
 
+    _LIGHT_HEAVY = frozenset({'inventory', 'source_ledger', 'rule_evaluations', 'coverage_manifest'})
+
     def __init__(self, inner):
         self.inner = inner
 
@@ -179,10 +181,61 @@ class ScopedStore:
             return scans
         return [s for s in (_filter(scan, current, strict=False) for scan in scans) if s is not None]
 
+    def _light_projection(self, scans):
+        heavy = self._LIGHT_HEAVY
+        return [{k: v for k, v in item.items() if k not in heavy} for item in scans]
+
     def list_light(self, tenant_id, limit=50):
-        list_light = getattr(self.inner, 'list_light', self.inner.list)
-        scans = list_light(tenant_id, limit)
+        scans = self.inner.list(tenant_id, limit)
         current = access.get()
         if current is None:
-            return scans
-        return [s for s in (_filter(scan, current, strict=False) for scan in scans) if s is not None]
+            return self._light_projection(scans)
+        filtered = [s for s in (_filter(scan, current, strict=False) for scan in scans) if s is not None]
+        return self._light_projection(filtered)
+
+    def running_inventory_page(self, tenant_id, scan_id, *, offset=0, limit=100):
+        current = access.get()
+        if current is None:
+            return self.inner.running_inventory_page(tenant_id, scan_id, offset=offset, limit=limit)
+        scan = self.get(tenant_id, scan_id)
+        if scan is None:
+            return None
+        inventory = scan.get('inventory') or []
+        offset = max(0, int(offset))
+        limit = max(1, min(int(limit), 1000))
+        return dict(
+            scan_id=scan['scan_id'],
+            status=scan.get('status'),
+            timestamp=scan.get('timestamp'),
+            data_origin=scan.get('data_origin'),
+            inventory_total=len(inventory),
+            inventory=inventory[offset:offset + limit],
+            findings=list(scan.get('findings') or []),
+        )
+
+    def scan_resource_bundle(self, tenant_id, scan_id, provider, resource_id):
+        current = access.get()
+        if current is None:
+            return self.inner.scan_resource_bundle(tenant_id, scan_id, provider, resource_id)
+        bundle = self.inner.scan_resource_bundle(tenant_id, scan_id, provider, resource_id)
+        if bundle is None:
+            return None
+        providers, _, scopes = current
+        observation = bundle.get('observation')
+        if observation and observation.get('cloud_provider', 'azure') not in providers:
+            observation = None
+        elif observation and scopes and not finding_in_scope(dict(observation, cloud_provider=observation.get('cloud_provider', 'azure')), scopes):
+            observation = None
+        findings = [f for f in (bundle.get('findings') or [])
+                    if f.get('cloud_provider', 'azure') in providers and finding_in_scope(f, scopes)]
+        if not observation and not findings:
+            return None
+        return dict(bundle, observation=observation, findings=findings)
+
+    def findings_for_resource_key(self, tenant_id, scan_id, key):
+        findings = self.inner.findings_for_resource_key(tenant_id, scan_id, key)
+        current = access.get()
+        if current is None:
+            return findings
+        providers, _, scopes = current
+        return [f for f in findings if f.get('cloud_provider', 'azure') in providers and finding_in_scope(f, scopes)]

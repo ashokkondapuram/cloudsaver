@@ -94,6 +94,10 @@ def _post(url, token, body, scope_id=None):
         key='gcp:bigquery:'+parsed.path.split('/')[4]
         interval=0
         deadline_seconds=30
+        raw_attempts = os.getenv('CLOUDSAVER_GCP_BIGQUERY_ATTEMPTS', '3')
+        attempts = min(5, int(raw_attempts))
+        if not 1 <= int(raw_attempts) <= 12:
+            raise ValueError('CLOUDSAVER_GCP_BIGQUERY_ATTEMPTS must be between 1 and 12')
     else:raise ValueError('Unexpected billing destination')
     with httpx.Client(follow_redirects=False) as client:
         return read_json(client,'POST',url,headers={'Authorization':'Bearer '+token},json=body,

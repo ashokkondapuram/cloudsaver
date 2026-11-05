@@ -174,6 +174,7 @@ ROUTES = {
     ('GET', '/api/v1/catalog/typed-resource-tables'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources/export'): 'scoped_read',
+    ('POST', '/api/v1/scans/{scan_id}/resource-signals/lookup'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources/{resource_key}'): 'scoped_read',
     ('GET', '/api/v1/scans/{scan_id}/resources/{key}'): 'scoped_read',
     ('GET', '/api/v1/resources/{resource_key}/history'): 'scoped_read',

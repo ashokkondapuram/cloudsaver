@@ -516,7 +516,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         for ident in body.identities:
             target = normalize_resource_id(ident.provider, ident.resource_id)
             match_key = None
-            for key, assessment in merged.items():
+            for key, (assessment, _context) in merged.items():
                 if assessment['provider'] == ident.provider and normalize_resource_id(ident.provider, assessment['resource_id']) == target:
                     match_key = key
                     break
@@ -524,7 +524,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 match_key = resource_key(dict(cloud_provider=ident.provider, resource_id=ident.resource_id))
             keyed[match_key] = dict(provider=ident.provider, resource_id=ident.resource_id)
 
-        key_set = set(keyed)
+        key_set = set(keyed) & set(merged)
         if scan['status'] == 'running':
             results, states, decisions = {}, {}, {}
         else:
@@ -534,11 +534,14 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
         items = []
         for key, meta in keyed.items():
-            assessment = merged.get(key) or dict(
-                provider=meta['provider'],
-                resource_id=meta['resource_id'],
-                evidence_digest='0' * 64,
-            )
+            if key in merged:
+                assessment, _context = merged[key]
+            else:
+                assessment = dict(
+                    provider=meta['provider'],
+                    resource_id=meta['resource_id'],
+                    evidence_digest='0' * 64,
+                )
             items.append(dict(
                 resource_key=key,
                 provider=meta['provider'],

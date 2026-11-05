@@ -310,8 +310,6 @@ def assessments(scan, *, now=None, list_view=False):
             merged[key] = (overlay_inventory_billing(assessment, obs), context)
             continue
         merged[key] = merge_inventory(key, obs, observed_at=scan.get('timestamp'), now=now, list_view=list_view)
-    if list_view:
-        return merged
     from app.ai_scan_context import augment_ai_context_from_scan
     from app.ai_resource_context import stable_digest_context
 

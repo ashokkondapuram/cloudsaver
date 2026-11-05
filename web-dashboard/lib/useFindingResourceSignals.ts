@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import type {Finding} from './types';
 import {identityOf, type ResourceRow} from './resources';
 import {lookupResourceSignals, type ResourceSignal} from './resource-signals';
@@ -22,25 +22,31 @@ export function useFindingResourceSignals(scanId: string | undefined, token: str
 
   const [signals, setSignals] = useState<Map<string, ResourceSignal>>(new Map());
   const [error, setError] = useState('');
+  const requestKey = `${scanId ?? ''}:${token}:${identities.map(i => identityOf(i.provider, i.resource_id)).join('|')}`;
+  const activeKey = useRef('');
 
   useEffect(() => {
+    activeKey.current = requestKey;
     if (!enabled || !scanId || !token || !identities.length) {
       setSignals(new Map());
       setError('');
       return;
     }
-    const request = new AbortController();
+    setSignals(new Map());
     setError('');
+    const request = new AbortController();
     lookupResourceSignals(scanId, token, identities, request.signal)
       .then(rows => {
-        if (request.signal.aborted) return;
+        if (request.signal.aborted || activeKey.current !== requestKey) return;
         setSignals(new Map(rows.map(row => [identityOf(row.provider, row.resource_id), row])));
       })
       .catch(cause => {
-        if (!request.signal.aborted) setError((cause as Error).message);
+        if (request.signal.aborted || activeKey.current !== requestKey) return;
+        setSignals(new Map());
+        setError((cause as Error).message);
       });
     return () => request.abort();
-  }, [enabled, scanId, token, identities]);
+  }, [enabled, scanId, token, identities, requestKey]);
 
   const resources = useMemo(() => {
     const map = new Map<string, Pick<ResourceRow, 'resource_key' | 'provider' | 'resource_id' | 'ai' | 'decision'>>();

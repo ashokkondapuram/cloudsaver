@@ -134,6 +134,7 @@ function CommandPalette() {
   const [active, setActive] = useState(0);
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {if (overlay === 'command') {setQuery(''); setActive(0);}}, [overlay]);
   const commands = useMemo(() => {
     const links = navigation.map(item => ({id: item.href, label: item.label, note: 'Navigate', icon: item.icon, action: () => {setOverlay(null); router.push(item.href);}}));
@@ -142,9 +143,19 @@ function CommandPalette() {
     const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:Blocks,action:()=>{setOverlay(null);router.push(`/resources?provider=${providerOf(f)}&resource_id=${encodeURIComponent(f.resource_id)}`);}})) : [];
     return [...links, ...explorers, ...actions].filter(c => matchesQuery(c.label,query)).concat(resources);
   }, [query, scan, canAdmin, router, setOverlay]);
+  useEffect(() => {
+    setActive(index => {
+      if (!commands.length) return 0;
+      return Math.min(index, commands.length - 1);
+    });
+  }, [commands]);
+  useEffect(() => {
+    if (!commands.length) return;
+    document.getElementById(`command-${active}`)?.scrollIntoView({block: 'nearest'});
+  }, [active, commands.length]);
   return <Dialog open={overlay === 'command'} onClose={() => setOverlay(null)} title="Search & commands" className="command-dialog">
     <div className="command-search"><Search size={20}/><input ref={input} autoFocus placeholder="Search pages, actions, resources…" aria-label="Search commands and resources" role="combobox" aria-expanded="true" aria-controls="command-results" aria-activedescendant={commands[active] ? `command-${active}` : undefined} value={query} onChange={e => {setQuery(e.target.value); setActive(0);}} onKeyDown={e => {if (e.key === 'ArrowDown') {e.preventDefault(); setActive(i => Math.min(i + 1,commands.length - 1));} else if(e.key === 'ArrowUp') {e.preventDefault(); setActive(i => Math.max(0,i - 1));} else if(e.key === 'Enter') {e.preventDefault(); commands[active]?.action();}}}/><kbd>esc</kbd></div>
-    <div className="command-results" id="command-results" role="listbox" aria-label="Commands">{commands.map((command,index) => <button type="button" role="option" aria-selected={index === active} id={`command-${index}`} key={command.id} className={index === active ? 'selected' : ''} onMouseEnter={() => setActive(index)} onClick={command.action}><command.icon size={18}/><span>{command.label}<small>{command.note}</small></span><ArrowRight size={15}/></button>)}{!commands.length && <p className="command-empty">No matching pages or resources.</p>}</div>
+    <div className="command-results" id="command-results" role="listbox" aria-label="Commands" ref={resultsRef}>{commands.map((command,index) => <button type="button" role="option" aria-selected={index === active} id={`command-${index}`} key={command.id} className={index === active ? 'selected' : ''} onMouseEnter={() => setActive(index)} onClick={command.action}><command.icon size={18}/><span>{command.label}<small>{command.note}</small></span><ArrowRight size={15}/></button>)}{!commands.length && <p className="command-empty">No matching pages or resources.</p>}</div>
     <div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span><span><kbd>↵</kbd> to open</span><span><kbd>esc</kbd> to close</span></div>
   </Dialog>;
 }

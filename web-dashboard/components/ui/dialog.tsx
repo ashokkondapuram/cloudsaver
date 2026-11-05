@@ -3,6 +3,20 @@
 import {useLayoutEffect, useRef, type ReactNode} from 'react';
 import {X} from 'lucide-react';
 
+let openDialogCount = 0;
+let savedBodyOverflow = '';
+
+function lockBodyScroll() {
+  if (openDialogCount === 0) savedBodyOverflow = document.body.style.overflow;
+  openDialogCount += 1;
+  if (openDialogCount === 1) document.body.style.overflow = 'hidden';
+}
+
+function unlockBodyScroll() {
+  openDialogCount = Math.max(0, openDialogCount - 1);
+  if (openDialogCount === 0) document.body.style.overflow = savedBodyOverflow;
+}
+
 export function Dialog({open, onClose, title, children, drawer = false, className = '', returnFocusKey, headerExtra}: {
   open: boolean; onClose: () => void; title: string; children: ReactNode; drawer?: boolean; className?: string; returnFocusKey?:string|null; headerExtra?: ReactNode;
 }) {
@@ -15,17 +29,15 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
     const previous = document.activeElement as HTMLElement | null;
     const focusKey = returnKey.current||previous?.getAttribute('data-focus-return');
     element.showModal();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
     return () => {
-      element.close(); document.body.style.overflow = previousOverflow;
-      // Restore after React has removed the modal and the browser has finished
-      // its native dialog focus handling and virtual rows have settled after resize.
-      // A second frame resolves the current row if overflow changes remount it.
+      element.close();
+      unlockBodyScroll();
       requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (document.querySelector('dialog[open]')) return;
         const current=focusKey?document.querySelector<HTMLElement>(`[data-focus-return="${CSS.escape(focusKey)}"]`):null;
         const target=current||(previous?.isConnected?previous:null);
-        if (target && !document.querySelector('dialog[open]')) target.focus({preventScroll:true});
+        if (target) target.focus({preventScroll:true});
       }));
     };
   }, [open]);

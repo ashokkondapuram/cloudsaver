@@ -105,9 +105,9 @@ def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dic
     raise ScanError("Azure inventory exceeded the pagination limit.")
 
 
-def inventory_query(*, settings=None) -> str:
-    """Full ARG inventory query, optionally capped for local pilot scans."""
-    query = (
+def inventory_query_body() -> str:
+    """Uncapped Azure Resource Graph inventory projection (no settings access)."""
+    return (
         "Resources | where isnotempty(id)" + _PROJECTION
         + ', diskState=tostring(properties.diskState), powerState=tostring(properties.extended.instanceView.powerState.code)'
         + ', vmSize=tostring(properties.hardwareProfile.vmSize), skuName=tostring(sku.name)'
@@ -126,6 +126,11 @@ def inventory_query(*, settings=None) -> str:
         + ', networkPlugin=tostring(properties.networkProfile.networkPlugin), agentPoolProfiles=properties.agentPoolProfiles'
         + ', publicIpConfiguration=properties.ipConfiguration, publicNatGateway=properties.natGateway'
     )
+
+
+def inventory_query(*, settings=None) -> str:
+    """Full ARG inventory query, optionally capped for local pilot scans."""
+    query = inventory_query_body()
     from app.config import Settings
     from app.cloudsaver_platform_settings import integration_int
     settings = settings or Settings.load()
@@ -138,7 +143,7 @@ def inventory_query(*, settings=None) -> str:
 
 
 # Backward-compatible name for tests and docs that reference the uncapped query shape.
-INVENTORY_QUERY = inventory_query()
+INVENTORY_QUERY = inventory_query_body()
 
 
 def scan_inventory_observations(client: Any, subscriptions: list[str], *, settings=None) -> list[dict]:

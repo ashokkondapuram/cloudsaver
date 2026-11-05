@@ -70,6 +70,15 @@ def adapter_for(calls, mutate=None):
     return adapter
 
 
+def test_list_and_detail_assessments_share_evidence_digest():
+    a = disk('disk-a')
+    scan = dict(findings=[a], inventory=[], timestamp='2026-10-22T00:00:00+00:00', status='completed')
+    key = resource_key(a)
+    list_pair = assessments(scan, list_view=True)[key]
+    detail_pair = assessments(scan, list_view=False)[key]
+    assert list_pair[0]['evidence_digest'] == detail_pair[0]['evidence_digest']
+
+
 def test_merge_inventory_observation_enriches_thin_finding_evidence():
     a = disk('disk-a', evidence={})
     obs = dict(
