@@ -83,8 +83,11 @@ async def upstream(method, base, path, authorization, *, params=None, json=None,
             raise HTTPException(502, 'Unexpected upstream redirect')
         if preserve_response:
             from fastapi.responses import JSONResponse
-            return JSONResponse(response.json(),status_code=response.status_code,
-                                headers={key:response.headers[key] for key in ('ETag','Location') if key in response.headers})
+            status_code = response.status_code
+            if status_code == 200 and method == 'POST' and path.endswith('/multi-cloud'):
+                status_code = 201
+            return JSONResponse(response.json(), status_code=status_code,
+                                headers={key: response.headers[key] for key in ('ETag', 'Location') if key in response.headers})
         return response.json()
     except (httpx.HTTPError, ValueError):
         raise HTTPException(502, 'Upstream service unavailable or returned invalid data') from None

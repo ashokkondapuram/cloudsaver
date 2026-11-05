@@ -78,7 +78,7 @@ def condition(rid,e,p,now):
 
 def evaluate_inventory(inventory,*,policies=None,observed_at=None,now=None,providers=None):
     from app.analysis_rules import LEGACY_AZURE_RULE_IDS
-    from app.resource_catalog import rule_resource_type_suffix
+    from app.azure_evidence_contracts import rule_resource_type_suffix
     now=now or datetime.now(timezone.utc);lookup={r[0]:r for r in definitions()};result=[]
     for resource in inventory:
         f=family(resource)

@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.analysis_rules import evaluate_inventory
-from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS
+from app.azure_evidence_contracts import AZURE_EVIDENCE_CONTRACT_IDS
 from app.dependencies import canonical_inventory, group_opportunities
 from app.inventory import coverage_manifest
 from app.pricing import opportunity_totals

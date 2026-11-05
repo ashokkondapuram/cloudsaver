@@ -32,6 +32,9 @@ def private_write(path, text):
 
 
 def env_values(path):
+    path = Path(path)
+    if not path.exists():
+        return {}
     result = {}
     for line in path.read_text().splitlines():
         if not line.strip() or line.lstrip().startswith('#') or '=' not in line:
@@ -106,7 +109,16 @@ def sync_secrets(env_file, home, auth_mode=None, local_creds=True):
     env_file = Path(env_file)
     if local_creds:
         patch_env_file(env_file, {'CLOUDSAVER_STACK_HOME': str(home)})
-        apply_workspace_local_auth(env_file)
+        selected = auth_mode or (env_values(env_file).get('CLOUDSAVER_AUTH_MODE') if env_file.exists() else None)
+        if selected == 'license':
+            patch_env_file(env_file, {'CLOUDSAVER_AUTH_MODE': 'license'})
+            license_env = home / 'license.env'
+            if license_env.exists():
+                license_values = {k: v for k, v in env_values(license_env).items() if k.startswith('CLOUDSAVER_')}
+                if license_values:
+                    patch_env_file(env_file, license_values)
+        else:
+            apply_workspace_local_auth(env_file)
         return env_file
     selected=auth_mode or (env_values(env_file).get('CLOUDSAVER_AUTH_MODE') if env_file.exists() else None)
     values={}
@@ -355,8 +367,12 @@ finally:
         config.mkdir(parents=True,exist_ok=True)
         if self.auth_mode=='workspace':
             (config/'cloudsaver.env').write_text(workspace_cloudsaver_env())
-            ensure_runtime_key_verifier(self.home,'identity')
-            sync_secrets(self.env_file,self.home,self.auth_mode,self.local_creds)
+            runtime = self.home / 'runtime.env'
+            if not runtime.exists():
+                private_write(runtime, workspace_cloudsaver_env())
+            else:
+                ensure_runtime_key_verifier(self.home, 'identity')
+            sync_secrets(self.env_file, self.home, self.auth_mode, self.local_creds)
         elif self.auth_mode=='license':
             binding=config/'cloudsaver.env'
             if binding.exists():

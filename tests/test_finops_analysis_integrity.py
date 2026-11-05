@@ -6,17 +6,15 @@ import pytest
 from app.analysis_rules import evaluate_inventory
 from app.finops_resize_playbooks import PLAYBOOKS, resolve_playbook
 from app.kubernetes_rules import DEFINITIONS as K8_DEFINITIONS, RULE_IDS as K8_RULE_IDS
-from app.resource_catalog import (
+import ast
+
+from app.azure_evidence_contracts import (
     AZURE_EVIDENCE_CONTRACT_IDS,
-    FAMILIES,
-    RULE_DISPLAY_NAMES,
     azure_evidence_contract,
     azure_evidence_contracts,
-    definitions,
-    display_name,
-    family,
     rule_resource_type_suffix,
 )
+from app.resource_catalog import FAMILIES, RULE_DISPLAY_NAMES, definitions, display_name, family
 
 NOW = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 NOW -= timedelta(minutes=NOW.minute % 5)
@@ -104,17 +102,22 @@ def test_each_catalog_family_evaluates_expected_rules_without_errors(family_row)
                 assert row.get("estimated_savings") is None or row["estimated_savings"] == 0
 
 
-def test_azure_evidence_contract_bounds_match_platform_identity():
-    """Platform identity DEFINITIONS must stay aligned with resource_catalog contract bounds."""
-    import sys
+def _platform_contract_definitions():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    platform = root / 'platform'
-    if str(platform) not in sys.path:
-        sys.path.insert(0, str(platform))
-    from identity.analysis.contracts import DEFINITIONS
+    tree = ast.parse((root / 'platform/identity/analysis/contracts.py').read_text())
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == 'DEFINITIONS':
+                    return ast.literal_eval(node.value)
+    raise AssertionError('platform contracts DEFINITIONS not found')
 
+
+def test_azure_evidence_contract_bounds_match_platform_identity():
+    """Platform identity DEFINITIONS must stay aligned with resource_catalog contract bounds."""
+    DEFINITIONS = _platform_contract_definitions()
     catalog_bounds = {rid: azure_evidence_contract(rid)[3] for rid in AZURE_EVIDENCE_CONTRACT_IDS}
     identity_bounds = {row[0]: row[4] for row in DEFINITIONS}
     assert set(catalog_bounds) == set(identity_bounds)

@@ -4,7 +4,7 @@ import math
 import pytest
 
 from app.analysis_rules import evaluate, evaluate_inventory, parameters, series
-from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS, azure_evidence_contract, azure_evidence_contracts
+from app.azure_evidence_contracts import AZURE_EVIDENCE_CONTRACT_IDS, azure_evidence_contract, azure_evidence_contracts
 from app.inventory import coverage
 
 NOW = datetime(2026, 10, 23, 18, tzinfo=timezone.utc)

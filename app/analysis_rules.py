@@ -9,7 +9,7 @@ VERSION = '1.4.0'
 OUTCOMES = ('condition_detected', 'condition_not_detected', 'insufficient_evidence', 'not_applicable',
             'disabled_by_policy', 'excluded_by_exception', 'unsupported_by_collector', 'evaluation_failed')
 
-from app.resource_catalog import AZURE_EVIDENCE_CONTRACT_IDS as LEGACY_AZURE_RULE_IDS
+from app.azure_evidence_contracts import AZURE_EVIDENCE_CONTRACT_IDS as LEGACY_AZURE_RULE_IDS
 
 
 def moment(value):
@@ -21,7 +21,7 @@ def moment(value):
 
 
 def parameters(rule_id, overrides=None):
-    from app.resource_catalog import validate_rule_parameters
+    from app.azure_evidence_contracts import validate_rule_parameters
 
     return validate_rule_parameters(rule_id, overrides)
 

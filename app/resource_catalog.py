@@ -123,64 +123,6 @@ def family(resource):
 def catalog():
     return [dict(provider=p,family=f,service_category=c,resource_types=list(k),rule_ids=list(r)) for p,f,c,k,r in FAMILIES]
 
-# Published parameter bounds for the eight Azure evidence contracts (identity + settings parity).
-_AZURE_CONTRACT_BOUNDS = {
-    'AZURE_DISK_UNATTACHED_RETENTION': {'minimum_days': (14, 7, 90)},
-    'AZURE_DISK_PROVISIONED_PERFORMANCE': {'headroom_percent': (30, 20, 100)},
-    'AZURE_PUBLIC_IP_UNASSOCIATED': {'minimum_days': (7, 7, 90)},
-    'AZURE_PUBLIC_IP_ASSOCIATED_IDLE': {'maximum_bytes': (0, 0, 1024)},
-    'AZURE_VM_STOPPED_RESIDUAL_COST': {'minimum_days': (14, 7, 90)},
-    'AZURE_VM_RIGHTSIZING_UTILIZATION': {'cpu_percent': (10, 1, 20)},
-    'AZURE_ASP_EMPTY_PAID_PLAN': {'minimum_days': (7, 7, 90)},
-    'AZURE_ASP_UNDERUTILIZED_SKU': {'cpu_percent': (15, 1, 30), 'memory_percent': (30, 1, 40)},
-}
-_AZURE_EVIDENCE_TYPE_SUFFIX = {
-    'AZURE_DISK_UNATTACHED_RETENTION': 'disks',
-    'AZURE_DISK_PROVISIONED_PERFORMANCE': 'disks',
-    'AZURE_PUBLIC_IP_UNASSOCIATED': 'publicipaddresses',
-    'AZURE_PUBLIC_IP_ASSOCIATED_IDLE': 'publicipaddresses',
-    'AZURE_VM_STOPPED_RESIDUAL_COST': 'virtualmachines',
-    'AZURE_VM_RIGHTSIZING_UTILIZATION': 'virtualmachines',
-    'AZURE_ASP_EMPTY_PAID_PLAN': 'serverfarms',
-    'AZURE_ASP_UNDERUTILIZED_SKU': 'serverfarms',
-}
-
-AZURE_EVIDENCE_CONTRACT_IDS = frozenset(_AZURE_CONTRACT_BOUNDS)
-
-
-def azure_evidence_contract(rule_id: str):
-    """Return (rule_id, arm_type_suffix, display_name, parameter_bounds) for contract unit tests."""
-    return (
-        rule_id,
-        _AZURE_EVIDENCE_TYPE_SUFFIX[rule_id],
-        RULE_DISPLAY_NAMES[rule_id],
-        dict(_AZURE_CONTRACT_BOUNDS[rule_id]),
-    )
-
-
-def azure_evidence_contracts():
-    return tuple(azure_evidence_contract(rid) for rid in sorted(AZURE_EVIDENCE_CONTRACT_IDS))
-
-
-def rule_resource_type_suffix(rule_id: str) -> str | None:
-    return _AZURE_EVIDENCE_TYPE_SUFFIX.get(rule_id)
-
-
-def validate_rule_parameters(rule_id, overrides=None):
-    bounds = {row[0]: row[6] for row in definitions()}.get(rule_id)
-    if not bounds:
-        raise ValueError('Unknown rule parameter')
-    if not isinstance(overrides or {}, dict) or set(overrides or {}) - set(bounds):
-        raise ValueError('Unknown rule parameter')
-    result = {}
-    for key, (default, low, high) in bounds.items():
-        value = (overrides or {}).get(key, default)
-        if type(value) is not int or not low <= value <= high:
-            raise ValueError(f'{key} must be an integer between {low} and {high}')
-        result[key] = value
-    return result
-
-
 def definitions():
     # Legacy contracts keep their own established bounds. New contracts use these
     # conservative delegated thresholds; target compatibility is separate evidence.
@@ -189,14 +131,13 @@ def definitions():
         for rid in rules:
             if rid in seen:continue
             seen.add(rid)
-            bounds=dict(_AZURE_CONTRACT_BOUNDS.get(rid) or {})
-            if rid not in _AZURE_CONTRACT_BOUNDS:
-                if any(s in rid for s in ('UNATTACHED','STOPPED')):bounds={'minimum_days':(14,7,90)}
-                if any(s in rid for s in ('UNASSIGNED','UNASSOCIATED','ELB_ORPHANED','APPGW_EMPTY','EMPTY_BACKEND')) or rid=='AWS_IDLE_RDS':bounds={'minimum_days':(7,7,90)}
-                if 'RIGHTSIZING' in rid:bounds={'utilization_percent':(15 if category=='compute' else 20,1,35)}
-                if rid in ('AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING','GCP_DISK_HYPERDISK_IOPS_TUNING'):bounds={'headroom_percent':(30,20,100)}
-                for fragment,default in (('COSMOSDB',30),('REDIS_UNDERUTILIZED',25),('DYNAMODB',18),('ELASTICACHE',25),('LAMBDA',15),('BIGQUERY',25),('FOUNDRY_PTU',35)):
-                    if fragment in rid:bounds={'utilization_percent':(default,1,40)}
+            bounds={}
+            if any(s in rid for s in ('UNATTACHED','STOPPED')):bounds={'minimum_days':(14,7,90)}
+            if any(s in rid for s in ('UNASSIGNED','UNASSOCIATED','ELB_ORPHANED','APPGW_EMPTY','EMPTY_BACKEND')) or rid=='AWS_IDLE_RDS':bounds={'minimum_days':(7,7,90)}
+            if 'RIGHTSIZING' in rid:bounds={'utilization_percent':(15 if category=='compute' else 20,1,35)}
+            if rid in ('AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING','GCP_DISK_HYPERDISK_IOPS_TUNING'):bounds={'headroom_percent':(30,20,100)}
+            for fragment,default in (('COSMOSDB',30),('REDIS_UNDERUTILIZED',25),('DYNAMODB',18),('ELASTICACHE',25),('LAMBDA',15),('BIGQUERY',25),('FOUNDRY_PTU',35)):
+                if fragment in rid:bounds={'utilization_percent':(default,1,40)}
             if provider=='kubernetes':bounds={}
             pillar='reliability' if 'STATEFULSET' in rid else 'operations' if 'ABANDONED' in rid else 'cost'
             if rid not in RULE_DISPLAY_NAMES:

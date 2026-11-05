@@ -317,7 +317,7 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
             if row.rule_id not in after or after[row.rule_id]['status'] != 'published':
                 raise HTTPException(422, 'Choose a published rule.')
             try:
-                from app.resource_catalog import validate_rule_parameters
+                from app.azure_evidence_contracts import validate_rule_parameters
 
                 validate_rule_parameters(row.rule_id, row.parameters)
             except ValueError as exc:

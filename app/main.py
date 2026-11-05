@@ -498,7 +498,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 store.save(tenant_id, validated, workspace=tenant)
             logger.info('Scan saved workspace=%s scan_id=%s', tenant_id, scan_id)
             scan_completed = True
-            return validated
+            from app.scan_response import scan_for_api
+            return scan_for_api(validated)
         except HTTPException:
             raise
         except ScanError as exc:
