@@ -60,8 +60,6 @@ def worker_validate(payload: dict) -> dict:
     """Runs inside scanner-service: Postgres + batched Azure ARG (+ optional ARM spot checks)."""
     from uuid import UUID
 
-    from azure.mgmt.resourcegraph import ResourceGraphClient
-
     from app.azure_resource_registry import arm_api_version, normalize_arm_body, supports_arm_detail
     from app.cloud_http import JSONReader
     from app.cloud_identity import CredentialError, azure_credential, identity_mode
@@ -112,78 +110,78 @@ def worker_validate(payload: dict) -> dict:
     ids = [s['resource_id'] for s in samples if s.get('resource_id')]
 
     with credential() as cred:
-        with ResourceGraphClient(cred, retry_total=2) as rg:
-            az_by_id: dict[str, dict] = {}
-            for start in range(0, len(ids), 50):
-                chunk = ids[start : start + 50]
-                quoted = ','.join("'" + i.replace("'", "''") + "'" for i in chunk)
-                query = (
-                    'Resources | where id in (' + quoted + ') '
-                    '| project id, name, type, resourceGroup, location, subscriptionId'
-                )
-                for az in execute_pages(rg, query, subs):
-                    az_by_id[az['id'].lower()] = az
+        az_by_id: dict[str, dict] = {}
+        for start in range(0, len(ids), 50):
+            chunk = ids[start : start + 50]
+            quoted = ','.join("'" + i.replace("'", "''") + "'" for i in chunk)
+            query = (
+                'Resources | where id in (' + quoted + ') '
+                '| project id, name, type, resourceGroup, location, subscriptionId'
+            )
+            for az in execute_pages(cred, query, subs):
+                az_by_id[az['id'].lower()] = az
 
-            from app.cloud_http import BearerTokenCache
+        from app.cloud_http import BearerTokenCache
 
-            reader = JSONReader(headers_factory=BearerTokenCache(cred, 'https://management.azure.com/.default'))
-            for sample in samples:
-                rid = (sample.get('resource_id') or '').lower()
-                rtype = (sample.get('resource_type') or '').lower()
-                entry: dict[str, Any] = {
-                    'resource_type': rtype,
-                    'resource_name': sample.get('resource_name'),
-                    'resource_key': sample.get('resource_key'),
-                    'checks': {},
-                    'issues': [],
-                }
-                hit = db_index.get(rid)
-                inv_row = hit[1] if hit and hit[0] == 'inventory' else None
-                entry['checks']['db_source'] = hit[0] if hit else None
-                entry['checks']['db_inventory_row'] = inv_row is not None
-                if not hit:
-                    entry['issues'].append('postgres: missing in findings and inventory')
-                elif hit[0] == 'finding':
-                    entry['checks']['db_finding_only'] = True
-                    entry['issues'].extend(compare_api_to_db_record(sample, 'finding', hit[1]))
-                else:
-                    if (hit[1].get('resource_name') or '') != (sample.get('resource_name') or ''):
-                        entry['issues'].append('postgres: name differs from API list')
-                    ev = hit[1].get('evidence') or {}
-                    entry['checks']['db_arm_detail'] = ev.get('arm_detail')
+        reader = JSONReader(headers_factory=BearerTokenCache(cred, 'https://management.azure.com/.default'))
+        for sample in samples:
+            rid = (sample.get('resource_id') or '').lower()
+            rtype = (sample.get('resource_type') or '').lower()
+            entry: dict[str, Any] = {
+                'resource_type': rtype,
+                'resource_name': sample.get('resource_name'),
+                'resource_key': sample.get('resource_key'),
+                'checks': {},
+                'issues': [],
+            }
+            hit = db_index.get(rid)
+            inv_row = hit[1] if hit and hit[0] == 'inventory' else None
+            entry['checks']['db_source'] = hit[0] if hit else None
+            entry['checks']['db_inventory_row'] = inv_row is not None
+            if not hit:
+                entry['issues'].append('postgres: missing in findings and inventory')
+            elif hit[0] == 'finding':
+                entry['checks']['db_finding_only'] = True
+                entry['issues'].extend(compare_api_to_db_record(sample, 'finding', hit[1]))
+            else:
+                if (hit[1].get('resource_name') or '') != (sample.get('resource_name') or ''):
+                    entry['issues'].append('postgres: name differs from API list')
+                ev = hit[1].get('evidence') or {}
+                entry['checks']['db_arm_detail'] = ev.get('arm_detail')
 
-                db_row = inv_row
+            db_row = inv_row
 
-                az = az_by_id.get(rid)
-                entry['checks']['azure_arg_found'] = az is not None
-                if az:
-                    entry['issues'].extend(compare_identity(az, sample, 'azure_arg vs api_list'))
-                    if db_row:
-                        entry['issues'].extend(compare_identity(az, db_row, 'azure_arg vs db'))
-                else:
-                    entry['issues'].append('azure: resource not found in ARG')
+            az = az_by_id.get(rid)
+            entry['checks']['azure_arg_found'] = az is not None
+            if az:
+                entry['issues'].extend(compare_identity(az, sample, 'azure_arg vs api_list'))
+                if db_row:
+                    entry['issues'].extend(compare_identity(az, db_row, 'azure_arg vs db'))
+            else:
+                entry['issues'].append('azure: resource not found in ARG')
 
-                if db_row and supports_arm_detail(rtype):
-                    arm_status = (db_row.get('evidence') or {}).get('arm_detail')
-                    entry['checks']['arm_detail_status'] = arm_status
-                    if arm_status == 'resource_budget_exceeded':
-                        entry['checks']['arm_skipped_reason'] = 'pilot ARM detail cap'
-                    elif arm_status == 'collected' and arm_spots_left > 0:
-                        version = arm_api_version(rtype)
-                        if version:
-                            arm_spots_left -= 1
-                            try:
-                                scope = sample['resource_id'].split('/providers/')[0]
-                                validate_arm_resource_path(sample['resource_id'], scope_path_lower=scope)
-                                body = reader.get(arm_url(sample['resource_id']), {'api-version': version})
-                                live_typed = (normalize_arm_body(body).get('typed_configuration')) or {}
-                                db_typed = ((db_row.get('evidence') or {}).get('typed_configuration')) or {}
-                                entry['checks']['arm_live_spot_check'] = True
-                                if live_typed and db_typed and not (set(live_typed) & set(db_typed)):
-                                    entry['issues'].append('arm: typed_configuration keys diverge from live ARM')
-                            except Exception as exc:  # noqa: BLE001 — audit script
-                                entry['issues'].append(f'azure_arm: {type(exc).__name__}')
-                results.append(entry)
+            if db_row and supports_arm_detail(rtype):
+                arm_status = (db_row.get('evidence') or {}).get('arm_detail')
+                entry['checks']['arm_detail_status'] = arm_status
+                if arm_status == 'resource_budget_exceeded':
+                    entry['checks']['arm_skipped_reason'] = 'pilot ARM detail cap'
+                elif arm_status == 'collected' and arm_spots_left > 0:
+                    version = arm_api_version(rtype)
+                    if version:
+                        arm_spots_left -= 1
+                        try:
+                            scope = sample['resource_id'].split('/providers/')[0]
+                            validate_arm_resource_path(sample['resource_id'], scope_path_lower=scope)
+                            body = reader.get(arm_url(sample['resource_id']), {'api-version': version})
+                            live_typed = (normalize_arm_body(body).get('typed_configuration')) or {}
+                            db_typed = ((db_row.get('evidence') or {}).get('typed_configuration')) or {}
+                            entry['checks']['arm_live_spot_check'] = True
+                            if live_typed and db_typed and not (set(live_typed) & set(db_typed)):
+                                entry['issues'].append('arm: typed_configuration keys diverge from live ARM')
+                        except Exception as exc:  # noqa: BLE001 — audit script
+                            entry['issues'].append(f'azure_arm: {type(exc).__name__}')
+            results.append(entry)
+        reader.close()
 
     return {'scan_id': scan_id, 'sample_count': len(results), 'results': results}
 

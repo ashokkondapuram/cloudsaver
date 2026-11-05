@@ -19,6 +19,9 @@ ACTIVITY_LOG_EVENTS_API_VERSION = '2015-04-01'
 # Authorization — Management Locks — List at scope.
 AUTHORIZATION_LOCKS_API_VERSION = '2016-09-01'
 
+# Resource Graph — Resources — Resources (tenant inventory query).
+RESOURCE_GRAPH_API_VERSION = '2024-04-01'
+
 AZURE_REST_CATALOG = {
     'arm_resource_get': {
         'doc': 'https://learn.microsoft.com/en-us/rest/api/resources/resources/get',
@@ -92,6 +95,24 @@ AZURE_REST_CATALOG = {
         'path': '/subscriptions/{subscription_id}/providers/microsoft.insights/eventtypes/management/values',
         'query': {'api-version': ACTIVITY_LOG_EVENTS_API_VERSION, '$filter': '{odata_filter}'},
         'applies_to': 'Resource-scoped management activity for state history.',
+    },
+    'resource_graph_query': {
+        'doc': 'https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resourcegraph/resources/resources',
+        'method': 'POST',
+        'host': 'management.azure.com',
+        'path': '/providers/Microsoft.ResourceGraph/resources',
+        'query': {'api-version': RESOURCE_GRAPH_API_VERSION},
+        'body': {
+            'query': '{kusto_query}',
+            'subscriptions': ['{subscription_id}'],
+            'options': {
+                '$top': 1000,
+                'resultFormat': 'objectArray',
+                'allowPartialScopes': False,
+                '$skipToken': '{optional_skip_token}',
+            },
+        },
+        'applies_to': 'Workspace inventory and rule queries (same service as azure-mgmt-resourcegraph SDK).',
     },
 }
 
@@ -177,3 +198,12 @@ def activity_log_events_url(subscription_id: str) -> str:
 def retail_prices_base_url() -> str:
     meta = AZURE_REST_CATALOG['retail_prices']
     return f"https://{meta['host']}{meta['path']}"
+
+
+def resource_graph_query_url() -> str:
+    """POST target for Resource Graph Resources/Resources (Microsoft Learn REST)."""
+    from app.collectors.azure_endpoint import arm_url
+
+    return arm_url(
+        f'/providers/Microsoft.ResourceGraph/resources?api-version={RESOURCE_GRAPH_API_VERSION}'
+    )

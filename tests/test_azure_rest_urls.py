@@ -4,12 +4,14 @@ from app.azure_rest_catalog import (
     ACTIVITY_LOG_EVENTS_API_VERSION,
     COST_MANAGEMENT_QUERY_API_VERSION,
     MONITOR_METRICS_API_VERSION,
+    RESOURCE_GRAPH_API_VERSION,
     activity_log_events_url,
     cost_management_query_path_lower,
     cost_management_query_url,
     provider_metadata_params,
     resource_metrics_params,
     resource_metrics_url,
+    resource_graph_query_url,
     retail_prices_base_url,
 )
 
@@ -37,3 +39,9 @@ def test_monitor_and_activity_log_urls_use_documented_versions():
     assert provider_metadata_params()['api-version'] == '2022-09-01'
     assert ACTIVITY_LOG_EVENTS_API_VERSION == '2015-04-01'
     assert retail_prices_base_url() == 'https://prices.azure.com/api/retail/prices'
+
+
+def test_resource_graph_query_matches_official_shape():
+    url = resource_graph_query_url()
+    assert url.startswith('https://management.azure.com/providers/Microsoft.ResourceGraph/resources')
+    assert f'api-version={RESOURCE_GRAPH_API_VERSION}' in url

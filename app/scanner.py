@@ -6,8 +6,8 @@ from typing import Any
 from uuid import UUID
 
 
-class ScanError(RuntimeError):
-    """The scan could not produce a complete, authorized result."""
+from app.scan_errors import ScanError
+from app.collectors.azure_resource_graph import execute_pages
 
 
 _PROJECTION = "| project id, name, type, resourceGroup, subscriptionId, tags, location"
@@ -52,59 +52,6 @@ RULES = (
 )
 
 
-def execute_pages(client: Any, query: str, subscriptions: list[str]) -> list[dict]:
-    """Fetch every ARG page or fail. Never return a silently incomplete inventory.
-
-    SDK contract: QueryRequestOptions(top=1000, skip_token=..., result_format='objectArray').
-    See https://learn.microsoft.com/python/api/azure-mgmt-resourcegraph/azure.mgmt.resourcegraph.models.queryrequestoptions
-    """
-    from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
-
-    if not subscriptions:
-        raise ScanError("At least one authorized Azure subscription is required.")
-    allowed = {str(UUID(s)).lower() for s in subscriptions}
-    token = None
-    seen_tokens: set[str] = set()
-    by_id: dict[str, dict] = {}
-    for _ in range(1000):
-        request = QueryRequest(
-            subscriptions=sorted(allowed), query=query,
-            options=QueryRequestOptions(top=1000, skip_token=token,
-                                        result_format="objectArray", allow_partial_scopes=False),
-        )
-        response = client.resources(request, connection_timeout=10, read_timeout=45)
-        rows = response.data
-        if not isinstance(rows, list):
-            raise ScanError("Azure returned an unexpected inventory format.")
-        for row in rows:
-            if not isinstance(row, dict):
-                raise ScanError("Azure returned a malformed inventory row.")
-            subscription = str(row.get("subscriptionId", "")).lower()
-            resource_id = row.get("id")
-            if subscription not in allowed or not isinstance(resource_id, str):
-                raise ScanError("Azure returned a resource outside the authorized scope.")
-            if not resource_id.lower().startswith(f"/subscriptions/{subscription}/"):
-                raise ScanError("Azure returned an inconsistent resource identifier.")
-            for field in ("name", "type", "resourceGroup"):
-                if not isinstance(row.get(field), str) or not row[field]:
-                    raise ScanError("Azure returned a malformed resource identity.")
-            by_id[resource_id.lower()] = row
-            if len(by_id) > 100_000:
-                raise ScanError("Inventory exceeds this MVP scan limit; split the workspace Azure subscriptions.")
-        next_token = getattr(response, "skip_token", None)
-        truncated = str(getattr(response, "result_truncated", "false")).lower()
-        is_truncated = truncated in ("true", "resulttruncated.true")
-        if not next_token:
-            if is_truncated:
-                raise ScanError("Azure truncated the result without a continuation token.")
-            return list(by_id.values())
-        if not isinstance(next_token, str) or next_token in seen_tokens:
-            raise ScanError("Azure returned an invalid or repeated continuation token.")
-        seen_tokens.add(next_token)
-        token = next_token
-    raise ScanError("Azure inventory exceeded the pagination limit.")
-
-
 def inventory_query_body() -> str:
     """Uncapped Azure Resource Graph inventory projection (no settings access)."""
     return (
@@ -144,12 +91,12 @@ def inventory_query(*, settings=None) -> str:
 INVENTORY_QUERY = inventory_query_body()
 
 
-def scan_inventory_observations(client: Any, subscriptions: list[str], *, settings=None) -> list[dict]:
+def scan_inventory_observations(credential, subscriptions: list[str], *, settings=None) -> list[dict]:
     """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
     rows = []
     observed_at = datetime.now(timezone.utc).isoformat()
     query = inventory_query(settings=settings)
-    for row in execute_pages(client, query, subscriptions):
+    for row in execute_pages(credential, query, subscriptions):
         evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
         for source, target in (('vmSize', 'vm_size'), ('skuName', 'sku_name'), ('diskState', 'disk_state'), ('powerState', 'power_state'), ('skuTier', 'sku_tier'), ('createdAt', 'created_at')):
             if isinstance(row.get(source), str) and row[source]:
@@ -218,13 +165,13 @@ def scan_inventory_observations(client: Any, subscriptions: list[str], *, settin
     return enrich_inventory_configuration(rows)
 
 
-def _findings(client: Any, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
+def _findings(credential, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
     from app.rule_id_canonical import rule_enabled
 
     findings = []
     rules = RULES if not enabled_rule_ids else tuple(r for r in RULES if rule_enabled(r[0], enabled_rule_ids))
     for rule_id, severity, query, explanation in rules:
-        for row in execute_pages(client, query, subscriptions):
+        for row in execute_pages(credential, query, subscriptions):
             evidence = []
             for field in ("sizeGB", "skuName", "powerState", "ipConfigs"):
                 if row.get(field) is not None:
@@ -260,7 +207,6 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
     Reader RBAC on each subscription is granted by the customer during onboarding.
     A mid-scan error raises; no partial findings escape or get persisted as complete.
     """
-    from azure.mgmt.resourcegraph import ResourceGraphClient
     from app.cloud_identity import CredentialError, azure_credential
     subscriptions = [str(UUID(s)) for s in tenant["subscription_ids"]]
     if not subscriptions:
@@ -270,26 +216,24 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
     except CredentialError as exc:
         raise ScanError(str(exc) or "The customer Azure credential is unavailable.") from None
     with credential:
-        with ResourceGraphClient(credential, retry_total=3, retry_backoff_factor=1,
-                                 connection_timeout=10, read_timeout=45) as client:
-            from app.config import Settings
-            stack_settings = Settings.load()
-            inventory = scan_inventory_observations(client, subscriptions, settings=stack_settings)
-            if progress is not None:
-                progress.seed_inventory(inventory)
-            from app.cloud_http import BearerTokenCache, JSONReader
-            arm_auth = BearerTokenCache(credential, 'https://management.azure.com/.default')
-            reader = JSONReader(headers_factory=arm_auth)
-            try:
-                from app.collectors.azure_arm_detail import enabled as arm_detail_enabled, enrich_arm_details
-                if arm_detail_enabled(stack_settings):
-                    inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
-                from app.collectors.azure_storage_policy import enrich_storage_management_policies
-                inventory = enrich_storage_management_policies(reader, inventory, settings=stack_settings)
-                from app.collectors.live_common import enabled
-                if enabled(stack_settings):
-                    from app.collectors.azure_live import enrich
-                    inventory = enrich(reader, inventory, settings=stack_settings)
-            finally:
-                reader.close()
-            return _findings(client, subscriptions, enabled_rule_ids), inventory
+        from app.config import Settings
+        stack_settings = Settings.load()
+        inventory = scan_inventory_observations(credential, subscriptions, settings=stack_settings)
+        if progress is not None:
+            progress.seed_inventory(inventory)
+        from app.cloud_http import BearerTokenCache, JSONReader
+        arm_auth = BearerTokenCache(credential, 'https://management.azure.com/.default')
+        reader = JSONReader(headers_factory=arm_auth)
+        try:
+            from app.collectors.azure_arm_detail import enabled as arm_detail_enabled, enrich_arm_details
+            if arm_detail_enabled(stack_settings):
+                inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
+            from app.collectors.azure_storage_policy import enrich_storage_management_policies
+            inventory = enrich_storage_management_policies(reader, inventory, settings=stack_settings)
+            from app.collectors.live_common import enabled
+            if enabled(stack_settings):
+                from app.collectors.azure_live import enrich
+                inventory = enrich(reader, inventory, settings=stack_settings)
+        finally:
+            reader.close()
+        return _findings(credential, subscriptions, enabled_rule_ids), inventory

@@ -151,7 +151,6 @@ def azure_arg_batch(
     subs: list[str],
     resource_ids: list[str],
 ) -> dict[str, dict]:
-    from azure.mgmt.resourcegraph import ResourceGraphClient
     from app.cloud_identity import CredentialError, azure_credential, identity_mode
     from app.scanner import execute_pages
 
@@ -168,21 +167,20 @@ def azure_arg_batch(
 
     by_id: dict[str, dict] = {}
     with cred() as credential:
-        with ResourceGraphClient(credential, retry_total=2) as rg:
-            for start in range(0, len(resource_ids), 80):
-                chunk = resource_ids[start : start + 80]
-                quoted = ','.join("'" + i.replace("'", "''") + "'" for i in chunk)
-                query = (
-                    'Resources | where id in (' + quoted + ') '
-                    '| project id, name, type, resourceGroup, subscriptionId'
-                )
-                for row in execute_pages(rg, query, subs):
-                    by_id[row['id'].lower()] = row
+        for start in range(0, len(resource_ids), 80):
+            chunk = resource_ids[start : start + 80]
+            quoted = ','.join("'" + i.replace("'", "''") + "'" for i in chunk)
+            query = (
+                'Resources | where id in (' + quoted + ') '
+                '| project id, name, type, resourceGroup, subscriptionId'
+            )
+            for row in execute_pages(credential, query, subs):
+                by_id[row['id'].lower()] = row
     return by_id
 
 
-def validate_findings_in_azure(rg_client, subs: list[str], findings: list[dict]) -> tuple[int, list[str]]:
-    from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
+def validate_findings_in_azure(credential, subs: list[str], findings: list[dict]) -> tuple[int, list[str]]:
+    from app.collectors.azure_resource_graph import _post_page, build_query_body
     from app.scanner import ScanError
 
     by_rule: dict[str, list[str]] = defaultdict(list)
@@ -191,16 +189,11 @@ def validate_findings_in_azure(rg_client, subs: list[str], findings: list[dict])
             by_rule[f['rule_id']].append(f['resource_id'])
     ok_ids: set[str] = set()
     issues: list[str] = []
-    allowed = sorted({str(UUID(s)) for s in subs})
 
     def run_query(query: str) -> list[dict]:
-        request = QueryRequest(
-            subscriptions=allowed,
-            query=query,
-            options=QueryRequestOptions(top=1000, result_format='objectArray', allow_partial_scopes=True),
-        )
-        response = rg_client.resources(request, connection_timeout=10, read_timeout=45)
-        rows = response.data
+        body = build_query_body(query, subs, allow_partial_scopes=True)
+        response = _post_page(credential, body)
+        rows = response.get('data')
         if not isinstance(rows, list):
             raise ScanError('unexpected ARG response')
         return [r for r in rows if isinstance(r, dict)]
@@ -284,7 +277,6 @@ def main() -> int:
     )
     findings_ok, finding_issues = 0, []
     if findings:
-        from azure.mgmt.resourcegraph import ResourceGraphClient
         from app.cloud_identity import azure_credential, identity_mode, CredentialError
 
         def cred():
@@ -299,13 +291,12 @@ def main() -> int:
                 return AzureCliCredential(process_timeout=60)
 
         with cred() as credential:
-            with ResourceGraphClient(credential, retry_total=2) as rg:
-                f_subs = expand_subscription_ids(subs, [f['resource_id'] for f in findings if f.get('resource_id')])
-                try:
-                    findings_ok, finding_issues = validate_findings_in_azure(rg, f_subs, findings)
-                except Exception as exc:  # noqa: BLE001
-                    finding_issues = [f'findings validation: {type(exc).__name__}: {exc}']
-                    findings_ok = 0
+            f_subs = expand_subscription_ids(subs, [f['resource_id'] for f in findings if f.get('resource_id')])
+            try:
+                findings_ok, finding_issues = validate_findings_in_azure(credential, f_subs, findings)
+            except Exception as exc:  # noqa: BLE001
+                finding_issues = [f'findings validation: {type(exc).__name__}: {exc}']
+                findings_ok = 0
 
     detail_issues: list[str] = []
     sample_keys = [r['resource_key'] for r in api_items]

@@ -5,7 +5,7 @@ import time
 import httpx
 from urllib.parse import urlsplit
 from app.provider_retry import read_json, ProviderReadError, ProviderDeferred
-from app.scanner import ScanError
+from app.scan_errors import ScanError
 
 
 def _json_reader_pacing_interval() -> float:
