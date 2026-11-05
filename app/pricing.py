@@ -7,7 +7,9 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel
 
-ENDPOINT = 'https://prices.azure.com/api/retail/prices'
+from app.azure_rest_catalog import retail_prices_base_url
+
+ENDPOINT = retail_prices_base_url()
 
 
 def opportunity_totals(findings, *, realized=False):

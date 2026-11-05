@@ -10,6 +10,15 @@ PROVIDER_METADATA_API_VERSION = '2022-09-01'
 # Cost Management — Query — Usage (subscription scope).
 COST_MANAGEMENT_QUERY_API_VERSION = '2023-11-01'
 
+# Azure Monitor — Metrics — List (resource scope).
+MONITOR_METRICS_API_VERSION = '2023-10-01'
+
+# Monitor — Activity Logs — List (management events).
+ACTIVITY_LOG_EVENTS_API_VERSION = '2015-04-01'
+
+# Authorization — Management Locks — List at scope.
+AUTHORIZATION_LOCKS_API_VERSION = '2016-09-01'
+
 AZURE_REST_CATALOG = {
     'arm_resource_get': {
         'doc': 'https://learn.microsoft.com/en-us/rest/api/resources/resources/get',
@@ -62,6 +71,28 @@ AZURE_REST_CATALOG = {
         'query': {'$filter': '{odata_filter}'},
         'applies_to': 'Azure list-price meters (USD catalog); OData JSON response.',
     },
+    'monitor_metrics_list': {
+        'doc': 'https://learn.microsoft.com/en-us/rest/api/monitor/metrics/list',
+        'method': 'GET',
+        'host': 'management.azure.com',
+        'path': '{resource_id}/providers/microsoft.insights/metrics',
+        'query': {
+            'api-version': MONITOR_METRICS_API_VERSION,
+            'timespan': '{start}/{end}',
+            'interval': 'PT5M',
+            'metricnames': '{metric_name}',
+            'aggregation': '{aggregation}',
+        },
+        'applies_to': 'Azure Monitor platform metrics for live evidence windows.',
+    },
+    'activity_log_events': {
+        'doc': 'https://learn.microsoft.com/en-us/rest/api/monitor/activity-logs/list',
+        'method': 'GET',
+        'host': 'management.azure.com',
+        'path': '/subscriptions/{subscription_id}/providers/microsoft.insights/eventtypes/management/values',
+        'query': {'api-version': ACTIVITY_LOG_EVENTS_API_VERSION, '$filter': '{odata_filter}'},
+        'applies_to': 'Resource-scoped management activity for state history.',
+    },
 }
 
 
@@ -88,3 +119,61 @@ def parse_arm_resource_type(resource_id: str) -> str | None:
     if not type_parts:
         return None
     return f'{namespace}/{'/'.join(type_parts)}'
+
+
+def cost_management_query_path_lower(subscription_id: str) -> str:
+    """Lowercase ARM path for Cost Management query (pagination validation)."""
+    from uuid import UUID
+
+    return f'/subscriptions/{str(UUID(subscription_id))}/providers/microsoft.costmanagement/query'
+
+
+def cost_management_query_url(subscription_id: str) -> str:
+    """POST target for Cost Management Query/Usage (Microsoft Learn REST)."""
+    from uuid import UUID
+    from app.collectors.azure_endpoint import arm_url
+
+    sid = str(UUID(subscription_id))
+    return (
+        f"{arm_url(f'/subscriptions/{sid}/providers/Microsoft.CostManagement/query')}"
+        f"?api-version={COST_MANAGEMENT_QUERY_API_VERSION}"
+    )
+
+
+def provider_metadata_params() -> dict[str, str]:
+    return {'api-version': PROVIDER_METADATA_API_VERSION}
+
+
+def resource_metrics_url(resource_id: str) -> str:
+    from app.collectors.azure_endpoint import arm_url
+
+    return arm_url(f'{resource_id}/providers/microsoft.insights/metrics')
+
+
+def resource_metrics_params(
+    *,
+    timespan: str,
+    metricnames: str,
+    aggregation: str,
+    interval: str = 'PT5M',
+) -> dict[str, str]:
+    return {
+        'api-version': MONITOR_METRICS_API_VERSION,
+        'timespan': timespan,
+        'interval': interval,
+        'metricnames': metricnames,
+        'aggregation': aggregation,
+    }
+
+
+def activity_log_events_url(subscription_id: str) -> str:
+    from app.collectors.azure_endpoint import arm_url
+
+    return arm_url(
+        f'/subscriptions/{subscription_id}/providers/Microsoft.Insights/eventtypes/management/values'
+    )
+
+
+def retail_prices_base_url() -> str:
+    meta = AZURE_REST_CATALOG['retail_prices']
+    return f"https://{meta['host']}{meta['path']}"

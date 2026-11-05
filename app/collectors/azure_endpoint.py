@@ -1,4 +1,7 @@
-"""Public Azure Resource Manager endpoint profile (release gate: no sovereign/custom hosts)."""
+"""Public Azure Resource Manager endpoint profile (release gate: no sovereign/custom hosts).
+
+Operation paths and api-versions are defined in app.azure_rest_catalog (Microsoft Learn REST).
+"""
 from __future__ import annotations
 
 from urllib.parse import urlsplit

@@ -12,6 +12,8 @@ import httpx
 from app.focus import Charge, FocusError, ImportRequest, authorized, digest
 from app.provider_retry import ProviderDeferred
 from app.v150_store import WorkflowStore
+from app.azure_rest_catalog import cost_management_query_path_lower, cost_management_query_url
+from app.collectors.azure_endpoint import ARM_HOST
 
 MAX_ROWS = 200000
 OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_region','athena_workgroup','athena_database','athena_table'}
@@ -134,8 +136,8 @@ def _azure_query(url, credential, kind, start, end, scope_id):
         if not page: return rows
         from urllib.parse import urlsplit
         parsed=urlsplit(page)
-        expected='/subscriptions/'+str(UUID(scope_id))+'/providers/microsoft.costmanagement/query'
-        if (page in seen or parsed.scheme!='https' or parsed.netloc!='management.azure.com'
+        expected = cost_management_query_path_lower(scope_id)
+        if (page in seen or parsed.scheme!='https' or parsed.netloc!=ARM_HOST
             or parsed.fragment or parsed.path.lower()!=expected):
             raise ValueError('Unexpected billing pagination host, scope or repeated cursor')
         seen.add(page)
@@ -189,7 +191,7 @@ def _azure_resource_query(url, credential, kind, start, end, scope_id, resource_
     rows, page, seen = [], url, {url}
     from urllib.parse import urlsplit
 
-    expected = '/subscriptions/' + str(UUID(scope_id)) + '/providers/microsoft.costmanagement/query'
+    expected = cost_management_query_path_lower(scope_id)
     for _ in range(100):
         properties = _post(page, _token(credential), body, scope_id)['properties']
         names = [c['name'].lower() for c in properties['columns']]
@@ -201,7 +203,7 @@ def _azure_resource_query(url, credential, kind, start, end, scope_id, resource_
         if (
             page in seen
             or parsed.scheme != 'https'
-            or parsed.netloc != 'management.azure.com'
+            or parsed.netloc != ARM_HOST
             or parsed.fragment
             or parsed.path.lower() != expected
         ):
@@ -215,7 +217,7 @@ def azure_rows(binding, tenant, start, end):
     from app.cloud_identity import azure_credential
     credential = azure_credential(tenant)
     try:
-        url = f"https://management.azure.com/subscriptions/{binding['scope_id']}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+        url = cost_management_query_url(binding['scope_id'])
         merged = {}
         for i, (kind, field) in enumerate((('ActualCost','billed'),('AmortizedCost','effective'))):
             for value in _azure_query(url, credential, kind, start, end, binding['scope_id']):
@@ -239,7 +241,7 @@ def azure_resource_rows(scope_id, resource_id, tenant, start, end):
     from app.cloud_identity import azure_credential
     credential = azure_credential(tenant)
     try:
-        url = f"https://management.azure.com/subscriptions/{scope_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+        url = cost_management_query_url(scope_id)
         merged = {}
         for kind, field in (('ActualCost', 'billed'), ('AmortizedCost', 'effective')):
             for value in _azure_resource_query(url, credential, kind, start, end, scope_id, resource_id):

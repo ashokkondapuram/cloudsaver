@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.azure_rest_catalog import provider_metadata_params
 from app.collectors.azure_endpoint import arm_url
 
 # Read-only inventory detail; api-version per provider namespace (Azure REST).
@@ -185,7 +186,7 @@ def resolve_arm_api_version(reader, subscription_id: str, resource_type: str, ca
     if provider_key not in cache:
         payload = reader.get(
             arm_url(f'/subscriptions/{subscription_id}/providers/{namespace}'),
-            {'api-version': '2022-09-01'},
+            provider_metadata_params(),
         )
         types = {
             (entry.get('resourceType') or '').lower(): entry.get('apiVersions') or []

@@ -1,7 +1,14 @@
 """Read-only Azure Monitor, Activity Log and operational guard evidence."""
 from datetime import datetime,timedelta,timezone
 from urllib.parse import urlsplit
-from app.collectors.azure_endpoint import ARM_ROOT, validate_arm_https_url
+from app.collectors.azure_endpoint import ARM_ROOT, validate_arm_https_url, arm_url
+from app.azure_rest_catalog import (
+    ACTIVITY_LOG_EVENTS_API_VERSION,
+    AUTHORIZATION_LOCKS_API_VERSION,
+    activity_log_events_url,
+    resource_metrics_params,
+    resource_metrics_url,
+)
 from app.collectors.live_common import window,series,collect,enrich_metrics,transition
 from app.telemetry_contract import moment
 
@@ -80,11 +87,9 @@ def fetch_azure_monitor_series(reader,resource,now):
         name, aggregation = spec if isinstance(spec, tuple) else (spec, 'Maximum')
         agg_key = _AZURE_AGG_VALUE.get(aggregation, aggregation.lower())
         data=reader.get(
-            ARM+rid+'/providers/microsoft.insights/metrics',
-            dict(
-                **{'api-version':'2023-10-01'},
+            resource_metrics_url(rid),
+            resource_metrics_params(
                 timespan=start.isoformat()+'/'+end.isoformat(),
-                interval='PT5M',
                 metricnames=name,
                 aggregation=aggregation,
             ),
@@ -113,8 +118,8 @@ def fetch_azure_state_history(reader,resource,now):
     if e.get('association_verified') is False:current='Unassociated'
     if e.get('hosted_app_count')==0 and e.get('deployment_slot_count')==0:current='Empty'
     expected=current;events=[]
-    url=ARM+'/subscriptions/'+resource['subscription_id']+'/providers/Microsoft.Insights/eventtypes/management/values'
-    params={'api-version':'2015-04-01','$filter':"eventTimestamp ge '"+(now-timedelta(days=90)).isoformat()+"' and resourceUri eq '"+rid+"'"}
+    url=activity_log_events_url(resource['subscription_id'])
+    params={'api-version':ACTIVITY_LOG_EVENTS_API_VERSION,'$filter':"eventTimestamp ge '"+(now-timedelta(days=90)).isoformat()+"' and resourceUri eq '"+rid+"'"}
     states={'microsoft.compute/disks/detach/action':'Unattached','microsoft.compute/virtualmachines/deallocate/action':'PowerState/deallocated',
         'microsoft.compute/virtualmachines/stop/action':'PowerState/stopped'}
     for event in pages(reader,url,params):
@@ -128,7 +133,7 @@ def fetch_azure_operational_guards(reader,resource,now):
     rid=resource['resource_id'];group='/'.join(rid.split('/')[:5]);result={}
     locks=[]
     for scope in (group,rid):
-        locks.extend((r.get('properties') or {}).get('level') for r in pages(reader,ARM+scope+'/providers/Microsoft.Authorization/locks',{'api-version':'2016-09-01'}))
+        locks.extend((r.get('properties') or {}).get('level') for r in pages(reader,arm_url(scope+'/providers/Microsoft.Authorization/locks'),{'api-version':AUTHORIZATION_LOCKS_API_VERSION}))
     result['management_locks']=locks
     if resource['resource_type'].lower()=='microsoft.compute/disks':
         ages=[]
