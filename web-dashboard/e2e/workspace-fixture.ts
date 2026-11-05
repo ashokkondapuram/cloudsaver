@@ -150,7 +150,10 @@ export async function navigate(page:Page,label:string){
   const aliases:Record<string,string>={'Agent workspace':'Agent worker','Kubernetes & containers':'Kubernetes','Settings & integrations':'Settings','Automation':'Automation & GitOps','Inventory & findings':'Resources','Resource analysis':'Resources'};
   const target=settings[label]?'Settings':aliases[label]||label;
   const mobile=await page.getByRole('button',{name:'Open navigation'}).isVisible();
-  if(mobile)await page.getByRole('button',{name:'Open navigation'}).click();
+  if(mobile){
+    await page.getByRole('button',{name:'Open navigation'}).click();
+    await expect(page.getByRole('dialog',{name:'Navigation'})).toBeVisible();
+  }
   const nav=page.getByRole('navigation',{name:mobile?'Mobile navigation':'Primary navigation'});
   await expect(nav).toBeVisible();
   const destination=nav.getByRole('link',{name:target,exact:true});

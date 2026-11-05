@@ -9,7 +9,7 @@ async function resources(page:Page){
   const rows=[resource(),resource(1)];
   await page.route(`**/api/v1/scans/${scanId}/resource-signals/lookup`, route => route.fulfill({json: {scan_id: scanId, items: rows.map(r => ({resource_key: r.resource_key, provider: r.provider, resource_id: r.resource_id, ai: r.ai, decision: r.decision}))}}));
   await page.route(`**/api/v1/scans/${scanId}/resources?**`,route=>route.fulfill({json:{scan_id:scanId,observed_at:scanTime,total:2,items:rows,summary:{total:2,ai_status:{not_run:2},ai_risk:{none:2},decision:{none:2},review_priority:{evidence_required:2},resolved_count:1,no_longer_observed_count:2},commitment_baseline:{status:'insufficient_evidence',recommended_new_commitment_hr:null,clean_steady_state_hr:null,warning:'Complete hourly evidence is required.'}}}));
-  await page.route(`**/api/v1/scans/${scanId}/resources/${'a'.repeat(64)}`,route=>route.fulfill({json:{scan_id:scanId,assessment:{...rows[0],policy_version:'current',observation:{status:'recent',observed_at:scanTime,max_age_hours:24},guardrails:['VERIFY_CURRENT_STATE'],pillars:Object.keys(pillars).map(p=>({pillar:p,status:'unknown',checks:[]}))},findings:[],ai_context:{},ai,ai_result:null,decision:null,followups:[],followups_remaining:5,observation:{observed_at:scanTime,collector_version:'test',evidence_schema_version:'2',configuration_snapshot:{},evidence:{metrics:{cpu_percent:{window_start:scanTime,window_end:scanTime,points:[]}},metric_summaries:{cpu_percent:{sufficient:false}}}},rule_evaluations:[],costs:{billed_cost_usd:12.5,effective_cost_usd:15,retail_estimate_usd:7.5,modeled_future_cost_usd:null,opportunity_usd:null,verified_realized_savings_usd:null,explanation:'Imported costs are evidence, not verified savings.'}}}));
+  await page.route(`**/api/v1/scans/${scanId}/resources/${'a'.repeat(64)}*`,route=>route.fulfill({json:{scan_id:scanId,assessment:{...rows[0],policy_version:'current',observation:{status:'recent',observed_at:scanTime,max_age_hours:24},guardrails:['VERIFY_CURRENT_STATE'],pillars:Object.keys(pillars).map(p=>({pillar:p,status:'unknown',checks:[]}))},findings:[],ai_context:{},ai,ai_result:null,decision:null,followups:[],followups_remaining:5,observation:{observed_at:scanTime,collector_version:'test',evidence_schema_version:'2',configuration_snapshot:{},evidence:{metrics:{cpu_percent:{window_start:scanTime,window_end:scanTime,points:[]}},metric_summaries:{cpu_percent:{sufficient:false}}}},rule_evaluations:[],costs:{billed_cost_usd:12.5,effective_cost_usd:15,retail_estimate_usd:7.5,modeled_future_cost_usd:null,opportunity_usd:null,verified_realized_savings_usd:null,explanation:'Imported costs are evidence, not verified savings.'}}}));
 }
 
 test('restored navigation coexists with current resource, Kubernetes, agent and settings workflows',async({page})=>{
@@ -20,15 +20,16 @@ test('restored navigation coexists with current resource, Kubernetes, agent and 
   for(const name of ['Overview','Resources','Kubernetes','Agent worker','Cost allocation','Automation & GitOps','Activity & delivery','Settings'])await expect(nav.getByRole('link',{name,exact:true})).toBeVisible();
   await navigate(page,'Settings & integrations');const tabs=page.getByRole('tablist',{name:'Workspace settings'});
   await expect(tabs.getByRole('tab')).toHaveCount(5);await tabs.getByRole('tab',{name:'Analysis rules',exact:true}).focus();await page.keyboard.press('End');
-  await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toBeFocused();await expect(tabs.getByRole('tab',{name:'Access & API keys'})).toHaveAttribute('aria-selected','true');
+  await expect(tabs.getByRole('tab',{name:'AI & data governance'})).toBeFocused();await expect(tabs.getByRole('tab',{name:'AI & data governance'})).toHaveAttribute('aria-selected','true');
 });
 
 test('unified resources keep imported billing separate from retail estimates and expose scan deltas',async({page})=>{
   await mockWorkspace(page);await resources(page);await navigate(page,'Resources');
   await expect(page.getByRole('columnheader',{name:'Type'})).toBeVisible();
-  await expect(page.getByRole('columnheader',{name:'30d billed USD'})).toBeVisible();await expect(page.getByRole('columnheader',{name:'30d effective USD'})).toBeVisible();
+  await expect(page.getByRole('columnheader',{name:'30d billed'})).toBeVisible();await expect(page.getByRole('columnheader',{name:'Retail opportunity'})).toBeVisible();
   await expect(page.getByText('regressed',{exact:true})).toBeVisible();await expect(page.getByText('new',{exact:true})).toBeVisible();
-  await page.getByLabel('Cloud provider',{exact:true}).selectOption('azure');await expect(page.getByRole('button',{name:'View analysis for aws-disk'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Azure 1'}).click();await expect(page.getByRole('button',{name:'View analysis for aws-disk'})).toHaveCount(0);
+  await page.getByRole('group').filter({has: page.getByText('More filters',{exact:true})}).click();
   await page.getByLabel('Pillar status',{exact:true}).selectOption('unknown');await expect(page.getByRole('button',{name:'View analysis for review-disk'})).toBeVisible();
   await page.getByRole('button',{name:'View analysis for review-disk'}).click();const drawer=page.getByRole('dialog',{name:'Resource details',exact:true});
   await drawer.getByRole('tab',{name:'Costs',exact:true}).click();
@@ -40,9 +41,12 @@ test('unified resources keep imported billing separate from retail estimates and
 
 test('resource handoff selects the same owned resource in the agent workspace',async({page})=>{
   await mockWorkspace(page);await resources(page);
+  const rows=[resource(),resource(1)];
+  await page.route(`**/api/v1/scans/${scanId}/resources?limit=1000`,route=>route.fulfill({json:{items:rows.map(r=>({resource_id:r.resource_id,resource_name:r.resource_name,provider:r.provider,scope_id:r.scope_id}))}}));
   await page.route('**/api/v1/agents/catalog',r=>r.fulfill({json:{enabled:false,connectors:[]}}));await page.route('**/api/v1/agents/tasks',r=>r.fulfill({json:{items:[]}}));
   await navigate(page,'Resource analysis');await page.getByRole('button',{name:'View analysis for review-disk'}).click();
-  await page.getByRole('link',{name:'Draft a tag or snapshot plan'}).click();await expect(page.getByLabel('Resource from selected scan')).toHaveValue(resource().resource_id);
+  await expect(page.getByRole('dialog',{name:'Resource details',exact:true})).toBeVisible();
+  await page.getByRole('link',{name:'Draft agent plan'}).click();await expect(page.getByLabel('Resource from selected scan')).toHaveValue(resource().resource_id);
 });
 
 test('mobile resource explorer and consolidated AI settings fit the viewport',async({page})=>{
