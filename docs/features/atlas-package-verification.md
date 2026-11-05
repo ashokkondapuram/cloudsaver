@@ -9,7 +9,7 @@
 | **Fleetflow AI** | No verified npm workspace package | Agent workspace chronological `agent-event-log` |
 | **BoardUI** | No verified npm package | `FindingWorkflowBoard` on governance Findings tab |
 | **Atrium** | Product shell reference | Portal/workspace chrome only; no Atrium SDK |
-| **Cloudflare Code Mode** | Cloudflare product | `CodeModePanel` read-only stub until tenant configures workers |
+| **Cloudflare Code Mode** | Worker bridge in `workers/code-mode-bridge` | API + UI when `CLOUDSAVER_CODE_MODE_ENABLED` and bridge URL or stub |
 
 Record bundle impact after dependency changes:
 

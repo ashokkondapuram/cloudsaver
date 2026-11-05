@@ -273,6 +273,23 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         from app.schemas import bounded_json
         return await upstream('POST',targets['agent'],f'/api/v1/agents/tasks/{task_id}/review',authorization,json=await bounded_json(request),transport=transport)
 
+    @app.get('/api/v1/code-mode/status')
+    async def code_mode_status(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/code-mode/status', authorization)
+
+    @app.get('/api/v1/code-mode/runs')
+    async def code_mode_runs(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/code-mode/runs', authorization)
+
+    @app.get('/api/v1/code-mode/runs/{run_id}')
+    async def code_mode_run(run_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/code-mode/runs/{run_id}', authorization)
+
+    @app.post('/api/v1/code-mode/runs', status_code=201)
+    async def code_mode_submit(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.schemas import bounded_json
+        return await upstream('POST', targets['scanner'], '/api/v1/code-mode/runs', authorization, json=await bounded_json(request), transport=transport)
+
     @app.get('/api/v1/auth/consent-url')
     async def consent_url(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/auth/consent-url', authorization)

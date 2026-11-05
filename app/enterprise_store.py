@@ -9,7 +9,7 @@ from app.governance_schema import TABLES as GOVERNANCE_TABLES, SQLITE as GOVERNA
 TABLES = ('ai_inference_attempts', 'ai_inference_events', 'focus_imports', 'focus_charges',
           'ai_batches', 'ai_batch_items', 'ai_followups', 'resource_decisions', 'ai_connection_diagnostics',
           'savings_cases','savings_case_events','savings_evidence_receipts','savings_verified_actions',
-          'agent_tasks', 'agent_task_events','ai_data_events','ai_data_retention','ai_data_holds',
+          'agent_tasks', 'agent_task_events','code_mode_runs','code_mode_run_events','ai_data_events','ai_data_retention','ai_data_holds',
           'billing_sync_runs','agent_gitops_syncs','billing_sync_jobs','finops_ownership','finops_anomalies',
           'finops_anomaly_events','finops_suppressions','savings_financial_claims','cloud_commitment_snapshots',
           'observability_connectors','observability_jobs','observability_snapshots')
@@ -137,6 +137,17 @@ class EnterpriseStore:
                     BEGIN SELECT RAISE(ABORT,'Agent audit events are append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS agent_events_no_delete BEFORE DELETE ON agent_task_events
                     BEGIN SELECT RAISE(ABORT,'Agent audit events are append-only'); END;
+                CREATE TABLE IF NOT EXISTS code_mode_runs (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,request_key TEXT NOT NULL,fingerprint TEXT NOT NULL,
+                    state TEXT NOT NULL,version INTEGER NOT NULL,snippet_digest TEXT NOT NULL,payload TEXT NOT NULL,
+                    result TEXT,actor TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(tenant_id,request_key));
+                CREATE TABLE IF NOT EXISTS code_mode_run_events (
+                    id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,run_id TEXT NOT NULL,version INTEGER NOT NULL,
+                    action TEXT NOT NULL,actor TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(run_id,version));
+                CREATE TRIGGER IF NOT EXISTS code_mode_events_no_update BEFORE UPDATE ON code_mode_run_events
+                    BEGIN SELECT RAISE(ABORT,'Code Mode audit events are append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS code_mode_events_no_delete BEFORE DELETE ON code_mode_run_events
+                    BEGIN SELECT RAISE(ABORT,'Code Mode audit events are append-only'); END;
                 UPDATE agent_tasks SET payload=json_set(payload,'$.data_retention_expires_at',strftime('%Y-%m-%dT%H:%M:%SZ','now','+7 days'))
                     WHERE json_extract(payload,'$.data_retention_expires_at') IS NULL;
                 CREATE TABLE IF NOT EXISTS finops_ownership (

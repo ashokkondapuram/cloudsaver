@@ -20,7 +20,7 @@ export const ATLAS_PAGE_ROLLOUT: AtlasRolloutPage[] = [
   {route: '/services', label: 'Services', status: 'pilot', notes: 'Service architecture analysis'},
   {route: '/kubernetes', label: 'Kubernetes', status: 'pilot', notes: 'Cluster workload evidence'},
   {route: '/optimization', label: 'Optimization evidence', status: 'pilot', notes: 'Topology / SLO evidence panels'},
-  {route: '/agents', label: 'Agent worker', status: 'pilot', notes: 'Event log + Code Mode stub'},
+  {route: '/agents', label: 'Agent worker', status: 'pilot', notes: 'Event log + Code Mode worker bridge'},
   {route: '/activity', label: 'Activity & delivery', status: 'pilot', notes: 'Delivery + AI usage AnalyticsCharts'},
   {route: '/settings', label: 'Settings', status: 'pilot', notes: 'Workspace tabs + preferences'},
   {route: '/claim', label: 'Claim account', status: 'pilot', notes: 'Onboarding surface with Atlas route boundary'},

@@ -13,6 +13,8 @@ function task(state='awaiting_approval'){
 async function mocks(page:import('@playwright/test').Page,state='awaiting_approval'){
   let current=task(state);const reviews:Record<string,unknown>[]=[];
   await page.route('**/api/v1/agents/catalog',r=>r.fulfill({json:{enabled:true,connectors:[connector]}}));
+  await page.route('**/api/v1/code-mode/status',r=>r.fulfill({json:{enabled:true,bridge_configured:true,bridge_host:'code-mode.test',runtime:'cloudflare-worker-isolate',max_snippet_bytes:16384,max_input_bytes:8192,requires_human_admin:true,stub_mode:true}}));
+  await page.route('**/api/v1/code-mode/runs',r=>r.fulfill({json:{items:[]}}));
   await page.route(`**/api/v1/scans/${scanId}/resources?limit=1000`,r=>r.fulfill({json:{items:[{...resource,provider:resource.cloud_provider}]}}));
   await page.route('**/api/v1/agents/tasks',r=>r.fulfill({json:{items:[current]}}));
   await page.route('**/api/v1/agents/tasks/'+id,r=>r.fulfill({json:current}));

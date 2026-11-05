@@ -118,6 +118,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
     api.include_router(create_drift_subscriptions_router(settings, current_tenant))
     api.include_router(create_semantic_router(settings, evidence_store, current_tenant))
+    from app.code_mode_api import create_router as code_mode_router
+    api.include_router(code_mode_router(evidence_store, current_tenant))
 
     @api.middleware('http')
     async def response_headers(request, call_next):
