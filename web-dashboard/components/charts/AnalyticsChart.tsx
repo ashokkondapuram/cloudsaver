@@ -59,7 +59,7 @@ export function AnalyticsChart({
 
   const ChartBody =
     chartEngine === 'nivo' ? (
-      <AnalyticsChartNivo series={series} height={height} unitLabel={unitLabel} tokens={tokens} />
+      <AnalyticsChartNivo series={series} height={height} unitLabel={unitLabel} tokens={tokens} labelledBy={`${series.id}-title`} />
     ) : (
       <AnalyticsChartRecharts series={series} height={height} unitLabel={unitLabel} tokens={tokens} />
     );

@@ -36,6 +36,7 @@ const pairs = [
   ['light text on surface', '--cs-text', '--cs-surface'],
   ['light muted on surface', '--cs-muted', '--cs-surface'],
   ['dark text on surface', '--cs-text', '--cs-surface'],
+  ['dark primary label on primary fill', '--cs-primary-fg', '--cs-primary'],
 ];
 
 function readThemeBlock(theme) {

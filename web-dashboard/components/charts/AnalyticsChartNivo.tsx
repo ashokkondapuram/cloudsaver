@@ -6,13 +6,15 @@ import {nivoChartTheme} from '../../lib/chart-theme';
 import type {ChartSeries} from '../../lib/atlas-contracts';
 import {chartPointsForDisplay} from '../../lib/atlas-contracts';
 
-type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens};
+type Props = {series: ChartSeries; height: number; unitLabel: string; tokens: ChartVisualTokens; labelledBy: string};
 
-export function AnalyticsChartNivo({series, height, unitLabel, tokens}: Props) {
+export function AnalyticsChartNivo({series, height, unitLabel, tokens, labelledBy}: Props) {
   const rows = chartPointsForDisplay(series);
   return (
     <div className="trend-chart nivo-trend-chart" style={{height}} role="presentation">
       <ResponsiveLine
+        role="presentation"
+        ariaLabelledBy={labelledBy}
         animate={false}
         enableSlices={false}
         enablePoints={false}
