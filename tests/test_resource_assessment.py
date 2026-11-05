@@ -70,6 +70,25 @@ def adapter_for(calls, mutate=None):
     return adapter
 
 
+def test_merge_inventory_observation_enriches_thin_finding_evidence():
+    a = disk('disk-a', evidence={})
+    obs = dict(
+        resource_id=a['resource_id'],
+        resource_type=a['resource_type'],
+        resource_group=a['resource_group'],
+        subscription_id=SUB,
+        evidence=dict(OBSERVED, billed_cost_usd=9.5, effective_cost_usd=9.5, currency='USD'),
+        dependency_refs=[],
+    )
+    key = resource_key(a)
+    thin, _ = merge(key, [a], observed_at='2026-10-22T00:00:00+00:00', now='2026-10-22T01:00:00+00:00')
+    enriched, _ = merge(key, [a], observed_at='2026-10-22T00:00:00+00:00', now='2026-10-22T01:00:00+00:00', observation=obs)
+    assert 'OWNERSHIP' in thin['evidence_gap_codes']
+    assert 'OWNERSHIP' not in enriched['evidence_gap_codes']
+    assert 'BILLED_COST' not in enriched['evidence_gap_codes']
+    assert enriched['billed_cost_usd'] == 9.5
+
+
 def test_resource_identity_merges_findings_and_digest_ignores_wall_clock():
     a, b, c = scanner(None)
     assert resource_key(a) == resource_key(b) != resource_key(c)

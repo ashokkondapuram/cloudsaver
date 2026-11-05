@@ -104,11 +104,18 @@ def finance_reconciled_benefit(store, tenant_id, provider, resource_id):
     if store is None:
         return None
     rid = resource_id.lower() if provider == 'azure' else resource_id
-    row = store.execute(
+    query = (
         "SELECT verification FROM savings_cases WHERE tenant_id=%s AND provider=%s AND resource_id=%s "
-        "AND state='financially_reconciled' ORDER BY updated_at DESC LIMIT 1",
-        (tenant_id, provider, rid),
-    ).fetchone()
+        "AND state='financially_reconciled' ORDER BY updated_at DESC LIMIT 1"
+    )
+    params = (tenant_id, provider, rid)
+    if hasattr(store, 'execute'):
+        row = store.execute(query, params).fetchone()
+    elif hasattr(store, 'transaction'):
+        with store.transaction(tenant_id) as db:
+            row = db.execute(query, params).fetchone()
+    else:
+        return None
     if not row or not row[0]:
         return None
     try:

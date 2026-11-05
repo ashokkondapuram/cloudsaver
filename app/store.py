@@ -114,6 +114,14 @@ class Store:
             findings=findings,
         )
 
+    def findings_for_resource_key(self, tenant_id, scan_id, key):
+        from app.resource_assessment import resource_key as rk
+
+        scan = self.get(tenant_id, scan_id)
+        if not scan:
+            return []
+        return [f for f in (scan.get('findings') or []) if rk(f) == key]
+
 
 class PostgresStore:
     """Every request uses a fresh transaction and transaction-local tenant context."""
@@ -504,6 +512,28 @@ class PostgresStore:
             observation=observation,
             findings=findings,
         )
+
+    def findings_for_resource_key(self, tenant_id, scan_id, key):
+        from uuid import UUID
+        from app.resource_assessment import resource_key as rk
+
+        try:
+            scan_id = str(UUID(scan_id))
+        except ValueError:
+            return []
+        with self.connection(tenant_id) as db:
+            row = db.execute(
+                "SELECT payload->'findings' FROM public.scans WHERE id = %s AND tenant_id = %s",
+                (scan_id, tenant_id),
+            ).fetchone()
+        if not row or row[0] is None:
+            return []
+        raw = row[0]
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        if not isinstance(raw, list):
+            return []
+        return [f for f in raw if rk(f) == key]
 
 
 def _analysis_audit(finding):

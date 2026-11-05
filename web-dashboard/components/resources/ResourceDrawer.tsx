@@ -1,15 +1,16 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, ExternalLink, FileCode2, Gauge, History, LayoutDashboard, ListChecks, MessageSquareText, ShieldCheck, ShieldAlert} from 'lucide-react';
+import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, Maximize2, MessageSquareText, Minimize2, ShieldCheck, ShieldAlert} from 'lucide-react';
 import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
+import type {Finding} from '../../lib/types';
 import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type RuleConflict, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
-import {resourceDetailQuery, resourceInsightPageHref, type ResourceIdentity} from '../../lib/resource-insight';
+import {resourceDetailQuery, type ResourceIdentity} from '../../lib/resource-insight';
 import {EvidenceRadar} from '../drawer/EvidenceRadar';
 import {Loading, Notice, ProviderBadge} from '../ui/shared';
 import {Actions, AIStatusBadge, ArmDetailBadge, PillarDots} from './ResourceParts';
@@ -22,18 +23,38 @@ import {ArchitecturalAssessment} from '../ServiceAnalysis';
 import {findingKey} from '../../lib/finops';
 
 function Evidence({detail}: {detail: ResourceDetail}) {
+  const a = detail.assessment;
+  const reconciliation = detail.reconciliation_status || detail.observation?.reconciliation_status;
+  return <div className="drawer-section"><h3>Evidence provenance</h3>
+    <dl className="settings-key-values">
+      <div><dt>Scan</dt><dd><code>{detail.scan_id}</code></dd></div>
+      <div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div>
+      <div><dt>Schema</dt><dd>{detail.evidence_schema_version || detail.observation?.evidence_schema_version || 'Legacy'}</dd></div>
+      <div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div>
+      {a.observation?.status && <div><dt>Observation freshness</dt><dd>{sentence(a.observation.status)}{a.observation.max_age_hours ? ` · ${a.observation.max_age_hours}h window` : ''}</dd></div>}
+      {reconciliation && <div><dt>Source reconciliation</dt><dd>{sentence(reconciliation)}</dd></div>}
+      {!!detail.observation?.data_sources?.length && <div className="full-width"><dt>Data sources</dt><dd>{detail.observation.data_sources.map(source => `${source.source_id || source.collector_type || 'Source'} (${sentence(source.status || 'unknown')})`).join(' · ')}</dd></div>}
+    </dl>
+    <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence is listed under Five-pillar checks above.</p>
+  </div>;
+}
+
+function Configuration({detail}: {detail: ResourceDetail}) {
   const snapshot = detail.configuration_detail || detail.observation?.configuration_snapshot || {};
   const text = JSON.stringify(snapshot, null, 2);
   const readiness = detail.analysis_readiness || detail.observation?.evidence?.analysis_readiness;
   const armDetail = detail.assessment.arm_detail;
-  return <div className="drawer-section"><h3>Evidence provenance</h3>
-    <dl className="settings-key-values"><div><dt>Collector</dt><dd>{detail.observation?.collector_version || 'Not recorded'}</dd></div><div><dt>Schema</dt><dd>{detail.evidence_schema_version || detail.observation?.evidence_schema_version || 'Legacy'}</dd></div><div><dt>Observed</dt><dd>{detail.observation?.observed_at ? dateTime(detail.observation.observed_at) : 'Unknown'}</dd></div>
-    {armDetail && <div><dt>ARM configuration detail</dt><dd><ArmDetailBadge status={armDetail}/></dd></div>}
-    {readiness && <><div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
-    {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}</>}
+  const hasSnapshot = text !== '{}';
+  return <div className="drawer-section"><h3>Configuration</h3>
+    <dl className="settings-key-values">
+      {armDetail && <div><dt>ARM configuration detail</dt><dd><ArmDetailBadge status={armDetail}/></dd></div>}
+      {readiness && <>
+        <div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
+        {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}
+      </>}
     </dl>
-    <p className="inline-help">Configuration older than 24 hours needs a new scan. Per-check evidence is listed under Five-pillar checks above.</p>
-    <details className="drawer-disclosure"><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>
+    {!hasSnapshot && !readiness && !armDetail ? <Notice>No typed configuration snapshot is attached to this observation.</Notice>
+      : <details className="drawer-disclosure" open={hasSnapshot}><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>}
   </div>;
 }
 
@@ -71,8 +92,9 @@ function Rules({detail}: {detail: ResourceDetail}) {
   const primary = matches?.primary_match;
   return <div className="drawer-section"><h3>Rules &amp; matching</h3>
     {conflicts.length > 0 && <div className="rule-conflict-list">{conflicts.map((conflict, index) => <Notice key={`${conflict.kind}:${conflict.rule_id ?? index}`} tone={conflictTone(conflict.severity)}>{conflict.rule_id ? <><strong>{ruleLabel(conflict.rule_id)}</strong> · </> : null}{conflict.message}</Notice>)}</div>}
-    {(primary || (matches?.alternate_matches?.length ?? 0) > 0) && <div className="rule-match-summary">
+    {(primary || (matches?.alternate_matches?.length ?? 0) > 0 || matches?.opportunity_group_id) && <div className="rule-match-summary">
       <p className="inline-help">When several rules fire, one primary recommendation is chosen (Turbonomic-style action market). Alternates stay visible but should not be summed with the primary.</p>
+      {matches?.opportunity_group_id && <p className="inline-help">Opportunity group: <code>{matches.opportunity_group_id}</code>{matches.overlap_policy ? ` · ${label(matches.overlap_policy)}` : ''}</p>}
       {primary && <article className="drawer-card rule-match-primary"><header><h4>Primary match · {ruleLabel(primary.rule_id)}</h4><span className="assessment-state risk">{sentence(primary.match_confidence)} confidence</span></header>
         <dl className="settings-key-values compact"><div><dt>Action</dt><dd>{sentence(primary.action_class)}</dd></div><div><dt>Channel</dt><dd>{label(primary.display_channel)}</dd></div></dl>
         {(primary.safety_blocks?.length ?? 0) > 0 && <p className="inline-help">Safety: {primary.safety_blocks!.join(', ')}</p>}
@@ -109,21 +131,11 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
   const [baselineEnd, setBaselineEnd] = useState(() => utcDayOffset(-30));
   const [baselineStart, setBaselineStart] = useState(() => utcDayOffset(-60));
   const [azureEvidence, setAzureEvidence] = useState<AzureCostSnapshot | null>(null);
-  const supplemental = [['modeled_future_cost_usd', 'Modeled future cost', 'USD']] as const;
-  async function importCost() {
-    setBusy(true); setError('');
-    try {
-      const qs = new URLSearchParams({
-        resource_id: detail.assessment.resource_id,
-        scope_id: detail.assessment.scope_id,
-        start: observationStart,
-        end: observationEnd,
-      }).toString();
-      await api(`/finops/resource-cost?${qs}`, token, {method: 'POST', body: {}});
-      onFetched();
-    } catch (cause) {setError((cause as Error).message);}
-    finally {setBusy(false);}
-  }
+  const supplemental = [
+    ['modeled_future_cost_usd', 'Modeled future cost', 'USD'],
+    ['opportunity_usd', 'Retail opportunity total', 'USD'],
+    ['verified_realized_savings_usd', 'Verified realized savings', 'USD'],
+  ] as const;
   async function fetchAzureCosts() {
     setBusy(true); setError('');
     try {
@@ -135,9 +147,11 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
         baseline_start: baselineStart,
         baseline_end: baselineEnd,
         scan_id: detail.scan_id,
+        persist: 'true',
       });
       const snapshot = await api<AzureCostSnapshot>(`/finops/azure-resource-costs?${qs}`, token);
       setAzureEvidence(snapshot);
+      onFetched();
     } catch (cause) {setError((cause as Error).message);}
     finally {setBusy(false);}
   }
@@ -154,8 +168,7 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
       <label>Baseline start<input type="date" value={baselineStart} onChange={e => setBaselineStart(e.target.value)}/></label>
       <label>Baseline end<input type="date" value={baselineEnd} onChange={e => setBaselineEnd(e.target.value)}/></label>
       <div className="drawer-header-actions">
-        <button className="button primary" disabled={busy} onClick={fetchAzureCosts}>{busy ? 'Calling Azure…' : 'Fetch retail + billed from Azure'}</button>
-        <button className="button secondary" disabled={busy} onClick={importCost}>{busy ? 'Importing…' : 'Import observation window to billing'}</button>
+        <button className="button primary" disabled={busy} onClick={fetchAzureCosts}>{busy ? 'Calling Azure…' : 'Fetch billed costs from Azure'}</button>
       </div>
     </div>}
     {error && <Notice tone="error">{error}</Notice>}
@@ -194,16 +207,24 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
   const a = detail.assessment;
   const retail = detail.costs?.retail_run_rate_usd ?? detail.costs?.retail_estimate_usd ?? a.retail_estimate_usd;
   const balance = detail.costs?.billed_vs_retail_usd;
+  const hasBilled = detail.costs?.billed_cost_usd != null || a.billed_cost_usd != null;
+  const retailLabel = retail == null ? 'Not estimated' : money(retail);
+  const balanceLabel = balance != null ? money(balance) : hasBilled ? 'Unknown' : 'Billed not imported';
+  const waste = detail.costs?.retail_waste_opportunity_usd;
   return <>
     {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}.</Notice>}
     {a.observation?.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
     <dl className="settings-key-values overview-snapshot">
       <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
-      <div><dt>Azure retail run-rate</dt><dd>{retail == null ? 'Unknown' : money(retail)}</dd></div>
-      <div><dt>Billed vs retail</dt><dd>{balance == null ? 'Unknown' : money(balance)}</dd></div>
-      <div><dt>Retail-modeled waste</dt><dd>{detail.costs?.retail_waste_opportunity_usd == null ? 'Unknown' : money(detail.costs.retail_waste_opportunity_usd)}</dd></div>
+      {a.region ? <div><dt>Region</dt><dd>{a.region}</dd></div> : null}
+      <div><dt>Azure retail run-rate</dt><dd>{retailLabel}</dd></div>
+      <div><dt>Billed vs retail</dt><dd>{balanceLabel}</dd></div>
+      <div><dt>Retail-modeled waste</dt><dd>{waste == null ? (retail == null ? 'Not estimated' : 'None modeled') : money(waste)}</dd></div>
       <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
     </dl>
+    {retail == null && !hasBilled && (
+      <p className="inline-help overview-cost-hint">Retail and billed amounts come from Azure Cost Management and billing sync. Open the <button type="button" className="text-link" onClick={() => onOpenTab('costs')}>Costs</button> tab to fetch live Azure charges for this resource.</p>
+    )}
     {!!detail.action_items?.length && <div className="drawer-section"><h3>Review action items</h3><p className="inline-help">Derived from saved evidence, guardrails, and findings — not from AI.</p><Actions actions={detail.action_items} grouped/></div>}
     <div className="drawer-section overview-radar"><EvidenceRadar pillars={a.pillars} onInspect={() => onOpenTab('evidence')}/></div>
     <div className="drawer-header-actions overview-actions">
@@ -222,6 +243,7 @@ function AssessmentChecks({detail}: {detail: ResourceDetail}) {
     <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={pillar ? pillar === p.pillar : p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{pillarState(p.status)}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{sentence(c.code)}</h4><p>{c.explanation}</p>{!!c.evidence_fields.length && <small className="inline-help">Evidence: {c.evidence_fields.join(', ')}</small>}</div></article>)}</div></details>)}</div>
     <details className="drawer-disclosure"><summary>Resource identity</summary><dl className="detail-metadata">
       <div><dt>Resource type</dt><dd>{a.resource_type || 'Not supplied'}</dd></div><div><dt>Service category</dt><dd>{sentence(a.service_category || 'other')}</dd></div>
+      {a.region ? <div><dt>Region</dt><dd>{a.region}</dd></div> : null}
       <div><dt>Group or namespace</dt><dd>{a.resource_group || 'Not supplied'}</dd></div><div><dt>Account or scope</dt><dd><code>{a.scope_id}</code></dd></div>
       <div className="full-width"><dt>Resource ID</dt><dd><code>{a.resource_id}</code></dd></div></dl></details>
     {!!a.guardrails.length && <details className="drawer-disclosure"><summary>Required guardrails</summary><ul className="assessment-guardrails">{a.guardrails.map(code => <li key={code}>{sentence(code)}</li>)}</ul></details>}
@@ -294,13 +316,23 @@ function Questions({detail, onChange}: {detail: ResourceDetail; onChange: () => 
 
 function HistoryTab({detail}: {detail: ResourceDetail}) {
   const {token} = useWorkspace();
-  const [data, setData] = useState<ResourceHistory | null>(null), [error, setError] = useState('');
+  const [data, setData] = useState<ResourceHistory | null>(null), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    setData(null);
+    setError('');
     const request = new AbortController();
     api<ResourceHistory>(`/resources/${detail.assessment.resource_key}/history`, token, {signal: request.signal}).then(setData).catch(cause => {if (!request.signal.aborted) setError((cause as Error).message);});
     return () => request.abort();
-  }, [detail.assessment.resource_key, token]);
-  if (error) return <Notice tone="error">{error}</Notice>;
+  }, [detail.assessment.resource_key, token, attempt]);
+  if (error) {
+    const retryable = /gateway could not be reached|could not be reached/i.test(error);
+    return (
+      <div className="drawer-section">
+        <Notice tone="error">{error}</Notice>
+        {retryable && <button type="button" className="button secondary small" onClick={() => setAttempt(v => v + 1)}>Retry</button>}
+      </div>
+    );
+  }
   if (!data) return <Loading label="Loading resource history…"/>;
   return <>
     <div className="drawer-section"><h3>Across recent scans</h3><div className="summary-table-scroll"><table className="summary-table"><thead><tr><th>Scan</th><th>Priority</th><th>Pillars</th><th>Changes</th></tr></thead><tbody>{data.scans.map(s => <tr key={s.scan_id} className={s.scan_id === detail.scan_id ? 'row-selected' : ''}><td>{dateTime(s.timestamp)}</td><td>{s.present ? sentence(s.review_priority || '') : 'Not flagged'}</td><td>{s.pillars ? <PillarDots pillars={s.pillars}/> : '—'}</td><td>{s.changes.length ? s.changes.map(sentence).join(', ') : 'No change'}</td></tr>)}</tbody></table></div></div>
@@ -340,20 +372,21 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
   </>;
 }
 
-export function ResourceDrawer({scanId, resourceKey, identity, onClose, onChange}: {
+export function ResourceDrawer({scanId, resourceKey, identity, relatedFindings = [], onClose, onChange}: {
   scanId: string;
   resourceKey: string | null;
   identity?: ResourceIdentity | null;
+  relatedFindings?: Finding[];
   onClose: () => void;
   onChange: () => void;
 }) {
-  const {token} = useWorkspace();
   return resourceKey ? (
     <ResourceInsightView
-      key={JSON.stringify([scanId, resourceKey, token, identity?.provider, identity?.resourceId])}
+      key={`${scanId}:${resourceKey}`}
       scanId={scanId}
       resourceKey={resourceKey}
       identity={identity}
+      relatedFindings={relatedFindings}
       layout="drawer"
       onClose={onClose}
       onChange={onChange}
@@ -361,10 +394,11 @@ export function ResourceDrawer({scanId, resourceKey, identity, onClose, onChange
   ) : null;
 }
 
-export function ResourceInsightView({scanId, resourceKey, identity, layout, onClose, onChange}: {
+export function ResourceInsightView({scanId, resourceKey, identity, relatedFindings = [], layout, onClose, onChange}: {
   scanId: string;
   resourceKey: string;
   identity?: ResourceIdentity | null;
+  relatedFindings?: Finding[];
   layout: 'drawer' | 'page';
   onClose: () => void;
   onChange: () => void;
@@ -385,14 +419,22 @@ export function ResourceInsightView({scanId, resourceKey, identity, layout, onCl
     return () => request.abort();
   }, [scanId, resourceKey, token, version, identity?.provider, identity?.resourceId]);
   const [tab, setTab] = useState('overview');
-  useEffect(() => {setTab('overview');}, [resourceKey]);
+  const [drawerExpanded, setDrawerExpanded] = useState(false);
+  useEffect(() => {setTab('overview'); setDrawerExpanded(false);}, [resourceKey]);
   const changed = () => {setVersion(v => v + 1); onChange();};
   const refetch = () => setVersion(v => v + 1);
   const current = detail?.assessment.resource_key === resourceKey ? detail : null;
-  const a = current?.assessment;
-  const tabs = current ? [
+  const view = current && !current.findings.length && relatedFindings.length
+    ? {...current, findings: relatedFindings}
+    : current;
+  const drawerTabIds = ['overview', 'findings', 'evidence', 'costs', 'safety', 'observability', 'ai', 'decision', 'history', 'code'] as const;
+  useEffect(() => {
+    if (view && !drawerTabIds.includes(tab as typeof drawerTabIds[number])) setTab('overview');
+  }, [view, tab]);
+  const a = view?.assessment;
+  const tabs = view ? [
     {id: 'overview', label: 'Overview', icon: LayoutDashboard},
-    {id: 'findings', label: `Findings (${current.findings.length})`, icon: ListChecks},
+    {id: 'findings', label: `Findings (${view.findings.length})`, icon: ListChecks},
     {id: 'evidence', label: 'Evidence', icon: Activity},
     {id: 'costs', label: 'Costs', icon: CircleDollarSign},
     {id: 'safety', label: 'Action safety', icon: ShieldAlert},
@@ -402,52 +444,43 @@ export function ResourceInsightView({scanId, resourceKey, identity, layout, onCl
     {id: 'history', label: 'History', icon: History},
     {id: 'code', label: 'Code', icon: FileCode2},
   ].map(item => ({...item, lead: resourceDrawerLeads[item.id]})) : [];
-  const openPageHref = identity ? resourceInsightPageHref(scanId, resourceKey, identity) : null;
   const body = error ? (
     <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}><Notice tone="error">{error}</Notice></div>
-  ) : !current || !a ? (
+  ) : !view || !a ? (
     <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}>
-      {layout === 'drawer' && openPageHref && (
-        <p className="drawer-quick-actions"><Link className="button secondary small" href={openPageHref}><ExternalLink size={14}/> Open full page</Link></p>
-      )}
       <Loading label="Loading resource details…"/>
     </div>
   ) : (
     <>
       <div className={`finding-drawer-header resource-drawer-header${layout === 'page' ? ' resource-insight-header' : ''}`}>
-        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected' : 'Review'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={current.ai}/>{current.decision && <span className="state-badge">{decisionLabels[current.decision.decision]}</span>}</div>
+        <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected' : 'Review'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={view.ai}/>{view.decision && <span className="state-badge">{decisionLabels[view.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
-        <p className="drawer-header-meta">Observed {a.observation?.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{current.findings.length ? ` · ${current.findings.length} finding${current.findings.length === 1 ? '' : 's'}` : ''}</p>
+        <p className="drawer-header-meta">Observed {a.observation?.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{view.findings.length ? ` · ${view.findings.length} finding${view.findings.length === 1 ? '' : 's'}` : ''}</p>
         <div className="drawer-header-actions">
-          {layout === 'drawer' && (
-            <Link className="button secondary small" href={resourceInsightPageHref(scanId, resourceKey, {provider: a.provider, resourceId: a.resource_id})}>
-              <ExternalLink size={14}/> Open full page
-            </Link>
-          )}
-          <Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft a tag or snapshot plan</Link>
-          <button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{current.ai_result ? 'View AI assessment' : 'AI assessment'}</button>
+          <Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft agent plan</Link>
+          <button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{view.ai_result ? 'View AI assessment' : 'AI assessment'}</button>
         </div>
       </div>
       <TabWorkspaceShell id={layout === 'page' ? 'resource-insight' : 'resource-drawer'} label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content" tabIcons={false}>
-        {tab === 'overview' && <Overview detail={current} onOpenTab={setTab}/>}
-        {tab === 'findings' && <Findings detail={current}/>}
-        {tab === 'evidence' && <><AssessmentChecks detail={current}/><Evidence detail={current}/><Telemetry detail={current}/><Rules detail={current}/><Dependencies detail={current}/></>}
-        {tab === 'costs' && <Costs detail={current} onFetched={refetch}/>}
+        {tab === 'overview' && <Overview detail={view} onOpenTab={setTab}/>}
+        {tab === 'findings' && <Findings detail={view}/>}
+        {tab === 'evidence' && <><AssessmentChecks detail={view}/><Evidence detail={view}/><Configuration detail={view}/><Telemetry detail={view}/><Rules detail={view}/><Dependencies detail={view}/></>}
+        {tab === 'costs' && <Costs detail={view} onFetched={refetch}/>}
         {tab === 'safety' && (
           <ActionSafetyPanel
             token={token}
             actionId={`resource:${a.resource_id}`}
-            supported={current.findings.some(f => f.estimated_monthly_waste_usd != null && f.estimated_monthly_waste_usd > 0)}
-            evidence={actionEvidenceFromResource(current)}
+            supported={view.findings.some(f => f.estimated_monthly_waste_usd != null && f.estimated_monthly_waste_usd > 0)}
+            evidence={actionEvidenceFromResource(view)}
             canAdmin={canAdmin}
           />
         )}
-        {tab === 'observability' && <Observability detail={current}/>}
-        {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={current}/></div><Questions detail={current} onChange={changed}/></>}
-        {tab === 'decision' && <DecisionTab detail={current} onChange={changed}/>}
-        {tab === 'history' && <HistoryTab detail={current}/>}
-        {tab === 'code' && <div className="drawer-section"><h3>Review code</h3><CodeReview findings={current.findings}/></div>}
+        {tab === 'observability' && <Observability detail={view}/>}
+        {tab === 'ai' && <><div className="drawer-section"><h3>AI assessment</h3><Assessment detail={view}/></div><Questions detail={view} onChange={changed}/></>}
+        {tab === 'decision' && <DecisionTab detail={view} onChange={changed}/>}
+        {tab === 'history' && <HistoryTab detail={view}/>}
+        {tab === 'code' && <div className="drawer-section"><h3>Review code</h3>{view.findings.length ? <CodeReview findings={view.findings}/> : <Notice tone="info">No findings are attached to this resource in this scan. Remediation code requires a flagged finding with a supported rule.</Notice>}</div>}
       </TabWorkspaceShell>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
     </>
@@ -455,5 +488,20 @@ export function ResourceInsightView({scanId, resourceKey, identity, layout, onCl
   if (layout === 'page') {
     return <div className="resource-insight-shell panel">{body}</div>;
   }
-  return <Dialog open={!!resourceKey} onClose={onClose} title="Resource details" drawer>{body}</Dialog>;
+  return (
+    <Dialog
+      open={!!resourceKey}
+      onClose={onClose}
+      title="Resource details"
+      drawer
+      className={drawerExpanded ? 'drawer-expanded' : ''}
+      headerExtra={
+        <button type="button" className="icon-button" aria-label={drawerExpanded ? 'Collapse drawer' : 'Expand drawer'} aria-pressed={drawerExpanded} onClick={() => setDrawerExpanded(v => !v)}>
+          {drawerExpanded ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}
+        </button>
+      }
+    >
+      {body}
+    </Dialog>
+  );
 }

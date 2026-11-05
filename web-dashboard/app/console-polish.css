@@ -1,0 +1,238 @@
+/**
+ * Console UX polish — spacing, drawer, resources table, nav density.
+ */
+
+/* —— Resource drawer —— */
+.dialog.drawer {
+  width: min(720px, 100vw);
+  transition: width 0.2s ease;
+}
+.dialog.drawer.drawer-expanded {
+  width: min(calc(100vw - 48px), 1120px);
+}
+.dialog-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.dialog.drawer .resource-drawer-header {
+  padding: 1.25rem 1.5rem 1rem;
+}
+.dialog.drawer .resource-drawer-header > h2 {
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.dialog.drawer .drawer-header-meta {
+  margin-top: 0.5rem;
+}
+.dialog.drawer .drawer-header-actions {
+  margin-top: 0.75rem;
+  gap: 0.5rem;
+}
+.dialog.drawer .drawer-header-actions .button.small {
+  font-size: 12px;
+}
+.resource-drawer-header .finding-badges {
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+.dialog.drawer .drawer-tab-shell.workspace-tab-shell {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  margin-bottom: 0;
+}
+.drawer-tab-shell .workspace-tab-list {
+  padding: 0 1rem;
+  gap: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--border);
+}
+.drawer-tab-shell .workspace-tab-list > button {
+  flex: 0 0 auto;
+  padding: 0.65rem 0.75rem;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.drawer-tab-shell .tab-lead {
+  margin: 0 1.5rem 0.75rem;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  position: sticky;
+  top: 2.75rem;
+  z-index: 2;
+  background: var(--surface);
+  padding-top: 0.5rem;
+}
+.drawer-tab-content .drawer-section:first-child {
+  margin-top: 0;
+}
+.dialog.drawer .drawer-tab-content .drawer-section,
+.dialog.drawer .drawer-tab-content > .inline-empty {
+  padding-bottom: 4px;
+}
+.dialog.drawer .drawer-tab-content .drawer-section > h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+.dialog.drawer .drawer-tab-content .inline-empty,
+.dialog.drawer .drawer-tab-content .inline-help {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dialog.drawer .drawer-tab-shell .tab-panel-stack.drawer-tab-content {
+  min-height: 160px;
+}
+.drawer-tab-content .panel-bleed {
+  margin-inline: -24px;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+/* —— Resources page —— */
+.resources-panel .grid-heading {
+  padding: 1.25rem 1.5rem 1rem;
+}
+.resources-panel .grid-heading h2 {
+  font-size: 1rem;
+}
+.resources-panel .explorer-facets,
+.resources-panel .explorer-quick-views {
+  padding-inline: 1.5rem;
+}
+.resource-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.resource-summary article {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+}
+.resource-summary article > span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.resource-summary article > strong {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.resource-summary article > small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+.resource-summary-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: -0.25rem 0 1rem;
+  line-height: 1.55;
+}
+.resource-table thead th {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+.resource-table .resource-type-cell {
+  max-width: 7rem;
+  font-size: 12px;
+}
+.resources-panel .grid-scroll {
+  max-height: min(62vh, 640px);
+}
+.grid-filters-advanced {
+  margin: 0 1.5rem 0.75rem;
+  font-size: 13px;
+}
+.grid-filters-advanced > summary {
+  cursor: pointer;
+  color: var(--indigo-600);
+  font-weight: 550;
+  padding: 0.35rem 0;
+}
+.grid-filters-advanced-panel {
+  padding-top: 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  .resource-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .resource-summary {
+    grid-template-columns: 1fr;
+  }
+  .resources-panel .grid-display-controls {
+    flex-wrap: wrap;
+  }
+}
+
+/* —— Top bar & scope —— */
+.topbar {
+  height: 64px;
+  padding-inline: 1.5rem;
+}
+.scope-toolbar {
+  padding-inline: 1.5rem;
+  min-height: 38px;
+}
+.page-content {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+.page-heading {
+  margin-bottom: 1.25rem;
+}
+.page-heading h1 {
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+/* —— Sidebar —— */
+.nav-link {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.specialist-navigation .nav-link {
+  width: 100%;
+}
+
+/* —— Overview KPIs —— */
+.kpi-grid {
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.metric-card {
+  padding: 1.1rem 1.15rem;
+  min-height: 120px;
+}
+.metric-card > strong {
+  font-size: 1.65rem;
+  margin: 0.65rem 0 0.5rem;
+}

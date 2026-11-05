@@ -69,7 +69,7 @@ export function FinancialFiveStrip({detail, token, canAdmin, knownOnly = false}:
 
   const balanceSub =
     billedVsRetail == null
-      ? 'Needs billed import and Azure retail meters'
+      ? 'Needs Azure billing sync or a resource cost fetch'
       : billedVsRetail > 0
         ? 'Billed above Azure list in this window'
         : billedVsRetail < 0
@@ -77,7 +77,7 @@ export function FinancialFiveStrip({detail, token, canAdmin, knownOnly = false}:
           : 'Billed matches Azure list run-rate';
 
   const measures = [
-    {label: '30-day billed cost', value: display(costs?.billed_cost_usd, currency), sub: 'Payable usage · FOCUS / Cost Management', known: costs?.billed_cost_usd != null},
+    {label: '30-day billed cost', value: display(costs?.billed_cost_usd, currency), sub: 'Payable usage · Azure Cost Management / billing sync', known: costs?.billed_cost_usd != null},
     {label: '30-day effective cost', value: display(costs?.effective_cost_usd, currency), sub: 'Amortized allocation · commitment-aware', known: costs?.effective_cost_usd != null},
     {
       label: 'Azure retail run-rate',
@@ -129,7 +129,7 @@ export function FinancialFiveStrip({detail, token, canAdmin, knownOnly = false}:
   if (knownOnly && !visible.length) {
     return (
       <Notice>
-        No billed, retail, or savings evidence is attached yet. Fetch billing on this tab or run a scan with verified retail meters.
+        No billed, retail, or savings evidence is attached yet. Fetch costs from Azure on the Costs tab or run billing sync on Cost allocation.
       </Notice>
     );
   }

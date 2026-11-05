@@ -16,6 +16,75 @@ HISTORY_SCANS = 10
 _BILLING_FIELDS = ('billed_cost_usd', 'effective_cost_usd', 'currency', 'commitment_locked', 'billing_coverage')
 
 
+def _sync_evidence_coverage(assessment):
+    checks = [c for pillar in assessment.get('pillars', []) for c in pillar.get('checks', [])]
+    return dict(
+        assessment,
+        evidence_gap_codes=sorted({c['code'] for c in checks if c.get('status') == 'unknown'}),
+        evidence_coverage=dict(observed=sum(c.get('status') != 'unknown' for c in checks), total=len(checks)),
+    )
+
+
+def _dependency_evidence_from_observation(obs):
+    refs = obs.get('dependency_refs')
+    if not isinstance(refs, list):
+        return {}
+    verified = []
+    for edge in refs:
+        if not isinstance(edge, dict) or edge.get('verification_state') != 'verified':
+            continue
+        rid = obs.get('resource_id')
+        if not isinstance(rid, str):
+            continue
+        if edge.get('from_resource_id') == rid:
+            other = edge.get('to_resource_id')
+        elif edge.get('to_resource_id') == rid:
+            other = edge.get('from_resource_id')
+        else:
+            continue
+        if isinstance(other, str) and other:
+            verified.append(other)
+    patch = {}
+    if verified:
+        patch['verified_dependencies'] = sorted(set(verified))
+    if refs:
+        patch['dependency_inventory_complete'] = all(
+            isinstance(edge, dict) and edge.get('verification_state') == 'verified' for edge in refs
+        )
+    return patch
+
+
+def _enrich_finding_for_assessment(finding, observation=None):
+    finding = dict(finding)
+    evidence = dict(finding.get('evidence') or {})
+    if observation:
+        obs_evidence = observation.get('evidence') or {}
+        evidence = {**obs_evidence, **evidence}
+        evidence.update(_dependency_evidence_from_observation(observation))
+        snapshot = observation.get('configuration_snapshot')
+        if isinstance(snapshot, dict):
+            for key, value in snapshot.items():
+                if key in ('metrics', 'state_history'):
+                    continue
+                if evidence.get(key) is None and value is not None:
+                    evidence[key] = value
+        tags = evidence.get('tags') or evidence.get('labels')
+        if not tags and isinstance(snapshot, dict):
+            tags = snapshot.get('tags') or snapshot.get('labels')
+        if isinstance(tags, dict) and tags:
+            evidence.setdefault('tags', tags)
+        if evidence.get('state_history') is None and isinstance(obs_evidence.get('state_history'), list):
+            evidence['state_history'] = obs_evidence['state_history']
+        for key in ('reconciliation_status', 'data_sources', 'collector_version', 'evidence_schema_version'):
+            if finding.get(key) is None and observation.get(key) is not None:
+                finding[key] = observation[key]
+    finding['evidence'] = evidence
+    retail = _retail_from_saved_evidence(finding, observation) if observation else _retail_from_saved_evidence(finding)
+    if retail is not None and finding.get('estimated_monthly_waste_usd') is None:
+        finding['estimated_monthly_waste_usd'] = retail
+    return finding
+
+
 def overlay_inventory_billing(assessment, obs):
     """Resources with findings skip merge_inventory; copy billed evidence from the inventory row."""
     if not obs:
@@ -32,7 +101,7 @@ def overlay_inventory_billing(assessment, obs):
             for check in pillar.get('checks', []):
                 if check.get('code') == 'BILLED_COST' and check.get('status') == 'unknown':
                     check['status'] = 'risk' if updated.get('commitment_locked') else 'observed'
-    return updated
+    return _sync_evidence_coverage(updated) if patch else assessment
 
 
 def identity(finding):
@@ -59,6 +128,16 @@ def _retail_from_saved_evidence(*rows):
         if not isinstance(row, dict):
             continue
         evidence = row.get('evidence') or {}
+        pricing = evidence.get('pricing_evidence') or row.get('pricing_evidence')
+        if isinstance(pricing, dict):
+            for key in ('monthly_run_rate_usd', 'window_run_rate_usd'):
+                value = pricing.get(key)
+                if value is None:
+                    continue
+                try:
+                    return float(Decimal(str(value)).quantize(Decimal('0.01')))
+                except (ValueError, TypeError, ArithmeticError):
+                    continue
         for key in ('retail_run_rate_usd', 'monthly_retail_usd', 'estimated_monthly_waste_usd'):
             value = evidence.get(key)
             if value is None:
@@ -70,7 +149,7 @@ def _retail_from_saved_evidence(*rows):
     return None
 
 
-def merge(key, findings, *, observed_at=None, now=None, list_view=False):
+def merge(key, findings, *, observed_at=None, now=None, list_view=False, observation=None):
     """Return (assessment, sanitized AI context) for one resource."""
     from app.rule_id_canonical import normalize_finding
 
@@ -81,7 +160,10 @@ def merge(key, findings, *, observed_at=None, now=None, list_view=False):
         if not isinstance(finding, dict) or not finding.get('resource_id'):
             raise ValueError('Each finding must include a resource_id')
         deduped.append(normalize_finding(finding))
-    findings = sorted(deduped, key=lambda f: f['rule_id'])
+    findings = sorted(
+        (_enrich_finding_for_assessment(f, observation) for f in deduped),
+        key=lambda f: f['rule_id'],
+    )
     results = [assess(f, observed_at=observed_at, now=now) for f in findings]
     if not results:
         raise ValueError('Assessment produced no results')
@@ -199,14 +281,26 @@ def merge_inventory(key, obs, *, observed_at=None, now=None, list_view=False):
         retail = inventory_retail_usd(obs)
         if retail is not None and result.get('retail_estimate_usd') is None:
             result['retail_estimate_usd'] = retail
+    if obs.get('region'):
+        result['region'] = obs['region']
     if result['disposition'] == 'inventory_only':
         result['guardrails'] = list(dict.fromkeys([*(result.get('guardrails') or []), 'INVENTORY_ONLY']))
     return result, context
 
 
 def assessments(scan, *, now=None, list_view=False):
+    inventory_by_key = {
+        resource_key(inventory_observation(obs)): obs for obs in (scan.get('inventory') or [])
+    }
     merged = {
-        key: merge(key, items, observed_at=scan.get('timestamp'), now=now, list_view=list_view)
+        key: merge(
+            key,
+            items,
+            observed_at=scan.get('timestamp'),
+            now=now,
+            list_view=list_view,
+            observation=inventory_by_key.get(key),
+        )
         for key, items in group(scan['findings']).items()
     }
     for obs in scan.get('inventory') or []:

@@ -171,7 +171,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 break
         return None
 
-    def resource_from_bundle(scan_id, tenant, resource_key, provider, resource_id):
+    def resource_from_bundle(scan_id, tenant, key, provider, resource_id):
         bundle = store.scan_resource_bundle(tenant['tenant_id'], str(scan_id), provider, resource_id)
         if bundle is None:
             raise HTTPException(404, 'Scan not found')
@@ -179,13 +179,15 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             raise HTTPException(409, 'Resource evidence requires a live scan snapshot')
         observation = bundle.get('observation')
         findings = list(bundle.get('findings') or [])
+        if not findings and hasattr(store, 'findings_for_resource_key'):
+            findings = store.findings_for_resource_key(tenant['tenant_id'], str(scan_id), key)
         if not observation and not findings:
             raise HTTPException(404, 'Resource not found in this scan')
         if observation:
             expected = resource_key(inventory_observation(observation))
         else:
             expected = resource_key(findings[0])
-        if expected != resource_key:
+        if expected != key:
             raise HTTPException(404, 'Resource not found in this scan')
         if bundle['status'] == 'completed':
             try:
@@ -207,13 +209,20 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         observation = (stub.get('inventory') or [None])[0] if observation else None
         grouped = group(findings)
         observed_at = bundle.get('timestamp')
-        if resource_key in grouped:
-            assessment, context = merge(resource_key, grouped[resource_key], observed_at=observed_at, list_view=True)
+        if key in grouped:
+            assessment, context = merge(
+                key,
+                grouped[key],
+                observed_at=observed_at,
+                list_view=False,
+                observation=observation,
+            )
             if observation:
                 assessment = overlay_inventory_billing(assessment, observation)
-            findings = grouped[resource_key]
+            findings = grouped[key]
         elif observation:
-            assessment, context = merge_inventory(resource_key, observation, observed_at=observed_at, list_view=True)
+            assessment, context = merge_inventory(key, observation, observed_at=observed_at, list_view=False)
+            assessment = overlay_inventory_billing(assessment, observation)
             findings = []
         else:
             raise HTTPException(404, 'Resource not found in this scan')
@@ -272,7 +281,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         )
         obs_evidence = ((observation or {}).get('evidence') or {}) if observation else {}
         configuration_detail = obs_evidence.get('typed_configuration') or (observation or {}).get('configuration_snapshot')
-        assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation))
+        region = assessment.get('region') or ((observation or {}).get('region') if observation else None) or ((observation or {}).get('location') if observation else None)
+        assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation), region=region)
         from app.resource_action_items import derive_action_items
 
         action_items = derive_action_items(assessment, findings, evaluations)
@@ -296,6 +306,9 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
     def inventory_db_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
         """Serve one inventory slice from Postgres without loading the full scan payload."""
+        # Billable filtering happens after the inventory slice is loaded; inventory_total is unfiltered.
+        if cost_scope == 'billable' and not arm_detail:
+            return None
         from app.billable_resources import include_in_cost_workspace
 
         def observation_rows(observations, findings_by_key, observed_at):
@@ -304,7 +317,13 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 pseudo = inventory_observation(obs)
                 key = resource_key(pseudo)
                 if key in findings_by_key:
-                    assessment, _ = merge(key, findings_by_key[key], observed_at=observed_at, list_view=True)
+                    assessment, _ = merge(
+                        key,
+                        findings_by_key[key],
+                        observed_at=observed_at,
+                        list_view=True,
+                        observation=obs,
+                    )
                 else:
                     assessment, _ = merge_inventory(key, obs, observed_at=observed_at, list_view=True)
                 row_item = dict(
@@ -395,11 +414,20 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 snap = dict(snap, findings=focused['findings'], inventory=focused.get('inventory') or snap['inventory'])
             findings_by_key = group(snap['findings'])
             observed_at = snap.get('timestamp')
+            inventory_by_key = {
+                resource_key(inventory_observation(o)): o for o in (snap.get('inventory') or [])
+            }
             items = observation_rows(snap['inventory'], findings_by_key, observed_at)
             total = snap['inventory_total']
             review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
             for key, grouped in findings_by_key.items():
-                assessment, _ = merge(key, grouped, observed_at=observed_at, list_view=True)
+                assessment, _ = merge(
+                    key,
+                    grouped,
+                    observed_at=observed_at,
+                    list_view=True,
+                    observation=inventory_by_key.get(key),
+                )
                 review_priority[assessment['review_priority']] = review_priority.get(assessment['review_priority'], 0) + 1
             review_priority['evidence_required'] += max(0, snap['inventory_total'] - len(findings_by_key))
             summary_payload = dict(

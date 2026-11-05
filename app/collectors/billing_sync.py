@@ -83,8 +83,12 @@ def _post(url, token, body, scope_id=None):
         if parsed.path.lower()!=expected:raise ValueError('Unexpected billing scope')
         key='azure:cost:'+scope_id
         interval, deadline_seconds = _azure_cost_pacing()
-        attempts = int(os.getenv('CLOUDSAVER_AZURE_COST_MANAGEMENT_ATTEMPTS', '8' if os.getenv('CLOUDSAVER_ENVIRONMENT', '').lower() == 'development' else '3'))
-        if not 1 <= attempts <= 12:
+        raw_attempts = os.getenv(
+            'CLOUDSAVER_AZURE_COST_MANAGEMENT_ATTEMPTS',
+            '5' if os.getenv('CLOUDSAVER_ENVIRONMENT', '').lower() == 'development' else '3',
+        )
+        attempts = min(5, int(raw_attempts))
+        if not 1 <= int(raw_attempts) <= 12:
             raise ValueError('CLOUDSAVER_AZURE_COST_MANAGEMENT_ATTEMPTS must be between 1 and 12')
     elif parsed.netloc=='bigquery.googleapis.com' and re.fullmatch(r'/bigquery/v2/projects/[a-z][a-z0-9-]{4,61}[a-z0-9]/queries',parsed.path):
         key='gcp:bigquery:'+parsed.path.split('/')[4]

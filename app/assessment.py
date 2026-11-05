@@ -110,7 +110,21 @@ def assess(finding, *, observed_at=None, now=None):
     if kind == 'database':
         check('reliability', 'DATABASE_RECOVERY', 'unknown' if retention is None else 'risk' if retention < 2 else 'observed',
               'Backup retention is unknown.' if retention is None else f'Observed backup retention: {retention:g} days; production recovery objectives need review.')
-    complete_utilization = utilization(evidence, observed_at)
+    legacy_utilization = utilization(evidence, observed_at)
+    complete_utilization = legacy_utilization
+    if not complete_utilization:
+        from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
+
+        metrics = evidence.get('metrics') or {}
+        now_ts = timestamp(now) or datetime.now(timezone.utc)
+        for metric_key in ('cpu_percent', 'memory_percent', 'iops', 'normalized_ru_consumption', 'ptu_utilization'):
+            series = metrics.get(metric_key)
+            if not isinstance(series, dict):
+                continue
+            contract = TimeSeriesEvidenceContract(metric_key)
+            if evaluate_series(series, contract, now=now_ts, require_resource_age=False).is_sufficient:
+                complete_utilization = True
+                break
     check('performance', 'UTILIZATION_WINDOW', 'observed' if complete_utilization else 'unknown',
           'Saved 14-day hourly P95 evidence has a complete collector summary; peaks and SLOs still need review.' if complete_utilization else 'Complete utilization/headroom evidence is unavailable; do not infer idle duration from stopped state.')
     if finding.get('cloud_provider')=='kubernetes' and finding.get('resource_type','').startswith('kubernetes.io/') and isinstance(evidence.get('metrics'),dict):
@@ -160,7 +174,7 @@ def assess(finding, *, observed_at=None, now=None):
     from app.pillar_checks import checks as concrete_checks
     # Existing codes remain stable; combine duplicate checks conservatively below.
     concrete_checks(kind,evidence,check,observed_at=observed_at,now=now,protected=protected)
-    if complete_utilization:
+    if legacy_utilization:
         ratio = evidence['p95_usage'] / evidence['minimum_request']
         check('performance', 'REQUEST_HEADROOM', 'risk' if ratio > 1 else 'observed',
               f'Saved P95/request ratio: {ratio:.3g}. This is request-sizing evidence, not a memory limit or safety guarantee.',

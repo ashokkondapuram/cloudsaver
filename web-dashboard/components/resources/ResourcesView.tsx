@@ -151,13 +151,17 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     return null;
   }, [drawerIdentityHint, params, openKey, page?.items]);
   useEffect(() => {
-    const provider = params.get('provider') || initialProvider || '';
     const armDetail = armDetailFromQuery(params.get('arm_detail')) || initialArmDetail || '';
-    setFilters(f => (f.provider === provider && f.arm_detail === armDetail) ? f : {...f, provider, arm_detail: armDetail});
+    const provider = openKey ? undefined : (params.get('provider') || initialProvider || '');
+    setFilters(f => {
+      const nextProvider = provider === undefined ? f.provider : provider;
+      if (f.provider === nextProvider && f.arm_detail === armDetail) return f;
+      return {...f, provider: nextProvider, arm_detail: armDetail};
+    });
     setCategory(initialCategory);
     setIntent(initialIntent);
     setPricing(initialPricing);
-  }, [params, initialProvider, initialCategory, initialIntent, initialPricing, initialArmDetail]);
+  }, [params, initialProvider, initialCategory, initialIntent, initialPricing, initialArmDetail, openKey]);
   useEffect(() => {
     const current = params.get('arm_detail') || '';
     const next = filters.arm_detail || '';
@@ -187,6 +191,10 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
   const start=Math.min(offset,Math.max(0,Math.ceil(rows.length/GRID_PAGE_SIZE)-1)*GRID_PAGE_SIZE);
   const displayed=rows.slice(start,start+GRID_PAGE_SIZE);
   const chosen = useMemo(() => (page?.items || []).filter(r => selected.has(r.resource_key)&&(!scope.length||scope.includes(r.scope_id))), [page, selected,scope]);
+  const drawerRelatedFindings = useMemo(() => {
+    if (!drawerIdentity) return [];
+    return findingIndex.get(identityOf(drawerIdentity.provider, drawerIdentity.resourceId)) || [];
+  }, [drawerIdentity, findingIndex]);
   const reviewFindings = useMemo(() => {
     if (!scan || !chosen.length) return [];
     const keys = new Set(chosen.map(r => identityOf(r.provider, r.resource_id)));
@@ -288,25 +296,25 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
       </details>
       <div className="grid-scroll" tabIndex={0} aria-label="Scrollable resource table">
         <table className="data-table resource-table">
-          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Type</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed USD</th><th>30d effective USD</th><th>Retail opportunity</th><th>AI risk</th><th>AI status</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
+          <thead><tr><th><input type="checkbox" aria-label="Select all matching resources" checked={allVisible} onChange={toggleAll}/></th><th>Resource</th><th>Type</th><th>Provider</th><th>Findings</th><th>Priority</th><th>Pillars</th><th>30d billed</th><th>Retail opportunity</th><th>AI risk</th><th>Decision</th><th><span className="sr-only">Open</span></th></tr></thead>
           <tbody>{displayed.map(r => <tr key={r.resource_key} className={selected.has(r.resource_key) ? 'row-selected' : ''} onClick={() => open(r.resource_key, r)}>
             <td onClick={e => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.resource_name}`} checked={selected.has(r.resource_key)} onChange={() => toggle(r.resource_key)}/></td>
             <td><button className="resource-name" onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><strong>{r.resource_name || r.resource_id}</strong>{(r.lifecycle_delta || r.arm_detail) && <small>{r.lifecycle_delta && <span className="mini-badge">{r.lifecycle_delta}</span>}{r.arm_detail && <ArmDetailBadge status={r.arm_detail} hideFromParentName/>}</small>}</button></td>
             <td className="resource-type-cell" title={r.resource_type}>{resourceTypeLabel(r.resource_type)}</td>
             <td><ProviderBadge provider={r.provider}/></td><td>{r.finding_count.toLocaleString()}</td><td>{sentence(r.review_priority)}</td><td><PillarDots pillars={r.pillars}/></td>
-            <td className="money-cell">{money(r.billed_cost_usd ?? null)}</td><td className="money-cell">{money(r.effective_cost_usd ?? null)}</td>
+            <td className="money-cell">{money(r.billed_cost_usd ?? null)}</td>
             <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'} title="Azure retail run-rate estimate (USD list); not verified savings">{money(r.retail_estimate_usd)}</td>
-            <td><AIRisk ai={r.ai}/></td><td><AIStatusBadge ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
+            <td><AIRisk ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
             <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><ChevronRight size={16}/></button></td>
           </tr>)}
-          {!rows.length && <tr><td colSpan={14}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
+          {!rows.length && <tr><td colSpan={12}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
       <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length?`${start+1}–${Math.min(start+GRID_PAGE_SIZE,rows.length)} of `:''}{rows.length.toLocaleString()} matching resources</span>{rows.length>GRID_PAGE_SIZE&&<nav aria-label="Resource pages"><button className="button secondary small" disabled={!start} onClick={()=>setOffset(Math.max(0,start-GRID_PAGE_SIZE))}>Previous resources</button><button className="button secondary small" disabled={start+GRID_PAGE_SIZE>=rows.length} onClick={()=>setOffset(start+GRID_PAGE_SIZE)}>Next resources</button></nav>}{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
       {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode2 size={16}/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17}/></button></div>}
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
-    <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} identity={drawerIdentity} onClose={() => open(null)} onChange={reload}/>
+    <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} identity={drawerIdentity} relatedFindings={drawerRelatedFindings} onClose={() => open(null)} onChange={reload}/>
   </>;
 }
 

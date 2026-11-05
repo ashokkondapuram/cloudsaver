@@ -1,7 +1,7 @@
 'use client';
 
-import {useEffect,useId,useRef,useState} from 'react';
-import {BrainCircuit,FileJson,Upload,Wallet} from 'lucide-react';
+import {useEffect,useRef,useState} from 'react';
+import {BrainCircuit,FileJson,Wallet} from 'lucide-react';
 import {api} from '../lib/api';
 import {dateTime,shortDate} from '../lib/finops';
 import {sentence} from '../lib/resources';
@@ -11,7 +11,6 @@ import {useWorkspace} from './WorkspaceProvider';
 import {EmptyState,Loading,Notice,ProviderBadge,SectionTitle} from './ui/shared';
 
 type Summary={currency:string;records:number;billed_cost:string|null;effective_cost:string|null;list_cost:string|null;effective_savings_rate_pct:string|null;excluded_overlapping_records:number;warning:string;daily:{date:string;billed_cost:string|null;complete:boolean}[];forecast:{month_end_billed_cost:string;daily_velocity:string;projected_budget_overrun:boolean}|null;anomaly:{value:number;spike:boolean}|null;providers:{provider:string;records:number;billed_cost:string;effective_cost:string}[]};
-type Import={id:string;source_id:string;provider:string;sub_account:string;currency:string;records:number;inserted:number;complete:boolean;created_at:string};
 type Selection={start:string;end:string;currency:string;budget:string};
 const initial=():Selection=>{const end=new Date().toISOString().slice(0,10),start=end.slice(0,8)+'01';return {start:start===end?new Date(Date.UTC(Number(end.slice(0,4)),Number(end.slice(5,7))-2,1)).toISOString().slice(0,10):start,end,currency:'USD',budget:''};};
 const amount=(value:string|null|undefined,currency:string)=>{if(value==null)return 'Unknown';const n=Number(value);if(!Number.isFinite(n))return `${currency} ${value}`;try{return new Intl.NumberFormat('en-US',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n);}catch{return `${currency} ${value}`;}};
@@ -20,31 +19,17 @@ const tokens=(value:number|null)=>value==null?'Unknown':num(value);
 const day=(value:string)=>shortDate(/^\d{4}-\d{2}-\d{2}$/.test(value)?value+'T12:00:00':value);
 
 export function BillingEvidencePanel(){
-  const {token,canBill}=useWorkspace();const id=useId();
+  const {token,canBill}=useWorkspace();
   const [draft,setDraft]=useState(initial),[selection,setSelection]=useState(initial),[revision,setRevision]=useState(0);
-  const [data,setData]=useState<{identity:string;summary:Summary;imports:Import[]}|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
-  const [file,setFile]=useState<{raw:string;name:string;source:string;records:number;identity:string}|null>(null),[ack,setAck]=useState(false),[busy,setBusy]=useState(false);
-  const mutation=useRef<AbortController|null>(null),identity=useRef(token);identity.current=token;
-  useEffect(()=>{setFile(null);setAck(false);setNotice('');setBusy(false);return()=>mutation.current?.abort();},[token]);
+  const [data,setData]=useState<{identity:string;summary:Summary}|null>(null),[error,setError]=useState('');
+  useEffect(()=>{setError('');},[token]);
   useEffect(()=>{
     const request=new AbortController();setData(null);setError('');
-    if(canBill&&token){const query=new URLSearchParams({start:selection.start,end:selection.end,currency:selection.currency,...(selection.budget?{budget:selection.budget}:{})});Promise.all([api<Summary>('/finops/summary?'+query,token,{signal:request.signal}),api<{items:Import[]}>('/finops/imports',token,{signal:request.signal})]).then(([summary,imports])=>{if(!request.signal.aborted)setData({identity:token,summary,imports:imports.items});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});}
+    if(canBill&&token){const query=new URLSearchParams({start:selection.start,end:selection.end,currency:selection.currency,...(selection.budget?{budget:selection.budget}:{})});api<Summary>('/finops/summary?'+query,token,{signal:request.signal}).then(summary=>{if(!request.signal.aborted)setData({identity:token,summary});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});}
     return()=>request.abort();
   },[token,canBill,selection,revision]);
-  async function choose(selected:File|undefined){
-    setFile(null);setAck(false);setNotice('');setError('');if(!selected)return;
-    const version=token;
-    try{if(selected.size>2000000)throw new Error('Choose a normalized billing JSON file smaller than 2 MB.');const raw=await selected.text();if(identity.current!==version)return;const payload=JSON.parse(raw);if(!payload||typeof payload.source_id!=='string'||!Array.isArray(payload.records))throw new Error('This file needs a source_id and a records array.');setFile({raw,name:selected.name,source:payload.source_id,records:payload.records.length,identity:version});}catch(cause){if(identity.current===version)setError((cause as Error).message);}
-  }
-  async function upload(){
-    if(!file||file.identity!==token||!ack||busy)return;
-    const version=token,request=new AbortController();mutation.current?.abort();mutation.current=request;setBusy(true);setError('');
-    try{const result=await api<{records:number;inserted:number;cached:boolean}>('/finops/imports',token,{rawBody:file.raw,signal:request.signal});if(!request.signal.aborted&&identity.current===version){setNotice(`${result.cached?'Existing import verified':'Import saved'}: ${result.inserted} new charges from ${result.records} records. Duplicate charges are not counted again.`);setFile(null);setAck(false);setRevision(v=>v+1);}}
-    catch(cause){if(!request.signal.aborted&&identity.current===version)setError((cause as Error).message);}
-    finally{if(!request.signal.aborted&&identity.current===version)setBusy(false);}
-  }
   const visible=data?.identity===token?data:null;
-  if(!canBill)return <section className="panel"><SectionTitle title="Cloud billing data">Normalized cloud billing imports</SectionTitle><EmptyState icon={Wallet} title="Finance access required">You need finance access to import and review billed costs. Ask your workspace administrator to grant it.</EmptyState></section>;
+  if(!canBill)return <section className="panel"><SectionTitle title="Cloud billing data">Azure billing synchronization</SectionTitle><EmptyState icon={Wallet} title="Finance access required">You need finance access to sync and review billed costs. Ask your workspace administrator to grant it.</EmptyState></section>;
   return <section className="panel billing-evidence"><SectionTitle title="Cloud billing data" eyebrow="FINOPS LEDGER">Provider-reported billed costs · separate from resource retail estimates</SectionTitle><AutoBillingStatus currency={selection.currency} onSynced={()=>setRevision(v=>v+1)}/>
     <form className="enterprise-filters" onSubmit={event=>{event.preventDefault();setSelection({...draft});}}>
       <label>From (UTC)<input type="date" required value={draft.start} onChange={e=>setDraft({...draft,start:e.target.value})}/></label>
@@ -53,18 +38,14 @@ export function BillingEvidencePanel(){
       <label>Monthly budget (optional)<input inputMode="decimal" value={draft.budget} placeholder="Decimal amount" onChange={e=>setDraft({...draft,budget:e.target.value})}/></label>
       <button className="button secondary" type="submit">Apply billing period</button>
     </form>
-    {error&&<Notice tone="error">{error}</Notice>}{notice&&<Notice tone="success">{notice}</Notice>}
+    {error&&<Notice tone="error">{error}</Notice>}
     {!visible&&!error?<Loading label="Loading cloud billing data…"/>:visible&&<>
       <Notice tone="warning">{visible.summary.warning}</Notice>
-      <div className="allocation-metrics"><article className="metric-card"><div className="metric-label">Imported billed cost</div><strong className="enterprise-amount">{amount(visible.summary.billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{num(visible.summary.records)} charge records · {num(visible.summary.excluded_overlapping_records)} overlapping periods excluded</p></article><article className="metric-card"><div className="metric-label">Effective cost</div><strong className="enterprise-amount">{amount(visible.summary.effective_cost,visible.summary.currency)}</strong><p className="metric-footnote">ESR: {visible.summary.effective_savings_rate_pct===null?'Unknown':visible.summary.effective_savings_rate_pct+'%'} · requires complete list-cost evidence</p></article><article className="metric-card"><div className="metric-label">Provisional month-end forecast</div><strong className="enterprise-amount">{amount(visible.summary.forecast?.month_end_billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{visible.summary.forecast?visible.summary.forecast.projected_budget_overrun?'Projected above the supplied budget':'Based on seven covered, closed UTC days':'Complete daily coverage is required'}</p></article></div>
+      <div className="allocation-metrics"><article className="metric-card"><div className="metric-label">Synced billed cost</div><strong className="enterprise-amount">{amount(visible.summary.billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{num(visible.summary.records)} charge records · {num(visible.summary.excluded_overlapping_records)} overlapping periods excluded</p></article><article className="metric-card"><div className="metric-label">Effective cost</div><strong className="enterprise-amount">{amount(visible.summary.effective_cost,visible.summary.currency)}</strong><p className="metric-footnote">ESR: {visible.summary.effective_savings_rate_pct===null?'Unknown':visible.summary.effective_savings_rate_pct+'%'} · requires complete list-cost evidence</p></article><article className="metric-card"><div className="metric-label">Provisional month-end forecast</div><strong className="enterprise-amount">{amount(visible.summary.forecast?.month_end_billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{visible.summary.forecast?visible.summary.forecast.projected_budget_overrun?'Projected above the supplied budget':'Based on seven covered, closed UTC days':'Complete daily coverage is required'}</p></article></div>
       {visible.summary.anomaly&&<Notice tone={visible.summary.anomaly.spike?'warning':'info'}>Latest closed-day Z-score: {visible.summary.anomaly.value}. A nonseasonal 30-day baseline is a review signal, not a diagnosed anomaly.</Notice>}
-      {visible.summary.providers.length>0?<div className="summary-table-scroll" tabIndex={0} aria-label="Provider billing costs"><table className="summary-table"><caption className="sr-only">Imported costs by provider in {visible.summary.currency}</caption><thead><tr><th>Provider</th><th>Charges</th><th>Billed cost</th><th>Effective cost</th></tr></thead><tbody>{visible.summary.providers.map(row=><tr key={row.provider}><td><ProviderBadge provider={row.provider}/></td><td>{num(row.records)}</td><td>{amount(row.billed_cost,visible.summary.currency)}</td><td>{amount(row.effective_cost,visible.summary.currency)}</td></tr>)}</tbody></table></div>:<EmptyState icon={FileJson} title="No imported charges in this period">Choose an authorized normalized billing export below. Missing cloud billing data remains unknown.</EmptyState>}
-      <details className="raw-evidence"><summary>Inspect daily coverage ({visible.summary.daily.filter(p=>p.complete).length} of {visible.summary.daily.length} days)</summary><div className="summary-table-scroll" tabIndex={0} aria-label="Daily cloud billing data"><table className="summary-table"><thead><tr><th>UTC date</th><th>Coverage</th><th>Billed cost</th></tr></thead><tbody>{visible.summary.daily.map(row=><tr key={row.date}><td>{day(row.date)}</td><td>{row.complete?'Operator-declared complete':'Incomplete or unverified'}</td><td>{amount(row.billed_cost,visible.summary.currency)}</td></tr>)}</tbody></table></div></details>
-      <details className="raw-evidence"><summary>Recent billing imports ({visible.imports.length})</summary>{visible.imports.length?<ul className="assessment-guardrails">{visible.imports.map(row=><li key={row.id}>{row.source_id} · {row.currency} · {num(row.inserted)} new / {num(row.records)} submitted · {row.complete?'declared complete':'partial'} · {dateTime(row.created_at)}</li>)}</ul>:<p className="inline-empty">No imports recorded.</p>}</details>
+      {visible.summary.providers.length>0?<div className="summary-table-scroll" tabIndex={0} aria-label="Provider billing costs"><table className="summary-table"><caption className="sr-only">Synced costs by provider in {visible.summary.currency}</caption><thead><tr><th>Provider</th><th>Charges</th><th>Billed cost</th><th>Effective cost</th></tr></thead><tbody>{visible.summary.providers.map(row=><tr key={row.provider}><td><ProviderBadge provider={row.provider}/></td><td>{num(row.records)}</td><td>{amount(row.billed_cost,visible.summary.currency)}</td><td>{amount(row.effective_cost,visible.summary.currency)}</td></tr>)}</tbody></table></div>:<EmptyState icon={FileJson} title="No synced charges in this period">Run billing sync above or fetch costs from Azure on a resource. Missing cloud billing data remains unknown.</EmptyState>}
+      <details className="raw-evidence"><summary>Inspect daily coverage ({visible.summary.daily.filter(p=>p.complete).length} of {visible.summary.daily.length} days)</summary><div className="summary-table-scroll" tabIndex={0} aria-label="Daily cloud billing data"><table className="summary-table"><thead><tr><th>UTC date</th><th>Coverage</th><th>Billed cost</th></tr></thead><tbody>{visible.summary.daily.map(row=><tr key={row.date}><td>{day(row.date)}</td><td>{row.complete?'Complete sync coverage':'Incomplete or unverified'}</td><td>{amount(row.billed_cost,visible.summary.currency)}</td></tr>)}</tbody></table></div></details>
     </>}
-    <details className="drawer-section"><summary>Advanced: import FOCUS billing JSON manually</summary><h3>Import normalized billing JSON</h3><p className="inline-help">Use the documented FOCUS field subset with decimal strings and stable x_ChargeId values. Each file covers one provider, authorized sub-account and currency. This imports your supplied evidence; automatic connectors fetch supported provider charges, without certifying FOCUS conformance.</p><label className="enterprise-file" htmlFor={id}><Upload size={17}/>Choose billing JSON<input id={id} type="file" accept=".json,application/json" disabled={busy} onChange={e=>choose(e.target.files?.[0])}/></label>
-      {file?.identity===token&&<><p className="inline-help">{file.name} · Source {file.source} · {num(file.records)} submitted records</p><label className="checkbox-row"><input type="checkbox" checked={ack} disabled={busy} onChange={e=>setAck(e.target.checked)}/>I have reviewed the account scope, amounts and completeness declaration in this file.</label><button className="button primary" disabled={!ack||busy} onClick={upload}>{busy?'Importing cloud billing data…':'Import cloud billing data'}</button></>}
-    </details>
   </section>;
 }
 

@@ -3,8 +3,8 @@
 import {useLayoutEffect, useRef, type ReactNode} from 'react';
 import {X} from 'lucide-react';
 
-export function Dialog({open, onClose, title, children, drawer = false, className = '', returnFocusKey}: {
-  open: boolean; onClose: () => void; title: string; children: ReactNode; drawer?: boolean; className?: string; returnFocusKey?:string|null;
+export function Dialog({open, onClose, title, children, drawer = false, className = '', returnFocusKey, headerExtra}: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode; drawer?: boolean; className?: string; returnFocusKey?:string|null; headerExtra?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose); close.current = onClose;
@@ -32,7 +32,7 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
   if (!open) return null;
   return <dialog ref={ref} aria-label={title} aria-modal="true" className={`dialog ${drawer ? 'drawer' : ''} ${className}`} onCancel={e => {e.preventDefault(); close.current();}} onClick={e => {if (e.target === ref.current) close.current();}}>
     <div className="dialog-surface">
-      <div className="dialog-heading"><h2>{title}</h2><button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={18}/></button></div>
+      <div className="dialog-heading"><h2>{title}</h2><div className="dialog-heading-actions">{headerExtra}<button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={18}/></button></div></div>
       {children}
     </div>
   </dialog>;

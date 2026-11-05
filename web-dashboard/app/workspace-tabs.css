@@ -85,6 +85,17 @@
 .drawer .workspace-tab-shell,
 .drawer .drawer-tabs.workspace-tab-list{border:0;border-radius:0;background:transparent;box-shadow:none}
 .drawer .drawer-tab-shell{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
+.drawer .drawer-tab-shell .workspace-tab-list{
+  flex-shrink:0;
+  position:relative;
+  z-index:2;
+  flex-wrap:nowrap;
+}
+.drawer .drawer-tab-shell .tab-lead{
+  flex-shrink:0;
+  position:relative;
+  z-index:1;
+}
 .resource-insight-page .page-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1rem}
 .resource-insight-page .page-heading h1{margin:0;font-size:1.25rem}
 .resource-insight-shell.panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:min(80vh,960px)}

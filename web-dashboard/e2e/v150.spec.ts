@@ -7,7 +7,7 @@ test('service and optimization destinations expose observed data and honest evid
   await page.route('**/api/v1/services/disks*',r=>r.fulfill({json:{service:'disks',total:1,warning:'TEST FIXTURE: Saved observations only.',items:[{resource_key:'a'.repeat(64),resource_name:'owned-disk',provider:'azure',resource_type:'Microsoft.Compute/disks',finding_count:1,billed_cost_usd:null,retail_estimate_usd:12}]}}));
   await page.route('**/api/v1/optimization/scans/'+scanId+'/auto-scenarios',r=>r.fulfill({json:{warning:'No synthetic savings are generated.',engines:{topology:{status:'insufficient_evidence',items:[]},commitment:{status:'insufficient_evidence',warning:'Complete hourly billing is required.'}}}}));
   await navigate(page,'Services');await expect(page.getByRole('heading',{name:'Services'})).toBeVisible();await expect(page.getByRole('link',{name:'owned-disk'})).toBeVisible();
-  await expect(page.getByRole('columnheader',{name:'Imported billed USD'})).toBeVisible();
+  await expect(page.getByRole('columnheader',{name:'Synced billed USD'})).toBeVisible();
   await navigate(page,'Optimization evidence');await expect(page.getByText('Insufficient evidence',{exact:true})).toHaveCount(2);
   const audit=await new AxeBuilder({page}).include('main').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);
 });
@@ -19,7 +19,7 @@ test('configured automatic billing sync refreshes durable history without a manu
   await page.route('**/api/v1/finops/sync-jobs/77777777-7777-4777-8777-777777777777',r=>{synced=true;return r.fulfill({json:{status:'completed'}});});
   await navigate(page,'Cost allocation');await page.getByRole('button',{name:'Sync now',exact:true}).click();
   await expect(page.getByText('Last successful synchronization:',{exact:false})).toBeVisible();expect(writes).toBe(1);await expect(page.getByText('Billing remains unreconciled:',{exact:false})).toBeVisible();
-  await expect(page.getByText('Advanced: import FOCUS billing JSON manually',{exact:true})).toBeVisible();
+  await expect(page.getByText('Advanced: import FOCUS billing JSON manually')).toHaveCount(0);
 });
 
 test('execution timeline distinguishes draft reviews from verified parity',async({page})=>{

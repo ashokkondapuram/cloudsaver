@@ -32,6 +32,7 @@ export type ResourcePage = {scan_id: string; observed_at: string; summary: Summa
 export type Check = {pillar: string; code: string; status: PillarStatus; explanation: string; evidence_fields: string[]};
 export type ResourceAssessment = Omit<ResourceRow, 'pillars' | 'ai' | 'decision'> & {
   pillars: {pillar: string; status: PillarStatus; checks: Check[]}[]; guardrails: string[]; policy_version: string;
+  region?: string | null;
   observation: {status: string; observed_at: string | null; max_age_hours: number};
 };
 export type Followup = {id: string; question: string; created_at: string; answer: {answer: string; evidence_codes: string[]; limitations: string[]}};
@@ -47,6 +48,8 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
   configuration_detail?: Record<string, unknown> | null;
   evidence_schema_version?: string | null;
   observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;analysis_readiness?:{configuration?:string;configuration_observed?:number;configuration_total?:number;telemetry_pending_rule_ids?:string[]}};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
+    reconciliation_status?: string | null; region?: string | null; location?: string | null;
+    data_sources?: {source_id?: string; collector_type?: string; status?: string; reason_code?: string | null}[];
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
   rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean; safety_blocks?: string[]}[];
   rule_matches?: RuleMatches;

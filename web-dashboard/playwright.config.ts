@@ -23,7 +23,9 @@ export default defineConfig({
     baseURL,
     launchOptions: process.env.CLOUDSAVER_BROWSER_EXECUTABLE
       ? {executablePath: process.env.CLOUDSAVER_BROWSER_EXECUTABLE}
-      : undefined,
+      : process.env.CLOUDSAVER_BROWSER_CHANNEL
+        ? {channel: process.env.CLOUDSAVER_BROWSER_CHANNEL as 'msedge' | 'chrome'}
+        : undefined,
     screenshot: 'only-on-failure',
   },
   projects: [
