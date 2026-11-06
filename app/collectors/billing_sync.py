@@ -209,6 +209,7 @@ def retail_estimated_observation_row(day, resource_id, currency, *, billed, effe
 
 
 def _azure_resource_query(url, credential, kind, start, end, scope_id, resource_id):
+    """Single-resource CM filter query; subscription-wide queries paginate in _azure_query instead."""
     body = dict(
         type=kind,
         timeframe='Custom',
@@ -222,28 +223,13 @@ def _azure_resource_query(url, credential, kind, start, end, scope_id, resource_
             'filter': {'dimensions': {'name': 'ResourceId', 'operator': 'In', 'values': [resource_id]}},
         },
     )
-    rows, page, seen = [], url, {url}
-    from urllib.parse import urlsplit
-
-    expected = cost_management_query_path_lower(scope_id)
-    for _ in range(100):
-        properties = _post(page, _token(credential), body, scope_id)['properties']
-        names = [c['name'].lower() for c in properties['columns']]
-        rows.extend(dict(zip(names, row)) for row in properties['rows'])
-        page = properties.get('nextLink')
-        if not page:
-            return rows
-        parsed = urlsplit(page)
-        if (
-            page in seen
-            or parsed.scheme != 'https'
-            or parsed.netloc != ARM_HOST
-            or parsed.fragment
-            or parsed.path.lower() != expected
-        ):
-            raise ValueError('Unexpected billing pagination host, scope or repeated cursor')
-        seen.add(page)
-    raise ValueError('Billing pagination limit exceeded')
+    properties = _post(url, _token(credential), body, scope_id)['properties']
+    if properties.get('nextLink'):
+        raise ValueError(
+            'Azure per-resource Cost Management query is incomplete; continuation pages are not imported'
+        )
+    names = [c['name'].lower() for c in properties['columns']]
+    return [dict(zip(names, row)) for row in properties['rows']]
 
 
 def azure_rows(binding, tenant, start, end):
