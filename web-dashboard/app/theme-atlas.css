@@ -466,6 +466,10 @@ html[data-ui-preset=atlas] .brand-rest {
   color: var(--cs-text);
 }
 
+html[data-ui-preset=atlas] .brand-char-accent {
+  color: var(--cs-success);
+}
+
 html[data-ui-preset=atlas] .brand-wordmark small,
 html[data-ui-preset=atlas] .brand small {
   color: var(--cs-muted);
