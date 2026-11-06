@@ -123,7 +123,7 @@ export const findingDrawerTabs: WorkspaceTab[] = [
 ];
 
 export const resourceDrawerLeads: Record<string, string> = {
-  overview: 'Summary and pillar radar.',
+  overview: 'Health snapshot, evidence coverage, and fastest next steps.',
   findings: 'Findings for this resource in the selected scan.',
   evidence: 'Collector evidence, telemetry, rules, and dependencies.',
   costs: 'Billed and retail breakdown when pricing exists.',

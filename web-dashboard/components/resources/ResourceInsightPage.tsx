@@ -30,7 +30,7 @@ export function ResourceInsightPage() {
 
   if (token && !scans.length) {
     if (busy) return <Loading label="Loading workspace snapshots…"/>;
-    return <EmptyState icon={ComputerTower} title="No scan available">Run a scan from Resources, then open this resource again.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="No scan available">Wait for your workspace snapshot to finish, or open Resources after a tenant admin has triggered collection.</EmptyState>;
   }
 
   if (urlScanId && scans.length && !scans.some(s => s.scan_id === urlScanId)) {
@@ -43,7 +43,7 @@ export function ResourceInsightPage() {
   }
 
   if (!scanId || !insightScan) {
-    return <EmptyState icon={ComputerTower} title="No scan selected">Run or select a scan on the Resources page, then open this resource again.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="No scan selected">Pick a scan on the Resources page, or return from a resource link once a snapshot exists.</EmptyState>;
   }
 
   if (!isLiveSnapshot(insightScan)) {

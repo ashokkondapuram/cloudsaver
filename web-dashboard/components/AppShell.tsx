@@ -17,6 +17,7 @@ import {
   Gear,
   Layout,
   List,
+  Kanban,
   LockKey,
   MagnifyingGlass,
   Pulse,
@@ -49,6 +50,7 @@ import {Reveal} from './landing/Reveal';
 
 export const navigation = [
   {href:'/',label:'Overview',icon:Layout,group:'WORKSPACE',shortcut:'G D'},
+  {href:'/actions',label:'Action center',icon:Kanban,group:'WORKSPACE'},
   {href:'/resources',label:'Resources',icon:SquaresFour,group:'',shortcut:'G R'},
   {href:'/workloads',label:'Workload assessments',icon:Stack,group:''},
   {href:'/allocation',label:'Cost allocation',icon:Wallet,group:'FINANCE'},
@@ -254,7 +256,7 @@ export function AppShell({children}: {children: ReactNode}) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.shiftKey && e.key.toLowerCase() === 'r' && canAdmin && selection.length) {e.preventDefault(); openReview(selection); return;}
       const key = e.key.toLowerCase();
-      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
+      if (prefix.current.key === 'g' && Date.now() - prefix.current.at < 900) {const target = ({d:'/',c:'/actions',r:'/resources',k:'/kubernetes',a:'/agents',s:'/settings'} as Record<string, string>)[key]; if (target) {e.preventDefault(); router.push(target);} prefix.current.key = '';}
       else prefix.current = {key,at:Date.now()};
     };
     document.addEventListener('keydown',handler);return () => document.removeEventListener('keydown',handler);

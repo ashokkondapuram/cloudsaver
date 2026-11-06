@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {
   ArrowsIn,
   ArrowsOut,
@@ -254,6 +254,18 @@ function Dependencies({detail}: {detail: ResourceDetail}) {
 const formatDay = (value: string) => new Date(value + 'T00:00:00').toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
 const pillarState = (status: string) => status === 'risk' ? 'Risk observed' : status === 'observed' ? 'Evidence observed' : 'Evidence incomplete';
 
+function pillarSummaryCounts(pillars: ResourceDetail['assessment']['pillars']) {
+  let risk = 0;
+  let observed = 0;
+  let unknown = 0;
+  for (const p of pillars) {
+    if (p.status === 'risk') risk++;
+    else if (p.status === 'observed') observed++;
+    else unknown++;
+  }
+  return {risk, observed, unknown, total: pillars.length};
+}
+
 function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab: string) => void}) {
   const a = detail.assessment;
   const retail = detail.costs?.retail_run_rate_usd ?? detail.costs?.retail_estimate_usd ?? a.retail_estimate_usd;
@@ -262,19 +274,161 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
   const retailLabel = retail == null ? 'Not estimated' : money(retail);
   const balanceLabel = balance != null ? money(balance) : hasBilled ? 'Unknown' : 'Billed not imported';
   const waste = detail.costs?.retail_waste_opportunity_usd;
+  const pc = pillarSummaryCounts(a.pillars);
+  const freshnessStale = a.observation?.status !== 'recent' || !!detail.analysis_stale;
+  const healthTitle =
+    pc.risk > 0
+      ? 'Risk signals on this resource'
+      : pc.total > 0 && pc.observed === pc.total
+        ? 'Pillar evidence complete'
+        : pc.total > 0
+          ? 'Evidence still filling in'
+          : 'Assessment overview';
+  const nextSteps = useMemo(() => {
+    const steps: {key: string; title: string; detail: string; action: ReactNode}[] = [];
+    if (freshnessStale) {
+      steps.push({
+        key: 'refresh',
+        title: 'Refresh evidence',
+        detail: detail.analysis_stale ? 'Analysis is marked stale for this resource.' : 'Observation is outside the freshness window your policy expects.',
+        action: (
+          <span className="resource-overview-step-hint">
+            Inventory refreshes on your workspace schedule.{' '}
+            <Link className="text-link" href="/resources">Open Resources</Link> to confirm the latest snapshot.
+          </span>
+        ),
+      });
+    }
+    if (a.protected_reasons.length) {
+      steps.push({
+        key: 'protected',
+        title: 'Confirm protection intent',
+        detail: `Recovery or retention: ${a.protected_reasons.map(label).join(', ')}`,
+        action: (
+          <button type="button" className="text-link" onClick={() => onOpenTab('safety')}>
+            Open Action safety
+          </button>
+        ),
+      });
+    }
+    if (detail.findings.length) {
+      steps.push({
+        key: 'findings',
+        title: 'Review findings',
+        detail: `${detail.findings.length} finding${detail.findings.length === 1 ? '' : 's'} in this scan`,
+        action: (
+          <button type="button" className="text-link" onClick={() => onOpenTab('findings')}>
+            Open Findings
+          </button>
+        ),
+      });
+    }
+    if (pc.risk > 0) {
+      steps.push({
+        key: 'pillars',
+        title: 'Inspect pillar checks',
+        detail: `${pc.risk} pillar${pc.risk === 1 ? '' : 's'} with risk observed`,
+        action: (
+          <button type="button" className="text-link" onClick={() => onOpenTab('evidence')}>
+            Open Evidence
+          </button>
+        ),
+      });
+    }
+    if (detail.ai.status === 'stale' || detail.ai.status === 'failed') {
+      steps.push({
+        key: 'ai',
+        title: 'Reconcile AI assessment',
+        detail: detail.ai.status === 'stale' ? 'Evidence changed after the last model run.' : 'The last AI run did not complete.',
+        action: (
+          <button type="button" className="text-link" onClick={() => onOpenTab('ai')}>
+            Open AI
+          </button>
+        ),
+      });
+    }
+    if (retail == null && !hasBilled) {
+      steps.push({
+        key: 'costs',
+        title: 'Attach billing context',
+        detail: 'Retail and billed amounts prioritize FinOps work.',
+        action: (
+          <button type="button" className="text-link" onClick={() => onOpenTab('costs')}>
+            Open Costs
+          </button>
+        ),
+      });
+    }
+    return steps.slice(0, 5);
+  }, [a.protected_reasons, detail.ai.status, detail.analysis_stale, detail.findings.length, freshnessStale, hasBilled, onOpenTab, pc.risk, retail]);
   return <>
     {!!a.protected_reasons.length && <Notice tone="warning">Recovery or retention intent detected: {a.protected_reasons.map(label).join(', ')}.</Notice>}
-    {a.observation?.status !== 'recent' && <Notice tone="warning">Observation is stale. Run a new scan before you plan a change.</Notice>}
-    <dl className="settings-key-values overview-snapshot">
-      <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
-      {a.region ? <div><dt>Region</dt><dd>{a.region}</dd></div> : null}
-      <div><dt>Azure retail run-rate</dt><dd>{retailLabel}</dd></div>
-      <div><dt>Billed vs retail</dt><dd>{balanceLabel}</dd></div>
-      <div><dt>Retail-modeled waste</dt><dd>{waste == null ? (retail == null ? 'Not estimated' : 'None modeled') : money(waste)}</dd></div>
-      <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
-      <div><dt>Last analyzed</dt><dd>{detail.refresh_in_progress ? 'Refreshing from Azure…' : detail.last_analyzed_at ? dateTime(detail.last_analyzed_at) : 'Not yet analyzed'}{!detail.refresh_in_progress && detail.analysis_stale ? ' · stale' : ''}</dd></div>
-      <div><dt>Azure status fetched</dt><dd>{detail.azure_status_fetched_at ? dateTime(detail.azure_status_fetched_at) : 'Not fetched'}</dd></div>
-    </dl>
+    {a.observation?.status !== 'recent' && <Notice tone="warning">Observation is outside the expected freshness window. Confirm the latest inventory snapshot before you plan an infrastructure change.</Notice>}
+    <div className="resource-overview-hero">
+      <div className="resource-overview-hero-main">
+        <span className="eyebrow">Resource health</span>
+        <h3 className="resource-overview-hero-title">{healthTitle}</h3>
+        <p className="resource-overview-hero-lead">
+          {pc.total ? (
+            <>
+              {pc.observed} of {pc.total} pillars with complete evidence
+              {pc.risk > 0 ? ` · ${pc.risk} with risk` : ''}
+              {pc.unknown > 0 ? ` · ${pc.unknown} incomplete` : ''}
+            </>
+          ) : (
+            'Pillar coverage will appear when this resource type is evaluated.'
+          )}
+          {a.evidence_coverage.total ? (
+            <> · {a.evidence_coverage.observed}/{a.evidence_coverage.total} checks observed</>
+          ) : (
+            <> · checks not evaluated</>
+          )}
+        </p>
+        <div className="resource-overview-pillar-strip" role="list" aria-label="Five-pillar status">
+          {a.pillars.map(p => (
+            <span key={p.pillar} role="listitem" className={`resource-overview-pillar-chip resource-overview-pillar-chip--${p.status}`}>
+              <span className="capitalize">{p.pillar}</span>
+              <small>{pillarState(p.status)}</small>
+            </span>
+          ))}
+        </div>
+      </div>
+      <dl className="drawer-facts resource-overview-facts">
+        <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
+        <div><dt>Retail run-rate</dt><dd>{retailLabel}</dd></div>
+        <div><dt>Billed vs retail</dt><dd title={balanceLabel}>{balanceLabel}</dd></div>
+        <div><dt>Last analyzed</dt><dd>{detail.refresh_in_progress ? 'Refreshing from Azure…' : detail.last_analyzed_at ? dateTime(detail.last_analyzed_at) : 'Not yet analyzed'}{!detail.refresh_in_progress && detail.analysis_stale ? ' · stale' : ''}</dd></div>
+      </dl>
+    </div>
+    {nextSteps.length > 0 && (
+      <div className="resource-overview-next" aria-label="Suggested next steps">
+        <h3 className="resource-overview-next-title">Next steps</h3>
+        <ul className="resource-overview-next-list">
+          {nextSteps.map(step => (
+            <li key={step.key}>
+              <div className="resource-overview-step-copy">
+                <strong>{step.title}</strong>
+                <p>{step.detail}</p>
+              </div>
+              <div className="resource-overview-step-action">{step.action}</div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+    <details className="drawer-disclosure resource-overview-snapshot">
+      <summary>Full cost &amp; telemetry snapshot</summary>
+      <dl className="settings-key-values overview-snapshot">
+        <div><dt>Findings</dt><dd>{detail.findings.length ? `${detail.findings.length} in this scan` : 'None'}</dd></div>
+        {a.region ? <div><dt>Region</dt><dd>{a.region}</dd></div> : null}
+        <div><dt>Azure retail run-rate</dt><dd>{retailLabel}</dd></div>
+        <div><dt>Billed vs retail</dt><dd>{balanceLabel}</dd></div>
+        <div><dt>Retail-modeled waste</dt><dd>{waste == null ? (retail == null ? 'Not estimated' : 'None modeled') : money(waste)}</dd></div>
+        <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
+        <div><dt>Last analyzed</dt><dd>{detail.refresh_in_progress ? 'Refreshing from Azure…' : detail.last_analyzed_at ? dateTime(detail.last_analyzed_at) : 'Not yet analyzed'}{!detail.refresh_in_progress && detail.analysis_stale ? ' · stale' : ''}</dd></div>
+        <div><dt>Azure status fetched</dt><dd>{detail.azure_status_fetched_at ? dateTime(detail.azure_status_fetched_at) : 'Not fetched'}</dd></div>
+      </dl>
+    </details>
     {retail == null && !hasBilled && (
       <p className="inline-help overview-cost-hint">Retail and billed amounts come from Azure Cost Management and billing sync. Open the <button type="button" className="text-link" onClick={() => onOpenTab('costs')}>Costs</button> tab to fetch live Azure charges for this resource.</p>
     )}
