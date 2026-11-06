@@ -97,9 +97,15 @@ def scan_account(source, *, session=None):
         from app.config import Settings
         from app.collectors.wiz_security import enrich_inventory_wiz_signals
 
-        stack_settings = Settings.load()
+        try:
+            stack_settings = Settings.load()
+        except ValueError:
+            # Unit tests and offline tools often omit CLOUDSAVER_TENANTS; optional enrichers still read env flags.
+            stack_settings = None
         from app.collectors.live_common import enabled
-        if enabled():
+        # Injected sessions (tests, custom readers) only stub a subset of AWS APIs; skip live expansion unless the caller opts in.
+        live_reader = getattr(session, '_cloudsaver_live_reader', False)
+        if enabled() and (session is None or live_reader):
             from app.collectors.aws_live import extra_inventory,enrich
             inventory += extra_inventory(client,account,region)
             enrich(client,inventory)

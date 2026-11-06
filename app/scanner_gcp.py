@@ -183,9 +183,13 @@ def scan_gcp_project(source, *, reader=None, now=None):
         from app.config import Settings
         from app.collectors.wiz_security import enrich_inventory_wiz_from_reader
 
-        stack_settings = Settings.load()
+        try:
+            stack_settings = Settings.load()
+        except ValueError:
+            stack_settings = None
         from app.collectors.live_common import enabled
-        if enabled():
+        # Tests inject readers that do not serve every Compute/SQL/Monitoring route live expansion needs; run only for real credentialed reads.
+        if enabled() and own_reader:
             from app.collectors.gcp_live import extra_inventory,enrich
             inventory += extra_inventory(reader,project,regions)
             enrich(reader,project,inventory,now)
