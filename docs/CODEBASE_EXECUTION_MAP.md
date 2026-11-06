@@ -1,7 +1,7 @@
 # CloudSaver codebase execution map
 
 **Purpose:** One place to see what runs, what calls what, and what to delete instead of maintaining twice.  
-**Version:** 1.8.1 tree · Nov 2026 · branch `cursor/retail-cost-consistency-083f`
+**Version:** 1.8.1 tree · Nov 2026 · branch `cursor/fix-all-ingestion-analysis-083f`
 
 ---
 
@@ -56,8 +56,9 @@ Triggered by `POST /api/v1/scans` or `POST /api/v1/scans/multi-cloud` in `app/ma
 | 8 | `app/store.py` | Persist scan JSON + `waste_finding_evidence` |
 | 9 | `app/typed_resources/persist.py` | Relational rows for 5 Azure types (PG) |
 | 10 | `app/scan_billing.py` | Azure Cost Management import at scan complete |
+| 11 | `app/analysis_service/pipeline.py` | `attach_pillar_analysis` after billing materialization (sync `app/main.py` + `workers/tasks.run_scan_job`) |
 
-**Read path (resources UI):** `app/resource_api.py` → `app/resource_assessment.py` merges findings + inventory → five-pillar assessment + `financial_balance`.
+**Read path (resources UI):** `app/resource_api.py` → `app/resource_assessment.py` (rules + `financial_balance`); **`pillar_scores`** from persisted `scan.pillar_analysis` when present.
 
 ---
 

@@ -1,8 +1,23 @@
 # CloudSaver backend remediation (sorted backlog)
 
-Branch: `cursor/backend-remediation-sort-083f`. Generated from multi-agent audit against the official multi-cloud FinOps spec (inventory, metrics, actual vs retail cost, activity/drift, resilience).
+Branch: `cursor/fix-all-ingestion-analysis-083f` (ingestion → analysis through commit **`ec2f304`**). Earlier backlog from multi-agent audit against the official multi-cloud FinOps spec (inventory, metrics, actual vs retail cost, activity/drift, resilience).
 
 **Reliability principle:** SDK and REST hit the same Azure/AWS/GCP services; CloudSaver prefers **documented REST + `provider_retry`** for Azure scan paths. Gaps below are mostly **missing APIs**, **pagination policy**, **identity/cost provenance**, and **module boundaries**—not “pick SDK vs REST.”
+
+---
+
+## Ingestion → analysis (completed through `ec2f304`)
+
+| Deliverable | Status | Primary paths |
+|-------------|--------|-----------------|
+| Standalone **AnalysisService** (5 pillars, no live cloud HTTP) | **Done** (`eb14cf4`) | `app/analysis_service/*`, `services/analysis_service_app.py` |
+| Scan jobs call **`attach_pillar_analysis`** before persist | **Done** (`4afb246`) | `workers/tasks.run_scan_job`, sync path in `app/main.py` after `materialize_scan_billing` |
+| **`activity_events`** normalization (AWS/Azure/GCP collectors) | **Done** (`4ff4553`) | `app/collectors/activity_events.py`; loader prefers over `state_history` |
+| **`billing_enrich`** on FOCUS attach (cost fields for evaluators) | **Done** (`8eec02b`) | `app/analysis_service/billing_enrich.py`, `app/focus.py` `attach()` |
+| **Persisted `pillar_analysis`** + HTTP read APIs | **Done** (`542ce7e`) | `app/analysis_service/pipeline.py`, `app/pillar_analysis_api.py`, `app/resource_api.py`, gateway proxy |
+| Azure Monitor **`metrics:getBatch`** in live enrich | **Done** (`ec2f304`) | `app/collectors/azure_monitor_batch.py`, `azure_live.enrich` prefetch + per-resource GET fallback |
+
+**Still open (honest gaps):** AWS **Resource Explorer 2** inventory; GCP **`searchAllResources`** (still **ListAssets**); **Stream E** (Advisor / TA / Recommender) not ingested; shared **`_pagination.py`** helper; drift baselines / IaC allowlist / `drift_detected` surfacing; thin **`scanner_pipeline`** module split.
 
 ---
 
@@ -41,9 +56,9 @@ Do these before large provider features; each unblocks Tasks 2–4.
 | Pillar | Status | Next fixes (order) |
 |--------|--------|-------------------|
 | **Inventory (ARG REST `2024-04-01`)** | Compliant | P2: batch ARG rule queries in `_findings`; P1: `collectors/azure_inventory.py` wrapper |
-| **Metrics (Monitor REST)** | Partial — no batch | **P0:** catalog + client for Metrics Batch (`2024-02-01` per spec); refactor `azure_live.fetch_azure_monitor_series` |
+| **Metrics (Monitor REST)** | **Compliant** — batch + GET fallback | P2: move remaining inline api-versions into catalog; P2: expand batch edge-case tests beyond mocked contract |
 | **Cost (CM `2023-11-01` + Retail)** | Partial | **Done:** per-resource CM fail-closed on `nextLink`; **Done:** `cost_source`; **Done:** retail Redis TTL cache |
-| **Activity (Activity Log `2015-04-01`)** | Partial — state history only | P2: API version review; P1: `azure_activity.py`; bridge to drift watermarks |
+| **Activity (Activity Log `2015-04-01`)** | Partial — **`activity_events`** on scan evidence | P2: API version review; P1: dedicated `azure_activity.py`; P0: drift watermarks + baseline bridge (Task 3) |
 
 **P3:** Move inline ARM api-versions from `azure_live.py` into `azure_rest_catalog.py`.
 
@@ -107,7 +122,8 @@ Do these before large provider features; each unblocks Tasks 2–4.
 |----------|------|--------|
 | P0 | AWS `aws_live` | New Stubber tests: pagination, enrich ordering |
 | P0 | GCP BQ billing | Multi-page `pageToken` mock |
-| P1 | Azure Monitor batch | Contract tests once batch client exists |
+| ~~P1~~ | Azure Monitor batch | **Done** — `tests/test_azure_monitor_batch.py` (mocked batch + prefetch grouping) |
+| P1 | Activity + billing for analysis | **Done** — `test_activity_events_normalization.py`, `test_analysis_billing_enrich.py`, `test_pillar_analysis_api.py` |
 | P1 | Drift baselines + IaC | Worker tests with populated baseline + allowlist |
 | P2 | Identity | Cross-surface test: same resource → same `resource_key` and drift hash |
 
@@ -115,8 +131,9 @@ Do these before large provider features; each unblocks Tasks 2–4.
 
 ## E2E verification
 
-- **Full suite:** `python3 -m pytest -q` → 1290 passed (branch `cursor/backend-remediation-sort-083f`).
+- **Full suite:** `python3 -m pytest -q` → **1323 passed** (branch `cursor/fix-all-ingestion-analysis-083f`, Nov 2026).
 - **Mocked scan pipeline:** `tests/test_backend_remediation_e2e.py` (ARG inventory + billing `cost_source` + domain `resource_key`).
+- **Ingestion → analysis:** `test_analysis_service_pipeline.py`, `test_pillar_analysis_api.py`, `test_azure_monitor_batch.py`, `test_activity_events_normalization.py`, `test_analysis_billing_enrich.py`.
 
 ---
 
