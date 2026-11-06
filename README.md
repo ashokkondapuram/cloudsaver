@@ -14,6 +14,9 @@ Open the dashboard at `http://127.0.0.1:3000` and the platform portal at `http:/
 
 This command starts a **local development** environment with no automatically authorized cloud scopes or execution connectors. Cloud-provider credentials and real customer integrations still require configuration. It does not deploy public hosting or finish the dashboard's browser SSO flow. The local certificate and trial license expire after 30 days. Allow sufficient Docker disk space and RAM for two Next.js builds; images are built serially. Use `./start.sh --no-build` for previously built images, or `./start.sh --help` for existing configuration paths.
 
+## Kubernetes (Docker Desktop / AKS smoke deploy)
+
+For a **minimal API-only** image on Kubernetes (not the full Compose stack), see [`k8s/README.md`](k8s/README.md). Use `scripts/deploy-docker-desktop.sh` or `scripts/deploy-aks.sh` after `chmod +x`.
 
 **Latest (release 1.8.1, Nov 2026):**
 

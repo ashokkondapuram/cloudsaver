@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudsaver-api
+  labels:
+    app.kubernetes.io/name: cloudsaver-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudsaver-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudsaver-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: app
+          image: cloudsaver-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            # Minimal standalone defaults; override via Kustomize configMapGenerator or secrets for real deployments.
+            - name: CLOUDSAVER_ENVIRONMENT
+              value: "development"
+            - name: CLOUDSAVER_TENANT_REGISTRY
+              value: "env"
+            - name: CLOUDSAVER_CLOUD_IDENTITY
+              value: "developer"
+            - name: CLOUDSAVER_TENANTS
+              value: >-
+                [{"tenant_id":"00000000-0000-4000-8000-000000000001","name":"Demo","subscription_ids":["00000000-0000-4000-8000-000000000002"],"api_key_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
