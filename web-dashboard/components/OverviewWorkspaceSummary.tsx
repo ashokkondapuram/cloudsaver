@@ -1,9 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import {useEffect, useMemo, useState} from 'react';
 import {
-  ArrowRight,
   ClipboardText,
   FileCode,
   Pulse,
@@ -245,23 +243,14 @@ export function OverviewWorkspaceSummary() {
 
   return (
     <section className={`panel ${styles.workspaceSummary}`} aria-label="Workspace summary" data-atlas-rollout="overview-workspace-summary">
-      <SectionTitle
-        title="Across the workspace"
-        eyebrow="SNAPSHOT"
-        action={
-          <Link className="text-link" href="/activity">
-            Activity &amp; delivery
-            <ArrowRight size={14} weight="regular" />
-          </Link>
-        }
-      />
+      <SectionTitle title="Across the workspace" eyebrow="SNAPSHOT" />
       {error ? <Notice tone="error">{error}</Notice> : null}
 
       <div className={styles.workspaceSummaryGrid}>
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <Pulse size={18} weight="regular" aria-hidden />
-            <Link href="/activity">Operations &amp; delivery</Link>
+            <span>Operations &amp; delivery</span>
           </h3>
           {reliability ? (
             <div className={styles.workspaceSummaryTiles}>
@@ -288,7 +277,7 @@ export function OverviewWorkspaceSummary() {
           <div className={styles.workspaceSummaryBlock}>
             <h3 className={styles.workspaceSummaryHeading}>
               <ClipboardText size={18} weight="regular" aria-hidden />
-              <Link href="/outcomes">Savings &amp; investigations</Link>
+              <span>Savings &amp; investigations</span>
             </h3>
             <div className={styles.workspaceSummaryTiles}>
               <article className="metric-card">
@@ -318,7 +307,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <SealCheck size={18} weight="regular" aria-hidden />
-            <Link href="/governance">Risk &amp; compliance</Link>
+            <span>Risk &amp; compliance</span>
           </h3>
           {governance ? (
             <>
@@ -371,7 +360,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <FileCode size={18} weight="regular" aria-hidden />
-            <Link href="/automation">Automation &amp; GitOps</Link>
+            <span>Automation &amp; GitOps</span>
           </h3>
           {gitops ? (
             <>
@@ -401,7 +390,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <Robot size={18} weight="regular" aria-hidden />
-            <Link href="/agents">Agent worker</Link>
+            <span>Agent worker</span>
           </h3>
           {agents ? (
             <>
@@ -436,7 +425,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <Pulse size={18} weight="regular" aria-hidden />
-            <Link href="/settings?tab=integrations">Observability</Link>
+            <span>Observability</span>
           </h3>
           {observability ? (
             <>
@@ -465,7 +454,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <Sparkle size={18} weight="regular" aria-hidden />
-            <Link href="/settings">AI &amp; data governance</Link>
+            <span>AI &amp; data governance</span>
           </h3>
           {aiGov ? (
             <div className={styles.workspaceSummaryTiles}>
@@ -493,7 +482,7 @@ export function OverviewWorkspaceSummary() {
         <div className={styles.workspaceSummaryBlock}>
           <h3 className={styles.workspaceSummaryHeading}>
             <SquaresFour size={18} weight="regular" aria-hidden />
-            <Link href="/kubernetes">Kubernetes</Link>
+            <span>Kubernetes</span>
           </h3>
           {scan?.status !== 'completed' ? (
             <p className="inline-help">Kubernetes statistics appear when a scan completes.</p>

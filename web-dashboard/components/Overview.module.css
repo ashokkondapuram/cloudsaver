@@ -56,12 +56,8 @@
   font-weight: 600;
   color: var(--slate-700);
 }
-.workspaceSummaryHeading a {
+.workspaceSummaryHeading span:last-child {
   color: inherit;
-  text-decoration: none;
-}
-.workspaceSummaryHeading a:hover {
-  text-decoration: underline;
 }
 .workspaceSummaryTiles {
   display: grid;

@@ -1,8 +1,7 @@
 'use client';
 
 import {useEffect, useState} from 'react';
-import Link from 'next/link';
-import {ArrowRight, Wallet} from '@phosphor-icons/react';
+import {Wallet} from '@phosphor-icons/react';
 import {api} from '../lib/api';
 import {AnalyticsChart} from './charts/AnalyticsChart';
 import {billingDailyToChartSeries, finopsPeriodLabel} from '../lib/finops-chart';
@@ -72,12 +71,6 @@ export function OverviewFinOpsMiniChart() {
         <Wallet size={17} weight="regular" aria-hidden="true"/>
         <span>Billing snapshot (month to date)</span>
       </summary>
-      <p className="overview-finops-actions">
-        <Link className="text-link" href="/allocation">
-          Open cost allocation
-          <ArrowRight size={14} weight="regular"/>
-        </Link>
-      </p>
       {open ? <OverviewFinOpsChartBody/> : null}
     </details>
   );

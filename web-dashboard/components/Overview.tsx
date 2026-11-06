@@ -1,8 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import {useMemo} from 'react';
-import {ArrowRight, CaretRight, Cube, SealCheck} from '@phosphor-icons/react';
+import {CaretRight, Cube, SealCheck} from '@phosphor-icons/react';
 import {EvidenceHealth} from './EvidenceHealth';
 import {scopeOf} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
@@ -27,10 +26,10 @@ function reviewTotal(summary: Summary | undefined, scopedRows: {disposition: str
 }
 
 export function Overview() {
-  const {scan, scope, canAdmin, setOverlay, token, busy, scanActivity, liveScanEpoch} = useWorkspace();
+  const {scan, scope, token, liveScanEpoch} = useWorkspace();
   const live = isLiveSnapshot(scan);
   const inProgress = scan?.status === 'running';
-  const {page, error, reload} = useResources(scan?.scan_id, token, live, inProgress ? liveScanEpoch : 0, {running: inProgress, overview: !inProgress});
+  const {page, error} = useResources(scan?.scan_id, token, live, inProgress ? liveScanEpoch : 0, {running: inProgress, overview: !inProgress});
   const rows = (page?.items || []).filter(row => !scope.length || scope.includes(row.scope_id));
   const complete = !!page && (inProgress || page.total === page.items.length || (live && !inProgress));
   const reviewCount = reviewTotal(page?.summary, rows);
@@ -47,11 +46,14 @@ export function Overview() {
   return <div className={`${styles.overview} atlas-overview`} data-atlas-rollout="overview">
     <Reveal>
       <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
-        <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
-        {error ? <button type="button" className="button secondary" onClick={reload}>Retry evidence</button>
-          : !scan && canAdmin ? <button type="button" className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
-          : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16} weight="regular"/></Link>
-          : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
+        <div>
+          <h2 id="overview-next-step">{headline}</h2>
+          {scope.length > 0 && (
+            <span className={styles.scopeNote}>
+              Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
       </section>
     </Reveal>
 
@@ -63,13 +65,13 @@ export function Overview() {
     <OverviewFinOpsMiniChart/>
 
     {scan && <section className="panel priority-panel" aria-label="Resource review queue">
-      <SectionTitle title="Review first" action={<Link className="text-link" href="/resources">View all<ArrowRight size={15} weight="regular"/></Link>}/>
+      <SectionTitle title="Review first" />
       {!complete ? <div className="empty-state" role="status">{error ? 'Unavailable until evidence loads.' : inProgress && !rows.length ? 'Resources will appear here as they are collected.' : 'Loading…'}</div>
-        : priorities.length ? <div className="priority-list">{priorities.map(row => <Link className="priority-row" key={row.resource_key} href={`/resources?resource=${row.resource_key}`}>
+        : priorities.length ? <div className="priority-list" role="list">{priorities.map(row => <div className="priority-row" role="listitem" key={row.resource_key}>
           <span className={`resource-symbol resource-${row.provider}`}><Cube size={18} weight="regular"/></span>
           <span className="priority-resource"><strong>{row.resource_name}</strong><small>{row.finding_count} signal{row.finding_count === 1 ? '' : 's'} · {sentence(row.review_priority)}</small></span>
-          <ProviderBadge provider={row.provider}/><CaretRight size={15} weight="regular"/>
-        </Link>)}</div>
+          <ProviderBadge provider={row.provider}/><CaretRight size={15} weight="regular" aria-hidden/>
+        </div>)}</div>
         : <EmptyState icon={SealCheck} title="Nothing needs review right now"/>}
     </section>}
   </div>;
