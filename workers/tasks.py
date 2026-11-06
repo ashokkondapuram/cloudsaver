@@ -258,6 +258,8 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         )).model_dump()
         from app.analysis_service.pipeline import attach_pillar_analysis
         attach_pillar_analysis(scan)
+        from app.drift.scan_baselines import capture_scan_drift_baselines_for_tenant
+        capture_scan_drift_baselines_for_tenant(scan, tenant_id, settings)
         heartbeat.ensure_owned()
         if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':
             # Recheck the current configured scope and licence before publishing evidence.

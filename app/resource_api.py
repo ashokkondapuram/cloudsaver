@@ -277,6 +277,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         configuration_detail = obs_evidence.get('typed_configuration') or (observation or {}).get('configuration_snapshot')
         region = assessment.get('region') or ((observation or {}).get('region') if observation else None) or ((observation or {}).get('location') if observation else None)
         assessment_payload = dict(assessment, arm_detail=observation_arm_detail(observation), region=region)
+        if obs_evidence.get('drift_detected') and 'drift_detected' not in assessment_payload:
+            assessment_payload['drift_detected'] = True
         from app.resource_action_items import derive_action_items
 
         action_items = derive_action_items(assessment, findings, evaluations)

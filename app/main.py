@@ -494,6 +494,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
             from app.analysis_service.pipeline import attach_pillar_analysis
             attach_pillar_analysis(validated)
+            from app.drift.scan_baselines import capture_scan_drift_baselines_for_tenant
+            capture_scan_drift_baselines_for_tenant(validated, tenant_id, settings)
 
             if heartbeat:
                 heartbeat.ensure_owned()
