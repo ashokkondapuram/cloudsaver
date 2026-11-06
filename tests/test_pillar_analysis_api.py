@@ -103,3 +103,8 @@ def test_resource_detail_includes_pillar_scores_overlay(client):
     detail = test_client.get(f"/api/v1/scans/{scan['scan_id']}/resources/{rk}", headers=auth()).json()
     assert detail['pillar_scores'] == scan['pillar_analysis']['resources'][0]['pillar_scores']
     assert len(detail['pillar_scores']) == 5
+    assessment = detail['assessment']
+    assert assessment['pillar_scores'] == detail['pillar_scores']
+    assert assessment['pillar_finding_severities']['COST_OPTIMIZATION'] == 'HIGH'
+    cost_status = next(p['status'] for p in assessment['pillars'] if p['pillar'] == 'cost')
+    assert cost_status == 'risk'

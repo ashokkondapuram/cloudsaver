@@ -11,11 +11,81 @@ from app.ai_resource_context import build_resource_ai_context
 from app.ai_scan_context import augment_ai_context_from_scan
 from app.assessment_policy import POLICY_VERSION
 from app.domain.resource.identity import canonical_resource_id, resource_key as _resource_key
+from app.pillar_analysis_api import pillar_analysis_row_for_resource
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
 PRIORITY = ('critical', 'high', 'evidence_required')
 HISTORY_SCANS = 10
 _BILLING_FIELDS = ('billed_cost_usd', 'effective_cost_usd', 'currency', 'commitment_locked', 'billing_coverage')
+_ANALYSIS_PILLAR_TO_LEGACY = {
+    'COST_OPTIMIZATION': 'cost',
+    'PERFORMANCE_EFFICIENCY': 'performance',
+    'RELIABILITY': 'reliability',
+    'SECURITY': 'security',
+    'OPERATIONAL_EXCELLENCE': 'operations',
+}
+_ANALYSIS_SEVERITY_RANK = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
+
+
+def _status_from_analysis_severity(severity: str | None) -> str:
+    if severity in ('CRITICAL', 'HIGH', 'MEDIUM'):
+        return 'risk'
+    if severity == 'LOW':
+        return 'observed'
+    return 'unknown'
+
+
+def _top_pillar_finding_severities(findings: list) -> dict[str, str | None]:
+    grouped: dict[str, list[str]] = {}
+    for item in findings:
+        if not isinstance(item, dict):
+            continue
+        pillar = item.get('pillar')
+        severity = item.get('severity')
+        if isinstance(pillar, str) and isinstance(severity, str):
+            grouped.setdefault(pillar, []).append(severity)
+    return {
+        pillar: min(severities, key=lambda s: _ANALYSIS_SEVERITY_RANK.index(s) if s in _ANALYSIS_SEVERITY_RANK else len(_ANALYSIS_SEVERITY_RANK))
+        for pillar, severities in grouped.items()
+    }
+
+
+def overlay_pillar_analysis(assessment, scan):
+    """Merge persisted analysis-service scores and severities into a rule-based assessment."""
+    if not isinstance(assessment, dict):
+        return assessment
+    row = pillar_analysis_row_for_resource(scan, assessment['provider'], assessment['resource_id'])
+    if not row:
+        return assessment
+    scores = row.get('pillar_scores')
+    if not isinstance(scores, dict) or not scores:
+        return assessment
+    top_severities = _top_pillar_finding_severities(row.get('findings') or [])
+    updated = dict(
+        assessment,
+        pillar_scores=dict(scores),
+        pillar_finding_severities={pillar: top_severities.get(pillar) for pillar in scores},
+    )
+    legacy_by_analysis = {analysis: legacy for analysis, legacy in _ANALYSIS_PILLAR_TO_LEGACY.items() if analysis in scores}
+    pillars = []
+    for pillar in updated.get('pillars') or []:
+        if not isinstance(pillar, dict):
+            pillars.append(pillar)
+            continue
+        analysis_pillar = next((name for name, legacy in legacy_by_analysis.items() if legacy == pillar.get('pillar')), None)
+        if analysis_pillar is None:
+            pillars.append(pillar)
+            continue
+        severity = top_severities.get(analysis_pillar)
+        if severity:
+            status = _status_from_analysis_severity(severity)
+        elif float(scores[analysis_pillar]) >= 100.0:
+            status = 'observed'
+        else:
+            status = 'risk'
+        pillars.append(dict(pillar, status=status))
+    updated['pillars'] = pillars
+    return updated
 
 
 def _sync_evidence_coverage(assessment):
@@ -85,6 +155,15 @@ def _enrich_finding_for_assessment(finding, observation=None):
     if retail is not None and finding.get('estimated_monthly_waste_usd') is None:
         finding['estimated_monthly_waste_usd'] = retail
     return finding
+
+
+def overlay_drift_detected(assessment, obs):
+    if not obs:
+        return assessment
+    evidence = obs.get('evidence') or {}
+    if evidence.get('drift_detected'):
+        return dict(assessment, drift_detected=True)
+    return assessment
 
 
 def overlay_inventory_billing(assessment, obs):
@@ -176,6 +255,7 @@ def assess_resource(scan, key, *, now=None, list_view=False, findings_by_key=Non
         findings = []
     else:
         return None
+    assessment = overlay_pillar_analysis(assessment, scan)
     context = augment_ai_context_from_scan(
         scan,
         assessment,
@@ -347,6 +427,7 @@ def merge_inventory(key, obs, *, observed_at=None, now=None, list_view=False):
             result['retail_estimate_usd'] = retail
     if obs.get('region'):
         result['region'] = obs['region']
+    result = overlay_drift_detected(result, obs)
     if result['disposition'] == 'inventory_only':
         result['guardrails'] = list(dict.fromkeys([*(result.get('guardrails') or []), 'INVENTORY_ONLY']))
     return result, context
@@ -368,7 +449,10 @@ def assessments(scan, *, now=None, list_view=False):
     for key, obs in inventory_by_key.items():
         if key in merged:
             assessment, context = merged[key]
-            merged[key] = (overlay_inventory_billing(assessment, obs), context)
+            merged[key] = (
+                overlay_drift_detected(overlay_inventory_billing(assessment, obs), obs),
+                context,
+            )
             continue
         merged[key] = merge_inventory(
             key,
@@ -380,6 +464,7 @@ def assessments(scan, *, now=None, list_view=False):
     finished = {}
     for key, (assessment, context) in merged.items():
         findings = findings_by_key.get(key, [])
+        assessment = overlay_pillar_analysis(assessment, scan)
         context = augment_ai_context_from_scan(
             scan,
             assessment,

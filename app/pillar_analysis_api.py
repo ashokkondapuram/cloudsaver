@@ -13,16 +13,23 @@ def pillar_analysis_block(scan: dict) -> dict | None:
     return block if isinstance(block, dict) else None
 
 
-def pillar_scores_for_resource(scan: dict, provider: str, resource_id: str) -> dict[str, float] | None:
+def pillar_analysis_row_for_resource(scan: dict, provider: str, resource_id: str) -> dict | None:
     block = pillar_analysis_block(scan)
     if not block:
         return None
     target = canonical_resource_id(provider, resource_id)
     for row in block.get('resources') or []:
         if isinstance(row, dict) and row.get('canonical_id') == target:
-            scores = row.get('pillar_scores')
-            return scores if isinstance(scores, dict) else None
+            return row
     return None
+
+
+def pillar_scores_for_resource(scan: dict, provider: str, resource_id: str) -> dict[str, float] | None:
+    row = pillar_analysis_row_for_resource(scan, provider, resource_id)
+    if not row:
+        return None
+    scores = row.get('pillar_scores')
+    return scores if isinstance(scores, dict) else None
 
 
 def create_router(store, current_tenant):

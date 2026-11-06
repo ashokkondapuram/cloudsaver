@@ -13,6 +13,7 @@ from app.config import Settings
 from app.enterprise_store import EnterpriseStore
 from app.inference_ledger import InferenceLedger
 from app.main import create_app
+from app.analysis_service.pipeline import attach_pillar_analysis
 from app.resource_assessment import assessments, assess_resource, changes, csv_report, history, merge, resource_key, scan_indexes
 from app.resource_batches import process_batches
 from app.resource_store import ResourceStore
@@ -77,6 +78,27 @@ def test_list_and_detail_assessments_share_evidence_digest():
     list_pair = assessments(scan, list_view=True)[key]
     detail_pair = assessments(scan, list_view=False)[key]
     assert list_pair[0]['evidence_digest'] == detail_pair[0]['evidence_digest']
+
+
+def test_assessments_overlay_pillar_analysis_scores_and_status():
+    a = disk('disk-a')
+    inventory_row = dict(
+        a,
+        evidence=dict(a.get('evidence') or {}, encrypted=False, disk_state='Unattached'),
+    )
+    scan = dict(
+        findings=[a],
+        inventory=[inventory_row],
+        timestamp='2026-10-22T00:00:00+00:00',
+        status='completed',
+    )
+    attach_pillar_analysis(scan)
+    key = resource_key(a)
+    assessment, _ = assessments(scan)[key]
+    analysis_row = scan['pillar_analysis']['resources'][0]
+    assert assessment['pillar_scores'] == analysis_row['pillar_scores']
+    assert assessment['pillar_finding_severities']['COST_OPTIMIZATION'] == 'HIGH'
+    assert next(p['status'] for p in assessment['pillars'] if p['pillar'] == 'cost') == 'risk'
 
 
 def test_assess_resource_matches_full_assessments_for_one_key():

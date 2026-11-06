@@ -1,6 +1,5 @@
 """Read-only Azure Monitor, Activity Log and operational guard evidence."""
 from datetime import datetime,timedelta,timezone
-from urllib.parse import urlsplit
 from app.collectors.azure_endpoint import ARM_ROOT, validate_arm_https_url, arm_url
 from app.azure_rest_catalog import (
     ACTIVITY_LOG_EVENTS_API_VERSION,
@@ -61,17 +60,14 @@ METRICS={
 }
 
 def pages(reader,url,params=None):
-    seen=set();scope=urlsplit(url).path.split('/providers/')[0].lower()
-    for _ in range(200):
-        data=reader.get(url,params);values=data.get('value')
-        if not isinstance(values,list):raise ValueError('Invalid Azure page')
-        yield from values
-        token=data.get('nextLink')
-        if not token:return
-        if token in seen:raise ValueError('Invalid Azure continuation')
-        validate_arm_https_url(token, scope_path_lower=scope)
-        seen.add(token);url,params=token,None
-    raise ValueError('Azure page bound exceeded')
+    from app.collectors._pagination import iter_arm_next_link_values
+
+    yield from iter_arm_next_link_values(
+        reader,
+        url,
+        params,
+        validate_link=validate_arm_https_url,
+    )
 
 _AZURE_AGG_VALUE = {
     'Maximum': 'maximum',
