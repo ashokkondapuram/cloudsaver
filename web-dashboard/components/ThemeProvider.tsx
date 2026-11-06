@@ -1,7 +1,7 @@
 'use client';
 
 import {createContext,useContext,useLayoutEffect,useState,type ReactNode} from 'react';
-import {Moon,Sun} from 'lucide-react';
+import {Moon,Sun} from '@phosphor-icons/react';
 import {getThemeMeta,normalizeUiThemePreset,type UiThemePreset} from '../lib/ui-theme';
 
 type Theme='dark'|'light';
@@ -48,5 +48,5 @@ export function ThemeToggle(){
   const context=useContext(ThemeContext);
   if(!context||context.appearanceLocked)return null;
   const label=`Switch to ${context.theme==='dark'?'light':'dark'} theme`;
-  return <button className="icon-button theme-toggle" aria-label={label} title={label} onClick={context.toggle}>{context.theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button>;
+  return <button className="icon-button theme-toggle" aria-label={label} title={label} onClick={context.toggle}>{context.theme==='dark'?<Sun size={18} weight="regular"/>:<Moon size={18} weight="regular"/>}</button>;
 }

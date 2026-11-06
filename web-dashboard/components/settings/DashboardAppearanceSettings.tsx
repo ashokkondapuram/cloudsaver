@@ -1,7 +1,7 @@
 'use client';
 
 import {useState} from 'react';
-import {Check, Palette} from 'lucide-react';
+import {Check, Palette} from '@phosphor-icons/react';
 import {
   UI_THEME_META,
   UI_THEME_PRESETS,
@@ -73,12 +73,12 @@ export function DashboardAppearanceSettings() {
               </span>
               {selected ? (
                 <span className="appearance-selected">
-                  <Check size={16} aria-hidden="true"/>
+                  <Check size={16} weight="regular" aria-hidden="true"/>
                   Active
                 </span>
               ) : (
                 <span className="appearance-cta">
-                  <Palette size={15} aria-hidden="true"/>
+                  <Palette size={15} weight="regular" aria-hidden="true"/>
                   Use this skin
                 </span>
               )}

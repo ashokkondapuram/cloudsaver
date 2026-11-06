@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {Layers, RefreshCw} from 'lucide-react';
+import {ArrowsClockwise, Stack} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import type {DeclaredWorkload} from '../../lib/control-plane';
 import {declaredWorkloadShareUrl} from '../../lib/workloads-tabs';
@@ -53,7 +53,7 @@ export function DeclaredWorkloadsPanel({
         title="Declared engineering workloads"
         action={
           <button type="button" className="button secondary small" disabled={loading} onClick={() => setRevision(r => r + 1)}>
-            <RefreshCw size={14} /> Refresh
+            <ArrowsClockwise size={14} weight="regular" /> Refresh
           </button>
         }
       >
@@ -84,7 +84,7 @@ export function DeclaredWorkloadsPanel({
         </Notice>
       )}
       {!loading && !error && items.length === 0 && (
-        <EmptyState icon={Layers} title="No declared workloads in this workspace">
+        <EmptyState icon={Stack} title="No declared workloads in this workspace">
           Use Engineering plans below to declare application workloads with owner, environment, and recovery references for
           action-safety checks (AG-HA-01, AG-DR-01, AG-OPS-01).
         </EmptyState>

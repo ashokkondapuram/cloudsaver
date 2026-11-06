@@ -1,7 +1,23 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useRef, useState} from 'react';
-import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, Maximize2, MessageSquareText, Minimize2, ShieldCheck, ShieldAlert} from 'lucide-react';
+import {
+  ArrowsIn,
+  ArrowsOut,
+  Brain,
+  ChatCircleText,
+  CheckCircle,
+  ClockCounterClockwise,
+  CurrencyCircleDollar,
+  FileCode,
+  Gauge,
+  Layout,
+  ListChecks,
+  Pulse,
+  Robot,
+  SealCheck,
+  ShieldWarning,
+} from '@phosphor-icons/react';
 import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
 import {api} from '../../lib/api';
 import {dateTime, money, ruleLabel, shortDate, checkLabel, providerNames, ruleProvider} from '../../lib/finops';
@@ -265,9 +281,9 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
     {!!detail.action_items?.length && <div className="drawer-section"><h3>Review action items</h3><p className="inline-help">Derived from saved evidence, guardrails, and findings — not from AI.</p><Actions actions={detail.action_items} grouped/></div>}
     <div className="drawer-section overview-radar"><EvidenceRadar pillars={a.pillars} onInspect={() => onOpenTab('evidence')}/></div>
     <div className="drawer-header-actions overview-actions">
-      {detail.findings.length > 0 && <button type="button" className="button secondary small" onClick={() => onOpenTab('findings')}><ListChecks size={14}/>Review findings</button>}
-      <button type="button" className="button secondary small" onClick={() => onOpenTab('costs')}><CircleDollarSign size={14}/>Costs</button>
-      <button type="button" className="button secondary small" onClick={() => onOpenTab('evidence')}><Activity size={14}/>Evidence & checks</button>
+      {detail.findings.length > 0 && <button type="button" className="button secondary small" onClick={() => onOpenTab('findings')}><ListChecks size={14} weight="regular"/>Review findings</button>}
+      <button type="button" className="button secondary small" onClick={() => onOpenTab('costs')}><CurrencyCircleDollar size={14} weight="regular"/>Costs</button>
+      <button type="button" className="button secondary small" onClick={() => onOpenTab('evidence')}><Pulse size={14} weight="regular"/>Evidence & checks</button>
     </div>
   </>;
 }
@@ -360,7 +376,7 @@ function Questions({detail, onChange}: {detail: ResourceDetail; onChange: () => 
       <small className="inline-help">{question.length}/500 · Your question is sent to the model with the sanitized evidence.</small>
       <label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} disabled={busy} onChange={e => setAck(e.target.checked)}/>I acknowledge external processing of my question and this sanitized evidence.</label>
       {error && <Notice tone="error">{error}</Notice>}
-      <button className="button primary" type="submit" disabled={busy || !ack || question.trim().length < 3}><MessageSquareText size={16}/>{busy ? 'Asking…' : 'Ask question'}</button>
+      <button className="button primary" type="submit" disabled={busy || !ack || question.trim().length < 3}><ChatCircleText size={16} weight="regular"/>{busy ? 'Asking…' : 'Ask question'}</button>
     </form>}
   </>;
 }
@@ -418,7 +434,7 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
       {decision === 'defer' && <label className="ai-target-label">Review again on (optional)<input type="date" min={iso(new Date(today.getTime() + 86400000))} max={iso(max)} value={until} onChange={e => setUntil(e.target.value)}/></label>}
       <p className="inline-help">Decisions are recorded for your workspace and apply to this resource in future scans. A decision doesn’t change any cloud resource.</p>
       {error && <Notice tone="error">{error}</Notice>}
-      <button className="button primary" type="submit" disabled={busy || (noteRequired && !note.trim())}><CheckCircle2 size={16}/>{busy ? 'Saving…' : 'Save decision'}</button>
+      <button className="button primary" type="submit" disabled={busy || (noteRequired && !note.trim())}><CheckCircle size={16} weight="regular"/>{busy ? 'Saving…' : 'Save decision'}</button>
     </form> : <p className="inline-help">A workspace administrator can record decisions.</p>}
   </>;
 }
@@ -524,17 +540,17 @@ export function ResourceInsightView({scanId, resourceKey, identity, previewRow =
     if (view && !drawerTabIds.includes(tab)) setTab('overview');
   }, [view, tab, showAzureGovernance]);
   const tabs = (view || preview) ? [
-    {id: 'overview', label: 'Overview', icon: LayoutDashboard},
+    {id: 'overview', label: 'Overview', icon: Layout},
     {id: 'findings', label: `Findings (${(view?.findings.length ?? preview?.finding_count ?? 0)})`, icon: ListChecks},
-    {id: 'evidence', label: 'Evidence', icon: Activity},
-    ...(showAzureGovernance ? [{id: 'azure', label: 'Azure Policy & Advisor', icon: ShieldCheck}] : []),
-    {id: 'costs', label: 'Costs', icon: CircleDollarSign},
-    {id: 'safety', label: 'Action safety', icon: ShieldAlert},
+    {id: 'evidence', label: 'Evidence', icon: Pulse},
+    ...(showAzureGovernance ? [{id: 'azure', label: 'Azure Policy & Advisor', icon: SealCheck}] : []),
+    {id: 'costs', label: 'Costs', icon: CurrencyCircleDollar},
+    {id: 'safety', label: 'Action safety', icon: ShieldWarning},
     {id: 'observability', label: 'Observability', icon: Gauge},
-    {id: 'ai', label: 'AI', icon: BrainCircuit},
-    {id: 'decision', label: 'Decision', icon: CheckCircle2},
-    {id: 'history', label: 'History', icon: History},
-    {id: 'code', label: 'Code', icon: FileCode2},
+    {id: 'ai', label: 'AI', icon: Brain},
+    {id: 'decision', label: 'Decision', icon: CheckCircle},
+    {id: 'history', label: 'History', icon: ClockCounterClockwise},
+    {id: 'code', label: 'Code', icon: FileCode},
   ].map(item => ({...item, lead: resourceDrawerLeads[item.id]})) : [];
   const body = error && !view && !preview ? (
     <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}><Notice tone="error">{error}</Notice></div>
@@ -555,7 +571,7 @@ export function ResourceInsightView({scanId, resourceKey, identity, previewRow =
       <TabWorkspaceShell id={layout === 'page' ? 'resource-insight' : 'resource-drawer'} label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content" tabIcons={false}>
         <Loading label="Loading resource details…"/>
       </TabWorkspaceShell>
-      <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
+      <div className="drawer-footer"><SealCheck size={15} weight="regular"/>AI advice is unverified and never changes cloud resources.</div>
     </>
   ) : view ? (
     (() => {
@@ -568,8 +584,8 @@ export function ResourceInsightView({scanId, resourceKey, identity, previewRow =
         <p>{a.resource_type.split('/').slice(-1)[0] || 'Resource'}{a.resource_group ? ` · ${a.resource_group}` : ''} · <PillarDots pillars={Object.fromEntries(a.pillars.map(p => [p.pillar, p.status]))}/></p>
         <p className="drawer-header-meta">Observed {a.observation?.observed_at ? shortDate(a.observation.observed_at) : 'Unknown'}{view.findings.length ? ` · ${view.findings.length} finding${view.findings.length === 1 ? '' : 's'}` : ''}</p>
         <div className="drawer-header-actions">
-          <Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Bot size={14}/>Draft agent plan</Link>
-          <button type="button" className="button secondary small" onClick={() => setTab('ai')}><BrainCircuit size={14}/>{view.ai_result ? 'View AI assessment' : 'AI assessment'}</button>
+          <Link className="button secondary small" href={`/agents?resource=${encodeURIComponent(a.resource_id)}`}><Robot size={14} weight="regular"/>Draft agent plan</Link>
+          <button type="button" className="button secondary small" onClick={() => setTab('ai')}><Brain size={14} weight="regular"/>{view.ai_result ? 'View AI assessment' : 'AI assessment'}</button>
         </div>
       </div>
       <TabWorkspaceShell id={layout === 'page' ? 'resource-insight' : 'resource-drawer'} label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content" tabIcons={false}>
@@ -593,7 +609,7 @@ export function ResourceInsightView({scanId, resourceKey, identity, previewRow =
         {tab === 'history' && <HistoryTab detail={view}/>}
         {tab === 'code' && <div className="drawer-section"><h3>Review code</h3>{view.findings.length ? <CodeReview findings={view.findings}/> : <Notice tone="info">No findings are attached to this resource in this scan. Remediation code requires a flagged finding with a supported rule.</Notice>}</div>}
       </TabWorkspaceShell>
-      <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
+      <div className="drawer-footer"><SealCheck size={15} weight="regular"/>AI advice is unverified and never changes cloud resources.</div>
     </>;
     })()
   ) : null;
@@ -609,7 +625,7 @@ export function ResourceInsightView({scanId, resourceKey, identity, previewRow =
       className={drawerExpanded ? 'drawer-expanded' : ''}
       headerExtra={
         <button type="button" className="icon-button" aria-label={drawerExpanded ? 'Collapse drawer' : 'Expand drawer'} aria-pressed={drawerExpanded} onClick={() => setDrawerExpanded(v => !v)}>
-          {drawerExpanded ? <Minimize2 size={18}/> : <Maximize2 size={18}/>}
+          {drawerExpanded ? <ArrowsIn size={18} weight="regular"/> : <ArrowsOut size={18} weight="regular"/>}
         </button>
       }
     >

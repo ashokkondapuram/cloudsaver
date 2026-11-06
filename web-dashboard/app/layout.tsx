@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import '@fontsource-variable/inter';
+import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import './globals.css';
 import './console-theme.css';

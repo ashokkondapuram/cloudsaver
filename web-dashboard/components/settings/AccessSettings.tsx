@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {Bot, Check, Copy, Download, KeyRound, RefreshCw, ShieldCheck, UserPlus, Users} from 'lucide-react';
+import {ArrowsClockwise, Check, Copy, Download, Key, Robot, SealCheck, UserPlus, Users} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import type {AccessEvent, AccessKey, CustomerRole, CustomerUser, ServiceAccount, WorkspaceMember} from '../../lib/types';
 import {useWorkspace} from '../WorkspaceProvider';
@@ -127,9 +127,9 @@ export function AccessSettings() {
 
     <section className="panel">
       <SectionTitle title="Organization users" action={<div className="section-actions">
-        <button type="button" className="button secondary" onClick={() => void load()}><RefreshCw size={15}/>Refresh</button>
-        <button type="button" className="button secondary" onClick={() => void exportCsv()}><Download size={15}/>Export access review</button>
-        {isAdmin && <button type="button" className="button primary" onClick={() => setPending({kind: 'invite'})}><UserPlus size={15}/>Invite user</button>}
+        <button type="button" className="button secondary" onClick={() => void load()}><ArrowsClockwise size={15} weight="regular"/>Refresh</button>
+        <button type="button" className="button secondary" onClick={() => void exportCsv()}><Download size={15} weight="regular"/>Export access review</button>
+        {isAdmin && <button type="button" className="button primary" onClick={() => setPending({kind: 'invite'})}><UserPlus size={15} weight="regular"/>Invite user</button>}
       </div>}>People who can manage your organization’s access</SectionTitle>
       <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
@@ -151,7 +151,7 @@ export function AccessSettings() {
     </section>
 
     <section className="panel">
-      <SectionTitle title="Workspace members" action={isAdmin ? <button type="button" className="button secondary" onClick={() => setPending({kind: 'member'})}><Users size={15}/>Add member</button> : undefined}>Roles each person has in {workspace?.name}</SectionTitle>
+      <SectionTitle title="Workspace members" action={isAdmin ? <button type="button" className="button secondary" onClick={() => setPending({kind: 'member'})}><Users size={15} weight="regular"/>Add member</button> : undefined}>Roles each person has in {workspace?.name}</SectionTitle>
       {data.members.length ? <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>Name</th><th>Workspace roles</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{data.members.map(member => <tr key={member.user_id}>
@@ -167,7 +167,7 @@ export function AccessSettings() {
     </section>
 
     <section className="panel">
-      <SectionTitle title="Service accounts" action={isAdmin ? <button type="button" className="button secondary" onClick={() => setPending({kind: 'account'})}><Bot size={15}/>Create service account</button> : undefined}>Non-human identities for automation and CI</SectionTitle>
+      <SectionTitle title="Service accounts" action={isAdmin ? <button type="button" className="button secondary" onClick={() => setPending({kind: 'account'})}><Robot size={15} weight="regular"/>Create service account</button> : undefined}>Non-human identities for automation and CI</SectionTitle>
       {data.accounts.filter(a => a.status !== 'deleted').length ? <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>Name</th><th>Description</th><th>Status</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{data.accounts.filter(a => a.status !== 'deleted').map(account => <tr key={account.service_account_id}>
@@ -184,7 +184,7 @@ export function AccessSettings() {
     </section>
 
     <section className="panel">
-      <SectionTitle title="Access keys" action={isAdmin ? <button type="button" className="button primary" onClick={() => setPending({kind: 'key'})}><KeyRound size={15}/>Issue key</button> : undefined}>Keys for {workspace?.name}. Secrets are shown once, when you issue a key.</SectionTitle>
+      <SectionTitle title="Access keys" action={isAdmin ? <button type="button" className="button primary" onClick={() => setPending({kind: 'key'})}><Key size={15} weight="regular"/>Issue key</button> : undefined}>Keys for {workspace?.name}. Secrets are shown once, when you issue a key.</SectionTitle>
       {data.keys.length ? <div className="summary-table-scroll"><table className="summary-table">
         <thead><tr><th>Name</th><th>Issued to</th><th>Roles</th><th>Status</th><th>Expires</th><th>Last used</th>{isAdmin && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{data.keys.map(key => <tr key={key.key_id}>
@@ -322,9 +322,9 @@ export function SecretDialog({secret, onClose}: {secret: string; onClose: () => 
     <div className="dialog-content">
       <Notice tone="warning">Copy this key now. You won’t be able to see it again.</Notice>
       <code className="secret-box" aria-label="New access key">{secret}</code>
-      <div><button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(secret).then(() => setCopied(true))}>{copied ? <><Check size={15}/>Copied</> : <><Copy size={15}/>Copy key</>}</button></div>
+      <div><button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(secret).then(() => setCopied(true))}>{copied ? <><Check size={15} weight="regular"/>Copied</> : <><Copy size={15} weight="regular"/>Copy key</>}</button></div>
       <label className="checkbox-row"><input type="checkbox" checked={stored} onChange={e => setStored(e.target.checked)}/>I’ve stored this key securely</label>
     </div>
-    <div className="dialog-actions"><button type="button" className="button primary" disabled={!stored} onClick={onClose}><ShieldCheck size={15}/>Close</button></div>
+    <div className="dialog-actions"><button type="button" className="button primary" disabled={!stored} onClick={onClose}><SealCheck size={15} weight="regular"/>Close</button></div>
   </Dialog>;
 }

@@ -8,7 +8,7 @@ Source: [Advanced UI/UX Architecture & Component Engineering Guide](https://docs
 
 | Guide requirement | Current experience |
 | --- | --- |
-| Deep slate design system | Default dark canvas, elevated surfaces, semantic indigo/amber/rose/emerald colors, provider badges, self-hosted Inter/JetBrains Mono and matching chart colors |
+| Deep slate design system | Default dark canvas, elevated surfaces, semantic indigo/amber/rose/emerald colors, provider badges, self-hosted Geist Variable/JetBrains Mono, Phosphor icons (regular weight), and matching chart colors |
 | Comfortable reading preferences | Explicit dark/light toggle in the console and sign-in screen; theme preference survives navigation/reload independently of credentials |
 | 240px/64px navigation | Existing six workspace routes and mobile navigation retained; collapsed desktop rail now measures 64px |
 | Executive inventory banner | Observed finding count, configured scopes represented in findings, known retail subtotal, protected-intent count and unknown pricing coverage; actual observations drive all values |

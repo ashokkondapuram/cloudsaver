@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {Download, Layers, Plus, RefreshCw, ChevronDown} from 'lucide-react';
+import {ArrowsClockwise, CaretDown, Download, Plus, Stack} from '@phosphor-icons/react';
 import {downloadFile, exportFindings} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
 import {Overview} from './Overview';
@@ -35,7 +35,7 @@ export function ConsolePage({view,provider='',category='',intent='',pricing='',a
     else exportFindings(scan.findings,'csv',`cloudsaver-${scan.scan_id}`);
     notify(`${format.toUpperCase()} download is ready.`);
   }
-  return <><div className="page-heading" data-atlas-rollout={`console-${view}`}>{view!=='overview'&&<h1>{heading}</h1>}<div className="page-heading-actions">{view==='resources'&&<Link className="button secondary" href="/workloads"><Layers size={15}/>Workload assessments</Link>}{['overview','resources','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><RefreshCw size={17}/></button>{view!=='overview'&&<details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15}/><span>Export snapshot</span><ChevronDown size={13}/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>}{canAdmin&&(view!=='overview'||!!scan)&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17}/>Run new scan</button>}</>}</div></div>
+  return <><div className="page-heading" data-atlas-rollout={`console-${view}`}>{view!=='overview'&&<h1>{heading}</h1>}<div className="page-heading-actions">{view==='resources'&&<Link className="button secondary" href="/workloads"><Stack size={15} weight="regular"/>Workload assessments</Link>}{['overview','resources','allocation'].includes(view)&&<><button className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><ArrowsClockwise size={17} weight="regular"/></button>{view!=='overview'&&<details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15} weight="regular"/><span>Export snapshot</span><CaretDown size={13} weight="regular"/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>}{canAdmin&&(view!=='overview'||!!scan)&&<button className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17} weight="regular"/>Run new scan</button>}</>}</div></div>
     {view==='overview'?<Overview/>:view==='resources'?<DiscoverResources key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} provider={provider} category={category} intent={intent} pricing={pricing} armDetail={armDetail}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
   </>;
 }

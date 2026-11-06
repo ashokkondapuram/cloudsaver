@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {Bell, CalendarClock, Fingerprint, Plus, Save, Trash2} from 'lucide-react';
+import {Bell, Calendar, Fingerprint, FloppyDisk, Plus, Trash} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import {NOT_INCLUDED} from '../../lib/plan';
 import type {AwsAccount, Frequency, SettingsResponse, TenantSettings} from '../../lib/types';
@@ -88,7 +88,7 @@ export function CloudScopesEditor() {
     }, 'Cloud accounts saved. Changes apply to your next scan.');
   }
   return <form className="panel settings-form" onSubmit={submit}>
-    <SectionTitle title="Authorized cloud scopes" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose which cloud accounts, projects, and clusters CloudSaver scans</SectionTitle>
+    <SectionTitle title="Authorized cloud scopes" action={editable && <button className="button primary" type="submit" disabled={saving}><FloppyDisk size={15} weight="regular"/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose which cloud accounts, projects, and clusters CloudSaver scans</SectionTitle>
     {data.directory_mode === 'cutover' ? <Notice>Your CloudSaver administrator manages cloud accounts in the platform portal. Contact them to add or remove accounts.</Notice> : <ReadOnlyNotice data={data}/>}
     {saveError && <Notice tone="error">{saveError}</Notice>}
     {!allowed.length && <Notice tone="warning">This workspace key doesn&apos;t include any cloud providers. Ask your administrator for a new key.</Notice>}
@@ -96,9 +96,9 @@ export function CloudScopesEditor() {
       <legend><ProviderBadge provider="azure"/>Azure subscriptions</legend>
       {subscriptions.map((subscriptionId, index) => <div className="settings-row" key={index}>
         <label className="wide"><span className="field-label">Subscription ID</span><input type="text" value={subscriptionId} onChange={e => setSubscriptions(subscriptions.map((s, i) => i === index ? e.target.value : s))} placeholder="00000000-0000-0000-0000-000000000000" required={subscriptions.length === 1}/></label>
-        <button type="button" className="icon-button" aria-label={`Remove subscription ${subscriptionId || index + 1}`} onClick={() => setSubscriptions(subscriptions.length > 1 ? subscriptions.filter((_, i) => i !== index) : [''])} disabled={subscriptions.length === 1 && !subscriptionId.trim()}><Trash2 size={16}/></button>
+        <button type="button" className="icon-button" aria-label={`Remove subscription ${subscriptionId || index + 1}`} onClick={() => setSubscriptions(subscriptions.length > 1 ? subscriptions.filter((_, i) => i !== index) : [''])} disabled={subscriptions.length === 1 && !subscriptionId.trim()}><Trash size={16} weight="regular"/></button>
       </div>)}
-      {editable && subscriptionList.length < data.limits.max_subscriptions && <button type="button" className="button secondary" onClick={() => setSubscriptions([...subscriptions, ''])}><Plus size={15}/>Add subscription</button>}
+      {editable && subscriptionList.length < data.limits.max_subscriptions && <button type="button" className="button secondary" onClick={() => setSubscriptions([...subscriptions, ''])}><Plus size={15} weight="regular"/>Add subscription</button>}
       <p className="inline-help">{subscriptionList.length} of {data.limits.max_subscriptions} subscriptions allowed on your plan.</p>
     </fieldset>}
     {allowed.includes('aws') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
@@ -107,18 +107,18 @@ export function CloudScopesEditor() {
         <label><span className="field-label">Account ID</span><input type="text" inputMode="numeric" value={account.account_id} onChange={e => setAws(aws.map((a, i) => i === index ? {...a, account_id: e.target.value} : a))} placeholder="123456789012" required/></label>
         <label><span className="field-label">Region</span><input type="text" value={account.region} onChange={e => setAws(aws.map((a, i) => i === index ? {...a, region: e.target.value} : a))} placeholder="us-east-1" required/></label>
         <label className="wide"><span className="field-label">Reader role ARN</span><input type="text" value={account.role_arn} onChange={e => setAws(aws.map((a, i) => i === index ? {...a, role_arn: e.target.value} : a))} placeholder="arn:aws:iam::123456789012:role/CloudSaverReader" required/></label>
-        <button type="button" className="icon-button" aria-label={`Remove AWS account ${account.account_id || index + 1}`} onClick={() => setAws(aws.filter((_, i) => i !== index))}><Trash2 size={16}/></button>
+        <button type="button" className="icon-button" aria-label={`Remove AWS account ${account.account_id || index + 1}`} onClick={() => setAws(aws.filter((_, i) => i !== index))}><Trash size={16} weight="regular"/></button>
       </div>)}
-      {editable && <button type="button" className="button secondary" onClick={() => setAws([...aws, {account_id: '', region: '', role_arn: ''}])}><Plus size={15}/>Add account</button>}
+      {editable && <button type="button" className="button secondary" onClick={() => setAws([...aws, {account_id: '', region: '', role_arn: ''}])}><Plus size={15} weight="regular"/>Add account</button>}
     </fieldset>}
     {allowed.includes('gcp') && <fieldset className="settings-fieldset" disabled={!editable || saving}>
       <legend><ProviderBadge provider="gcp"/>Google Cloud projects</legend>
       {gcp.map((project, index) => <div className="settings-row" key={index}>
         <label><span className="field-label">Project ID</span><input type="text" value={project.project_id} onChange={e => setGcp(gcp.map((p, i) => i === index ? {...p, project_id: e.target.value} : p))} placeholder="customer-project" required/></label>
         <label className="wide"><span className="field-label">Regions, comma-separated</span><input type="text" value={project.regions} onChange={e => setGcp(gcp.map((p, i) => i === index ? {...p, regions: e.target.value} : p))} placeholder="us-central1, europe-west1" required/></label>
-        <button type="button" className="icon-button" aria-label={`Remove project ${project.project_id || index + 1}`} onClick={() => setGcp(gcp.filter((_, i) => i !== index))}><Trash2 size={16}/></button>
+        <button type="button" className="icon-button" aria-label={`Remove project ${project.project_id || index + 1}`} onClick={() => setGcp(gcp.filter((_, i) => i !== index))}><Trash size={16} weight="regular"/></button>
       </div>)}
-      {editable && <button type="button" className="button secondary" onClick={() => setGcp([...gcp, {project_id: '', regions: ''}])}><Plus size={15}/>Add project</button>}
+      {editable && <button type="button" className="button secondary" onClick={() => setGcp([...gcp, {project_id: '', regions: ''}])}><Plus size={15} weight="regular"/>Add project</button>}
     </fieldset>}
     {allowed.includes('kubernetes') && <fieldset className="settings-fieldset" disabled>
       <legend><ProviderBadge provider="kubernetes"/>Kubernetes clusters</legend>
@@ -138,7 +138,7 @@ export function IdentityOnboardingPanel() {
   const identity = data.identity;
   const localSignIn = identity.identity_mode === 'developer';
   return <section className="panel">
-    <SectionTitle title="Resource access" action={<span className="state-badge configured"><Fingerprint size={14}/>{localSignIn ? 'Local sign-in with Azure CLI' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Copy the commands below to grant read-only access.</SectionTitle>
+    <SectionTitle title="Resource access" action={<span className="state-badge configured"><Fingerprint size={14} weight="regular"/>{localSignIn ? 'Local sign-in with Azure CLI' : 'Managed identity'}</span>}>CloudSaver never asks for client secrets or access keys. Copy the commands below to grant read-only access.</SectionTitle>
     {localSignIn && <Notice tone="info">Scans use your local Azure CLI, AWS, and gcloud credentials. Hosted deployments use a managed identity instead.</Notice>}
     <p className="inline-help"><a className="text-link" href={`/${identity.setup_guide_path || 'docs/MANAGED_IDENTITY_ROLES.md'}`} target="_blank" rel="noreferrer">View setup guide</a></p>
     <div className="identity-grid">
@@ -179,7 +179,7 @@ export function ResourceAccessIdentityEditor() {
     <input id="identity-azure-app-client-id" className="input" value={azureAppClientId} onChange={event => setAzureAppClientId(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
     <label className="field-label" htmlFor="identity-gcp-service-account">GCP service account</label>
     <input id="identity-gcp-service-account" className="input" value={gcpServiceAccount} onChange={event => setGcpServiceAccount(event.target.value)} disabled={!data.editable || saving} placeholder="Platform default"/>
-    {data.editable && <div className="panel-bottom-action"><button type="button" className="button secondary" disabled={saving} onClick={() => void submit()}><Save size={15}/>Save</button></div>}
+    {data.editable && <div className="panel-bottom-action"><button type="button" className="button secondary" disabled={saving} onClick={() => void submit()}><FloppyDisk size={15} weight="regular"/>Save</button></div>}
   </section>;
 }
 
@@ -208,11 +208,11 @@ export function ScheduleAlertsEditor() {
     save({alerts: {enabled: false, channel: alerts.channel, remove_webhook: true}}, 'Webhook removed. Alerts are off.');
   }
   return <form className="panel settings-form" onSubmit={submit}>
-    <SectionTitle title="Schedule and alerts" action={editable && <button className="button primary" type="submit" disabled={saving}><Save size={15}/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose how often CloudSaver scans and where it sends results</SectionTitle>
+    <SectionTitle title="Schedule and alerts" action={editable && <button className="button primary" type="submit" disabled={saving}><FloppyDisk size={15} weight="regular"/>{saving ? 'Saving…' : 'Save changes'}</button>}>Choose how often CloudSaver scans and where it sends results</SectionTitle>
     <ReadOnlyNotice data={data}/>
     {saveError && <Notice tone="error">{saveError}</Notice>}
     <fieldset className="settings-fieldset" disabled={!editable || saving}>
-      <legend><CalendarClock size={16}/>Scheduled scans</legend>
+      <legend><Calendar size={16} weight="regular"/>Scheduled scans</legend>
       <label className="field-label" htmlFor="scan-frequency">Scan frequency</label>
       <select id="scan-frequency" value={frequency} onChange={e => setFrequency(e.target.value as Frequency)}>
         {(['manual', 'daily', 'hourly'] as Frequency[]).map(value => <option key={value} value={value} disabled={!limits.allowed_scan_frequencies.includes(value)}>{frequencyLabels[value]}{limits.allowed_scan_frequencies.includes(value) ? '' : ` · ${NOT_INCLUDED}`}</option>)}
@@ -221,7 +221,7 @@ export function ScheduleAlertsEditor() {
       {platform && !platform.scheduled_scans_enabled && <p className="inline-help">Scheduled scans are paused for all workspaces by your platform operator. Your choice is saved and applies when they resume.</p>}
     </fieldset>
     <fieldset className="settings-fieldset" disabled={!editable || saving || !limits.can_dispatch_automated_alerts}>
-      <legend><Bell size={16}/>Scan alerts</legend>
+      <legend><Bell size={16} weight="regular"/>Scan alerts</legend>
       {!limits.can_dispatch_automated_alerts && <p className="inline-help">{NOT_INCLUDED}</p>}
       <label className="checkbox-row"><input type="checkbox" checked={alerts.enabled} onChange={e => setAlerts({...alerts, enabled: e.target.checked})}/>Send a summary when a scheduled scan completes</label>
       <div className="settings-row">
@@ -229,7 +229,7 @@ export function ScheduleAlertsEditor() {
         <label className="wide"><span className="field-label">Webhook URL</span><input type="password" autoComplete="off" value={webhook} onChange={e => setWebhook(e.target.value)} placeholder={settings.alerts.webhook_configured ? 'Webhook saved. Enter a new URL to replace it.' : 'https://hooks.slack.com/services/…'}/></label>
       </div>
       <p className="inline-help">The webhook URL is stored securely and never shown again after you save it.</p>
-      {settings.alerts.webhook_configured && <button type="button" className="button secondary" onClick={removeWebhook}><Trash2 size={15}/>Remove webhook</button>}
+      {settings.alerts.webhook_configured && <button type="button" className="button secondary" onClick={removeWebhook}><Trash size={15} weight="regular"/>Remove webhook</button>}
       {platform && !platform.automated_alerts_enabled && <p className="inline-help">Automated alerts are paused for all workspaces by your platform operator.</p>}
     </fieldset>
   </form>;

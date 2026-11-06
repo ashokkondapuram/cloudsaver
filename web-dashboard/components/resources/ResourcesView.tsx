@@ -2,7 +2,19 @@
 import Link from 'next/link';
 import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {BrainCircuit, ChevronRight, Download, FileCode2, Filter, Loader2, Printer, Search, Server, ShieldCheck, X} from 'lucide-react';
+import {
+  Brain,
+  CaretRight,
+  ComputerTower,
+  Download,
+  FileCode,
+  Funnel,
+  MagnifyingGlass,
+  Printer,
+  SealCheck,
+  SpinnerGap,
+  X,
+} from '@phosphor-icons/react';
 import {categories, categoryOf, protectionSignals, type Category, type Intent, type Pricing} from '../../lib/resource-insights';
 import {identityOf} from '../../lib/resources';
 import {resourceCsv} from '../../lib/resource-csv';
@@ -81,7 +93,7 @@ function BatchDialog({open, onClose, scanId, selected, total, onCreated}: {open:
         <p className="inline-help">Only sanitized facts are sent: check codes, statuses and allowlisted settings. Resource names, IDs, raw tags and free text stay in CloudSaver. Inference can incur provider charges.</p>
         <label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} disabled={busy} onChange={e => setAck(e.target.checked)}/>I acknowledge external processing of this sanitized evidence.</label>
         {error && <Notice tone="error">{error}</Notice>}
-        <div className="dialog-actions"><button className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || !ack || !target || !count || count > 500} onClick={submit}>{busy ? <Loader2 size={16} className="spin"/> : <BrainCircuit size={16}/>}Start assessment</button></div>
+        <div className="dialog-actions"><button className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy || !ack || !target || !count || count > 500} onClick={submit}>{busy ? <SpinnerGap size={16} className="spin" weight="regular"/> : <Brain size={16} weight="regular"/>}Start assessment</button></div>
       </>}
     </div>
   </Dialog>;
@@ -93,11 +105,11 @@ function BatchBanner({batch, onCancel, canAdmin}: {batch: Batch; onCancel: () =>
   const percent = Math.round(100 * done / Math.max(1, batch.total));
   const extra = [batch.counts.failed && `${batch.counts.failed} failed`, batch.counts.skipped && `${batch.counts.skipped} skipped`, batch.counts.uncertain && `${batch.counts.uncertain} uncertain`].filter(Boolean).join(' · ');
   return <div className={`batch-banner batch-${batch.status}`} role="status">
-    <BrainCircuit size={18}/>
+    <Brain size={18} weight="regular"/>
     <div><strong>{batch.status === 'waiting_for_budget' ? 'AI assessment paused until the hourly limit resets' : active ? 'AI assessment in progress' : batch.status === 'cancelled' ? 'AI assessment cancelled' : 'AI assessment completed'}</strong>
       <span>{batch.counts.completed.toLocaleString()} of {batch.total.toLocaleString()} assessed{extra ? ` · ${extra}` : ''}{batch.status === 'waiting_for_budget' && batch.resume_after ? ` · resumes ${dateTime(batch.resume_after)}` : ''}</span>
       <div className="batch-progress" aria-hidden="true"><span style={{width: `${percent}%`}}/></div></div>
-    {active && canAdmin && <button className="button secondary small" onClick={onCancel}><X size={14}/>Cancel</button>}
+    {active && canAdmin && <button className="button secondary small" onClick={onCancel}><X size={14} weight="regular"/>Cancel</button>}
   </div>;
 }
 
@@ -115,7 +127,7 @@ function ResourceLoadProgress({progress}: {progress: {loaded: number; total: num
   if (!progress || progress.complete) return null;
   const percent = Math.round(100 * progress.loaded / Math.max(1, progress.total));
   return <div className="resource-load-banner batch-banner" role="status" aria-live="polite">
-    <Loader2 size={18} className="spin"/>
+    <SpinnerGap size={18} className="spin" weight="regular"/>
     <div><strong>Loading resources</strong>
       <span>{progress.loaded.toLocaleString()} of {progress.total.toLocaleString()} loaded</span>
       <div className="batch-progress" aria-hidden="true"><span style={{width: `${percent}%`}}/></div></div>
@@ -246,8 +258,8 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     try {await api(`/ai-batches/${batch.id}/cancel`, token, {method: 'POST'}); notify('Queued resources were cancelled.'); refreshBatch(); reload();}
     catch (cause) {notify((cause as Error).message, 'error');}
   }
-  if (!scan) return <EmptyState icon={Server} title="No scan selected">Run a scan to analyze your resources.</EmptyState>;
-  if (!live) return <EmptyState icon={Server} title="A live scan is required">Resource analysis uses saved observations from a completed or in-progress live scan.</EmptyState>;
+  if (!scan) return <EmptyState icon={ComputerTower} title="No scan selected">Run a scan to analyze your resources.</EmptyState>;
+  if (!live) return <EmptyState icon={ComputerTower} title="A live scan is required">Resource analysis uses saved observations from a completed or in-progress live scan.</EmptyState>;
   if (error && !page?.items.length) return <Notice tone="error">{error}</Notice>;
   if (!page?.items.length) return <><ResourceLoadProgress progress={progress}/><Loading label={progress ? `Loading resources… ${progress.loaded.toLocaleString()} of ${progress.total.toLocaleString()}` : 'Loading resources…'}/></>;
   if (error) return <Notice tone="warning">{error}</Notice>;
@@ -274,18 +286,18 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
     <section className="panel resources-panel" aria-label="Resources">
       <div className="grid-heading"><div><h2>Resources <span className="count-badge">{rows.length.toLocaleString()}</span></h2><p>One row per resource · {dateTime(page.observed_at)}</p></div>
         <div className="grid-display-controls">
-          <Link className="button secondary" href="/resources/report"><Printer size={15}/>Print report</Link>
-          <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15}/>Export CSV</button>
-          {canAdmin && <button className="button primary" disabled={batchLoading||!!batchError||(!!batch && ACTIVE_BATCH.includes(batch.status))} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><BrainCircuit size={16}/>Run AI assessment</button>}
+          <Link className="button secondary" href="/resources/report"><Printer size={15} weight="regular"/>Print report</Link>
+          <button className="button secondary" disabled={exporting} onClick={exportCsv}><Download size={15} weight="regular"/>Export CSV</button>
+          {canAdmin && <button className="button primary" disabled={batchLoading||!!batchError||(!!batch && ACTIVE_BATCH.includes(batch.status))} title={batch && ACTIVE_BATCH.includes(batch.status) ? 'An AI assessment is already running for this scan' : undefined} onClick={() => setDialog(true)}><Brain size={16} weight="regular"/>Run AI assessment</button>}
         </div></div>
       <div className="explorer-facets">
         <div className="provider-pills" role="group" aria-label="Cloud providers"><button aria-pressed={!filters.provider} onClick={() => setFilters(f => ({...f, provider: ''}))}>All clouds<span>{page.items.length}</span></button>{Object.entries(providerCounts).sort().map(([id, count]) => <button key={id} className={`cloud-pill cloud-${id}`} aria-pressed={filters.provider === id} onClick={() => setFilters(f => ({...f, provider: f.provider === id ? '' : id}))}><span className="cloud-pill-dot"/>{providerNames[id] || id} <span>{count}</span></button>)}</div>
         <div className="category-pills" role="group" aria-label="Resource categories"><button aria-pressed={!category} onClick={() => setCategory('')}>All categories</button>{categories.filter(([id]) => (categoryCounts[id] || 0) > 0).map(([id, name]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(category === id ? '' : id)}>{name}<span>{categoryCounts[id]}</span></button>)}</div>
       </div>
-      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing && !filters.arm_detail} onClick={() => {setIntent(''); setPricing(''); setFilters(f => ({...f, arm_detail: ''}));}}>All</button><button aria-pressed={filters.arm_detail === 'collected'} onClick={() => setFilters(f => ({...f, arm_detail: f.arm_detail === 'collected' ? '' : 'collected', pillar_status: '', ai_status: '', ai_risk: '', decision: ''}))}>ARM detail</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><ShieldCheck size={13}/>Protected</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
-      {!!discoveryChips.length && <div className="active-filters"><Filter size={13}/>{discoveryChips.map(chip => <button key={chip.label} onClick={chip.clear}>{chip.label}<X size={12}/></button>)}<button className="clear-filters" onClick={resetDiscovery}>Clear all</button></div>}
+      <div className="explorer-quick-views" role="group" aria-label="Evidence quick views"><span>Quick views</span><button aria-pressed={!intent && !pricing && !filters.arm_detail} onClick={() => {setIntent(''); setPricing(''); setFilters(f => ({...f, arm_detail: ''}));}}>All</button><button aria-pressed={filters.arm_detail === 'collected'} onClick={() => setFilters(f => ({...f, arm_detail: f.arm_detail === 'collected' ? '' : 'collected', pillar_status: '', ai_status: '', ai_risk: '', decision: ''}))}>ARM detail</button><button aria-pressed={intent === 'protected'} onClick={() => {setIntent(intent === 'protected' ? '' : 'protected'); setPricing('');}}><SealCheck size={13} weight="regular"/>Protected</button><button aria-pressed={pricing === 'unknown'} onClick={() => {setPricing(pricing === 'unknown' ? '' : 'unknown'); setIntent('');}}>Missing prices</button></div>
+      {!!discoveryChips.length && <div className="active-filters"><Funnel size={13} weight="regular"/>{discoveryChips.map(chip => <button key={chip.label} onClick={chip.clear}>{chip.label}<X size={12} weight="regular"/></button>)}<button className="clear-filters" onClick={resetDiscovery}>Clear all</button></div>}
       <div className="grid-filters">
-        <label className="grid-search"><Search size={16}/><input type="search" aria-label="Search resources" placeholder="Search names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
+        <label className="grid-search"><MagnifyingGlass size={16} weight="regular"/><input type="search" aria-label="Search resources" placeholder="Search names or IDs…" value={query} onChange={e => setQuery(e.target.value)}/></label>
       </div>
       <details className="grid-filters-advanced">
         <summary>More filters</summary>
@@ -314,13 +326,13 @@ export function ResourcesView({initialProvider = '', initialCategory = '', initi
             <td className="money-cell">{money(r.billed_cost_usd ?? null)}</td>
             <td className={r.retail_estimate_usd === null ? 'unpriced-cell' : 'money-cell'} title="Azure retail run-rate estimate (USD list); not verified savings">{money(r.retail_estimate_usd)}</td>
             <td><AIRisk ai={r.ai}/></td><td><DecisionBadge decision={r.decision}/></td>
-            <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><ChevronRight size={16}/></button></td>
+            <td><button className="icon-button" aria-label={`View analysis for ${r.resource_name}`} onClick={e => {e.stopPropagation(); open(r.resource_key, r);}}><CaretRight size={16} weight="regular"/></button></td>
           </tr>)}
-          {!rows.length && <tr><td colSpan={14}><EmptyState icon={Search} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
+          {!rows.length && <tr><td colSpan={14}><EmptyState icon={MagnifyingGlass} title="No matching resources">Try a broader search or remove a filter.<button className="button secondary" onClick={() => {setFilters(empty); setQuery(''); resetDiscovery();}}>Reset filters</button></EmptyState></td></tr>}</tbody>
         </table>
       </div>
       <div className="grid-footer"><span>{chosen.length ? `${chosen.length.toLocaleString()} selected · ` : ''}{rows.length?`${start+1}–${Math.min(start+GRID_PAGE_SIZE,rows.length)} of `:''}{rows.length.toLocaleString()} matching resources</span>{rows.length>GRID_PAGE_SIZE&&<nav aria-label="Resource pages"><button className="button secondary small" disabled={!start} onClick={()=>setOffset(Math.max(0,start-GRID_PAGE_SIZE))}>Previous resources</button><button className="button secondary small" disabled={start+GRID_PAGE_SIZE>=rows.length} onClick={()=>setOffset(start+GRID_PAGE_SIZE)}>Next resources</button></nav>}{chosen.length > 0 && <button className="text-button" onClick={() => setSelected(new Set())}>Clear selection</button>}</div>
-      {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode2 size={16}/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17}/></button></div>}
+      {chosen.length > 0 && <div className="bulk-toolbar" role="region" aria-label="Selected resources actions"><span className="bulk-count"><strong>{chosen.length}</strong> selected</span><button className="button primary" onClick={() => openReview(reviewFindings)}><FileCode size={16} weight="regular"/>Review code<span className="shortcut-hint">⇧ R</span></button><button className="icon-button" aria-label="Clear selected resources" onClick={() => setSelected(new Set())}><X size={17} weight="regular"/></button></div>}
     </section>
     <BatchDialog open={dialog} onClose={() => setDialog(false)} scanId={scan.scan_id} selected={chosen} total={page.total} onCreated={created => {setDialog(false); notify(`AI assessment started for ${created.total.toLocaleString()} resources.`); refreshBatch(); reload();}}/>
     <ResourceDrawer scanId={scan.scan_id} resourceKey={openKey} identity={drawerIdentity} previewRow={page.items.find(r => r.resource_key === openKey) ?? null} relatedFindings={drawerRelatedFindings} onClose={() => open(null)} onChange={reload}/>
@@ -331,12 +343,12 @@ export function ResourceReport() {
   const {scan, token, workspace} = useWorkspace();
   const live = !!scan && scan.status === 'completed' && scan.data_origin !== 'legacy_synthetic';
   const {page, error} = useResources(scan?.scan_id, token, live);
-  if (!live) return <EmptyState icon={Server} title="A live scan is required">Select a completed live scan to print its resource report.</EmptyState>;
+  if (!live) return <EmptyState icon={ComputerTower} title="A live scan is required">Select a completed live scan to print its resource report.</EmptyState>;
   if (error) return <Notice tone="error">{error}</Notice>;
   if (!page) return <Loading label="Preparing your report…"/>;
   const rows = [...page.items].sort((a, b) => priorityRank[a.review_priority] - priorityRank[b.review_priority]);
   return <article className="resource-report">
-    <div className="report-actions"><Link className="button secondary" href="/resources">Back</Link><button className="button primary" onClick={() => window.print()}><Printer size={15}/>Print</button></div>
+    <div className="report-actions"><Link className="button secondary" href="/resources">Back</Link><button className="button primary" onClick={() => window.print()}><Printer size={15} weight="regular"/>Print</button></div>
     <header><h1>Resource analysis report</h1><p>{workspace?.name} · Scan {scan.scan_id.slice(0, 8)} · Observed {dateTime(page.observed_at)} · Generated {dateTime(new Date().toISOString())}</p>
       <p>{page.summary.total.toLocaleString()} resources · {(page.summary.ai_status.completed || 0).toLocaleString()} with current AI assessments · {(page.summary.total - (page.summary.decision.none || 0)).toLocaleString()} with decisions</p></header>
     {rows.map(r => <section key={r.resource_key} className="report-resource">

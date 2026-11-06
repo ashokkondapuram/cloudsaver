@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {BrainCircuit, Save, ShieldCheck} from 'lucide-react';
+import {Brain, FloppyDisk, SealCheck} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
@@ -75,7 +75,7 @@ export function AIFoundryConfigurationEditor() {
   }
   const dirty = !!view && JSON.stringify(draft) !== JSON.stringify(view.ai_foundry);
   return <section className="panel settings-form">
-    <SectionTitle title="AI Foundry configuration" action={<BrainCircuit size={18}/>}>Choose approved, keyless model destinations for this workspace.</SectionTitle>
+    <SectionTitle title="AI Foundry configuration" action={<Brain size={18} weight="regular"/>}>Choose approved, keyless model destinations for this workspace.</SectionTitle>
     {error && <Notice tone="error">{error}<button type="button" className="text-button" onClick={() => void load()}>Refresh AI settings</button></Notice>}
     {!view || !draft ? !error && <Loading label="Loading AI policy and bindings…"/> : <>
       {!view.editable && <Notice>{view.directory_mode === 'cutover' ? 'AI configuration is locked while the platform directory owns workspace configuration.' : 'An unrestricted workspace administrator can edit these settings.'}</Notice>}
@@ -117,7 +117,7 @@ export function AIFoundryConfigurationEditor() {
             </ol></div>}
         </article>;
       })}</div>
-      <fieldset className="settings-fieldset" disabled={!editable}><legend><ShieldCheck size={16}/>Routing, budget and consent</legend>
+      <fieldset className="settings-fieldset" disabled={!editable}><legend><SealCheck size={16} weight="regular"/>Routing, budget and consent</legend>
         <label className="checkbox-row"><input type="checkbox" checked={draft.policy.advisory_enabled} onChange={event => policy('advisory_enabled', event.target.checked)}/>Enable opt-in AI advisory</label>
         <label className="field-label">Source-provider routing<select value={draft.policy.routing_mode} onChange={event => policy('routing_mode', event.target.value)}><option value="same_cloud_only">Same cloud only</option><option value="workspace_default_provider" disabled>Workspace default provider (requires extra sign-in verification)</option></select></label>
         <p className="inline-help">A missing matching provider blocks the request. Kubernetes inference is blocked until its hosting cloud is authoritatively verified.</p>
@@ -135,7 +135,7 @@ export function AIFoundryConfigurationEditor() {
         <p>{view.usage.monthly_tokens_used_or_reserved.toLocaleString()} / {(draft.policy.monthly_token_limit || view.platform_policy.policy.monthly_token_ceiling).toLocaleString()}. Unknown outcomes retain their reservation.</p>
         {!!view.usage.monthly_unbounded_legacy_attempts && <Notice tone="warning">Historical unmetered calls have no reservation. Capped inference is paused until the monthly budget can be verified.</Notice>}</div>}
       {editable && <><label className="checkbox-row ai-ack"><input type="checkbox" checked={ack} onChange={event => setAck(event.target.checked)}/>I acknowledge the selected provider, model and region, possible charges, and unverified advisory processing.</label>
-        <button type="button" className="button primary" disabled={!!busy || !dirty || (draft.policy.advisory_enabled && !ack)} onClick={() => void save()}><Save size={15}/>{busy === 'save' ? 'Saving…' : 'Save AI configuration'}</button></>}
+        <button type="button" className="button primary" disabled={!!busy || !dirty || (draft.policy.advisory_enabled && !ack)} onClick={() => void save()}><FloppyDisk size={15} weight="regular"/>{busy === 'save' ? 'Saving…' : 'Save AI configuration'}</button></>}
       <p className="inline-help">Policy revision {view.platform_policy.version}. {view.message}</p>
       {!!view.diagnostics.length && <details><summary>Recent connection checks ({view.diagnostics.length})</summary><ul>{view.diagnostics.map(item => <li key={item.id}>{names[item.provider]} · {dateTime(item.created_at)} · {sentence(item.result.status)} · {item.result.latency_ms} ms</li>)}</ul></details>}
     </>}

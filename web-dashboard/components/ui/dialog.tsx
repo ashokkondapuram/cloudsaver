@@ -1,7 +1,7 @@
 'use client';
 
 import {useLayoutEffect, useRef, type ReactNode} from 'react';
-import {X} from 'lucide-react';
+import {X} from '@phosphor-icons/react';
 
 let openDialogCount = 0;
 let savedBodyOverflow = '';

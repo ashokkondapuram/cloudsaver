@@ -1,9 +1,9 @@
 'use client';
 
 import type {KeyboardEvent} from 'react';
-import type {LucideIcon} from 'lucide-react';
+import type {Icon} from '@phosphor-icons/react';
 
-export type PageTab = {id: string; label: string; icon?: LucideIcon};
+export type PageTab = {id: string; label: string; icon?: Icon};
 
 export function PageTabs({id, label, tabs, value, onChange, className = 'page-tabs', icons = true}: {id: string; label: string; tabs: PageTab[]; value: string; onChange: (value: string) => void; className?: string; icons?: boolean}) {
   function onKeyDown(event: KeyboardEvent) {
@@ -18,5 +18,5 @@ export function PageTabs({id, label, tabs, value, onChange, className = 'page-ta
     document.getElementById(`${id}-${tabs[next].id}-tab`)?.focus();
   }
   if (!tabs.length) return null;
-  return <div className={className} role="tablist" aria-label={label} onKeyDown={onKeyDown}>{tabs.map(tab => <button type="button" key={tab.id} role="tab" id={`${id}-${tab.id}-tab`} aria-controls={`${id}-${tab.id}`} aria-selected={value === tab.id} tabIndex={value === tab.id ? 0 : -1} onClick={() => onChange(tab.id)}>{icons && tab.icon && <tab.icon size={16}/>}{tab.label}</button>)}</div>;
+  return <div className={className} role="tablist" aria-label={label} onKeyDown={onKeyDown}>{tabs.map(tab => <button type="button" key={tab.id} role="tab" id={`${id}-${tab.id}-tab`} aria-controls={`${id}-${tab.id}`} aria-selected={value === tab.id} tabIndex={value === tab.id ? 0 : -1} onClick={() => onChange(tab.id)}>{icons && tab.icon && <tab.icon size={16} weight="regular"/>}{tab.label}</button>)}</div>;
 }

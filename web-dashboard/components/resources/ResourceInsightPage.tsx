@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {useMemo} from 'react';
 import {useSearchParams} from 'next/navigation';
-import {ArrowLeft, Server} from 'lucide-react';
+import {ArrowLeft, ComputerTower} from '@phosphor-icons/react';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice} from '../ui/shared';
 import {isLiveSnapshot} from '../../lib/resources';
@@ -25,12 +25,12 @@ export function ResourceInsightPage() {
   const scanId = insightScan?.scan_id || urlScanId || '';
 
   if (!resourceKey) {
-    return <EmptyState icon={Server} title="No resource selected">Choose a resource from the Resources list.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="No resource selected">Choose a resource from the Resources list.</EmptyState>;
   }
 
   if (token && !scans.length) {
     if (busy) return <Loading label="Loading workspace snapshots…"/>;
-    return <EmptyState icon={Server} title="No scan available">Run a scan from Resources, then open this resource again.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="No scan available">Run a scan from Resources, then open this resource again.</EmptyState>;
   }
 
   if (urlScanId && scans.length && !scans.some(s => s.scan_id === urlScanId)) {
@@ -43,11 +43,11 @@ export function ResourceInsightPage() {
   }
 
   if (!scanId || !insightScan) {
-    return <EmptyState icon={Server} title="No scan selected">Run or select a scan on the Resources page, then open this resource again.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="No scan selected">Run or select a scan on the Resources page, then open this resource again.</EmptyState>;
   }
 
   if (!isLiveSnapshot(insightScan)) {
-    return <EmptyState icon={Server} title="A live scan is required">Resource insights use saved observations from a completed or in-progress live scan.</EmptyState>;
+    return <EmptyState icon={ComputerTower} title="A live scan is required">Resource insights use saved observations from a completed or in-progress live scan.</EmptyState>;
   }
 
   return (
@@ -55,7 +55,7 @@ export function ResourceInsightPage() {
       <div className="page-heading">
         <h1>Resource insight</h1>
         <Link className="button secondary" href={resourceListHref(resourceKey, identity)}>
-          <ArrowLeft size={16}/> Back to resources
+          <ArrowLeft size={16} weight="regular"/> Back to resources
         </Link>
       </div>
       <ResourceInsightView

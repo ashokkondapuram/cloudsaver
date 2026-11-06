@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import {useMemo} from 'react';
-import {ArrowRight, Blocks, ChevronRight, ShieldCheck} from 'lucide-react';
+import {ArrowRight, CaretRight, Cube, SealCheck} from '@phosphor-icons/react';
 import {EvidenceHealth} from './EvidenceHealth';
 import {scopeOf} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
@@ -46,9 +46,9 @@ export function Overview() {
     <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
       <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
       {error ? <button className="button secondary" onClick={reload}>Retry evidence</button>
-        : !scan && canAdmin ? <button className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16}/></button>
-        : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16}/></Link>
-        : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16}/></Link>}
+        : !scan && canAdmin ? <button className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
+        : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16} weight="regular"/></Link>
+        : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
     </section>
 
     <EvidenceHealth rows={rows} total={page?.total} ready={complete} error={error}/>
@@ -57,14 +57,14 @@ export function Overview() {
     <OverviewFinOpsMiniChart/>
 
     {scan && <section className="panel priority-panel" aria-label="Resource review queue">
-      <SectionTitle title="Review first" action={<Link className="text-link" href="/resources">View all<ArrowRight size={15}/></Link>}/>
+      <SectionTitle title="Review first" action={<Link className="text-link" href="/resources">View all<ArrowRight size={15} weight="regular"/></Link>}/>
       {!complete ? <div className="empty-state" role="status">{error ? 'Unavailable until evidence loads.' : inProgress && !rows.length ? 'Resources will appear here as they are collected.' : 'Loading…'}</div>
         : priorities.length ? <div className="priority-list">{priorities.map(row => <Link className="priority-row" key={row.resource_key} href={`/resources?resource=${row.resource_key}`}>
-          <span className={`resource-symbol resource-${row.provider}`}><Blocks size={18}/></span>
+          <span className={`resource-symbol resource-${row.provider}`}><Cube size={18} weight="regular"/></span>
           <span className="priority-resource"><strong>{row.resource_name}</strong><small>{row.finding_count} signal{row.finding_count === 1 ? '' : 's'} · {sentence(row.review_priority)}</small></span>
-          <ProviderBadge provider={row.provider}/><ChevronRight size={15}/>
+          <ProviderBadge provider={row.provider}/><CaretRight size={15} weight="regular"/>
         </Link>)}</div>
-        : <EmptyState icon={ShieldCheck} title="Nothing needs review right now"/>}
+        : <EmptyState icon={SealCheck} title="Nothing needs review right now"/>}
     </section>}
   </div>;
 }

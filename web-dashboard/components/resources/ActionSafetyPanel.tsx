@@ -1,6 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {ShieldAlert} from 'lucide-react';
+import {ShieldWarning} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import {findingsToChecks, type ActionAssessmentResponse, type GateCheckStatus} from '../../lib/control-plane';
 import {Notice, SectionTitle} from '../ui/shared';
@@ -84,7 +84,7 @@ export function ActionSafetyPanel({
       {!result ? (
         <div className="empty-state">
           <div className="empty-icon">
-            <ShieldAlert size={20} />
+            <ShieldWarning size={20} weight="regular" />
           </div>
           <p>
             Run a deterministic safety evaluation to inspect all eight enterprise firewall gates (AG-COST-01 through

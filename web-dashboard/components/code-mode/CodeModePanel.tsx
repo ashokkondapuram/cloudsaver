@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useState} from 'react';
-import {TerminalSquare} from 'lucide-react';
+import {TerminalWindow} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
@@ -139,7 +139,7 @@ export function CodeModePanel() {
                 <span>I accept that this snippet runs in an isolated worker boundary separate from agent connector execution.</span>
               </label>
               <button className="button primary" type="submit" disabled={busy || !ack || !ready}>
-                <TerminalSquare size={16}/>
+                <TerminalWindow size={16} weight="regular"/>
                 {busy ? 'Running…' : 'Run in sandbox'}
               </button>
             </form>
@@ -168,7 +168,7 @@ export function CodeModePanel() {
               )}
             </div>
           ) : (
-            <EmptyState icon={TerminalSquare} title="No sandbox runs yet">Approved transforms and outcomes are retained for audit.</EmptyState>
+            <EmptyState icon={TerminalWindow} title="No sandbox runs yet">Approved transforms and outcomes are retained for audit.</EmptyState>
           )}
         </>
       )}

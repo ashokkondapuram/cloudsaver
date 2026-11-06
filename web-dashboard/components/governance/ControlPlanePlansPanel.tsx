@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
-import {RefreshCw} from 'lucide-react';
+import {ArrowsClockwise} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
 import {dateTime} from '../../lib/finops';
 import type {EngineeringOutboxRow, PlanRecord, PlanVersionRecord} from '../../lib/control-plane';
@@ -263,7 +263,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
 
   if (!canAdmin) {
     return (
-      <EmptyState icon={RefreshCw} title="Workspace administrator required">
+      <EmptyState icon={ArrowsClockwise} title="Workspace administrator required">
         Control-plane plans are visible only to workspace administrators. Human approval requires a verified human session,
         not a workspace API key.
       </EmptyState>
@@ -276,7 +276,7 @@ export function ControlPlanePlansPanel({highlightPlanId}: {highlightPlanId?: str
         title="Control-plane plans"
         action={
           <button type="button" className="button secondary small" disabled={busy} onClick={() => setRevision(r => r + 1)}>
-            <RefreshCw size={14} /> Refresh plans &amp; outbox
+            <ArrowsClockwise size={14} weight="regular" /> Refresh plans &amp; outbox
           </button>
         }
       >
