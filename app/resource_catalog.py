@@ -13,7 +13,7 @@ FAMILIES = (
  ('azure','blob-storage','storage',('microsoft.storage/storageaccounts',),('AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD',)),
  ('azure','ai-foundry','ai',('microsoft.cognitiveservices/accounts',),('AZURE_AI_FOUNDRY_PTU_VS_PAYG_ARBITRAGE',)),
  ('aws','ebs','storage',('aws:ec2:volume',),('AWS_UNATTACHED_EBS','AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING')),
- ('aws','ec2','compute',('aws:ec2:instance',),('AWS_EC2_STOPPED_EBS_RESIDUAL','AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING')),
+ ('aws','ec2','compute',('aws:ec2:instance',),('AWS_EC2_STOPPED_EBS_RESIDUAL','AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING','AWS_EC2_IMDSV2_NOT_REQUIRED')),
  ('aws','eip-nat','network',('aws:ec2:elastic-ip','aws:ec2:natgateway'),('AWS_UNASSOCIATED_EIP','AWS_NAT_GW_ENDPOINT_BYPASS_AND_IDLE')),
  ('aws','load-balancers','network',('aws:elbv2:loadbalancer',),('AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION',)),
  ('aws','rds-aurora','database',('aws:rds:db','aws:rds:cluster'),('AWS_IDLE_RDS','AWS_RDS_AURORA_RIGHTSIZING_AND_GP3')),
@@ -75,6 +75,7 @@ RULE_DISPLAY_NAMES = {
     'AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING': 'EBS GP2 to GP3 and provisioned IOPS tuning review',
     'AWS_EC2_STOPPED_EBS_RESIDUAL': 'Stopped EC2 instance residual EBS charge review',
     'AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING': 'EC2 Graviton migration and SLO-bounded rightsizing review',
+    'AWS_EC2_IMDSV2_NOT_REQUIRED': 'EC2 instance metadata IMDSv2 not required review',
     'AWS_UNASSOCIATED_EIP': 'Unassociated Elastic IP address review',
     'AWS_NAT_GW_ENDPOINT_BYPASS_AND_IDLE': 'NAT gateway idle and VPC endpoint bypass review',
     'AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION': 'Orphaned load balancer and ingress consolidation review',
@@ -159,6 +160,8 @@ def definitions():
             if provider=='kubernetes':bounds={}
             if provider == 'platform':
                 pillar = _platform_pillar_by_rule[rid]
+            elif rid == 'AWS_EC2_IMDSV2_NOT_REQUIRED':
+                pillar = 'security'
             else:
                 pillar='reliability' if 'STATEFULSET' in rid else 'operations' if 'ABANDONED' in rid else 'cost'
             if rid not in RULE_DISPLAY_NAMES:

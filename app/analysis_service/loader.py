@@ -89,9 +89,13 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
     if ip_associated is None and isinstance(assoc, bool):
         ip_associated = assoc
 
+    imds_raw = evidence.get('imds_v2_required')
+    imds_v2_required = imds_raw if isinstance(imds_raw, bool) else None
+
     config = ConfigMetadata(
         encrypted_at_rest=evidence.get('encrypted') if 'encrypted' in evidence else evidence.get('encrypted_at_rest'),
         publicly_accessible=evidence.get('publicly_accessible'),
+        imds_v2_required=imds_v2_required,
         multi_az_or_ha=evidence.get('multi_az'),
         backup_retention_days=_float(evidence.get('backup_retention_days')),
         deletion_protection=evidence.get('deletion_protection'),

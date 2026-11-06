@@ -84,6 +84,20 @@ def test_slo_and_target_proof_cannot_be_replaced_by_low_average_cpu():
     r['evidence']['slo_burn_rate']=1.01;assert run()['outcome']=='condition_not_detected'
     r['evidence']['slo_burn_rate']=.8;r['evidence']['cpu_latency_correlation_r']=.61;assert run()['outcome']=='condition_not_detected'
 
+def test_ec2_imdsv2_optional_triggers_catalog_condition():
+    r = dict(
+        resource_id='arn:aws:ec2:us-east-1:123456789012:instance/i-test',
+        resource_type='aws:ec2:instance',
+        cloud_provider='aws',
+        scope_id='123456789012',
+        evidence=dict(imds_v2_required=False),
+    )
+    row = next(v for v in evaluate_inventory([r], observed_at=NOW.isoformat(), now=NOW) if v['rule_id'] == 'AWS_EC2_IMDSV2_NOT_REQUIRED')
+    assert row['outcome'] == 'condition_detected'
+    r['evidence']['imds_v2_required'] = True
+    row2 = next(v for v in evaluate_inventory([r], observed_at=NOW.isoformat(), now=NOW) if v['rule_id'] == 'AWS_EC2_IMDSV2_NOT_REQUIRED')
+    assert row2['outcome'] == 'condition_not_detected'
+
 def test_clean_portfolio_deduplicates_each_hour_and_preserves_decimal_math():
     from app.nextgen_engines import compute_clean_before_commit_plan
     base=dict(resource_key='a'*64,provider='aws',scope_id='123456789012',opportunity_group_id='ec2-envelope:synthetic',outcome='condition_detected',disposition='requires_review',commitment_lock_conflict=False)

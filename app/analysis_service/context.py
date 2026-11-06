@@ -48,6 +48,7 @@ class MetricsSummary(BaseModel):
 class ConfigMetadata(BaseModel):
     encrypted_at_rest: bool | None = None
     publicly_accessible: bool | None = None
+    imds_v2_required: bool | None = None
     multi_az_or_ha: bool | None = None
     backup_retention_days: float | None = None
     deletion_protection: bool | None = None

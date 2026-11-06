@@ -3,6 +3,7 @@
   "AWS_DYNAMODB_BILLING_MODE_AND_UNUSED_GSI": "DynamoDB billing mode and unused GSI review",
   "AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING": "EBS GP2 to GP3 and provisioned IOPS tuning review",
   "AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING": "EC2 Graviton migration and SLO-bounded rightsizing review",
+  "AWS_EC2_IMDSV2_NOT_REQUIRED": "EC2 instance metadata IMDSv2 not required review",
   "AWS_EC2_STOPPED_EBS_RESIDUAL": "Stopped EC2 instance residual EBS charge review",
   "AWS_ELASTICACHE_GRAVITON_AND_VALKEY_UPGRADE": "ElastiCache Graviton and Valkey upgrade review",
   "AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION": "Orphaned load balancer and ingress consolidation review",

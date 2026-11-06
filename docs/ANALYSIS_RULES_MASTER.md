@@ -1,6 +1,6 @@
 # Analysis rules master reference (all points considered)
 
-CloudSaver evaluates **53 published catalog rules** across Azure, AWS, GCP, Kubernetes, and platform extensions. 
+CloudSaver evaluates **54 published catalog rules** across Azure, AWS, GCP, Kubernetes, and platform extensions. 
 This document is the operator-facing view of **what each rule checks**, **what evidence must exist**, 
 **which pillar it primarily supports**, and **which action path applies** after `condition_detected`.
 
@@ -60,7 +60,7 @@ flowchart TD
 | **Storage hygiene** | Snapshot/history collectors healthy | Unattached disk/EBS/GCP disk + performance/tuning rules |
 | **Network cost** | Flow logs + routing verification wired | NAT bypass, AppGW/LB empty backend, idle IP rules |
 | **Kubernetes efficiency** | Prometheus/AMP metrics on clusters | CPU/memory overrequest + PVC/service rules |
-| **Full catalog** | Mature observability on all families | All **53** base rules + declarative JSON (default identity catalog) |
+| **Full catalog** | Mature observability on all families | All **54** base rules + declarative JSON (default identity catalog) |
 
 **Best single rule quality bar:** prefer rules that reached **`condition_detected`** with **sufficient telemetry** 
 and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluations`.
@@ -75,6 +75,7 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — General manual assessment | aws | database | `AWS_DYNAMODB_BILLING_MODE_AND_UNUSED_GSI` | DynamoDB billing mode and unused GSI review | cost | `manual_assessment_only` | Low read/write utilization, low throttles, spiky traffic verified. | utilization_percent=18 |
 | B — Capacity / tier review (manual) | aws | storage | `AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING` | EBS GP2 to GP3 and provisioned IOPS tuning review | cost | `manual_assessment_only` | IOPS/throughput P99 vs target disk headroom; no throttling. | headroom_percent=30 |
 | A — FinOps resize (telemetry + SLO) | aws | compute | `AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING` | EC2 Graviton migration and SLO-bounded rightsizing review | cost | `finops_autopilot_resize` | Low CPU/memory P95 + SLO gate + target_compatible. | utilization_percent=15 |
+| B — General manual assessment | aws | compute | `AWS_EC2_IMDSV2_NOT_REQUIRED` | EC2 instance metadata IMDSv2 not required review | security | `manual_assessment_only` | Live inventory shows HttpTokens != required on instance metadata options (IMDSv2 optional). | — |
 | B — General manual assessment | aws | compute | `AWS_EC2_STOPPED_EBS_RESIDUAL` | Stopped EC2 instance residual EBS charge review | cost | `manual_assessment_only` | Stopped instance state history. | minimum_days=14 |
 | B — General manual assessment | aws | database | `AWS_ELASTICACHE_GRAVITON_AND_VALKEY_UPGRADE` | ElastiCache Graviton and Valkey upgrade review | cost | `manual_assessment_only` | Low memory/CPU + target_compatible. | utilization_percent=25 |
 | C — Network / architecture | aws | network | `AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION` | Orphaned load balancer and ingress consolidation review | cost | `manual_assessment_only` | Empty/orphan backend pattern (same as AppGW empty backend family). | minimum_days=7 |

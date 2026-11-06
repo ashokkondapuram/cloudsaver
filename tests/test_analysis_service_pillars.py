@@ -147,3 +147,26 @@ def test_loader_from_scan_inventory():
     assert len(contexts) == 1
     analysis = AnalysisService().analyze_resource(contexts[0])
     assert any(f.rule_id == 'COST_ORPHAN_DISK' for f in analysis.findings)
+
+
+def test_aws_ec2_imdsv2_not_required_finding():
+    from app.analysis_service.loader import contexts_from_scan
+
+    scan = {
+        'timestamp': '2026-10-15T12:00:00Z',
+        'inventory': [
+            {
+                'cloud_provider': 'aws',
+                'resource_id': 'arn:aws:ec2:us-east-1:123456789012:instance/i-imds',
+                'resource_type': 'aws:ec2:instance',
+                'region': 'us-east-1',
+                'evidence': {'imds_v2_required': False},
+            }
+        ],
+    }
+    ctx = contexts_from_scan(scan)[0]
+    assert ctx.config.imds_v2_required is False
+    analysis = AnalysisService().analyze_resource(ctx)
+    imds = next(f for f in analysis.findings if f.rule_id == 'AWS_EC2_IMDSV2_NOT_REQUIRED')
+    assert imds.pillar == Pillar.SECURITY
+    assert imds.remediation_action == 'REQUIRE_IMDSV2'

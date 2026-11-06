@@ -60,6 +60,31 @@ def evaluate(ctx: UnifiedResourceContext) -> list[PillarFinding]:
             )
         )
 
+    rt = (ctx.resource_type or '').lower()
+    if (
+        ctx.provider == 'aws'
+        and rt in ('aws:ec2:instance', 'ec2/instance')
+        and ctx.config.imds_v2_required is False
+    ):
+        findings.append(
+            PillarFinding(
+                finding_id=deterministic_finding_id(
+                    canonical_id=ctx.canonical_id, pillar=Pillar.SECURITY, rule_id='AWS_EC2_IMDSV2_NOT_REQUIRED'
+                ),
+                pillar=Pillar.SECURITY,
+                rule_id='AWS_EC2_IMDSV2_NOT_REQUIRED',
+                severity=Severity.HIGH,
+                canonical_id=ctx.canonical_id,
+                provider=ctx.provider,
+                region=ctx.region,
+                resource_type=ctx.resource_type,
+                current_sku=ctx.current_sku,
+                evidence={'imds_v2_required': False},
+                financial_impact=h.financial(monthly),
+                remediation_action='REQUIRE_IMDSV2',
+            )
+        )
+
     for event in h.human_drift_events(ctx):
         if any(name in event.event_name for name in _SECURITY_EVENTS):
             findings.append(

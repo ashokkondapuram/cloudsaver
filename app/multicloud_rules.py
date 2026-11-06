@@ -72,6 +72,7 @@ def condition(rid,e,p,now):
         if e.get('commitment_lock_conflict') is True:return False
         if e.get('dependencies_verified') is not True:return None
         return low('invocations',1,'maximum')
+    if rid=='AWS_EC2_IMDSV2_NOT_REQUIRED':return e.get('imds_v2_required') is False if 'imds_v2_required' in e else None
     if rid=='GCP_BIGQUERY_SLOT_AUTOSCALE_AND_STORAGE':return all_known(low('slot_utilization_percent',p.get('utilization_percent',25)),e.get('target_compatible'),e.get('commitment_lock_conflict') is False if 'commitment_lock_conflict' in e else None)
     if rid=='GCP_CLOUDRUN_MIN_INSTANCE_AND_MEMORYSTORE':return all_known(low('requests',1,'maximum'),e.get('nonproduction'),e.get('minimum_instances',0)>0 if type(e.get('minimum_instances')) is int else None)
     return None

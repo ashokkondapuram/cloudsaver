@@ -115,9 +115,9 @@ Related: [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md), `GE
 
 | Resource type | Rules evaluated |
 | --- | --- |
-| `aws:ec2:instance` | **EC2 Graviton migration and SLO-bounded rightsizing review** (`AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING`)<br>**Stopped EC2 instance residual EBS charge review** (`AWS_EC2_STOPPED_EBS_RESIDUAL`) |
+| `aws:ec2:instance` | **EC2 Graviton migration and SLO-bounded rightsizing review** (`AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING`)<br>**Stopped EC2 instance residual EBS charge review** (`AWS_EC2_STOPPED_EBS_RESIDUAL`)<br>**EC2 instance metadata IMDSv2 not required review** (`AWS_EC2_IMDSV2_NOT_REQUIRED`) |
 
-**Family rule set** (2 ids): `AWS_EC2_STOPPED_EBS_RESIDUAL`, `AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING`
+**Family rule set** (3 ids): `AWS_EC2_STOPPED_EBS_RESIDUAL`, `AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING`, `AWS_EC2_IMDSV2_NOT_REQUIRED`
 
 ## aws · Eip Nat (`network`)
 
@@ -332,6 +332,7 @@ Related: [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md), `GE
 | DynamoDB billing mode and unused GSI review | `AWS_DYNAMODB_BILLING_MODE_AND_UNUSED_GSI` | aws |
 | EBS GP2 to GP3 and provisioned IOPS tuning review | `AWS_EBS_GP2_TO_GP3_AND_IOPS_TUNING` | aws |
 | EC2 Graviton migration and SLO-bounded rightsizing review | `AWS_EC2_GRAVITON_AND_SLO_RIGHTSIZING` | aws |
+| EC2 instance metadata IMDSv2 not required review | `AWS_EC2_IMDSV2_NOT_REQUIRED` | aws |
 | Stopped EC2 instance residual EBS charge review | `AWS_EC2_STOPPED_EBS_RESIDUAL` | aws |
 | ElastiCache Graviton and Valkey upgrade review | `AWS_ELASTICACHE_GRAVITON_AND_VALKEY_UPGRADE` | aws |
 | Orphaned load balancer and ingress consolidation review | `AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION` | aws |
