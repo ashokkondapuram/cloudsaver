@@ -152,3 +152,8 @@ def test_scan_pipeline_e2e_inventory_billing_and_resource_key(
     reassessed = assessments(billed_scan, now=now)[expected_key][0]
     assert reassessed['resource_key'] == expected_key
     assert reassessed['billed_cost_usd'] == pytest.approx(11.0)
+
+    pillar = scan.get('pillar_analysis') or {}
+    assert pillar.get('engine') == 'analysis-service'
+    assert 'account_pillar_scores' in pillar
+    assert len(pillar.get('account_pillar_scores', {})) == 5

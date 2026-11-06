@@ -78,7 +78,14 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
         retail_monthly_equivalent_usd=_float(evidence.get('retail_monthly_usd') or evidence.get('retail_estimate_usd')),
         effective_discount_rate=_float(evidence.get('effective_discount_rate')),
         cost_source=evidence.get('cost_source'),
+        daily_cost_spike_pct=_float(evidence.get('daily_cost_spike_pct')),
+        target_sku_retail_monthly_usd=_float(evidence.get('target_sku_retail_monthly_usd')),
     )
+
+    assoc = evidence.get('association_verified')
+    ip_associated = evidence.get('ip_associated')
+    if ip_associated is None and isinstance(assoc, bool):
+        ip_associated = assoc
 
     config = ConfigMetadata(
         encrypted_at_rest=evidence.get('encrypted') if 'encrypted' in evidence else evidence.get('encrypted_at_rest'),
@@ -96,6 +103,8 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
         burstable_sku=evidence.get('burstable_sku'),
         attached_iam_or_sa=evidence.get('attached_iam_or_sa'),
         zero_traffic_14d=evidence.get('zero_traffic_14d'),
+        ip_associated=ip_associated if isinstance(ip_associated, bool) else None,
+        load_balancer_idle=evidence.get('load_balancer_idle') if isinstance(evidence.get('load_balancer_idle'), bool) else None,
     )
 
     metrics = MetricsSummary(
@@ -110,7 +119,7 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
         disk_iops_provisioned=_float(evidence.get('provisioned_iops') or evidence.get('provisionedIops')),
         disk_iops_observed_max=_metric_max(metrics_raw, 'iops', now),
         request_count_14d=_float(evidence.get('request_count_14d')),
-        backend_target_count=_int(evidence.get('backend_target_count')),
+        backend_target_count=_int(evidence.get('backend_target_count') or evidence.get('hosted_app_count')),
         runtime_hours_30d=_float(evidence.get('runtime_hours_30d')),
     )
 

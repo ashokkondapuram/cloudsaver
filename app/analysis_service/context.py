@@ -24,6 +24,8 @@ class CostSnapshot(BaseModel):
     retail_monthly_equivalent_usd: float | None = None
     effective_discount_rate: float | None = None
     cost_source: str | None = None
+    daily_cost_spike_pct: float | None = None
+    target_sku_retail_monthly_usd: float | None = None
 
 
 class MetricsSummary(BaseModel):
@@ -59,6 +61,8 @@ class ConfigMetadata(BaseModel):
     burstable_sku: bool | None = None
     attached_iam_or_sa: bool | None = None
     zero_traffic_14d: bool | None = None
+    ip_associated: bool | None = None
+    load_balancer_idle: bool | None = None
 
 
 class UnifiedResourceContext(BaseModel):

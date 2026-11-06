@@ -1,6 +1,8 @@
 """AnalysisService — deterministic 5-pillar evaluation (no provider HTTP)."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from pydantic import BaseModel, Field
 
 from app.analysis_service.context import UnifiedResourceContext
@@ -29,8 +31,9 @@ class AnalysisService:
 
     def analyze_resource(self, ctx: UnifiedResourceContext) -> ResourceAnalysisResult:
         findings: list[PillarFinding] = []
-        for evaluator in EVALUATORS:
-            findings.extend(evaluator(ctx))
+        with ThreadPoolExecutor(max_workers=len(EVALUATORS), thread_name_prefix='pillar') as pool:
+            for batch in pool.map(lambda fn: fn(ctx), EVALUATORS):
+                findings.extend(batch)
         scores = {pillar.value: score_pillar(findings, pillar=pillar) for pillar in Pillar}
         return ResourceAnalysisResult(
             canonical_id=ctx.canonical_id,

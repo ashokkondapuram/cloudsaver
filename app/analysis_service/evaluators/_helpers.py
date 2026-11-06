@@ -38,6 +38,25 @@ def is_orphan_disk(ctx: UnifiedResourceContext) -> bool:
     return state in ('unattached', 'available', 'unassociated')
 
 
+def is_orphan_public_ip(ctx: UnifiedResourceContext) -> bool:
+    if ctx.config.ip_associated is False:
+        return True
+    rtype = ctx.resource_type.lower()
+    if 'publicip' in rtype or 'elastic-ip' in rtype or '/addresses' in rtype:
+        return ctx.config.ip_associated is False
+    return False
+
+
+def is_idle_load_balancer(ctx: UnifiedResourceContext) -> bool:
+    if ctx.config.load_balancer_idle:
+        return True
+    targets = ctx.metrics.backend_target_count
+    requests = ctx.metrics.request_count_14d
+    if targets is not None and targets == 0:
+        return requests is None or requests <= 0
+    return False
+
+
 def is_idle_compute(ctx: UnifiedResourceContext) -> bool:
     m = ctx.metrics
     if m.cpu_max_pct is None:

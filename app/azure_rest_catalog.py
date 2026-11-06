@@ -13,6 +13,9 @@ COST_MANAGEMENT_QUERY_API_VERSION = '2023-11-01'
 # Azure Monitor — Metrics — List (resource scope).
 MONITOR_METRICS_API_VERSION = '2023-10-01'
 
+# Azure Monitor — Metrics — Batch (regional endpoint; prefer when polling many resources).
+MONITOR_METRICS_BATCH_API_VERSION = '2024-02-01'
+
 # Monitor — Activity Logs — List (management events).
 ACTIVITY_LOG_EVENTS_API_VERSION = '2015-04-01'
 
@@ -87,6 +90,14 @@ AZURE_REST_CATALOG = {
             'aggregation': '{aggregation}',
         },
         'applies_to': 'Azure Monitor platform metrics for live evidence windows.',
+    },
+    'monitor_metrics_batch': {
+        'doc': 'https://learn.microsoft.com/en-us/rest/api/monitor/metrics-batch/batch',
+        'method': 'POST',
+        'host': '{region}.metrics.monitor.azure.com',
+        'path': '/subscriptions/{subscription_id}/metrics:getBatch',
+        'query': {'api-version': MONITOR_METRICS_BATCH_API_VERSION},
+        'applies_to': 'Batch metrics for up to 50 resources per subscription/region (prefer over N× GET).',
     },
     'activity_log_events': {
         'doc': 'https://learn.microsoft.com/en-us/rest/api/monitor/activity-logs/list',
