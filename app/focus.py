@@ -358,11 +358,41 @@ class FocusRepository:
         keys='id,source_id,provider,sub_account,currency,period_start,period_end,complete,records,inserted,created_at'.split(',')
         return [dict(zip(keys,[str(r[0]),*r[1:]])) for r in rows if authorized(r[2],r[3],tenant)]
 
-    def summary(self,tenant,start,end,currency,budget=None):
+    def resolve_summary_currency(self, tenant, start, end, currency):
+        """Pick ISO 4217 code for /finops/summary.
+
+        Explicit three-letter codes pass through. ``None``, empty, or ``AUTO`` (case-insensitive)
+        select the dominant currency by charge-row count in the window, else workspace/reporting default.
+        """
+        from app.typed_resources.costs import reporting_currency
+
+        if isinstance(currency, str):
+            raw = currency.strip().upper()
+        else:
+            raw = ''
+        if raw and raw not in ('AUTO',) and re.fullmatch(r'[A-Z]{3}', raw):
+            return raw, 'explicit'
+        begin = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        finish = datetime.combine(end, time.min, tzinfo=timezone.utc)
+        begin_iso, finish_iso = begin.isoformat(), finish.isoformat()
+        with self.store.transaction(tenant['tenant_id']) as db:
+            row = db.execute(
+                'SELECT currency, COUNT(*) AS n FROM focus_charges WHERE tenant_id=%s AND period_start<%s AND period_end>%s '
+                'GROUP BY currency ORDER BY n DESC LIMIT 1',
+                (tenant['tenant_id'], finish_iso, begin_iso),
+            ).fetchone()
+        if row and row[0] and re.fullmatch(r'[A-Z]{3}', str(row[0])):
+            return str(row[0]), 'billing_data'
+        return reporting_currency(tenant, {}), 'workspace_default'
+
+    def summary(self,tenant,start,end,currency=None,budget=None):
         # Keep all permitted totals, ratios and projections inside a request-local precision budget.
+        resolved, source = self.resolve_summary_currency(tenant, start, end, currency)
         with localcontext() as context:
             context.prec=60
-            return self._summary(tenant,start,end,currency,budget)
+            out = self._summary(tenant,start,end,resolved,budget)
+        out['currency_resolution'] = source
+        return out
 
     def _summary(self,tenant,start,end,currency,budget=None):
         begin=datetime.combine(start,time.min,tzinfo=timezone.utc);finish=datetime.combine(end,time.min,tzinfo=timezone.utc)

@@ -207,6 +207,11 @@ def test_finance_routes_and_durable_history_through_real_api(evidence):
         assert imported.status_code==201,imported.text
         summary=client.get('/api/v1/finops/summary?start=2026-10-01&end=2026-10-22&currency=USD',headers=AUTH)
         assert summary.status_code==200 and summary.json()['billed_cost']=='210.00000000'
+        assert summary.json().get('currency_resolution') == 'explicit'
+        auto=client.get('/api/v1/finops/summary?start=2026-10-01&end=2026-10-22&currency=AUTO',headers=AUTH)
+        assert auto.status_code==200
+        body=auto.json()
+        assert body['currency']=='USD' and body['billed_cost']=='210.00000000' and body.get('currency_resolution')=='billing_data'
         assert client.get('/api/v1/finops/summary?budget=nan',headers=AUTH).status_code==422
         scan=client.post('/api/v1/scans',headers=AUTH).json();base='/api/v1/scans/'+scan['scan_id']
         resources=client.get(base+'/resources',headers=AUTH)

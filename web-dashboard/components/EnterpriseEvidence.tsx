@@ -13,9 +13,10 @@ import {useWorkspace} from './WorkspaceProvider';
 import {billingDailyToChartSeries,finopsPeriodLabel} from '../lib/finops-chart';
 import {EmptyState,Loading,Notice,ProviderBadge,SectionTitle} from './ui/shared';
 
-type Summary={currency:string;records:number;billed_cost:string|null;effective_cost:string|null;list_cost:string|null;effective_savings_rate_pct:string|null;excluded_overlapping_records:number;warning:string;daily:{date:string;billed_cost:string|null;complete:boolean}[];forecast:{month_end_billed_cost:string;daily_velocity:string;projected_budget_overrun:boolean}|null;anomaly:{value:number;spike:boolean}|null;providers:{provider:string;records:number;billed_cost:string;effective_cost:string}[]};
-type Selection={start:string;end:string;currency:string;budget:string};
-const initial=():Selection=>{const end=new Date().toISOString().slice(0,10),start=end.slice(0,8)+'01';return {start:start===end?new Date(Date.UTC(Number(end.slice(0,4)),Number(end.slice(5,7))-2,1)).toISOString().slice(0,10):start,end,currency:'USD',budget:''};};
+type Summary={currency:string;currency_resolution?:string;records:number;billed_cost:string|null;effective_cost:string|null;list_cost:string|null;effective_savings_rate_pct:string|null;excluded_overlapping_records:number;warning:string;daily:{date:string;billed_cost:string|null;complete:boolean}[];forecast:{month_end_billed_cost:string;daily_velocity:string;projected_budget_overrun:boolean}|null;anomaly:{value:number;spike:boolean}|null;providers:{provider:string;records:number;billed_cost:string;effective_cost:string}[]};
+type CurrencyMode='auto'|'manual';
+type Selection={start:string;end:string;currencyMode:CurrencyMode;currencyCode:string;budget:string};
+const initial=():Selection=>{const end=new Date().toISOString().slice(0,10),start=end.slice(0,8)+'01';return {start:start===end?new Date(Date.UTC(Number(end.slice(0,4)),Number(end.slice(5,7))-2,1)).toISOString().slice(0,10):start,end,currencyMode:'auto',currencyCode:'USD',budget:''};};
 const amount=(value:string|null|undefined,currency:string)=>{if(value==null)return 'Unknown';const n=Number(value);if(!Number.isFinite(n))return `${currency} ${value}`;try{return new Intl.NumberFormat('en-US',{style:'currency',currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(n);}catch{return `${currency} ${value}`;}};
 const num=(value:number)=>Number(value).toLocaleString('en-US');
 const tokens=(value:number|null)=>value==null?'Unknown':num(value);
@@ -28,22 +29,30 @@ export function BillingEvidencePanel(){
   useEffect(()=>{setError('');},[token]);
   useEffect(()=>{
     const request=new AbortController();setData(null);setError('');
-    if(canBill&&token){const query=new URLSearchParams({start:selection.start,end:selection.end,currency:selection.currency,...(selection.budget?{budget:selection.budget}:{})});api<Summary>('/finops/summary?'+query,token,{signal:request.signal}).then(summary=>{if(!request.signal.aborted)setData({identity:token,summary});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});}
+    if(canBill&&token){
+      const query=new URLSearchParams({start:selection.start,end:selection.end,...(selection.budget?{budget:selection.budget}:{})});
+      query.set('currency',selection.currencyMode==='manual'?selection.currencyCode:'AUTO');
+      api<Summary>('/finops/summary?'+query,token,{signal:request.signal}).then(summary=>{if(!request.signal.aborted)setData({identity:token,summary});}).catch(cause=>{if(!request.signal.aborted)setError((cause as Error).message);});
+    }
     return()=>request.abort();
   },[token,canBill,selection,revision]);
   const visible=data?.identity===token?data:null;
+  const syncCurrency=selection.currencyMode==='auto'?(visible?.summary.currency??'USD'):selection.currencyCode;
   if(!canBill)return <section className="panel"><SectionTitle title="Cloud billing data">Azure billing synchronization</SectionTitle><EmptyState icon={Wallet} title="Finance access required">You need finance access to sync and review billed costs. Ask your workspace administrator to grant it.</EmptyState></section>;
   const chartSeries=visible?billingDailyToChartSeries(visible.summary,{start:selection.start,end:selection.end}):null;
-  return <section className="panel billing-evidence" data-atlas-rollout="finops-ledger"><SectionTitle title="Cloud billing data" eyebrow="FINOPS LEDGER">Provider-reported billed costs · separate from resource retail estimates</SectionTitle><AutoBillingStatus currency={selection.currency} onSynced={()=>setRevision(v=>v+1)}/>
+  const resolutionNote=(r:string|undefined)=>{if(!r)return null;if(r==='explicit')return 'manual selection';if(r==='billing_data')return 'dominant currency in synced charges for this period';return 'workspace default';}
+  return <section className="panel billing-evidence" data-atlas-rollout="finops-ledger"><SectionTitle title="Cloud billing data" eyebrow="FINOPS LEDGER">Provider-reported billed costs · separate from resource retail estimates</SectionTitle><AutoBillingStatus currency={syncCurrency} onSynced={()=>setRevision(v=>v+1)}/>
     <form className="enterprise-filters" onSubmit={event=>{event.preventDefault();setSelection({...draft});}}>
       <label>From (UTC)<input type="date" required value={draft.start} onChange={e=>setDraft({...draft,start:e.target.value})}/></label>
       <label>Until, exclusive (UTC)<input type="date" required value={draft.end} onChange={e=>setDraft({...draft,end:e.target.value})}/></label>
-      <label>Billing currency<input value={draft.currency} required pattern="[A-Z]{3}" maxLength={3} onChange={e=>setDraft({...draft,currency:e.target.value.toUpperCase()})}/></label>
+      <label>Billing currency<select value={draft.currencyMode} onChange={e=>setDraft({...draft,currencyMode:e.target.value as CurrencyMode})} aria-label="Billing currency mode"><option value="auto">Auto (from cost data)</option><option value="manual">Choose ISO code…</option></select></label>
+      {draft.currencyMode==='manual'&&<label>ISO 4217 code<input value={draft.currencyCode} required pattern="[A-Z]{3}" maxLength={3} title="Three-letter currency code" onChange={e=>setDraft({...draft,currencyCode:e.target.value.toUpperCase()})}/></label>}
       <label>Monthly budget (optional)<input inputMode="decimal" value={draft.budget} placeholder="Decimal amount" onChange={e=>setDraft({...draft,budget:e.target.value})}/></label>
       <button className="button secondary" type="submit">Apply billing period</button>
     </form>
     {error&&<Notice tone="error">{error}</Notice>}
     {!visible&&!error?<Loading label="Loading cloud billing data…"/>:visible&&<>
+      {selection.currencyMode==='auto'&&visible.summary.currency_resolution&&<p className="inline-help">Reporting in <strong>{visible.summary.currency}</strong> ({resolutionNote(visible.summary.currency_resolution)}).</p>}
       <Notice tone="warning">{visible.summary.warning}</Notice>
       <div className="allocation-metrics"><article className="metric-card"><div className="metric-label">Synced billed cost</div><strong className="enterprise-amount">{amount(visible.summary.billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{num(visible.summary.records)} charge records · {num(visible.summary.excluded_overlapping_records)} overlapping periods excluded</p></article><article className="metric-card"><div className="metric-label">Effective cost</div><strong className="enterprise-amount">{amount(visible.summary.effective_cost,visible.summary.currency)}</strong><p className="metric-footnote">ESR: {visible.summary.effective_savings_rate_pct===null?'Unknown':visible.summary.effective_savings_rate_pct+'%'} · requires complete list-cost evidence</p></article><article className="metric-card"><div className="metric-label">Provisional month-end forecast</div><strong className="enterprise-amount">{amount(visible.summary.forecast?.month_end_billed_cost,visible.summary.currency)}</strong><p className="metric-footnote">{visible.summary.forecast?visible.summary.forecast.projected_budget_overrun?'Projected above the supplied budget':'Based on seven covered, closed UTC days':'Complete daily coverage is required'}</p></article></div>
       {visible.summary.anomaly&&<Notice tone={visible.summary.anomaly.spike?'warning':'info'}>Latest closed-day Z-score: {visible.summary.anomaly.value}. A nonseasonal 30-day baseline is a review signal, not a diagnosed anomaly.</Notice>}

@@ -1,6 +1,7 @@
 """Explicit normalized billing ingestion; tenant-owned, finance-authorized access."""
 from datetime import date, datetime, timezone
 import json
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from uuid import UUID
 from pydantic import ValidationError
@@ -79,12 +80,28 @@ def create_router(repository, current_tenant, *, scan_store=None):
         return dict(items=repository.imports(tenant,limit))
 
     @router.get('/summary')
-    def summary(start:date|None=None,end:date|None=None,currency:str=Query('USD',pattern=r'^[A-Z]{3}$'),
-                budget:str|None=None,tenant=Depends(finance)):
+    def summary(
+        start: date | None = None,
+        end: date | None = None,
+        currency: str | None = Query(
+            None,
+            description='ISO 4217 code (e.g. USD), or omit / AUTO to use dominant synced billing currency or workspace default',
+        ),
+        budget: str | None = None,
+        tenant=Depends(finance),
+    ):
         today=datetime.now(timezone.utc).date()
         start,end=start or today.replace(day=1),end or today
         if not 0<(end-start).days<=366:
             raise HTTPException(422,'Select a billing window from 1 to 366 UTC days')
+        if currency is not None:
+            c = currency.strip().upper()
+            if c in ('AUTO', ''):
+                currency = None
+            elif not re.fullmatch(r'[A-Z]{3}', c):
+                raise HTTPException(422, 'currency must be a 3-letter ISO code, AUTO, or omitted')
+            else:
+                currency = c
         try:
             if budget is not None:
                 budget=money(budget)
