@@ -117,12 +117,40 @@ def extra_inventory(client,account,region):
     for r in pages(bedrock,'list_provisioned_model_throughputs','provisionedModelSummaries',token_key='nextToken',request_key='nextToken',maxResults=100):add('aws:bedrock:provisioned-throughput',r['provisionedModelArn'],r['provisionedModelName'],dict(state=r.get('status'),commitment_lock_conflict=r.get('commitmentDuration') is not None))
     return rows
 
+# Billable catalog types: expanded inventory (compute/network/db) before legacy scanner rows when capped.
+_LIVE_ENRICHMENT_TYPE_ORDER = (
+    'aws:ec2:instance', 'aws:ec2:natgateway', 'aws:elbv2:loadbalancer',
+    'aws:rds:cluster', 'aws:dynamodb:table', 'aws:elasticache:replication-group',
+    'aws:lambda:function', 'aws:ecs:service', 'aws:s3:bucket',
+    'aws:sagemaker:endpoint', 'aws:bedrock:provisioned-throughput',
+    'aws:ec2:volume', 'aws:ec2:elastic-ip', 'aws:rds:db',
+)
+_LIVE_ENRICHMENT_TYPE_RANK = {kind: index for index, kind in enumerate(_LIVE_ENRICHMENT_TYPE_ORDER)}
+
+
+def live_enrichment_priority(resource):
+    """Prefer billable catalog resources; rank by resource_type, not inventory list order."""
+    from app.billable_resources import is_billable_resource
+    kind = (resource.get('resource_type') or '').lower()
+    billable = is_billable_resource(resource)
+    rank = _LIVE_ENRICHMENT_TYPE_RANK.get(kind, len(_LIVE_ENRICHMENT_TYPE_ORDER))
+    return (0 if billable else 1, rank, resource.get('resource_id') or '')
+
+
+def select_live_enrichment_targets(inventory, limit):
+    if not 1 <= limit <= 100:
+        raise ValueError('Live evidence bound must be 1–100 resources')
+    ordered = sorted(inventory, key=live_enrichment_priority)
+    selected = set(id(row) for row in ordered[:limit])
+    return [row for row in inventory if id(row) in selected]
+
+
 def enrich(client,inventory,now=None):
     import os
     now=now or datetime.now(timezone.utc);limit=int(os.getenv('CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES','25'))
-    if not 1<=limit<=100:raise ValueError('Live evidence bound must be 1–100 resources')
+    selected=select_live_enrichment_targets(inventory,limit);selected_ids={id(r) for r in selected}
     cw,trail=client('cloudwatch'),client('cloudtrail')
-    for r in inventory[:limit]:
+    for r in selected:
         e=r.setdefault('evidence',{});kind=r['resource_type'];spec=METRICS.get(kind);values={}
         if spec:
             namespace,dimension,names=spec
@@ -144,5 +172,7 @@ def enrich(client,inventory,now=None):
                     stamp=moment(s.get('StartTime') or s.get('SnapshotCreateTime'))
                     if s.get('State',s.get('Status')) in ('completed','available') and stamp and stamp<=now:ages.append((now-stamp).total_seconds()/3600)
                 e.update(recent_snapshot_verified=bool(ages and min(ages)<24),snapshot_age_hours=min(ages) if ages else None)
-    for r in inventory[limit:]:r.setdefault('evidence',{}).setdefault('live_sources',{})['telemetry']='resource_budget_exceeded'
+    for r in inventory:
+        if id(r) not in selected_ids:
+            r.setdefault('evidence',{}).setdefault('live_sources',{})['telemetry']='resource_budget_exceeded'
     return inventory
