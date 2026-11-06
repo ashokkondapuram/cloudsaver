@@ -25,10 +25,10 @@ Do these before large provider features; each unblocks Tasks 2–4.
 
 | Order | Priority | Item | Primary paths |
 |-------|----------|------|----------------|
-| 1 | **P0** | Single **`canonical_resource_id` + `resource_key`** module; migrate assessment, drift, GitOps, store lookups | New `app/domain/resource/identity.py`; replace `normalize_resource_id` call sites |
-| 2 | **P0** | **`cost_source`** enum on billing rows and financial evidence: `ACTUAL_BILLED` \| `RETAIL_ESTIMATED` \| `FOCUS_IMPORT` | `billing_sync._cost_row_from_totals`, `azure_json_profile`, FOCUS import |
-| 3 | **P0** | **Retail price cache** (Redis, 24h TTL) for Azure Retail Prices (+ future AWS GetProducts / GCP skus.list) | New `app/domain/pricing/retail_cache.py`; wire `AzurePricingClient` |
-| 4 | **P0** | **Shared pagination helper**; align CM per-resource policy with internal docs | `collectors/_pagination.py`; `billing_sync._azure_resource_query` |
+| 1 | **P0** | Single **`canonical_resource_id` + `resource_key`** module; migrate assessment, drift, GitOps, store lookups | **Done** — `app/domain/resource/identity.py`; assessment + `rule_detail` delegated |
+| 2 | **P0** | **`cost_source`** enum on billing rows and financial evidence: `ACTUAL_BILLED` \| `RETAIL_ESTIMATED` \| `FOCUS_IMPORT` | **Done** — `billing_sync.py`; tests in `test_cost_source.py` |
+| 3 | **P0** | **Retail price cache** (Redis, 24h TTL) for Azure Retail Prices (+ future AWS GetProducts / GCP skus.list) | **Done (Azure)** — `app/domain/pricing/retail_cache.py`; `test_retail_cache.py` |
+| 4 | **P0** | **Shared pagination helper**; align CM per-resource policy with internal docs | **Partial** — per-resource CM rejects `nextLink` (`f0769b7`); shared helper still open |
 | 5 | **P0** | **Drift baselines from scan** + **IaC principal allowlist** + surface **`drift_detected`** on resources | `baseline_store`, `event_drift_worker`, `resource_api.py` |
 | 6 | **P1** | Thin **`scanner_pipeline`**: inventory → metrics → cost evidence → activity → persist | Split from `scanner.py` / `scan_live` |
 | 7 | **P1** | **Waste engine** single entry: contracts → pricing; dedupe legacy ARG vs catalog rule IDs | `waste/engine.py`, `multicloud_rules` |
@@ -42,7 +42,7 @@ Do these before large provider features; each unblocks Tasks 2–4.
 |--------|--------|-------------------|
 | **Inventory (ARG REST `2024-04-01`)** | Compliant | P2: batch ARG rule queries in `_findings`; P1: `collectors/azure_inventory.py` wrapper |
 | **Metrics (Monitor REST)** | Partial — no batch | **P0:** catalog + client for Metrics Batch (`2024-02-01` per spec); refactor `azure_live.fetch_azure_monitor_series` |
-| **Cost (CM `2023-11-01` + Retail)** | Partial | **P0:** per-resource CM pagination policy; **P1:** `cost_source`; **P2:** retail TTL cache |
+| **Cost (CM `2023-11-01` + Retail)** | Partial | **Done:** per-resource CM fail-closed on `nextLink`; **Done:** `cost_source`; **Done:** retail Redis TTL cache |
 | **Activity (Activity Log `2015-04-01`)** | Partial — state history only | P2: API version review; P1: `azure_activity.py`; bridge to drift watermarks |
 
 **P3:** Move inline ARM api-versions from `azure_live.py` into `azure_rest_catalog.py`.
@@ -53,7 +53,7 @@ Do these before large provider features; each unblocks Tasks 2–4.
 
 | Pillar | Status | Next fixes (order) |
 |--------|--------|-------------------|
-| **Inventory** | Partial — no Resource Explorer 2 | **P0:** fix live-evidence ordering (`inventory[:limit]` starves expanded rows); **P1:** `DescribeDBInstances` in `extra_inventory`; **P2:** optional Resource Explorer collector |
+| **Inventory** | Partial — no Resource Explorer 2 | **Done:** live enrich prioritizes billable catalog types (`aws_live.select_live_enrichment_targets`); **P1:** `DescribeDBInstances` in `extra_inventory`; **P2:** optional Resource Explorer collector |
 | **CloudWatch** | Compliant for fixed catalog | P2: optional `ListMetrics`; **P1:** gate `LookupEvents` when history cannot apply |
 | **Cost** | Partial — account CE only | **P1:** CE pagination >10 pages + retries; **P2:** `GetCostAndUsageWithResources` or document CUR mandatory |
 | **Price List** | Missing | **P2:** `GetProducts` adapter (mirror Azure retail client) |
@@ -113,7 +113,12 @@ Do these before large provider features; each unblocks Tasks 2–4.
 
 ---
 
-## References
+## E2E verification
+
+- **Full suite:** `python3 -m pytest -q` → 1290 passed (branch `cursor/backend-remediation-sort-083f`).
+- **Mocked scan pipeline:** `tests/test_backend_remediation_e2e.py` (ARG inventory + billing `cost_source` + domain `resource_key`).
+
+---
 
 - Azure REST catalog: `app/azure_rest_catalog.py`, `GET /finops/azure-rest-catalog`
 - Execution map: `docs/CODEBASE_EXECUTION_MAP.md`
