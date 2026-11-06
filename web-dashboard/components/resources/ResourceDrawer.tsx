@@ -219,7 +219,7 @@ function Costs({detail, onFetched}: {detail: ResourceDetail; onFetched: () => vo
       <label>Baseline start<input type="date" value={baselineStart} onChange={e => setBaselineStart(e.target.value)}/></label>
       <label>Baseline end<input type="date" value={baselineEnd} onChange={e => setBaselineEnd(e.target.value)}/></label>
       <div className="drawer-header-actions">
-        <button className="button primary" disabled={busy} onClick={fetchAzureCosts}>{busy ? 'Calling Azure…' : 'Fetch billed costs from Azure'}</button>
+        <button type="button" className="button primary" disabled={busy} onClick={fetchAzureCosts}>{busy ? 'Calling Azure…' : 'Fetch billed costs from Azure'}</button>
       </div>
     </div>}
     {error && <Notice tone="error">{error}</Notice>}

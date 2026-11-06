@@ -94,15 +94,15 @@ function RuleSettings() {
       {error && <Notice tone="error">{error}</Notice>}{notice && <div role="status"><Notice>{notice}</Notice></div>}
       {restricted && <Notice>Your key is scope-limited. Workspace-wide rule changes require an unrestricted authorized administrator.</Notice>}
       {!canAdmin && <Notice>Read-only rule policy. A workspace administrator can request changes.</Notice>}
-      {needsReload && <Notice tone="warning">The current policy must be checked before another write. Your draft is retained in this session. <button className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Reload current policy</button></Notice>}
-      {!data ? error ? <button className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Retry loading rules</button> : <Loading label="Loading published rules…"/> : <>
+      {needsReload && <Notice tone="warning">The current policy must be checked before another write. Your draft is retained in this session. <button type="button" className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Reload current policy</button></Notice>}
+      {!data ? error ? <button type="button" className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Retry loading rules</button> : <Loading label="Loading published rules…"/> : <>
         <div className="rule-catalog-filters">
           <div className="provider-pills" role="group" aria-label="Cloud providers">{catalogProviders.map(value => <button key={value} type="button" className={`cloud-pill cloud-${value}`} aria-pressed={provider === value} onClick={() => setProvider(value)}><span className="cloud-pill-dot"/>{providerNames[value] ?? value}</button>)}</div>
           <label>Service category<select value={service} onChange={event => setService(event.target.value)}><option value="">All services</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(rule => rule.service_category).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
           <label>Pillar<select value={pillar} onChange={event => setPillar(event.target.value)}><option value="">All pillars</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(rule => rule.pillar).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
           <label>Effective state<select aria-label="Effective state" value={state} onChange={event => setState(event.target.value)}><option value="">All states</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(effectiveState))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Find a resource rule<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Name, ID or resource type"/></label>
-          <button className="button secondary" onClick={() => {setService(''); setPillar(''); setState(''); setSearch('');}}>Reset rule filters</button>
+          <button type="button" className="button secondary" onClick={() => {setService(''); setPillar(''); setState(''); setSearch('');}}>Reset rule filters</button>
         </div>
         <p className="rule-catalog-caption" role="status">{rows.length} {providerNames[provider] ?? provider} rules · switch provider to review another catalog. Drafts can span providers.</p>
         <div className="summary-table-scroll" tabIndex={0} aria-label="Analysis rule catalog"><table className="summary-table"><thead><tr><th>Rule and service</th><th>Effective state</th><th>Delegated parameters</th></tr></thead><tbody>
@@ -126,7 +126,7 @@ function RuleSettings() {
         <p className="rule-catalog-caption">Disabling a rule preserves historical findings and mandatory protection controls. Parameter units are defined by the published rule; bounds alone do not establish units.</p>
         {invalid && <Notice tone="warning">Enter whole-number parameter values within the current delegated bounds before previewing.</Notice>}
         {changes.length > 100 && <Notice tone="warning">Review at most 100 rule changes in one request.</Notice>}
-        {canEdit && <div className="rule-draft-actions"><button className="button primary" disabled={busy || needsReload || invalid || !changes.length || changes.length > 100} onClick={() => void submit(false)}>{busy ? 'Preparing…' : `Preview ${changes.length} rule changes`}</button><button className="button secondary" disabled={busy || !changes.length} onClick={() => {setDraft({}); setPreview(null);}}>Discard draft</button><span>Draft changes include rules outside the current filters.</span></div>}
+        {canEdit && <div className="rule-draft-actions"><button type="button" className="button primary" disabled={busy || needsReload || invalid || !changes.length || changes.length > 100} onClick={() => void submit(false)}>{busy ? 'Preparing…' : `Preview ${changes.length} rule changes`}</button><button type="button" className="button secondary" disabled={busy || !changes.length} onClick={() => {setDraft({}); setPreview(null);}}>Discard draft</button><span>Draft changes include rules outside the current filters.</span></div>}
       </>}
     </section>
     <Dialog open={!!preview} onClose={() => !busy && setPreview(null)} title="Review rule policy changes">
@@ -134,7 +134,7 @@ function RuleSettings() {
         <p>Workspace: <strong>{workspace?.name}</strong> · Policy version {data?.version}</p>
         <ul className="rule-change-list">{changes.map(change => {const rule = data?.items.find(item => item.id === change.rule_id); return <li key={change.rule_id}><strong>{rule?.name || change.rule_id}</strong><p>{rule?.enabled ? 'Enabled' : 'Disabled'} → {change.enabled ? 'Enabled' : 'Disabled'}</p>{Object.entries(change.parameters).filter(([key, value]) => value !== rule?.parameters[key]).map(([key, value]) => <p key={key}>{sentence(key)}: {rule?.parameters[key] ?? 'Not supplied'} → {value}</p>)}</li>;})}</ul>
         <p>Historical snapshots retain the original policy. New settings apply to the next scan. This preview is not execution approval.</p></div>
-      <div className="dialog-actions"><button className="button secondary" disabled={busy} onClick={() => setPreview(null)}>Cancel</button><button className="button primary" disabled={busy || needsReload || invalid} onClick={() => void submit(true)}>Apply changes</button></div>
+      <div className="dialog-actions"><button type="button" className="button secondary" disabled={busy} onClick={() => setPreview(null)}>Cancel</button><button type="button" className="button primary" disabled={busy || needsReload || invalid} onClick={() => void submit(true)}>Apply changes</button></div>
     </Dialog>
   </>;
 }

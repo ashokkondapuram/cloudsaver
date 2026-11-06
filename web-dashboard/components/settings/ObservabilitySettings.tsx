@@ -122,8 +122,8 @@ export function ObservabilitySettings() {
   const secret = draft && ['bearer_env', 'basic_env', 'header_env'].includes(draft.auth_kind);
   return <section className="panel">
     <SectionTitle title="Observability connectors" eyebrow="METRICS · TRACES · CORRELATION" action={canAdmin && !draft ? <div className="button-row">
-      <button className="button secondary" disabled={busy || !items?.some(i => i.enabled)} onClick={sync}><ArrowsClockwise size={15} weight="regular"/>Sync now</button>
-      <button className="button primary" disabled={busy} onClick={() => {setDraft(blank()); setProbe(null);}}><Plus size={15} weight="regular"/>Add connector</button></div> : undefined}>
+      <button type="button" className="button secondary" disabled={busy || !items?.some(i => i.enabled)} onClick={sync}><ArrowsClockwise size={15} weight="regular"/>Sync now</button>
+      <button type="button" className="button primary" disabled={busy} onClick={() => {setDraft(blank()); setProbe(null);}}><Plus size={15} weight="regular"/>Add connector</button></div> : undefined}>
       Read-only metrics and traces, linked to resources through mappings you define
     </SectionTitle>
     <p className="inline-help">Connectors only read data. Secrets are never stored in CloudSaver: enter the name of an environment variable that your operator sets, such as <code>CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY</code>.</p>
@@ -161,7 +161,7 @@ export function ObservabilitySettings() {
         <td>{c.name}{!c.enabled && <small> · Disabled</small>}</td><td>{kindLabel(c.kind)}</td><td>{sentence(c.schedule)}</td>
         <td>{!s || s.status === 'not_collected' ? 'Not collected yet' : s.status === 'completed' ? (s.observed_at ? dateTime(s.observed_at) : 'Completed') : <span title={s.error}>Failed{s.observed_at ? ` · ${dateTime(s.observed_at)}` : ''}</span>}{s?.error && <small className="inline-help"> {s.error}</small>}</td>
         <td>{coverage ? (c.kind === 'prometheus' || c.kind === 'rest_metrics' ? `${coverage.labeled.toLocaleString('en-US')} of ${coverage.series.toLocaleString('en-US')} series labeled` : `${coverage.mapped_services.toLocaleString('en-US')} of ${coverage.services.toLocaleString('en-US')} services linked`) : '—'}</td>
-        {canAdmin && <td><div className="button-row"><button className="button secondary small" disabled={busy} onClick={() => {setDraft(toDraft(c)); setProbe(null);}}>Edit</button><button className="button secondary small" disabled={busy} onClick={() => testSaved(c)}>Test</button><button className="button secondary small" disabled={busy} onClick={() => toggle(c)}>{c.enabled ? 'Disable' : 'Enable'}</button></div></td>}
+        {canAdmin && <td><div className="button-row"><button type="button" className="button secondary small" disabled={busy} onClick={() => {setDraft(toDraft(c)); setProbe(null);}}>Edit</button><button type="button" className="button secondary small" disabled={busy} onClick={() => testSaved(c)}>Test</button><button type="button" className="button secondary small" disabled={busy} onClick={() => toggle(c)}>{c.enabled ? 'Disable' : 'Enable'}</button></div></td>}
       </tr>;})}</tbody></table></div>
       : <EmptyState icon={Pulse} title="No observability connectors">{canAdmin ? 'Add a Prometheus, REST metrics, Tempo or Jaeger connector to link metrics and traces to your resources.' : 'Ask a workspace admin to add a Prometheus, REST metrics, Tempo or Jaeger connector.'}</EmptyState>)}
   </section>;

@@ -27,7 +27,7 @@ export function EvidenceRadar({pillars,onInspect}:{pillars:Pillar[];onInspect:(p
       })}
     </svg>
     <div className="radar-legend"><span><i className="observed"/>Observed</span><span><i className="risk"/>Risk observed</span><span><i/>Unknown</span></div>
-    <div className="radar-pillar-links" role="group" aria-label="Inspect pillar evidence">{pillars.map(p=><button key={p.pillar} onClick={()=>onInspect(p.pillar)} aria-label={`Inspect ${p.pillar} checks`}>{p.pillar}</button>)}</div>
+    <div className="radar-pillar-links" role="group" aria-label="Inspect pillar evidence">{pillars.map(p=><button type="button" key={p.pillar} onClick={()=>onInspect(p.pillar)} aria-label={`Inspect ${p.pillar} checks`}>{p.pillar}</button>)}</div>
     <p>Each axis measures the share of checks with saved evidence, including observed risks. Full coverage does not establish safety, live state, or change approval.</p>
   </section>;
 }

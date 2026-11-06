@@ -48,5 +48,5 @@ export function ThemeToggle(){
   const context=useContext(ThemeContext);
   if(!context||context.appearanceLocked)return null;
   const label=`Switch to ${context.theme==='dark'?'light':'dark'} theme`;
-  return <button className="icon-button theme-toggle" aria-label={label} title={label} onClick={context.toggle}>{context.theme==='dark'?<Sun size={18} weight="regular"/>:<Moon size={18} weight="regular"/>}</button>;
+  return <button type="button" className="icon-button theme-toggle" aria-label={label} title={label} onClick={context.toggle}>{context.theme==='dark'?<Sun size={18} weight="regular"/>:<Moon size={18} weight="regular"/>}</button>;
 }

@@ -32,7 +32,7 @@ function useRead<T>(path:string|null,token:string,revision=0){
 }
 
 function Pages({cursor,next,onChange,label}:{cursor:string|null;next?:string|null;onChange:(s:string|null)=>void;label:string}){
-  return <nav className={css.pager} aria-label={label}><button className="button secondary" disabled={!cursor} onClick={()=>onChange(null)}>First page</button><button className="button secondary" disabled={!next} onClick={()=>onChange(next!)}>Next page</button></nav>;
+  return <nav className={css.pager} aria-label={label}><button type="button" className="button secondary" disabled={!cursor} onClick={()=>onChange(null)}>First page</button><button type="button" className="button secondary" disabled={!next} onClick={()=>onChange(next!)}>Next page</button></nav>;
 }
 const query=(cursor:string|null)=>'?limit=20'+(cursor?'&cursor='+encodeURIComponent(cursor):'');
 
@@ -103,7 +103,7 @@ function PlanCard({plan,token,w,canAdmin,scanId,done,highlightPlanId}:{plan:Plan
     <details className={css.details}><summary>Evidence checks ({r.checks.length})</summary><ul className={css.checks}>{r.checks.map(check=><li key={check.code}><span className={css.status}>{sentence(check.status)}</span><div><strong>{sentence(check.code)}</strong><p>{check.reason}</p>{check.coverage_ratio!==undefined&&<p>Sample coverage: {(check.coverage_ratio*100).toFixed(1)}%{check.p95!=null?` · p95: ${check.p95}%`:''}</p>}</div></li>)}</ul></details>
     <p className={css.wrap+' '+css.muted}>Manifest: {v.identity_digest}</p>
     <p className={css.muted}>Estimated opportunity, validated run rate and reconciled benefit are unavailable until their supporting evidence is accepted.</p>
-    <button className="button secondary" aria-expanded={history} onClick={()=>setHistory(!history)}>{history?'Hide version history':'View version history'}</button>
+    <button type="button" className="button secondary" aria-expanded={history} onClick={()=>setHistory(!history)}>{history?'Hide version history':'View version history'}</button>
     {history&&<History token={token} planId={plan.id}/>}
     {canAdmin&&<details className={css.details}><summary>Create a new review version</summary><Command token={token} path={`/engineering/workloads/${w.id}/plans/${plan.id}/versions`} version={w.version} label="Save new version" done={()=>done(plan.id)} body={data=>({member_id:p.member_id,objective:String(data.get('objective')),action:p.action,candidate_sku:p.action==='azure.vm.rightsize'?String(data.get('candidate_sku')):null,parent_version:v.version,scan_id:data.get('latest')?scanId:p.scan_id})}>
       <label className={css.wide}>Objective<textarea name="objective" required minLength={10} maxLength={500} defaultValue={p.objective}/></label>
@@ -136,7 +136,7 @@ function Detail({id,token,revision,refresh,canAdmin,scanId,highlightPlanId}:{id:
       {canAdmin&&(!scanId?<Notice>Select a completed live observation to add resources.</Notice>:<details className={css.details}><summary>Attach resource from selected observation</summary>{resources.error?<Notice tone="error">{resources.error}</Notice>:!resources.value?<Loading label="Loading saved resources…"/>:<>
         <Command token={token} key={`${revision}:${scanId}:${offset}`} path={`/engineering/workloads/${id}/members`} version={workload.version} label="Attach resource" done={refreshDetail} body={data=>({scan_id:scanId,resource_key:data.get('resource_key')})}>
           <label className={css.wide}>Resource<select name="resource_key" required defaultValue=""><option value="" disabled>Select a resource</option>{resources.value.items.filter(r=>r.scope_id===workload.scope_id).map(r=><option value={r.resource_key} key={r.resource_key}>{r.resource_name} · {r.resource_type}</option>)}</select></label>
-        </Command><nav className={css.pager} aria-label="Observation resource pages"><button className="button secondary" disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-20))}>Previous resources</button><button className="button secondary" disabled={offset+20>=resources.value.total} onClick={()=>setOffset(offset+20)}>Next resources</button></nav>
+        </Command><nav className={css.pager} aria-label="Observation resource pages"><button type="button" className="button secondary" disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-20))}>Previous resources</button><button type="button" className="button secondary" disabled={offset+20>=resources.value.total} onClick={()=>setOffset(offset+20)}>Next resources</button></nav>
       </>}</details>)}
     </section>
     <section className={'panel '+css.panel}><h2>Improvement plans</h2><p className={css.muted}>Create review alternatives for Azure VMs and managed disks. Every version retains its evidence and policy digests. Execution requires the remaining acceptance gates.</p>
@@ -178,7 +178,7 @@ export function EngineeringView(){
   if(!workspace)return <Notice>Connect a workspace to continue.</Notice>;
   return <section className={css.root} aria-label="Engineering plans">
     <div className={css.intro}><div><strong>1. Define the workload</strong><p>Assign an owner and explain its service, peak demand and recovery needs.</p></div><div><strong>2. Review the evidence</strong><p>Attach saved observations and compare a candidate against the evidence requirements.</p></div><div><strong>3. Prepare the change</strong><p>Resolve blockers before a reviewed Terraform change. Track verified results in <Link href="/outcomes">Outcomes</Link>.</p></div></div>
-    <div className={css.actions}><button className="button secondary" onClick={refresh}>Refresh engineering records</button><button className="button secondary" aria-expanded={capabilityDetails} onClick={()=>setCapabilityDetails(!capabilityDetails)}>Pilot capabilities</button></div>
+    <div className={css.actions}><button type="button" className="button secondary" onClick={refresh}>Refresh engineering records</button><button type="button" className="button secondary" aria-expanded={capabilityDetails} onClick={()=>setCapabilityDetails(!capabilityDetails)}>Pilot capabilities</button></div>
     {syncNotice&&(
       <div className={css.syncNotice}>
         <Notice tone="success">{syncNotice}</Notice>
@@ -192,7 +192,7 @@ export function EngineeringView(){
     {canAdmin&&!!capabilities.value?.scopes.length&&<details className={'panel '+css.panel+' '+css.details}><summary>Create a workload</summary><Command key={revision} token={token} path="/engineering/workloads" label="Create workload" body={workloadBody} done={()=>{setCursor(null);refresh();}}><WorkloadFields scopes={capabilities.value.scopes}/></Command></details>}
     {capabilities.value&&!capabilities.value.scopes.length&&<Notice>No authorized Azure subscription is available. Review cloud access in Settings.</Notice>}
     {!canAdmin&&<Notice>You can inspect engineering records. A workspace administrator can change workloads and prepare plans.</Notice>}
-    <div className={css.layout}><section className={'panel '+css.panel}><h2>Workloads</h2>{workloads.error?<Notice tone="error">{workloads.error}</Notice>:!workloads.value?<Loading label="Loading engineering workloads…"/>:<><ul className={css.list}>{workloads.value.items.map(w=><li key={w.id}><button className="button secondary" aria-pressed={selected===w.id} onClick={()=>setSelected(w.id)}>{w.name} · {w.environment}</button></li>)}</ul>{!workloads.value.items.length&&<p className={css.empty}>No workloads on this page.</p>}<Pages label="Engineering workload pages" cursor={cursor} next={workloads.value.next_cursor} onChange={setCursor}/></>}</section>
+    <div className={css.layout}><section className={'panel '+css.panel}><h2>Workloads</h2>{workloads.error?<Notice tone="error">{workloads.error}</Notice>:!workloads.value?<Loading label="Loading engineering workloads…"/>:<><ul className={css.list}>{workloads.value.items.map(w=><li key={w.id}><button type="button" className="button secondary" aria-pressed={selected===w.id} onClick={()=>setSelected(w.id)}>{w.name} · {w.environment}</button></li>)}</ul>{!workloads.value.items.length&&<p className={css.empty}>No workloads on this page.</p>}<Pages label="Engineering workload pages" cursor={cursor} next={workloads.value.next_cursor} onChange={setCursor}/></>}</section>
       {selected?<Detail key={selected+':'+(scan?.scan_id||'')} id={selected} token={token} revision={revision} refresh={refresh} canAdmin={canAdmin} scanId={live?scan?.scan_id:undefined} highlightPlanId={highlightPlanId}/>:<section className={'panel '+css.panel}><h2>Select a workload</h2><p className={css.empty}>Open a workload to inspect its resources, prepare a versioned plan and review activity.</p></section>}
     </div>
   </section>;

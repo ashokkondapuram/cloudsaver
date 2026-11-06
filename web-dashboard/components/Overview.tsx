@@ -45,8 +45,8 @@ export function Overview() {
   return <div className={`${styles.overview} atlas-overview`} data-atlas-rollout="overview">
     <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
       <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
-      {error ? <button className="button secondary" onClick={reload}>Retry evidence</button>
-        : !scan && canAdmin ? <button className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
+      {error ? <button type="button" className="button secondary" onClick={reload}>Retry evidence</button>
+        : !scan && canAdmin ? <button type="button" className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
         : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16} weight="regular"/></Link>
         : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
     </section>
