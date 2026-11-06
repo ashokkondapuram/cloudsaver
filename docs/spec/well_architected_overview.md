@@ -35,3 +35,5 @@ Details, security notes, and examples: **`docs/ANALYSIS_SERVICE.md`** (section *
 - **Analysis-service findings:** `PillarFinding.rule_id` in `app/analysis_service/finding.py` — use deterministic ids; platform hooks should prefix custom ids (e.g. `PLATFORM_COST_*`) to avoid collisions.
 
 When adding a new **first-party** rule, add the id to the catalog and an evaluator (built-in or platform hook) so **both** the scanner policy path and **pillar_analysis** stay aligned.
+
+Platform hooks normalize **`finding_id`** and resource identity fields from the live context, dedupe **(pillar, rule_id)**, and cap volume per resource (see **`docs/ANALYSIS_SERVICE.md`**).

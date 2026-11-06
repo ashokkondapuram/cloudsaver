@@ -110,12 +110,16 @@ Deployments can add **extra** `PillarFinding` rows without forking CloudSaver. T
 | **`app/analysis_platform_hooks.py`** | If this module exists on `PYTHONPATH`, it may define `evaluate_platform(ctx: UnifiedResourceContext) -> list[PillarFinding]`. |
 | **`CLOUDSAVER_ANALYSIS_PLATFORM_EVALUATORS`** | Comma-separated dotted import paths; each module must export **`evaluate_platform`** with the same signature. |
 | **`register_platform_evaluator(fn)`** | In-process registration (tests or app startup code); see `app/analysis_service/platform_rules.py`. |
+| **`CLOUDSAVER_ANALYSIS_PLATFORM_MAX_FINDINGS_PER_RESOURCE`** | Safety cap per resource (default **50**, max **500**); truncates with a log line if exceeded. |
 
 **Implementation notes**
 
 - Use **`deterministic_finding_id`** with a unique `rule_id` (prefix custom ids, e.g. `PLATFORM_*`) to avoid collisions with core rules.
 - Evaluators must be **pure**: only read `UnifiedResourceContext` (built from scan inventory by `loader.py`); no live HTTP.
-- Prefer packaging platform logic in a dedicated wheel or repo layer that ships `app/analysis_platform_hooks.py` on the image.
+- **`finding_id`**, **`canonical_id`**, **`provider`**, **`region`**, and **`resource_type`** on each returned finding are **normalized** from the current context (platform code cannot attach findings to another resource).
+- Duplicate **(pillar, rule_id)** pairs from platform code are **deduplicated** (highest **Severity** kept).
+- Invalid dicts / failed validation are skipped with a warning log.
+- Prefer packaging platform logic in a dedicated wheel or repo layer that ships `app/analysis_platform_hooks.py` on the image. Example starter: `examples/analysis_platform_hooks.example.py`.
 
 **Also see:** `docs/spec/well_architected_overview.md` (rule catalog + extension story).
 

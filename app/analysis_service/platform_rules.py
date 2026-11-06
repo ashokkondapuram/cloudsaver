@@ -15,6 +15,14 @@ lets deployments add **extra** ``PillarFinding`` rows without forking CloudSaver
 
 Evaluators run **after** the built-in cost/performance/reliability/security/operational
 functions; all findings participate in pillar scoring.
+
+**Safety**
+
+- Each finding is validated with Pydantic; ``finding_id`` is **recomputed** from
+  ``canonical_id|pillar|rule_id`` so platform code cannot collide with core ids.
+- Fields ``canonical_id``, ``provider``, ``resource_type``, ``region`` are taken from
+  the current ``UnifiedResourceContext`` (evaluators cannot stamp another resource).
+- Optional cap: ``CLOUDSAVER_ANALYSIS_PLATFORM_MAX_FINDINGS_PER_RESOURCE`` (default 50).
 """
 from __future__ import annotations
 
@@ -34,6 +42,69 @@ PlatformEvaluator = Callable[['UnifiedResourceContext'], list['PillarFinding']]
 
 _EXTRA: list[PlatformEvaluator] = []
 _INITIALIZED = False
+
+_SEVERITY_RANK = None
+
+
+def _rank(severity):
+    global _SEVERITY_RANK
+    if _SEVERITY_RANK is None:
+        from app.analysis_service.finding import Severity
+
+        _SEVERITY_RANK = {
+            Severity.CRITICAL: 4,
+            Severity.HIGH: 3,
+            Severity.MEDIUM: 2,
+            Severity.LOW: 1,
+        }
+    return _SEVERITY_RANK.get(severity, 0)
+
+
+def _max_platform_findings_per_resource() -> int:
+    raw = os.getenv('CLOUDSAVER_ANALYSIS_PLATFORM_MAX_FINDINGS_PER_RESOURCE', '50').strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 50
+    return max(1, min(n, 500))
+
+
+def _validate_and_bind_finding(ctx: 'UnifiedResourceContext', raw):
+    """Return a normalized PillarFinding or None if invalid."""
+    from app.analysis_service.finding import PillarFinding, deterministic_finding_id
+
+    if not isinstance(raw, PillarFinding):
+        try:
+            model = PillarFinding.model_validate(raw)
+        except Exception:
+            logger.warning('Platform evaluator emitted invalid finding for resource=%s', ctx.resource_id, exc_info=True)
+            return None
+    else:
+        model = raw
+    rule_id = (model.rule_id or '').strip()
+    if not rule_id or len(rule_id) > 256:
+        logger.warning('Platform finding skipped: invalid rule_id for resource=%s', ctx.resource_id)
+        return None
+    fid = deterministic_finding_id(canonical_id=ctx.canonical_id, pillar=model.pillar, rule_id=rule_id)
+    return model.model_copy(
+        update=dict(
+            finding_id=fid,
+            canonical_id=ctx.canonical_id,
+            provider=ctx.provider,
+            resource_type=ctx.resource_type or model.resource_type,
+            region=ctx.region,
+        )
+    )
+
+
+def _dedupe_platform_findings(findings: list) -> list:
+    """Keep highest-severity row per (pillar, rule_id)."""
+    best = {}
+    for f in findings:
+        key = (f.pillar, f.rule_id)
+        if key not in best or _rank(f.severity) > _rank(best[key].severity):
+            best[key] = f
+    return list(best.values())
 
 
 def register_platform_evaluator(fn: PlatformEvaluator) -> PlatformEvaluator:
@@ -107,5 +178,18 @@ def run_platform_evaluators(ctx: UnifiedResourceContext) -> list[PillarFinding]:
         if not isinstance(batch, list):
             logger.warning('Platform evaluator %s returned non-list; skipping', getattr(fn, '__name__', fn))
             continue
-        out.extend(batch)
+        for raw in batch:
+            bound = _validate_and_bind_finding(ctx, raw)
+            if bound is not None:
+                out.append(bound)
+    out = _dedupe_platform_findings(out)
+    cap = _max_platform_findings_per_resource()
+    if len(out) > cap:
+        logger.warning(
+            'Platform findings truncated for resource=%s (%s > cap %s)',
+            ctx.resource_id,
+            len(out),
+            cap,
+        )
+        out = out[:cap]
     return out
