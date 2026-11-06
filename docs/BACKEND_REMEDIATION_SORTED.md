@@ -45,6 +45,10 @@ Branch: `cursor/fix-all-ingestion-analysis-083f` (ingestion → analysis through
 
 Collectors stay under `app/collectors/`; orchestration should shrink `app/scanner.py` / `app/main.py` into `scanner_pipeline.py` after identity is centralized.
 
+## Multi-cloud Well-Architected specification (split docs)
+
+Per-provider tables (discovery, metrics, cost, activity, 5-pillar summaries): `docs/spec/well_architected_{aws,azure,gcp}.md`; overview + **platform analysis extensions**: `docs/spec/well_architected_overview.md`. Cross-provider brief: `docs/MULTI_CLOUD_WELL_ARCHITECTED_AGENT_SPEC.md`.
+
 ---
 
 ## Global execution order (cross-cloud)

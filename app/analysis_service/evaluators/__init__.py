@@ -1,4 +1,4 @@
-from app.analysis_service.evaluators import cost, operational, performance, reliability, security
+from app.analysis_service.evaluators import cost, operational, performance, platform, reliability, security
 
 EVALUATORS = (
     cost.evaluate,
@@ -6,4 +6,5 @@ EVALUATORS = (
     reliability.evaluate,
     security.evaluate,
     operational.evaluate,
+    platform.evaluate,
 )

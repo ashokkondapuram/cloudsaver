@@ -23,6 +23,7 @@ flowchart LR
   AS --> E3[ReliabilityEvaluator]
   AS --> E4[SecurityEvaluator]
   AS --> E5[OperationalExcellenceEvaluator]
+  AS --> E6[PlatformEvaluator optional]
   AS --> Out[PillarFinding + 0-100 scores]
 ```
 
@@ -54,7 +55,8 @@ Implemented in `app/pillar_analysis_api.py` and `app/resource_api.py`; gateway f
 | `app/analysis_service/billing_enrich.py` | Derive evaluator cost fields when FOCUS billing is merged onto evidence |
 | `app/analysis_service/pipeline.py` | `run_pillar_analysis`, `attach_pillar_analysis` |
 | `app/analysis_service/service.py` | `AnalysisService.analyze_account` |
-| `app/analysis_service/evaluators/*.py` | Deterministic pillar rules |
+| `app/analysis_service/evaluators/*.py` | Deterministic pillar rules + `platform.py` aggregator |
+| `app/analysis_service/platform_rules.py` | Optional **platform** evaluators (`evaluate_platform`) |
 | `app/analysis_service/finding.py` | `PillarFinding`, `finding_id` hash |
 | `app/collectors/activity_events.py` | Normalized Stream D events appended by live collectors |
 | `services/analysis_service_app.py` | FastAPI factory |
@@ -97,7 +99,25 @@ Ingestion collectors populate `inventory[].evidence` (metrics series, **`activit
 | **B** Metrics | CloudWatch / Monitor (+ batch) / Monitoring | Azure: **`prefetch_batch_metrics`** when ≥11 resources share sub+region+type, else per-resource GET (`azure_monitor_batch` + `azure_live.enrich`); AWS/GCP per-resource as before | `metrics` summary + series in evidence |
 | **C** Cost + retail | CM / CE / BQ + retail APIs | `billing_sync`, retail cache, scan billing merge + **`billing_enrich`** on FOCUS attach | `cost` snapshot on context (`CostSnapshot`) |
 | **D** Activity | CloudTrail / Activity Log / Audit | Normalized **`activity_events`** on AWS/Azure/GCP live paths; legacy `state_history` fallback in loader | `activity[]`, `drift_detected` (when present on evidence) |
-| **E** Advisor | TA / Advisor / Recommender | **Not collected** | `advisor_signals[]` optional only |
+| **E** Advisor | TA / Advisor / Recommender | **Optional** when `CLOUDSAVER_CLOUD_ADVISOR_ENABLED` (`app/collectors/cloud_advisor.py`) | `advisor_signals[]` optional |
+
+## Platform-extensible analysis rules
+
+Deployments can add **extra** `PillarFinding` rows without forking CloudSaver. These run **after** built-in evaluators and **affect pillar scores** (same scoring as core rules).
+
+| Mechanism | Description |
+|-----------|-------------|
+| **`app/analysis_platform_hooks.py`** | If this module exists on `PYTHONPATH`, it may define `evaluate_platform(ctx: UnifiedResourceContext) -> list[PillarFinding]`. |
+| **`CLOUDSAVER_ANALYSIS_PLATFORM_EVALUATORS`** | Comma-separated dotted import paths; each module must export **`evaluate_platform`** with the same signature. |
+| **`register_platform_evaluator(fn)`** | In-process registration (tests or app startup code); see `app/analysis_service/platform_rules.py`. |
+
+**Implementation notes**
+
+- Use **`deterministic_finding_id`** with a unique `rule_id` (prefix custom ids, e.g. `PLATFORM_*`) to avoid collisions with core rules.
+- Evaluators must be **pure**: only read `UnifiedResourceContext` (built from scan inventory by `loader.py`); no live HTTP.
+- Prefer packaging platform logic in a dedicated wheel or repo layer that ships `app/analysis_platform_hooks.py` on the image.
+
+**Also see:** `docs/spec/well_architected_overview.md` (rule catalog + extension story).
 
 ## Relation to legacy assessment
 
