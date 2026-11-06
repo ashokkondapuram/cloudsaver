@@ -87,9 +87,9 @@ class JSONReader:
         return parsed.netloc.lower()+':'+scope
 
     def post_read(self,url,body):
-        # Google's log search is a read operation exposed as POST. Keep this
-        # helper restricted to that exact API; it is not a generic action client.
-        if url!='https://logging.googleapis.com/v2/entries:list':raise ScanError('Unsupported read-only POST endpoint')
+        # Read-only provider queries exposed as POST. Not a generic action client.
+        if not _allowed_read_post_url(url):
+            raise ScanError('Unsupported read-only POST endpoint')
         headers={}
         if self.credentials:
             from google.auth.transport.requests import Request
@@ -105,8 +105,16 @@ class JSONReader:
             read_only_post=True,
             interval=_json_reader_pacing_interval(),
         )
-        if not isinstance(value,dict) or value.get('error'):raise ScanError('Invalid cloud audit response')
+        if not isinstance(value,dict) or value.get('error'):raise ScanError('Invalid cloud read response')
         return value
+
+
+def _allowed_read_post_url(url):
+    if url == 'https://logging.googleapis.com/v2/entries:list':
+        return True
+    if url.startswith('https://cloudasset.googleapis.com/v1/projects/') and url.endswith(':searchAllResources'):
+        return True
+    return False
 
 
 def pages(reader, url, params=None, *, token_key='nextPageToken', param_key='pageToken'):
@@ -123,4 +131,21 @@ def pages(reader, url, params=None, *, token_key='nextPageToken', param_key='pag
             raise ScanError('Cloud inventory repeated an invalid continuation token')
         seen.add(token)
         params[param_key] = token
+    raise ScanError('Cloud inventory exceeded its page limit')
+
+
+def post_pages(reader, url, body, *, token_key='nextPageToken', param_key='pageToken'):
+    body, seen = dict(body or {}), set()
+    for _ in range(1000):
+        page = reader.post_read(url, body)
+        if not isinstance(page, dict) or page.get('error') or page.get('unreachables'):
+            raise ScanError('Cloud inventory returned a partial or invalid result')
+        yield page
+        token = page.get(token_key)
+        if not token:
+            return
+        if not isinstance(token, str) or len(token) > 10000 or token in seen:
+            raise ScanError('Cloud inventory repeated an invalid continuation token')
+        seen.add(token)
+        body[param_key] = token
     raise ScanError('Cloud inventory exceeded its page limit')

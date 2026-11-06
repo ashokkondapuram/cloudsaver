@@ -12,36 +12,113 @@ ASSET_TYPES={
  'aiplatform.googleapis.com/Endpoint':'aiplatform.googleapis.com/Endpoint','compute.googleapis.com/Router':'compute.googleapis.com/RouterNat',
 }
 
-def extra_inventory(reader,project,regions):
-    rows=[]
-    for page in pages(reader,'https://cloudasset.googleapis.com/v1/projects/'+project+'/assets',{'contentType':'RESOURCE','assetTypes':list(ASSET_TYPES),'pageSize':500}):
-        for asset in page.get('assets',[]):
-            kind=asset.get('assetType');rid=asset.get('name','');record=asset.get('resource') or {};data=record.get('data') or {};location=record.get('location')
-            if kind not in ASSET_TYPES or '/projects/'+project+'/' not in rid:raise ValueError('Cloud Asset returned an unrelated resource')
-            region=location.rsplit('-',1)[0] if location and location[-2:-1]=='-' else location
-            if region not in regions:continue
-            e=dict(source='Cloud Asset API',state=data.get('status',data.get('state')),power_state=data.get('status'),created_at=data.get('creationTimestamp'),
-                labels=data.get('labels') or {},instance_id=str(data['id']) if data.get('id') is not None else None)
-            # Deliberately omit environment variables, SQL users, arbitrary spec
-            # text, networking addresses and credentials from config projection.
-            if kind=='compute.googleapis.com/Instance':
-                e['machine_type']=(data.get('machineType') or '').rsplit('/',1)[-1]
-                edges=[]
-                for disk in data.get('disks',[]):
-                    source=disk.get('source','')
-                    if '/projects/'+project+'/' in source:
-                        edges.append(dict(relationship='vm_to_disk',from_resource_id=rid,to_resource_id='//compute.googleapis.com'+source[source.index('/projects/'):],verification_state='verified',observed_at=datetime.now(timezone.utc).isoformat()))
-            else:edges=[]
-            if kind=='run.googleapis.com/Service':
-                template=data.get('template') or {};e.update(minimum_instances=(template.get('scaling') or {}).get('minInstanceCount'),nonproduction=e['labels'].get('environment') in ('dev','test','staging','sandbox'))
-            if kind=='redis.googleapis.com/Instance':e.update(memory_size_gb=data.get('memorySizeGb'),multi_az=data.get('tier')=='STANDARD_HA',tls_required=data.get('transitEncryptionMode')=='SERVER_AUTHENTICATION' if 'transitEncryptionMode' in data else None)
-            if kind=='aiplatform.googleapis.com/Endpoint':e.update(encrypted=bool(data.get('encryptionSpec')) if 'encryptionSpec' in data else None,replica_count=sum(v.get('dedicatedResources',{}).get('minReplicaCount',0) for v in data.get('deployedModels',[])))
-            entries=[(rid,e)]
-            if kind=='compute.googleapis.com/Router':entries=[(rid+'/nats/'+n['name'],dict(e,nat_configured=True)) for n in data.get('nats',[])]
-            for resource_id,evidence in entries:
-                rows.append(dict(cloud_provider='gcp',scope_id=project,subscription_id=project,region=region,resource_id=resource_id,
-                    resource_name=resource_id.rsplit('/',1)[-1],resource_group=project,resource_type=ASSET_TYPES[kind],evidence=evidence,
-                    dependency_refs=edges,inventory_rule_id='MULTICLOUD_INVENTORY',collector_version='gcp-live-1.4.0'))
+def inventory_rows_from_asset(asset, project, regions):
+    rows = []
+    kind = asset.get('assetType')
+    rid = asset.get('name', '')
+    record = asset.get('resource') or {}
+    data = record.get('data') or {}
+    location = record.get('location')
+    if kind not in ASSET_TYPES or '/projects/' + project + '/' not in rid:
+        raise ValueError('Cloud Asset returned an unrelated resource')
+    region = location.rsplit('-', 1)[0] if location and location[-2:-1] == '-' else location
+    if region not in regions:
+        return rows
+    e = dict(
+        source='Cloud Asset API',
+        state=data.get('status', data.get('state')),
+        power_state=data.get('status'),
+        created_at=data.get('creationTimestamp'),
+        labels=data.get('labels') or {},
+        instance_id=str(data['id']) if data.get('id') is not None else None,
+    )
+    # Deliberately omit environment variables, SQL users, arbitrary spec
+    # text, networking addresses and credentials from config projection.
+    if kind == 'compute.googleapis.com/Instance':
+        e['machine_type'] = (data.get('machineType') or '').rsplit('/', 1)[-1]
+        edges = []
+        for disk in data.get('disks', []):
+            source = disk.get('source', '')
+            if '/projects/' + project + '/' in source:
+                edges.append(
+                    dict(
+                        relationship='vm_to_disk',
+                        from_resource_id=rid,
+                        to_resource_id='//compute.googleapis.com' + source[source.index('/projects/') :],
+                        verification_state='verified',
+                        observed_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+    else:
+        edges = []
+    if kind == 'run.googleapis.com/Service':
+        template = data.get('template') or {}
+        e.update(
+            minimum_instances=(template.get('scaling') or {}).get('minInstanceCount'),
+            nonproduction=e['labels'].get('environment') in ('dev', 'test', 'staging', 'sandbox'),
+        )
+    if kind == 'redis.googleapis.com/Instance':
+        e.update(
+            memory_size_gb=data.get('memorySizeGb'),
+            multi_az=data.get('tier') == 'STANDARD_HA',
+            tls_required=data.get('transitEncryptionMode') == 'SERVER_AUTHENTICATION'
+            if 'transitEncryptionMode' in data
+            else None,
+        )
+    if kind == 'aiplatform.googleapis.com/Endpoint':
+        e.update(
+            encrypted=bool(data.get('encryptionSpec')) if 'encryptionSpec' in data else None,
+            replica_count=sum(
+                v.get('dedicatedResources', {}).get('minReplicaCount', 0) for v in data.get('deployedModels', [])
+            ),
+        )
+    entries = [(rid, e)]
+    if kind == 'compute.googleapis.com/Router':
+        entries = [(rid + '/nats/' + n['name'], dict(e, nat_configured=True)) for n in data.get('nats', [])]
+    for resource_id, evidence in entries:
+        rows.append(
+            dict(
+                cloud_provider='gcp',
+                scope_id=project,
+                subscription_id=project,
+                region=region,
+                resource_id=resource_id,
+                resource_name=resource_id.rsplit('/', 1)[-1],
+                resource_group=project,
+                resource_type=ASSET_TYPES[kind],
+                evidence=evidence,
+                dependency_refs=edges,
+                inventory_rule_id='MULTICLOUD_INVENTORY',
+                collector_version='gcp-live-1.4.0',
+            )
+        )
+    return rows
+
+
+def extra_inventory(reader, project, regions):
+    rows = []
+    seen = set()
+    for page in pages(
+        reader,
+        'https://cloudasset.googleapis.com/v1/projects/' + project + '/assets',
+        {'contentType': 'RESOURCE', 'assetTypes': list(ASSET_TYPES), 'pageSize': 500},
+    ):
+        for asset in page.get('assets', []):
+            for row in inventory_rows_from_asset(asset, project, regions):
+                rid = row['resource_id']
+                if rid in seen:
+                    continue
+                seen.add(rid)
+                rows.append(row)
+    if os.getenv('CLOUDSAVER_GCP_ASSET_SEARCH', '').lower() in ('1', 'true', 'yes'):
+        from app.collectors.gcp_asset_search import search_inventory_rows
+
+        for row in search_inventory_rows(reader, project, regions):
+            rid = row['resource_id']
+            if rid in seen:
+                continue
+            seen.add(rid)
+            rows.append(row)
     return rows
 
 def gcp_monitoring_series(reader,project,metric_type,resource_filter,now,window_days=30,step_seconds=300):
