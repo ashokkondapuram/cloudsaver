@@ -77,6 +77,8 @@ ACTION_CLASS_BY_RULE: dict[str, ActionClass] = {
     "K8S_PVC_UNMOUNTED_OR_LOW_OCCUPANCY": ActionClass.DELETE,
     "K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE": ActionClass.RESIZE,
     "K8S_CONTAINER_UNDERPROVISIONED_RISK": ActionClass.SCALE,
+    "PLATFORM_DEFAULT_TAGS": ActionClass.CONFIGURE,
+    "PLATFORM_PROD_ENCRYPTION_EXPECTATION": ActionClass.CONFIGURE,
 }
 
 # Lower number = higher priority channel when picking a primary match.

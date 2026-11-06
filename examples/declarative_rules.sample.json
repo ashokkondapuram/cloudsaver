@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "PLATFORM_JSON_SAMPLE_COST_TAG",
+      "display_name": "Sample: non-prod compute missing cost center (declarative)",
+      "pillar": "COST_OPTIMIZATION",
+      "severity": "LOW",
+      "remediation_action": "Add a cost_center tag for chargeback attribution",
+      "when": {
+        "all": [
+          {"provider_in": ["aws", "azure", "gcp"]},
+          {"resource_type_matches": "instance|virtualmachines|Instance"},
+          {"tag_missing": "cost_center"},
+          {"env_not_in": ["prod", "production"]}
+        ]
+      }
+    }
+  ]
+}

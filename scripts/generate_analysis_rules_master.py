@@ -70,6 +70,8 @@ EVIDENCE_GUIDE: dict[str, str] = {
     "K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE": "StatefulSet memory buffer and volume template sizing.",
     "K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX": "DaemonSet aggregate allocation overhead.",
     "K8S_ORPHANED_LOADBALANCER_SERVICE": "LoadBalancer service with empty endpoints.",
+    "PLATFORM_DEFAULT_TAGS": "Built-in platform check on inventory tags/labels (owner, cost center, environment).",
+    "PLATFORM_PROD_ENCRYPTION_EXPECTATION": "Production-scoped resource with encryption_at_rest explicitly false in evidence.",
 }
 
 
@@ -81,6 +83,8 @@ def action_channel(rule_id: str) -> str:
 
 
 def tier(rule_id: str, channel: str) -> str:
+    if rule_id.startswith("PLATFORM_"):
+        return "B — Platform policy (tags / declarative JSON)"
     if rule_id in FINOPS_RULE_TO_ACTION:
         return "A — FinOps resize (telemetry + SLO)"
     if rule_id in KUBERNETES_PATCH_PREVIEW_RULES:
@@ -103,7 +107,7 @@ def main() -> None:
     lines = [
         "# Analysis rules master reference (all points considered)",
         "",
-        "CloudSaver evaluates **51 published catalog rules** across Azure, AWS, GCP, and Kubernetes. ",
+        "CloudSaver evaluates **53 published catalog rules** across Azure, AWS, GCP, Kubernetes, and platform extensions. ",
         "This document is the operator-facing view of **what each rule checks**, **what evidence must exist**, ",
         "**which pillar it primarily supports**, and **which action path applies** after `condition_detected`.",
         "",
@@ -163,7 +167,7 @@ def main() -> None:
         "| **Storage hygiene** | Snapshot/history collectors healthy | Unattached disk/EBS/GCP disk + performance/tuning rules |",
         "| **Network cost** | Flow logs + routing verification wired | NAT bypass, AppGW/LB empty backend, idle IP rules |",
         "| **Kubernetes efficiency** | Prometheus/AMP metrics on clusters | CPU/memory overrequest + PVC/service rules |",
-        "| **Full catalog** | Mature observability on all families | All **51** rules (default identity catalog) |",
+        "| **Full catalog** | Mature observability on all families | All **53** base rules + declarative JSON (default identity catalog) |",
         "",
         "**Best single rule quality bar:** prefer rules that reached **`condition_detected`** with **sufficient telemetry** ",
         "and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluations`.",

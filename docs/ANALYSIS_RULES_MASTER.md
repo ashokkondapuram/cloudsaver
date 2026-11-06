@@ -1,6 +1,6 @@
 # Analysis rules master reference (all points considered)
 
-CloudSaver evaluates **51 published catalog rules** across Azure, AWS, GCP, and Kubernetes. 
+CloudSaver evaluates **53 published catalog rules** across Azure, AWS, GCP, Kubernetes, and platform extensions. 
 This document is the operator-facing view of **what each rule checks**, **what evidence must exist**, 
 **which pillar it primarily supports**, and **which action path applies** after `condition_detected`.
 
@@ -12,8 +12,7 @@ PYTHONPATH=. python3 scripts/generate_analysis_rules_master.py
 
 Related: [RESOURCE_ANALYSIS_RULES.md](RESOURCE_ANALYSIS_RULES.md) (per resource type), 
 [FINOPS_ANALYSIS_VERIFICATION.md](FINOPS_ANALYSIS_VERIFICATION.md), 
-[FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md),
-[RULE_MATCHING_STRATEGY.md](RULE_MATCHING_STRATEGY.md) (primary vs alternate matches; Turbonomic-aligned).
+[FINOPS_RESIZE_METRICS.md](FINOPS_RESIZE_METRICS.md).
 
 ---
 
@@ -61,7 +60,7 @@ flowchart TD
 | **Storage hygiene** | Snapshot/history collectors healthy | Unattached disk/EBS/GCP disk + performance/tuning rules |
 | **Network cost** | Flow logs + routing verification wired | NAT bypass, AppGW/LB empty backend, idle IP rules |
 | **Kubernetes efficiency** | Prometheus/AMP metrics on clusters | CPU/memory overrequest + PVC/service rules |
-| **Full catalog** | Mature observability on all families | All **51** rules (default identity catalog) |
+| **Full catalog** | Mature observability on all families | All **53** base rules + declarative JSON (default identity catalog) |
 
 **Best single rule quality bar:** prefer rules that reached **`condition_detected`** with **sufficient telemetry** 
 and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluations`.
@@ -87,7 +86,7 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — Import / bash review artifact | aws | network | `AWS_UNASSOCIATED_EIP` | Unassociated Elastic IP address review | cost | `remediation_terraform_import` | Unassociated address state history (7d default). | minimum_days=7 |
 | B — Import / bash review artifact | aws | storage | `AWS_UNATTACHED_EBS` | Unattached EBS volume retention review | cost | `remediation_terraform_import` | Unattached volume state + snapshot verification within 24h when required. | minimum_days=14 |
 | B — General manual assessment | azure | ai | `AZURE_AI_FOUNDRY_PTU_VS_PAYG_ARBITRAGE` | Azure AI Foundry PTU vs pay-as-you-go review | cost | `manual_assessment_only` | PTU utilization review via ai_capacity.ptu_review. | utilization_percent=35 |
-| C — Network / architecture | azure | network | `AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR` | Empty Application Gateway or high autoscale floor review | cost | `manual_assessment_only` | dependencies_verified; request/healthy_target metrics; Empty state history (7d default). | minimum_days=7 |
+| B — Import / bash review artifact | azure | network | `AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR` | Empty Application Gateway or high autoscale floor review | cost | `remediation_terraform_import` | dependencies_verified; request/healthy_target metrics; Empty state history (7d default). | minimum_days=7 |
 | B — General manual assessment | azure | application | `AZURE_ASP_EMPTY_PAID_PLAN` | Empty paid App Service plan review | cost | `manual_assessment_only` | Paid SKU with zero apps/slots + Empty state history. | — |
 | A — FinOps resize (telemetry + SLO) | azure | application | `AZURE_ASP_UNDERUTILIZED_SKU` | App Service capacity review | cost | `finops_autopilot_resize` | 30d CPU/memory P95 below thresholds; SLO gate pass. | — |
 | B — General manual assessment | azure | database | `AZURE_COSMOSDB_MANUAL_RU_TO_AUTOSCALE` | Cosmos DB manual throughput vs autoscale review | cost | `manual_assessment_only` | Manual RU with low normalized RU consumption spread vs average. | utilization_percent=30 |
@@ -95,10 +94,10 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — Engineering zero-downtime review | azure | storage | `AZURE_DISK_UNATTACHED_RETENTION` | Retained unattached managed disk review | cost | `engineering_review_plan` | Continuous unattached disk state history for minimum_days; fresh observation (<24h). | minimum_days=14 |
 | C — Network / architecture | azure | network | `AZURE_NAT_GATEWAY_SERVICE_ENDPOINT_BYPASS` | NAT gateway vs service endpoint routing review | cost | `manual_assessment_only` | routing_verified, flow_log_coverage_ratio ≥95%, endpoint_eligible_bytes max > 0. | — |
 | B — General manual assessment | azure | network | `AZURE_PUBLIC_IP_ASSOCIATED_IDLE` | Associated public IP traffic review | cost | `manual_assessment_only` | Associated IP with ingress/egress byte series max ≤ maximum_bytes. | — |
-| B — General manual assessment | azure | network | `AZURE_PUBLIC_IP_UNASSOCIATED` | Unassociated public IP review | cost | `manual_assessment_only` | Association verified false + continuous Unassociated state for minimum_days. | minimum_days=7 |
+| B — Import / bash review artifact | azure | network | `AZURE_PUBLIC_IP_UNASSOCIATED` | Unassociated public IP review | cost | `remediation_bash_review` | Association verified false + continuous Unassociated state for minimum_days. | minimum_days=7 |
 | B — Capacity / tier review (manual) | azure | database | `AZURE_REDIS_UNDERUTILIZED_TIER_REVIEW` | Azure Cache for Redis tier utilization review | cost | `manual_assessment_only` | Memory/CPU P99 low, evictions low, target_compatible. | utilization_percent=25 |
 | B — General manual assessment | azure | database | `AZURE_SQL_PG_IDLE_AND_NONPROD_HA_REVIEW` | Azure SQL / PostgreSQL idle and non-production HA review | cost | `manual_assessment_only` | Low CPU/memory utilization + SLO gate + target_compatible. | — |
-| B — General manual assessment | azure | storage | `AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD` | Storage lifecycle and orphaned VHD page blob review | cost | `manual_assessment_only` | Lifecycle verified without multipart abort rules, or orphaned VHD signals. | — |
+| B — Engineering zero-downtime review | azure | storage | `AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD` | Storage lifecycle and orphaned VHD page blob review | cost | `engineering_review_plan` | Lifecycle verified without multipart abort rules, or orphaned VHD signals. | — |
 | A — FinOps resize (telemetry + SLO) | azure | compute | `AZURE_VM_RIGHTSIZING_UTILIZATION` | Evidence-based VM rightsizing review | cost | `finops_autopilot_resize` | 30d CPU/memory P95 below thresholds; disk IOPS & network series; burst credits; SLO gate pass. | utilization_percent=15 |
 | B — General manual assessment | azure | compute | `AZURE_VM_STOPPED_RESIDUAL_COST` | Stopped VM residual charge review | cost | `manual_assessment_only` | Power stopped/deallocated with duration history where applicable. | minimum_days=14 |
 | B — General manual assessment | gcp | database | `GCP_BIGQUERY_SLOT_AUTOSCALE_AND_STORAGE` | BigQuery slot autoscale and storage review | cost | `manual_assessment_only` | Low slot utilization + target_compatible + no commitment conflict. | utilization_percent=25 |
@@ -123,6 +122,8 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — Kubernetes assessment | kubernetes | network | `K8S_ORPHANED_LOADBALANCER_SERVICE` | LoadBalancer service with empty endpoints review | cost | `manual_assessment_only` | LoadBalancer service with empty endpoints. | — |
 | B — Kubernetes assessment | kubernetes | storage | `K8S_PVC_UNMOUNTED_OR_LOW_OCCUPANCY` | Unmounted or low-occupancy PVC review | cost | `manual_assessment_only` | PVC mount status and occupancy. | — |
 | B — Kubernetes assessment | kubernetes | compute | `K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE` | StatefulSet memory buffer and volume template review | reliability | `manual_assessment_only` | StatefulSet memory buffer and volume template sizing. | — |
+| B — Platform policy (tags / declarative JSON) | platform | operations | `PLATFORM_DEFAULT_TAGS` | Default FinOps tag set review (platform) | operations | `manual_assessment_only` | Built-in platform check on inventory tags/labels (owner, cost center, environment). | — |
+| B — Platform policy (tags / declarative JSON) | platform | operations | `PLATFORM_PROD_ENCRYPTION_EXPECTATION` | Production encryption expectation review (platform) | security | `manual_assessment_only` | Production-scoped resource with encryption_at_rest explicitly false in evidence. | — |
 
 ---
 

@@ -49,6 +49,8 @@ Collectors stay under `app/collectors/`; orchestration should shrink `app/scanne
 
 Per-provider tables (discovery, metrics, cost, activity, 5-pillar summaries): `docs/spec/well_architected_{aws,azure,gcp}.md`; overview + **platform analysis extensions**: `docs/spec/well_architected_overview.md`. Cross-provider brief: `docs/MULTI_CLOUD_WELL_ARCHITECTED_AGENT_SPEC.md`.
 
+**Platform rules in catalog:** `PLATFORM_DEFAULT_TAGS`, `PLATFORM_PROD_ENCRYPTION_EXPECTATION`, optional **`CLOUDSAVER_ANALYSIS_DECLARATIVE_RULES`** JSON (`examples/declarative_rules.sample.json`); see `docs/ANALYSIS_SERVICE.md`.
+
 ---
 
 ## Global execution order (cross-cloud)

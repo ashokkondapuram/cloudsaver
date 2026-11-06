@@ -157,12 +157,17 @@ def _ensure_platform_evaluators_loaded() -> None:
     if _INITIALIZED:
         return
     _INITIALIZED = True
+    from app.analysis_service.builtin_platform_evaluators import evaluate_builtin_platform_rules
+
+    if evaluate_builtin_platform_rules not in _EXTRA:
+        _EXTRA.insert(0, evaluate_builtin_platform_rules)
     _load_optional_hooks_module()
     _load_from_environment()
 
 
 def run_platform_evaluators(ctx: UnifiedResourceContext) -> list[PillarFinding]:
     """Run all registered platform evaluators for one resource context."""
+    from app.analysis_service.declarative_rules import evaluate_declarative_rules
     from app.analysis_service.finding import PillarFinding
 
     _ensure_platform_evaluators_loaded()
@@ -182,6 +187,10 @@ def run_platform_evaluators(ctx: UnifiedResourceContext) -> list[PillarFinding]:
             bound = _validate_and_bind_finding(ctx, raw)
             if bound is not None:
                 out.append(bound)
+    try:
+        out.extend(evaluate_declarative_rules(ctx))
+    except Exception:
+        logger.exception('Declarative rules evaluation failed resource=%s', ctx.resource_id)
     out = _dedupe_platform_findings(out)
     cap = _max_platform_findings_per_resource()
     if len(out) > cap:

@@ -177,9 +177,15 @@ def test_family_lookup_matches_catalog_rows():
 
 
 def test_definitions_cover_every_catalog_rule_once():
-    published = {row[0] for row in definitions()}
+    from collections import Counter
+
+    rows = definitions()
+    published = {row[0] for row in rows}
     catalog_rules = {rule_id for _p, _f, _c, _t, rules in FAMILIES for rule_id in rules}
-    assert published == catalog_rules
+    assert catalog_rules <= published
+    counts = Counter(row[0] for row in rows)
+    for rid in catalog_rules:
+        assert counts[rid] == 1, f'Expected one definition row for {rid}'
 
 
 def test_every_catalog_rule_has_human_display_name():

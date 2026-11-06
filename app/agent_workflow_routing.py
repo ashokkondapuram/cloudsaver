@@ -80,6 +80,11 @@ def _catalog_rule_ids() -> frozenset[str]:
 
 
 def route_for_rule(rule_id: str) -> AgentWorkflowRoute:
+    if rule_id.startswith('PLATFORM_'):
+        return AgentWorkflowRoute(
+            primary="manual_assessment_only",
+            agent_operations=("manual_review",),
+        )
     if rule_id not in _catalog_rule_ids() and rule_id not in TERRAFORM_IMPORT_RULES | BASH_REMEDIATION_RULES:
         raise KeyError(f"Unknown rule_id for workflow routing: {rule_id}")
 

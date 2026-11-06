@@ -1,5 +1,5 @@
 """v1.4 resource families; mirrored in the independently packaged control plane."""
-VERSION = '1.4.0'
+VERSION = '1.4.1'
 # provider, family, category, canonical resource types, rule IDs
 FAMILIES = (
  ('azure','managed-disks','storage',('microsoft.compute/disks',),('AZURE_DISK_UNATTACHED_RETENTION','AZURE_DISK_PROVISIONED_PERFORMANCE')),
@@ -38,6 +38,19 @@ FAMILIES = (
  ('kubernetes','nodes','compute',('kubernetes.io/Node',),('K8S_NODE_POOL_FRAGMENTATION_WASTE',)),
  ('kubernetes','persistent-volumes','storage',('kubernetes.io/PersistentVolumeClaim',),('K8S_PVC_UNMOUNTED_OR_LOW_OCCUPANCY',)),
  ('kubernetes','services','network',('kubernetes.io/Service',),('K8S_ORPHANED_LOADBALANCER_SERVICE',)),
+    (
+        'platform',
+        'policy',
+        'operations',
+        ('*',),
+        ('PLATFORM_DEFAULT_TAGS', 'PLATFORM_PROD_ENCRYPTION_EXPECTATION'),
+    ),
+)
+
+# (rule_id, display title, legacy pillar key for catalog API: cost|performance|reliability|security|operations)
+_PLATFORM_POLICY_RULES = (
+    ('PLATFORM_DEFAULT_TAGS', 'Default FinOps tag set review (platform)', 'operations'),
+    ('PLATFORM_PROD_ENCRYPTION_EXPECTATION', 'Production encryption expectation review (platform)', 'security'),
 )
 
 # Human-readable rule titles (stable `rule_id` keys for policy, APIs, and storage).
@@ -107,6 +120,8 @@ RULE_DISPLAY_NAMES = {
     'EMPTY_APP_SERVICE': 'Empty App Service plan',
     'UNDERUTILIZED_APP_SERVICE_PLAN': 'Underutilized App Service plan review',
 }
+for _rid, _title, _pillar in _PLATFORM_POLICY_RULES:
+    RULE_DISPLAY_NAMES[_rid] = _title
 
 
 def display_name(rule_id: str) -> str:
@@ -127,6 +142,7 @@ def definitions():
     # Legacy contracts keep their own established bounds. New contracts use these
     # conservative delegated thresholds; target compatibility is separate evidence.
     seen=set();rows=[]
+    _platform_pillar_by_rule = {r: p for r, _t, p in _PLATFORM_POLICY_RULES}
     for provider,_,category,kinds,rules in FAMILIES:
         for rid in rules:
             if rid in seen:continue
@@ -139,10 +155,16 @@ def definitions():
             for fragment,default in (('COSMOSDB',30),('REDIS_UNDERUTILIZED',25),('DYNAMODB',18),('ELASTICACHE',25),('LAMBDA',15),('BIGQUERY',25),('FOUNDRY_PTU',35)):
                 if fragment in rid:bounds={'utilization_percent':(default,1,40)}
             if provider=='kubernetes':bounds={}
-            pillar='reliability' if 'STATEFULSET' in rid else 'operations' if 'ABANDONED' in rid else 'cost'
+            if provider == 'platform':
+                pillar = _platform_pillar_by_rule[rid]
+            else:
+                pillar='reliability' if 'STATEFULSET' in rid else 'operations' if 'ABANDONED' in rid else 'cost'
             if rid not in RULE_DISPLAY_NAMES:
                 raise KeyError(f'Missing RULE_DISPLAY_NAMES entry for {rid}')
             rows.append((rid,provider,category,kinds[0],RULE_DISPLAY_NAMES[rid],pillar,bounds))
+    from app.analysis_service.declarative_rules import extend_resource_catalog_definitions
+
+    rows.extend(extend_resource_catalog_definitions())
     return tuple(rows)
 
 

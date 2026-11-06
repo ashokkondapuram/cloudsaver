@@ -27,8 +27,8 @@ def hourly(value='10'):
     end=NOW.replace(minute=0);start=end-timedelta(days=30)
     return dict(unit='USD/hour',currency='USD',window_start=start.isoformat(),window_end=end.isoformat(),points=[dict(at=(start+timedelta(hours=i+1)).isoformat(),value=value) for i in range(720)])
 
-def test_catalog_has_exact_36_families_and_independent_control_plane_contract():
-    assert {p:sum(f[0]==p for f in FAMILIES) for p in ('azure','aws','gcp','kubernetes')}=={'azure':10,'aws':10,'gcp':8,'kubernetes':8}
+def test_catalog_has_exact_37_families_and_independent_control_plane_contract():
+    assert {p:sum(f[0]==p for f in FAMILIES) for p in ('azure','aws','gcp','kubernetes','platform')}=={'azure':10,'aws':10,'gcp':8,'kubernetes':8,'platform':1}
     assert len({r[0] for r in definitions()})==len(definitions())
     root=Path(__file__).resolve().parents[1]
     assert (root/'app/resource_catalog.py').read_bytes()==(root/'platform/identity/analysis/multicloud.py').read_bytes()

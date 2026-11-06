@@ -111,6 +111,8 @@ Deployments can add **extra** `PillarFinding` rows without forking CloudSaver. T
 | **`CLOUDSAVER_ANALYSIS_PLATFORM_EVALUATORS`** | Comma-separated dotted import paths; each module must export **`evaluate_platform`** with the same signature. |
 | **`register_platform_evaluator(fn)`** | In-process registration (tests or app startup code); see `app/analysis_service/platform_rules.py`. |
 | **`CLOUDSAVER_ANALYSIS_PLATFORM_MAX_FINDINGS_PER_RESOURCE`** | Safety cap per resource (default **50**, max **500**); truncates with a log line if exceeded. |
+| **`CLOUDSAVER_ANALYSIS_DECLARATIVE_RULES`** | Path to UTF-8 JSON (see `examples/declarative_rules.sample.json`); rules with `PLATFORM_*` ids merge into `/api/v1/rules/catalog` and run in the platform pass. |
+| **Built-ins** | `app/analysis_service/builtin_platform_evaluators.py` registers **`PLATFORM_DEFAULT_TAGS`** and **`PLATFORM_PROD_ENCRYPTION_EXPECTATION`** (catalog-backed). |
 
 **Implementation notes**
 
