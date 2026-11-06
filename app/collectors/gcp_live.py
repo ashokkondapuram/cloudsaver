@@ -64,24 +64,67 @@ def gcp_monitoring_series(reader,project,metric_type,resource_filter,now,window_
         if v is not None:points.append((p.get('interval',{}).get('endTime'),v))
     return series(points,now)
 
-def audit_history(reader,project,resource,now):
-    rid=resource['resource_id'];e=resource.get('evidence') or {};current='Stopped' if e.get('power_state')=='TERMINATED' else 'Unattached' if e.get('disk_state')=='READY' and e.get('association_verified') is False else None
-    query={'resourceNames':['projects/'+project],'filter':'protoPayload.resourceName='+json.dumps(rid.removeprefix('//compute.googleapis.com/'))+' AND timestamp >= '+json.dumps((now-timedelta(days=90)).isoformat()),'pageSize':1000,'orderBy':'timestamp asc'}
-    seen=set();events=[]
+def collect_gcp_audit_evidence(reader, project, resource, now):
+    from app.collectors.activity_events import append_activity_events, normalize_activity_event
+
+    rid = resource['resource_id']
+    e = resource.get('evidence') or {}
+    current = (
+        'Stopped'
+        if e.get('power_state') == 'TERMINATED'
+        else 'Unattached'
+        if e.get('disk_state') == 'READY' and e.get('association_verified') is False
+        else None
+    )
+    query = {
+        'resourceNames': ['projects/' + project],
+        'filter': 'protoPayload.resourceName='
+        + json.dumps(rid.removeprefix('//compute.googleapis.com/'))
+        + ' AND timestamp >= '
+        + json.dumps((now - timedelta(days=90)).isoformat()),
+        'pageSize': 1000,
+        'orderBy': 'timestamp asc',
+    }
+    seen = set()
+    transition_events = []
+    normalized = []
+    mapping = {
+        'v1.compute.instances.stop': 'Stopped',
+        'v1.compute.instances.start': 'Running',
+        'v1.compute.instances.detachDisk': 'Unattached',
+        'v1.compute.instances.attachDisk': 'Attached',
+    }
     for _ in range(200):
-        page=reader.post_read('https://logging.googleapis.com/v2/entries:list',query)
-        for entry in page.get('entries',[]):
-            p=entry.get('protoPayload') or {};source=p.get('resourceName','')
-            if source not in (rid,rid.split('.com/',1)[-1]):raise ValueError('Audit resource mismatch')
-            if (p.get('status') or {}).get('code',0):continue
-            method=p.get('methodName','')
-            mapping={'v1.compute.instances.stop':'Stopped','v1.compute.instances.start':'Running','v1.compute.instances.detachDisk':'Unattached','v1.compute.instances.attachDisk':'Attached'}
-            if method in mapping:events.append((moment(entry.get('timestamp')),mapping[method]))
-        token=page.get('nextPageToken')
-        if not token:return transition(events,current,current,now) if current else None
-        if token in seen:raise ValueError('Repeated audit continuation')
-        seen.add(token);query['pageToken']=token
-    raise ValueError('Audit page bound exceeded')
+        page = reader.post_read('https://logging.googleapis.com/v2/entries:list', query)
+        for entry in page.get('entries', []):
+            p = entry.get('protoPayload') or {}
+            source = p.get('resourceName', '')
+            if source not in (rid, rid.split('.com/', 1)[-1]):
+                raise ValueError('Audit resource mismatch')
+            if (p.get('status') or {}).get('code', 0):
+                continue
+            method = p.get('methodName', '')
+            if method in mapping:
+                transition_events.append((moment(entry.get('timestamp')), mapping[method]))
+            item = normalize_activity_event(provider='gcp', payload=entry)
+            if item:
+                normalized.append(item)
+        token = page.get('nextPageToken')
+        if not token:
+            break
+        if token in seen:
+            raise ValueError('Repeated audit continuation')
+        seen.add(token)
+        query['pageToken'] = token
+    else:
+        raise ValueError('Audit page bound exceeded')
+    normalized.sort(key=lambda item: item.get('event_time') or '', reverse=True)
+    append_activity_events(resource.setdefault('evidence', {}), normalized)
+    return transition(transition_events, current, current, now) if current else None
+
+
+def audit_history(reader,project,resource,now):
+    return collect_gcp_audit_evidence(reader, project, resource, now)
 
 def enrich(reader,project,inventory,now=None):
     now=now or datetime.now(timezone.utc);limit=int(os.getenv('CLOUDSAVER_LIVE_EVIDENCE_MAX_RESOURCES','25'))

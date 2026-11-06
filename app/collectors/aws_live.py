@@ -32,23 +32,54 @@ def fetch_cloudwatch_series(cloudwatch,namespace,metric_name,dimensions,now,wind
         seen.add(token)
     raise ValueError('CloudWatch page bound exceeded')
 
-def fetch_cloudtrail_transition_age(cloudtrail,resource_name,event_names,now,*,current=None):
+def collect_aws_cloudtrail_evidence(cloudtrail, resource_name, event_names, now, *, current=None, evidence=None):
     from datetime import timedelta
-    token=None;seen=set();events=[]
+    from app.collectors.activity_events import append_activity_events, normalize_activity_event
+
+    token = None
+    seen = set()
+    transition_events = []
+    normalized = []
     for _ in range(200):
-        response=cloudtrail.lookup_events(LookupAttributes=[{'AttributeKey':'ResourceName','AttributeValue':resource_name}],StartTime=now-timedelta(days=90),EndTime=now,MaxResults=50,**({'NextToken':token} if token else {}))
-        if not isinstance(response.get('Events'),list):raise ValueError('Invalid CloudTrail response')
+        response = cloudtrail.lookup_events(
+            LookupAttributes=[{'AttributeKey': 'ResourceName', 'AttributeValue': resource_name}],
+            StartTime=now - timedelta(days=90),
+            EndTime=now,
+            MaxResults=50,
+            **({'NextToken': token} if token else {}),
+        )
+        if not isinstance(response.get('Events'), list):
+            raise ValueError('Invalid CloudTrail response')
         for event in response['Events']:
-            body=json.loads(event.get('CloudTrailEvent','{}'))
-            if body.get('errorCode'):continue
-            if not any(r.get('ResourceName')==resource_name for r in event.get('Resources',[])):raise ValueError('Unrelated CloudTrail event')
-            name=event.get('EventName')
-            if name in event_names:events.append((moment(event.get('EventTime')),event_names[name]))
-        token=response.get('NextToken')
-        if not token:return transition(events,current,current,now)
-        if token in seen:raise ValueError('Repeated CloudTrail continuation')
+            body = json.loads(event.get('CloudTrailEvent', '{}'))
+            if body.get('errorCode'):
+                continue
+            if not any(r.get('ResourceName') == resource_name for r in event.get('Resources', [])):
+                raise ValueError('Unrelated CloudTrail event')
+            name = event.get('EventName')
+            if name in event_names:
+                transition_events.append((moment(event.get('EventTime')), event_names[name]))
+            item = normalize_activity_event(provider='aws', payload=event)
+            if item:
+                normalized.append(item)
+        token = response.get('NextToken')
+        if not token:
+            break
+        if token in seen:
+            raise ValueError('Repeated CloudTrail continuation')
         seen.add(token)
-    raise ValueError('CloudTrail page bound exceeded')
+    else:
+        raise ValueError('CloudTrail page bound exceeded')
+    normalized.sort(key=lambda item: item.get('event_time') or '', reverse=True)
+    if evidence is not None:
+        append_activity_events(evidence, normalized)
+    return transition(transition_events, current, current, now)
+
+
+def fetch_cloudtrail_transition_age(cloudtrail,resource_name,event_names,now,*,current=None,evidence=None):
+    return collect_aws_cloudtrail_evidence(
+        cloudtrail, resource_name, event_names, now, current=current, evidence=evidence
+    )
 
 def pages(api,operation,field,*,token_key='NextToken',request_key='NextToken',**kwargs):
     token=None;seen=set();count=0
@@ -160,7 +191,7 @@ def enrich(client,inventory,now=None):
             enrich_metrics(e,values,now)
         states={'DetachVolume':'Unattached','AttachVolume':'Attached'} if kind=='aws:ec2:volume' else {'StopInstances':'Stopped','StartInstances':'Running','StopDBInstance':'Stopped','StartDBInstance':'Running'}
         current='Unattached' if e.get('disk_state')=='available' else 'Stopped' if e.get('power_state')=='stopped' else None
-        e['state_history']=collect(e,'cloudtrail',lambda:fetch_cloudtrail_transition_age(trail,r['resource_name'],states,now,current=current))
+        e['state_history']=collect(e,'cloudtrail',lambda:fetch_cloudtrail_transition_age(trail,r['resource_name'],states,now,current=current,evidence=e))
         if kind in ('aws:ec2:volume','aws:rds:db'):
             def snapshots():
                 if kind=='aws:ec2:volume':return list(pages(client('ec2'),'describe_snapshots','Snapshots',OwnerIds=[r['scope_id']],Filters=[{'Name':'volume-id','Values':[r['resource_name']]}],MaxResults=100))

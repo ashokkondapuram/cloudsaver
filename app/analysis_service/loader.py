@@ -39,6 +39,8 @@ def _activity_from_history(evidence: dict) -> list[ActivityEvent]:
     for item in evidence.get('activity_events') or []:
         if isinstance(item, dict) and item.get('event_id'):
             events.append(ActivityEvent.model_validate(item))
+    if events:
+        return events
     for item in evidence.get('state_history') or []:
         if not isinstance(item, dict):
             continue

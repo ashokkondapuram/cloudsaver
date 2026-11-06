@@ -113,21 +113,59 @@ def fetch_azure_monitor_series(reader,resource,now):
         )
     return result
 
-def fetch_azure_state_history(reader,resource,now):
-    rid=resource['resource_id'];e=resource.get('evidence') or {};current=e.get('disk_state') or e.get('power_state')
-    if e.get('association_verified') is False:current='Unassociated'
-    if e.get('hosted_app_count')==0 and e.get('deployment_slot_count')==0:current='Empty'
-    expected=current;events=[]
-    url=activity_log_events_url(resource['subscription_id'])
-    params={'api-version':ACTIVITY_LOG_EVENTS_API_VERSION,'$filter':"eventTimestamp ge '"+(now-timedelta(days=90)).isoformat()+"' and resourceUri eq '"+rid+"'"}
-    states={'microsoft.compute/disks/detach/action':'Unattached','microsoft.compute/virtualmachines/deallocate/action':'PowerState/deallocated',
-        'microsoft.compute/virtualmachines/stop/action':'PowerState/stopped'}
-    for event in pages(reader,url,params):
-        if str(event.get('resourceId','')).lower()!=rid.lower():raise ValueError('Activity event outside requested resource')
-        if (event.get('status') or {}).get('value')!='Succeeded':continue
-        operation=(event.get('operationName') or {}).get('value','').lower()
-        if operation.endswith(('/write','/delete','/action')):events.append((moment(event.get('eventTimestamp')),states.get(operation,'Unknown')))
-    return transition(events,current,expected,now) if expected else None
+def _azure_activity_log_events(reader, resource, now):
+    rid = resource['resource_id']
+    url = activity_log_events_url(resource['subscription_id'])
+    params = {
+        'api-version': ACTIVITY_LOG_EVENTS_API_VERSION,
+        '$filter': "eventTimestamp ge '" + (now - timedelta(days=90)).isoformat() + "' and resourceUri eq '" + rid + "'",
+    }
+    raw = []
+    for event in pages(reader, url, params):
+        if str(event.get('resourceId', '')).lower() != rid.lower():
+            raise ValueError('Activity event outside requested resource')
+        if (event.get('status') or {}).get('value') != 'Succeeded':
+            continue
+        raw.append(event)
+    return raw
+
+
+def collect_azure_activity_log_evidence(reader, resource, now):
+    from app.collectors.activity_events import append_activity_events, normalize_activity_event
+
+    e = resource.get('evidence') or {}
+    current = e.get('disk_state') or e.get('power_state')
+    if e.get('association_verified') is False:
+        current = 'Unassociated'
+    if e.get('hosted_app_count') == 0 and e.get('deployment_slot_count') == 0:
+        current = 'Empty'
+    expected = current
+    transition_events = []
+    normalized = []
+    states = {
+        'microsoft.compute/disks/detach/action': 'Unattached',
+        'microsoft.compute/virtualmachines/deallocate/action': 'PowerState/deallocated',
+        'microsoft.compute/virtualmachines/stop/action': 'PowerState/stopped',
+    }
+    for event in _azure_activity_log_events(reader, resource, now):
+        operation = (event.get('operationName') or {}).get('value', '').lower()
+        if operation.endswith(('/write', '/delete', '/action')):
+            transition_events.append((moment(event.get('eventTimestamp')), states.get(operation, 'Unknown')))
+        item = normalize_activity_event(provider='azure', payload=event)
+        if item:
+            normalized.append(item)
+    normalized.sort(key=lambda item: item.get('event_time') or '', reverse=True)
+    append_activity_events(resource.setdefault('evidence', {}), normalized)
+    return transition(transition_events, current, expected, now) if expected else None
+
+
+def fetch_azure_state_history(reader, resource, now):
+    return collect_azure_activity_log_evidence(reader, resource, now)
+
+
+def fetch_azure_activity_events(reader, resource, now):
+    collect_azure_activity_log_evidence(reader, resource, now)
+    return (resource.get('evidence') or {}).get('activity_events')
 
 def fetch_azure_operational_guards(reader,resource,now):
     rid=resource['resource_id'];group='/'.join(rid.split('/')[:5]);result={}
