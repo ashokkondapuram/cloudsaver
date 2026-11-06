@@ -200,6 +200,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     validate_finding_scope(finding, tenant)
             except (ValueError, KeyError):
                 raise HTTPException(409, 'The saved scan is outside the current workspace scope') from None
+        full_scan = store.get(tenant['tenant_id'], str(scan_id))
         stub = dict(
             scan_id=bundle['scan_id'],
             timestamp=bundle['timestamp'],
@@ -207,6 +208,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             findings=findings,
             inventory=[observation] if observation else [],
             rule_evaluations=bundle.get('rule_evaluations') or [],
+            pillar_analysis=(full_scan or {}).get('pillar_analysis'),
         )
         from app.focus import FocusRepository
         stub = FocusRepository(evidence_store).attach(tenant, stub)
@@ -278,20 +280,26 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         from app.resource_action_items import derive_action_items
 
         action_items = derive_action_items(assessment, findings, evaluations)
-        return dict(scan_id=scan['scan_id'], assessment=assessment_payload, findings=findings, ai_context=context,
-                    ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
-                    decision=decision_state(assessment, decision), followups=followups,
-                    followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,
-                    configuration_detail=configuration_detail,
-                    analysis_readiness=obs_evidence.get('analysis_readiness'),
-                    evidence_schema_version=obs_evidence.get('evidence_schema_version') or (observation or {}).get('evidence_schema_version'),
-                    rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
-                    rule_matches=rule_detail['rule_matches'],
-                    rule_conflicts=rule_detail['rule_conflicts'],
-                    reconciliation_status=rule_detail.get('reconciliation_status'),
-                    action_items=action_items,
-                    observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
-                                        if r.get('evidence', {}).get('observed_signals')), None))
+        from app.pillar_analysis_api import pillar_scores_for_resource
+
+        pillar_scores = pillar_scores_for_resource(scan, provider, assessment['resource_id'])
+        payload = dict(scan_id=scan['scan_id'], assessment=assessment_payload, findings=findings, ai_context=context,
+                       ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
+                       decision=decision_state(assessment, decision), followups=followups,
+                       followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,
+                       configuration_detail=configuration_detail,
+                       analysis_readiness=obs_evidence.get('analysis_readiness'),
+                       evidence_schema_version=obs_evidence.get('evidence_schema_version') or (observation or {}).get('evidence_schema_version'),
+                       rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
+                       rule_matches=rule_detail['rule_matches'],
+                       rule_conflicts=rule_detail['rule_conflicts'],
+                       reconciliation_status=rule_detail.get('reconciliation_status'),
+                       action_items=action_items,
+                       observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
+                                           if r.get('evidence', {}).get('observed_signals')), None))
+        if pillar_scores is not None:
+            payload['pillar_scores'] = pillar_scores
+        return payload
 
     def query_filters(provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status):
         return dict(zip(FILTERS, (provider, service_category, review_priority, ai_status, ai_risk, decision, pillar_status)))

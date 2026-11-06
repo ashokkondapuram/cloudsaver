@@ -405,6 +405,10 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def detail(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}', authorization)
 
+    @app.get('/api/v1/scans/{scan_id}/pillar-analysis')
+    async def scan_pillar_analysis(scan_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/scans/{scan_id}/pillar-analysis', authorization)
+
     @app.get('/api/v1/ai/targets')
     async def ai_targets(row=Depends(allowed), authorization: str = Header()):
         return await forward('GET', 'scanner', '/api/v1/ai/targets', authorization)

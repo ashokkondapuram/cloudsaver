@@ -110,6 +110,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     api.include_router(kubernetes_router(store, current_tenant, evidence_store=evidence_store))
     from app.assessment_api import create_router as assessment_router
     api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
+    from app.pillar_analysis_api import create_router as pillar_analysis_router
+    api.include_router(pillar_analysis_router(store, current_tenant))
     from app.gitops_api import create_router as gitops_router
     api.include_router(gitops_router(settings, store, current_tenant, config=gitops_config, client=gitops_client))
     from app.drift.event_ingress_api import create_router as drift_ingress_router
@@ -489,6 +491,9 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 validated = materialize_scan_billing(tenant, validated, FocusRepository(evidence_store))
             except Exception:
                 logger.warning('Scan billing materialization failed scan_id=%s', scan_id, exc_info=True)
+
+            from app.analysis_service.pipeline import attach_pillar_analysis
+            attach_pillar_analysis(validated)
 
             if heartbeat:
                 heartbeat.ensure_owned()

@@ -13,7 +13,10 @@ _HEAVY_FIELDS = (
 
 
 def scan_for_api(payload, *, include_inventory=False):
-    """Return a ScanSummary-compatible dict without multi-MB inventory blobs."""
+    """Return a ScanSummary-compatible dict without multi-MB inventory blobs.
+
+    Preserves ``pillar_analysis`` when present on the stored scan payload.
+    """
     summary = dict(payload)
     summary.setdefault('scan_id', summary.get('scan_id') or summary.get('id'))
     summary.setdefault('subscriptions_scanned', 0)

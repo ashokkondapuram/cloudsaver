@@ -42,6 +42,10 @@ class ScanSummary(BaseModel):
     realizable_monthly_savings_usd: float | None = Field(default=None, ge=0)
     findings: list[WasteFinding]
     inventory: list[dict] = Field(default_factory=list)
+    pillar_analysis: dict | None = Field(
+        default=None,
+        description='Deterministic five-pillar analysis from pre-ingested inventory (when computed at scan completion).',
+    )
 
     model_config = ConfigDict(extra='allow', allow_inf_nan=False)
 

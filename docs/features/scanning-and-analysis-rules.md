@@ -169,6 +169,7 @@ A saved scan (`ScanSummary`) includes:
 - `scope_results`: per-scope completion and supported resource types.
 - `source_ledger`: provenance for every collector source.
 - `total_monthly_waste_usd`, `realizable_monthly_savings_usd` and `opportunity_summary`.
+- `pillar_analysis` (when computed at scan completion): account-level pillar scores, per-resource scores/findings, and `finding_count`. Also available at `GET /api/v1/scans/{scan_id}/pillar-analysis`.
 
 ## Permissions
 
