@@ -10,6 +10,7 @@ from app.assessment import PILLARS, ai_context, assess, category as service_cate
 from app.ai_resource_context import build_resource_ai_context
 from app.ai_scan_context import augment_ai_context_from_scan
 from app.assessment_policy import POLICY_VERSION
+from app.domain.resource.identity import canonical_resource_id, resource_key as _resource_key
 
 SEVERITY = {'risk': 2, 'unknown': 1, 'observed': 0}
 PRIORITY = ('critical', 'high', 'evidence_required')
@@ -107,13 +108,12 @@ def overlay_inventory_billing(assessment, obs):
 
 def identity(finding):
     provider = finding.get('cloud_provider', 'azure')
-    resource = finding['resource_id'].lower() if provider == 'azure' else finding['resource_id']
-    return provider, resource
+    return provider, canonical_resource_id(provider, finding['resource_id'])
 
 
 def resource_key(finding):
     provider, resource = identity(finding)
-    return hashlib.sha256((provider + '|' + resource).encode()).hexdigest()
+    return _resource_key(provider, resource)
 
 
 def group(findings):

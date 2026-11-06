@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.domain.resource.identity import canonical_resource_id
 from app.rule_match_strategy import resolve_resource_matches
 
 
 def normalize_resource_id(provider: str, resource_id: str) -> str:
-    value = resource_id or ''
-    return value.lower() if provider == 'azure' else value
+    return canonical_resource_id(provider, resource_id)
 
 
 def evaluations_for_resource(
