@@ -33,21 +33,51 @@
 | 5 | **EKS** | `eks:cluster`, `eks:nodegroup` — `describe_cluster`, `describe_nodegroup`, `list_fargate_profiles`, `list_addons` | **ContainerInsights**: node_cpu_utilization, node_memory_utilization, pod_cpu_utilization_over_pod_limit, pod_memory_utilization_over_pod_limit, cluster_failed_node_count — **ClusterName**, **Namespace**, **PodName** | ServiceCode=AmazonEKS + worker EC2/Fargate spend | CreateCluster, UpdateClusterConfig, UpdateClusterVersion, CreateNodegroup, UpdateNodegroupConfig |
 | 6 | **ECR** | `ecr:repository` — `describe_repositories`, `get_lifecycle_policy`, `describe_images` | **AWS/ECR**, **AWS/Usage**: RepositoryPullCount; image metadata from API | ServiceCode=AmazonECR, TimedStorage-ByteHrs, data transfer | CreateRepository, PutLifecyclePolicy, DeleteLifecyclePolicy, PutImageScanningConfiguration, SetRepositoryPolicy |
 
-### 2.2 Extended 5-pillar rules (compute & containers)
+### 2.2 Rules by resource type (compute, containers & serverless)
 
-**1. EC2:** AWS-EC2-COST-01 … 05, AWS-EC2-PERF-01 … 04, AWS-EC2-REL-01 … 03, AWS-EC2-SEC-01 … 03, AWS-EC2-OPS-01 … 04 (idle, rightsizing, surplus credits, stopped assets, dedicated host, saturation, burstable credits, Graviton upgrade, EBS bottleneck, standalone prod, status checks, termination protection, IMDSv1, public SSH/RDP, unencrypted volumes, missing CW Agent / SSM, non-prod 24×7, manual resize drift).
+#### 1. EC2 Instances
+- **Cost optimization:** `AWS-EC2-COST-01` … `AWS-EC2-COST-05`
+- **Performance efficiency:** `AWS-EC2-PERF-01` … `AWS-EC2-PERF-04`
+- **Reliability:** `AWS-EC2-REL-01` … `AWS-EC2-REL-03`
+- **Security:** `AWS-EC2-SEC-01` … `AWS-EC2-SEC-03`
+- **Operational excellence:** `AWS-EC2-OPS-01` … `AWS-EC2-OPS-04`
 
-**2. ASG:** AWS-ASG-COST-01–02, AWS-ASG-PERF-01–02, AWS-ASG-REL-01–03, AWS-ASG-SEC-01, AWS-ASG-OPS-01 (min size vs utilization, mixed instances Spot, scaling ceiling, warm pool/predictive, single-AZ, ELB health check, suspended processes, launch configuration vs launch template, tag propagation).
+#### 2. EC2 Auto Scaling Groups
+- **Cost optimization:** `AWS-ASG-COST-01`, `AWS-ASG-COST-02`
+- **Performance efficiency:** `AWS-ASG-PERF-01`, `AWS-ASG-PERF-02`
+- **Reliability:** `AWS-ASG-REL-01` … `AWS-ASG-REL-03`
+- **Security:** `AWS-ASG-SEC-01`
+- **Operational excellence:** `AWS-ASG-OPS-01`
 
-**3. Lambda:** AWS-LAM-COST-01–04, AWS-LAM-PERF-01–02, AWS-LAM-REL-01–03, AWS-LAM-SEC-01–02, AWS-LAM-OPS-01–02 (provisioned concurrency idle, memory over-allocation, Graviton, ephemeral storage, spillover, timeout proximity, throttling/DLQ/subnets, public URL, wildcard IAM / secrets in env, deprecated runtime, log retention).
+#### 3. AWS Lambda
+- **Cost optimization:** `AWS-LAM-COST-01` … `AWS-LAM-COST-04`
+- **Performance efficiency:** `AWS-LAM-PERF-01`, `AWS-LAM-PERF-02`
+- **Reliability:** `AWS-LAM-REL-01` … `AWS-LAM-REL-03`
+- **Security:** `AWS-LAM-SEC-01`, `AWS-LAM-SEC-02`
+- **Operational excellence:** `AWS-LAM-OPS-01`, `AWS-LAM-OPS-02`
 
-**4. ECS/Fargate:** AWS-ECS-COST-01–03, AWS-ECS-PERF-01, AWS-ECS-REL-01–02, AWS-ECS-SEC-01, AWS-ECS-OPS-01 (task overprovisioning, Spot candidate, ARM64, CPU/memory contention, single-task prod, deployment circuit breaker, privileged/public IP, Container Insights).
+#### 4. Amazon ECS & AWS Fargate
+- **Cost optimization:** `AWS-ECS-COST-01` … `AWS-ECS-COST-03`
+- **Performance efficiency:** `AWS-ECS-PERF-01`
+- **Reliability:** `AWS-ECS-REL-01`, `AWS-ECS-REL-02`
+- **Security:** `AWS-ECS-SEC-01`
+- **Operational excellence:** `AWS-ECS-OPS-01`
 
-**5. EKS:** AWS-EKS-COST-01–03, AWS-EKS-PERF-01–02, AWS-EKS-REL-01–02, AWS-EKS-SEC-01–02, AWS-EKS-OPS-01 (extended support surcharge, overprovisioned node groups, idle dev cluster, pod throttling/OOM, VPC CNI IP exhaustion, failed nodes/single-AZ, PDB, public API, KMS secrets encryption, audit logs).
+#### 5. Amazon EKS
+- **Cost optimization:** `AWS-EKS-COST-01` … `AWS-EKS-COST-03`
+- **Performance efficiency:** `AWS-EKS-PERF-01`, `AWS-EKS-PERF-02`
+- **Reliability:** `AWS-EKS-REL-01`, `AWS-EKS-REL-02`
+- **Security:** `AWS-EKS-SEC-01`, `AWS-EKS-SEC-02`
+- **Operational excellence:** `AWS-EKS-OPS-01`
 
-**6. ECR:** AWS-ECR-COST-01, AWS-ECR-PERF-01, AWS-ECR-REL-01, AWS-ECR-SEC-01–02, AWS-ECR-OPS-01 (image sprawl, cross-region pull, mutable tags, scan on push, wildcard policy, orphaned repos).
+#### 6. Amazon ECR
+- **Cost optimization:** `AWS-ECR-COST-01`
+- **Performance efficiency:** `AWS-ECR-PERF-01`
+- **Reliability:** `AWS-ECR-REL-01`
+- **Security:** `AWS-ECR-SEC-01`, `AWS-ECR-SEC-02`
+- **Operational excellence:** `AWS-ECR-OPS-01`
 
-*(Full formula text for each rule id is identical to the specification you maintain for implementation thresholds.)*
+*Per-rule formulas/thresholds: upstream FinOps spec; implementation binds to inventory + metrics + cost + activity evidence.*
 
 ---
 
@@ -63,9 +93,42 @@
 | 10 | **EFS & FSx** | `elasticfilesystem:file-system`, `fsx:file-system` | **AWS/EFS**, **AWS/FSx**: PercentIOLimit, BurstCreditBalance, StorageBytes, … | AmazonEFS, AmazonFSx | CreateFileSystem, UpdateFileSystem, PutLifecycleConfiguration, PutBackupPolicy |
 | 11 | **AWS Backup** | `backup:backup-vault`, `backup:backup-plan` | **AWS/Backup**: NumberOfRecoveryPoints, NumberOfBackupJobsFailed, … | AWSBackup warm/cold byte-hours | CreateBackupVault, DeleteRecoveryPoint, UpdateRecoveryPointLifecycle, PutBackupVaultAccessPolicy |
 
-### 3.2 Extended 5-pillar rules (storage)
+### 3.2 Rules by resource type (storage & backup)
 
-**7–11:** EBS (unattached, gp2→gp3, overprovisioned IOPS, throttling, backup gaps, encryption, DeleteOnTermination); snapshots (orphan/stale, archive tier, FSR waste, DR hydration, cross-region, public sharing, unencrypted, ad-hoc tags); S3 (cold Standard without lifecycle/IT, version sprawl, multipart abort, small-object IA penalty, 503/prefix, versioning/CRR, PublicAccessBlock/TLS, lifecycle drift); EFS/FSx (provisioned throughput idle, IA/archive lifecycle, abandoned FS, I/O limit, one-zone prod, encryption/NFS, single-AZ mounts); AWS Backup (warm/cold transition, backup window overlap, failed jobs, vault lock, orphaned recovery points).
+#### 7. EBS Volumes
+- **Cost optimization:** `AWS-EBS-COST-01` … `AWS-EBS-COST-03`
+- **Performance efficiency:** `AWS-EBS-PERF-01`
+- **Reliability:** `AWS-EBS-REL-01`, `AWS-EBS-REL-02`
+- **Security:** `AWS-EBS-SEC-01`
+- **Operational excellence:** `AWS-EBS-OPS-01`
+
+#### 8. EBS Snapshots & Fast Snapshot Restore
+- **Cost optimization:** `AWS-SNAP-COST-01` … `AWS-SNAP-COST-03`
+- **Performance efficiency:** `AWS-SNAP-PERF-01`
+- **Reliability:** `AWS-SNAP-REL-01`
+- **Security:** `AWS-SNAP-SEC-01`, `AWS-SNAP-SEC-02`
+- **Operational excellence:** `AWS-SNAP-OPS-01`
+
+#### 9. Amazon S3
+- **Cost optimization:** `AWS-S3-COST-01` … `AWS-S3-COST-04`
+- **Performance efficiency:** `AWS-S3-PERF-01`
+- **Reliability:** `AWS-S3-REL-01`
+- **Security:** `AWS-S3-SEC-01`, `AWS-S3-SEC-02`
+- **Operational excellence:** `AWS-S3-OPS-01`
+
+#### 10. Amazon EFS & Amazon FSx
+- **Cost optimization:** `AWS-EFS-COST-01` … `AWS-EFS-COST-03`
+- **Performance efficiency:** `AWS-EFS-PERF-01`
+- **Reliability:** `AWS-EFS-REL-01`
+- **Security:** `AWS-EFS-SEC-01`
+- **Operational excellence:** `AWS-EFS-OPS-01`
+
+#### 11. AWS Backup
+- **Cost optimization:** `AWS-BKP-COST-01`
+- **Performance efficiency:** `AWS-BKP-PERF-01`
+- **Reliability:** `AWS-BKP-REL-01`
+- **Security:** `AWS-BKP-SEC-01`
+- **Operational excellence:** `AWS-BKP-OPS-01`
 
 ---
 
@@ -81,9 +144,42 @@
 | 15 | **Redshift** | `redshift:cluster`, `redshift-serverless:workgroup` | **AWS/Redshift**, **AWS/Redshift-Serverless** | Node types, RMS Serverless RPU-hours | CreateCluster, PauseCluster, UpdateWorkgroup, … |
 | 16 | **OpenSearch** | `es:domain`, `aoss:collection` | **AWS/ES**, **AWS/AOSS** | ESInstance, AOSS Search/Indexing OCU | CreateDomain, UpdateDomainConfig, CreateCollection, … |
 
-### 4.2 Extended rules (databases)
+### 4.2 Rules by resource type (databases, cache & analytics)
 
-**12–16:** RDS (idle, rightsizing, Aurora I/O-optimized mode, gp2→gp3, saturation, replica lag, single-AZ prod, backups/deletion protection, auto-scaling storage, public/unencrypted, extended support, Performance Insights); DynamoDB (provisioned vs on-demand, unused GSI, IA table class, throttling, PITR, encryption, TTL); ElastiCache (idle, Valkey/Graviton, eviction/CPU, Multi-AZ/failover, snapshots, encryption, EOL engine); Redshift (idle/pause, dc2→ra3, WLM/disk spill, single-AZ, public/unencrypted, concurrency scaling cap); OpenSearch (idle/overprovisioned, OCU floor waste, JVM pressure, red/yellow/single-AZ, public/VPC/encryption/FGAC, ISM lifecycle).
+#### 12. Amazon RDS & Aurora
+- **Cost optimization:** `AWS-RDS-COST-01` … `AWS-RDS-COST-04`
+- **Performance efficiency:** `AWS-RDS-PERF-01`, `AWS-RDS-PERF-02`
+- **Reliability:** `AWS-RDS-REL-01` … `AWS-RDS-REL-03`
+- **Security:** `AWS-RDS-SEC-01`, `AWS-RDS-SEC-02`
+- **Operational excellence:** `AWS-RDS-OPS-01`, `AWS-RDS-OPS-02`
+
+#### 13. Amazon DynamoDB
+- **Cost optimization:** `AWS-DDB-COST-01` … `AWS-DDB-COST-04`
+- **Performance efficiency:** `AWS-DDB-PERF-01`
+- **Reliability:** `AWS-DDB-REL-01`, `AWS-DDB-REL-02`
+- **Security:** `AWS-DDB-SEC-01`
+- **Operational excellence:** `AWS-DDB-OPS-01`
+
+#### 14. Amazon ElastiCache
+- **Cost optimization:** `AWS-ECACHE-COST-01`, `AWS-ECACHE-COST-02`
+- **Performance efficiency:** `AWS-ECACHE-PERF-01`
+- **Reliability:** `AWS-ECACHE-REL-01`, `AWS-ECACHE-REL-02`
+- **Security:** `AWS-ECACHE-SEC-01`
+- **Operational excellence:** `AWS-ECACHE-OPS-01`
+
+#### 15. Amazon Redshift
+- **Cost optimization:** `AWS-RS-COST-01`, `AWS-RS-COST-02`
+- **Performance efficiency:** `AWS-RS-PERF-01`
+- **Reliability:** `AWS-RS-REL-01`
+- **Security:** `AWS-RS-SEC-01`
+- **Operational excellence:** `AWS-RS-OPS-01`
+
+#### 16. Amazon OpenSearch Service
+- **Cost optimization:** `AWS-OS-COST-01`, `AWS-OS-COST-02`
+- **Performance efficiency:** `AWS-OS-PERF-01`
+- **Reliability:** `AWS-OS-REL-01`
+- **Security:** `AWS-OS-SEC-01`
+- **Operational excellence:** `AWS-OS-OPS-01`
 
 ---
 
@@ -102,9 +198,63 @@
 | 23 | **CloudWatch** (logs, metrics, alarms) | `logs:log-group`, `cloudwatch:alarm` | **AWS/Logs**, **AWS/Usage** | DataProcessing, TimedStorage, custom metrics, alarms | PutRetentionPolicy, PutMetricAlarm, … |
 | 24 | **KMS & Secrets Manager** | `kms:key`, `secretsmanager:secret` | **AWS/KMS**, **AWS/SecretsManager** + CloudTrail counts | Per-key, per-secret, API request charges | CreateKey, RotateSecret, … |
 
-### 5.2 Extended rules (networking & security ops)
+### 5.2 Rules by resource type (networking, AI/ML & observability)
 
-**17–24:** ELB (orphan/idle, consolidation, latency/TLS, unhealthy targets, deletion protection, WAF, access logs); NAT (idle, S3/DynamoDB hairpinning, multi-AZ NAT in non-prod, packet drops, SNAT errors, single-AZ routing, flow logs, blackhole routes); EIP (unassociated, auto public IPv4 on private workloads, hairpin, hardcoded IP, perimeter bypass, untagged); VPCe/TGW (idle endpoint, unused attachment, drops, single-AZ endpoint, wildcard policies, private DNS); CloudFront (cache hit, price class, origin latency/HTTP3, origin failover, OAI/OAC/TLS, invalidations); SageMaker/Bedrock (idle notebook/endpoint, underused PT, GPU/latency, single-instance prod, notebook internet/root); CloudWatch (never-expire logs, IA log class, orphaned alarms, API throttling, alarm actions, encryption/PII, verbose debug); KMS/Secrets (unused CMK, S3 bucket keys, secret caching, KMS throttling, single-region keys, rotation, pending deletion references).
+#### 17. Elastic Load Balancing (ALB, NLB, GWLB, Classic)
+- **Cost optimization:** `AWS-ELB-COST-01`, `AWS-ELB-COST-02`
+- **Performance efficiency:** `AWS-ELB-PERF-01`
+- **Reliability:** `AWS-ELB-REL-01`, `AWS-ELB-REL-02`
+- **Security:** `AWS-ELB-SEC-01`, `AWS-ELB-SEC-02`
+- **Operational excellence:** `AWS-ELB-OPS-01`
+
+#### 18. VPC NAT Gateways
+- **Cost optimization:** `AWS-NAT-COST-01` … `AWS-NAT-COST-03`
+- **Performance efficiency:** `AWS-NAT-PERF-01`
+- **Reliability:** `AWS-NAT-REL-01`, `AWS-NAT-REL-02`
+- **Security:** `AWS-NAT-SEC-01`
+- **Operational excellence:** `AWS-NAT-OPS-01`
+
+#### 19. Elastic IPs & Public IPv4
+- **Cost optimization:** `AWS-EIP-COST-01`, `AWS-EIP-COST-02`
+- **Performance efficiency:** `AWS-EIP-PERF-01`
+- **Reliability:** `AWS-EIP-REL-01`
+- **Security:** `AWS-EIP-SEC-01`
+- **Operational excellence:** `AWS-EIP-OPS-01`
+
+#### 20. VPC Interface Endpoints & Transit Gateway
+- **Cost optimization:** `AWS-VPCE-COST-01`, `AWS-VPCE-COST-02`
+- **Performance efficiency:** `AWS-VPCE-PERF-01`
+- **Reliability:** `AWS-VPCE-REL-01`
+- **Security:** `AWS-VPCE-SEC-01`
+- **Operational excellence:** `AWS-VPCE-OPS-01`
+
+#### 21. Amazon CloudFront & AWS Global Accelerator
+- **Cost optimization:** `AWS-CF-COST-01`, `AWS-CF-COST-02`
+- **Performance efficiency:** `AWS-CF-PERF-01`
+- **Reliability:** `AWS-CF-REL-01`
+- **Security:** `AWS-CF-SEC-01`
+- **Operational excellence:** `AWS-CF-OPS-01`
+
+#### 22. Amazon SageMaker & Amazon Bedrock
+- **Cost optimization:** `AWS-AIML-COST-01` … `AWS-AIML-COST-03`
+- **Performance efficiency:** `AWS-AIML-PERF-01`
+- **Reliability:** `AWS-AIML-REL-01`
+- **Security:** `AWS-AIML-SEC-01`
+- **Operational excellence:** `AWS-AIML-OPS-01`
+
+#### 23. Amazon CloudWatch (logs, metrics, alarms)
+- **Cost optimization:** `AWS-CW-COST-01` … `AWS-CW-COST-03`
+- **Performance efficiency:** `AWS-CW-PERF-01`
+- **Reliability:** `AWS-CW-REL-01`
+- **Security:** `AWS-CW-SEC-01`
+- **Operational excellence:** `AWS-CW-OPS-01`
+
+#### 24. AWS KMS & AWS Secrets Manager
+- **Cost optimization:** `AWS-SEC-COST-01` … `AWS-SEC-COST-03` *(KMS/Secrets family in upstream spec)*
+- **Performance efficiency:** `AWS-SEC-PERF-01`
+- **Reliability:** `AWS-SEC-REL-01`
+- **Security:** `AWS-SEC-SEC-01`
+- **Operational excellence:** `AWS-SEC-OPS-01`
 
 ---
 

@@ -33,21 +33,56 @@
 | 5 | **AKS** | `microsoft.containerservice/managedclusters` | **Microsoft.ContainerService/managedClusters**: node_cpu_usage_percentage, node_memory_working_set_percentage, node_disk_usage_percentage, kube_pod_status_ready, cluster_autoscaler_unschedulable_pods_count — Dim node, nodepool, namespace | MeterCategory=Container Service (Standard vs Premium LTS) + MC_* node RG spend | `Microsoft.ContainerService/managedClusters/write`, `delete`, `start/action`, `stop/action`, `agentPools/write`, `agentPools/delete` |
 | 6 | **ACR & Container Apps** | `microsoft.containerregistry/registries`, `microsoft.app/containerapps`, `microsoft.app/managedenvironments` | **Microsoft.ContainerRegistry/registries**, **Microsoft.App/containerApps**: StorageUsed, TotalPull/PushCount, UsageNanoCores, WorkingSetBytes, Replicas, Requests | MeterCategory in (Container Registry, Azure Container Apps); retail ACR SKUs; ACA Consumption vs workload profiles | `Microsoft.ContainerRegistry/registries/write`, `webhooks/write`; `Microsoft.App/containerApps/write`, `managedEnvironments/write` |
 
-### 2.2 Extended 5-pillar rules (compute & containers)
+### 2.2 Rules by resource type (compute, containers & serverless)
 
-**1. VMs:** AZ-VM-COST-01–04, AZ-VM-PERF-01–03, AZ-VM-REL-01–03, AZ-VM-SEC-01–03, AZ-VM-OPS-01–03 (stopped vs deallocated, idle shutdown, rightsizing/Hybrid Benefit, CPU/memory/disk saturation, B-series credits, accelerated networking, zonal/AS/unmanaged disks/backup, encryption/Trusted Launch/public RDP-SSH, Monitor Agent/patching/IaC drift).
+#### 1. Virtual Machines
+- **Cost optimization:** `AZ-VM-COST-01` … `AZ-VM-COST-04`
+- **Performance efficiency:** `AZ-VM-PERF-01` … `AZ-VM-PERF-03`
+- **Reliability:** `AZ-VM-REL-01` … `AZ-VM-REL-03`
+- **Security:** `AZ-VM-SEC-01` … `AZ-VM-SEC-03`
+- **Operational excellence:** `AZ-VM-OPS-01` … `AZ-VM-OPS-03`
 
-**2. VMSS:** AZ-VMSS-COST-01–02, AZ-VMSS-PERF-01–02, AZ-VMSS-REL-01–02, AZ-VMSS-SEC-01–02, AZ-VMSS-OPS-01 (capacity floor vs CPU, legacy D*v2/v3, autoscale ceiling, load skew, zones/balance/orchestration/AppHealth, public IPs/managed identity, upgrade policy).
+#### 2. Virtual Machine Scale Sets
+- **Cost optimization:** `AZ-VMSS-COST-01`, `AZ-VMSS-COST-02`
+- **Performance efficiency:** `AZ-VMSS-PERF-01`, `AZ-VMSS-PERF-02`
+- **Reliability:** `AZ-VMSS-REL-01`, `AZ-VMSS-REL-02`
+- **Security:** `AZ-VMSS-SEC-01`, `AZ-VMSS-SEC-02`
+- **Operational excellence:** `AZ-VMSS-OPS-01`
 
-**3. App Service Plans:** AZ-ASP-COST-01–03, AZ-ASP-PERF-01, AZ-ASP-REL-01–02, AZ-ASP-SEC-01, AZ-ASP-OPS-01 (empty paid plan, over-tiered workers, legacy PremiumV2/Isolated, HTTP/disk queue/SNAT, zone redundancy/autoscale, VNet integration/remote debug, per-site scaling).
+#### 3. App Service Plans
+- **Cost optimization:** `AZ-ASP-COST-01` … `AZ-ASP-COST-03`
+- **Performance efficiency:** `AZ-ASP-PERF-01`
+- **Reliability:** `AZ-ASP-REL-01`, `AZ-ASP-REL-02`
+- **Security:** `AZ-ASP-SEC-01`
+- **Operational excellence:** `AZ-ASP-OPS-01`
 
-**4. Functions:** AZ-FUNC-COST-01–02, AZ-FUNC-PERF-01, AZ-FUNC-REL-01–02, AZ-FUNC-SEC-01, AZ-FUNC-OPS-01 (idle EP/flex memory, pre-warmed exhaustion, LRS host storage/slots, HTTPS/TLS/MI, App Insights/runtime).
+#### 4. Azure Functions (Function Apps)
+- **Cost optimization:** `AZ-FUNC-COST-01`, `AZ-FUNC-COST-02`
+- **Performance efficiency:** `AZ-FUNC-PERF-01`
+- **Reliability:** `AZ-FUNC-REL-01`, `AZ-FUNC-REL-02`
+- **Security:** `AZ-FUNC-SEC-01`
+- **Operational excellence:** `AZ-FUNC-OPS-01`
 
-**5. AKS:** AZ-AKS-COST-01–03, AZ-AKS-PERF-01–02, AZ-AKS-REL-01–02, AZ-AKS-SEC-01–02, AZ-AKS-OPS-01 (Premium LTS vs Standard, node pool utilization, dev cluster stop/start, unschedulable/disk pressure, ephemeral OS, SLA/zones/system pool, local accounts/RBAC/private API/network policy, auto-upgrade).
+#### 5. Azure Kubernetes Service (AKS)
+- **Cost optimization:** `AZ-AKS-COST-01` … `AZ-AKS-COST-03`
+- **Performance efficiency:** `AZ-AKS-PERF-01`, `AZ-AKS-PERF-02`
+- **Reliability:** `AZ-AKS-REL-01`, `AZ-AKS-REL-02`
+- **Security:** `AZ-AKS-SEC-01`, `AZ-AKS-SEC-02`
+- **Operational excellence:** `AZ-AKS-OPS-01`
 
-**6. ACR & ACA:** AZ-ACR-COST-01, AZ-ACA-COST-01, AZ-ACA-PERF-01, AZ-ACR-REL-01, AZ-ACR-SEC-01, AZ-ACR-OPS-01 (Premium tier/sprawl, idle min replicas, CPU/memory throttling, zone redundancy, admin/anonymous pull, retention policy).
+#### 6a. Azure Container Registry (ACR)
+- **Cost optimization:** `AZ-ACR-COST-01`
+- **Performance efficiency:** *(use cross-region / pull metrics in implementation)*
+- **Reliability:** `AZ-ACR-REL-01`
+- **Security:** `AZ-ACR-SEC-01`
+- **Operational excellence:** `AZ-ACR-OPS-01`
 
-*(Full formula text for each rule id matches the specification you maintain for implementation thresholds.)*
+#### 6b. Azure Container Apps (ACA)
+- **Cost optimization:** `AZ-ACA-COST-01`
+- **Performance efficiency:** `AZ-ACA-PERF-01`
+- **Reliability:** *(probe / replica rules pair with App Service patterns in implementation)*
+- **Security:** *(ingress + identity rules pair with Functions/App Service patterns in implementation)*
+- **Operational excellence:** *(revision and env rules in implementation)*
 
 ---
 
@@ -62,9 +97,35 @@
 | 9 | **Storage accounts** (Blob, ADLS Gen2, Files) | `microsoft.storage/storageaccounts` | **Microsoft.Storage/storageAccounts**, **blobServices**, **fileServices**: UsedCapacity, BlobCapacity, BlobCount, Transactions, Ingress/Egress, SuccessServerLatency, Availability | MeterCategory=Storage (General Block Blob v2, Files v2, Premium Files); retail | `Microsoft.Storage/storageAccounts/write`, `delete`, `listKeys/action`, `regenerateKey/action`, `blobServices/write`, `managementPolicies/write` |
 | 10 | **Recovery Services & Backup vaults** | `microsoft.recoveryservices/vaults`, `microsoft.dataprotection/backupvaults` | **Microsoft.RecoveryServices/vaults**: BackupHealthEvent, RestoreHealthEvent; protected instance counts; GRS vs LRS/ZRS bytes | MeterCategory=Backup; retail Backup + region | `Microsoft.RecoveryServices/vaults/write`, `backupPolicies/write`, `protectedItems/delete` |
 
-### 3.2 Extended 5-pillar rules (storage)
+### 3.2 Rules by resource type (storage & backup)
 
-**7–10:** Disks (unattached orphan, Premium→StandardSSD downgrade candidate, Premium v2 rightsizing, paid burst vs tier, burst/IOPS cap, zonal redundancy on prod, public export/CMK); snapshots (Premium SKU waste, full vs incremental, stale/orphan, gallery hydration, ZRS for prod, ActiveSAS/public, ad-hoc tags); storage accounts (hot without lifecycle, premium files underused, cool read penalty, throttling/latency, LRS prod vs ZRS/GZRS, soft delete/versioning, anonymous/shared keys/TLS/network, key rotation/task failures); backup vaults (GRS on non-prod, orphaned soft-delete items, enhanced backup policy for high-IOPS disks, failed jobs/cross-region restore, immutability/soft-delete, MUA/Resource Guard).
+#### 7. Managed Disks
+- **Cost optimization:** `AZ-DISK-COST-01` … `AZ-DISK-COST-04`
+- **Performance efficiency:** `AZ-DISK-PERF-01`
+- **Reliability:** `AZ-DISK-REL-01`
+- **Security:** `AZ-DISK-SEC-01`
+- **Operational excellence:** `AZ-DISK-OPS-01`
+
+#### 8. Disk Snapshots & Restore Points
+- **Cost optimization:** `AZ-SNAP-COST-01` … `AZ-SNAP-COST-03`
+- **Performance efficiency:** `AZ-SNAP-PERF-01`
+- **Reliability:** `AZ-SNAP-REL-01`
+- **Security:** `AZ-SNAP-SEC-01`
+- **Operational excellence:** `AZ-SNAP-OPS-01`
+
+#### 9. Storage Accounts (Blob, ADLS Gen2, Files)
+- **Cost optimization:** `AZ-STG-COST-01` … `AZ-STG-COST-03`
+- **Performance efficiency:** `AZ-STG-PERF-01`
+- **Reliability:** `AZ-STG-REL-01`, `AZ-STG-REL-02`
+- **Security:** `AZ-STG-SEC-01`
+- **Operational excellence:** `AZ-STG-OPS-01`
+
+#### 10. Recovery Services Vaults & Backup Vaults
+- **Cost optimization:** `AZ-BKP-COST-01`, `AZ-BKP-COST-02`
+- **Performance efficiency:** `AZ-BKP-PERF-01`
+- **Reliability:** `AZ-BKP-REL-01`
+- **Security:** `AZ-BKP-SEC-01`
+- **Operational excellence:** `AZ-BKP-OPS-01`
 
 ---
 
@@ -81,9 +142,42 @@
 | 15 | **Azure Cache for Redis** | `microsoft.cache/redis`, `microsoft.cache/redisenterprise` | **Microsoft.Cache/redis**: percentProcessorTime, usedmemorypercentage, usedmemoryRss, serverLoad, connectedclients, cachehits/misses, evictedkeys, cacheLatency — Dim ShardId, PrimaryOrReplica | MeterCategory=Azure Cache for Redis; retail Redis SKUs | `Microsoft.Cache/redis/write`, `delete`, `forceReboot/action`, `flushCache/action`, `listKeys/action`, `regenerateKey/action`, `import/action` |
 | 16 | **Synapse & Databricks** | `microsoft.synapse/workspaces/sqlpools`, `bigdatapools`, `microsoft.databricks/workspaces` | **Microsoft.Synapse/workspaces/sqlPools**: DWUUsedPercent, CPU, MemoryUsedPercent, ActiveQueries, Connections | MeterCategory Azure Synapse Analytics / Azure Databricks; DWU/DBU retail | `Microsoft.Synapse/workspaces/sqlPools/write`, `pause/action`, `resume/action`; `Microsoft.Databricks/workspaces/write` |
 
-### 4.2 Extended 5-pillar rules (databases)
+### 4.2 Rules by resource type (databases, cache & analytics)
 
-**11–16:** SQL (rightsizing/elastic/serverless, storage allocation, AHB, worker/CPU/deadlocks, zone/geo backup redundancy, Entra-only/firewall/alerts, maintenance windows); Cosmos (manual RU, autoscale/serverless, multi-region write waste, index bloat, hot partition/429s, region/zone/autofailover, backup redundancy, local auth/public network, partition diagnostics); Postgres/MySQL (rightsizing/burstable, dev stop/start, disk queue/IOPS/transaction limits, HA/geo-backup/auto-grow, Entra/TLS/public access, EOL engines); Redis (tier/shard overprovision, serverLoad/eviction, Basic/non-zonal prod, access keys/non-SSL/TLS, patch schedule); Synapse/Databricks (unpaused SQL pool, Spark/Databricks auto-pause, DWU saturation, geo-backup, managed VNet/exfiltration, job vs all-purpose clusters).
+#### 11. Azure SQL (databases, elastic pools, managed instance)
+- **Cost optimization:** `AZ-SQL-COST-01` … `AZ-SQL-COST-03`
+- **Performance efficiency:** `AZ-SQL-PERF-01`
+- **Reliability:** `AZ-SQL-REL-01`
+- **Security:** `AZ-SQL-SEC-01`
+- **Operational excellence:** `AZ-SQL-OPS-01`
+
+#### 12. Azure Cosmos DB
+- **Cost optimization:** `AZ-COS-COST-01` … `AZ-COS-COST-04`
+- **Performance efficiency:** `AZ-COS-PERF-01`
+- **Reliability:** `AZ-COS-REL-01`, `AZ-COS-REL-02`
+- **Security:** `AZ-COS-SEC-01`
+- **Operational excellence:** `AZ-COS-OPS-01`
+
+#### 13 & 14. Azure Database for PostgreSQL / MySQL (Flexible Server)
+- **Cost optimization:** `AZ-PGMY-COST-01`, `AZ-PGMY-COST-02`
+- **Performance efficiency:** `AZ-PGMY-PERF-01`
+- **Reliability:** `AZ-PGMY-REL-01`
+- **Security:** `AZ-PGMY-SEC-01`
+- **Operational excellence:** `AZ-PGMY-OPS-01`
+
+#### 15. Azure Cache for Redis
+- **Cost optimization:** `AZ-REDIS-COST-01`
+- **Performance efficiency:** `AZ-REDIS-PERF-01`
+- **Reliability:** `AZ-REDIS-REL-01`
+- **Security:** `AZ-REDIS-SEC-01`
+- **Operational excellence:** `AZ-REDIS-OPS-01`
+
+#### 16. Azure Synapse & Azure Databricks
+- **Cost optimization:** `AZ-SYN-COST-01`, `AZ-SYN-COST-02`
+- **Performance efficiency:** `AZ-SYN-PERF-01`
+- **Reliability:** `AZ-SYN-REL-01`
+- **Security:** `AZ-SYN-SEC-01`
+- **Operational excellence:** `AZ-SYN-OPS-01`
 
 ---
 
@@ -102,15 +196,64 @@
 | 23 | **Azure ML & Azure OpenAI (PTU)** | `microsoft.machinelearningservices/workspaces/computes`, `onlineendpoints`, `microsoft.cognitiveservices/accounts/deployments` | **Microsoft.MachineLearningServices/workspaces**, **Microsoft.CognitiveServices/accounts**: CpuUtilization, GpuUtilization, GpuMemoryUtilization, ActiveNodes, ProvisionedManagedUtilizationV2 | MeterCategory Azure Machine Learning, Cognitive Services, Virtual Machines; retail | `Microsoft.MachineLearningServices/workspaces/computes/write`, `stop/action`; `Microsoft.CognitiveServices/accounts/deployments/write` |
 | 24 | **Log Analytics & Key Vault** | `microsoft.operationalinsights/workspaces`, `microsoft.keyvault/vaults`, `managedhsms` | **Microsoft.OperationalInsights/workspaces**, **Microsoft.KeyVault/vaults**: DataExportBytes, ServiceApiHit, ServiceApiLatency, SaturationShoebox | MeterCategory Log Analytics, Azure Monitor, Key Vault; retail tiers + HSM key charges | `Microsoft.OperationalInsights/workspaces/write`, `tables/write`; `Microsoft.KeyVault/vaults/write`, `accessPolicies/write` |
 
-### 5.2 Extended 5-pillar rules (networking & security ops)
+### 5.2 Rules by resource type (networking, AI/ML & observability)
 
-**17–18:** Load Balancer & AppGW (orphaned LB, idle/over-scaled AppGW, SNAT exhaustion/backend latency, zonal/unhealthy backends, WAF/TLS, legacy v1/Basic).
+#### 17. Load Balancers (Standard SKU)
+- **Cost optimization:** `AZ-NET-COST-01`
+- **Performance efficiency:** `AZ-NET-PERF-01`
+- **Reliability:** `AZ-NET-REL-01`, `AZ-NET-REL-02`
+- **Security:** *(TLS/WAF are Application Gateway concerns; LB often paired with NSG / Azure Firewall — see 18, 22)*
+- **Operational excellence:** `AZ-NET-OPS-01` (Basic / retiring SKU)
 
-**19–20:** NAT & PIPs (unattached/idle NAT, storage/SQL hairpin without service endpoints, unassociated public IP/prefix, drops/SNAT failures, single-zone NAT covering multi-AZ, DDoS on VIPs, Basic SKU public IP).
+#### 18. Application Gateways & WAF
+- **Cost optimization:** `AZ-NET-COST-02`
+- **Performance efficiency:** `AZ-NET-PERF-02`
+- **Reliability:** `AZ-NET-REL-01`, `AZ-NET-REL-02`
+- **Security:** `AZ-NET-SEC-01`
+- **Operational excellence:** `AZ-NET-OPS-01` (legacy v1)
 
-**21–22:** Gateways, Private Endpoints, Firewall (disconnected VPN/unprovisioned ER, ER Local vs Standard metering, over-tiered Firewall, orphaned PE, gateway CPU/drops, active-active/AZ SKUs, IDPS/threat intel, missing private DNS zone group).
+#### 19. Azure NAT Gateway
+- **Cost optimization:** `AZ-NAT-COST-01`, `AZ-NAT-COST-02`
+- **Performance efficiency:** `AZ-NAT-PERF-01`
+- **Reliability:** `AZ-NAT-REL-01`
+- **Security:** `AZ-NAT-SEC-01`
+- **Operational excellence:** `AZ-NAT-OPS-01`
 
-**23–24:** AI & observability (idle AML compute, cluster min nodes, underused OpenAI PTU, PTU saturation/429, single-region GenAI, public workspace/local key auth, orphaned online deployments; Log Analytics commitment vs PayG, Basic/Auxiliary tables, KV throttling, purge/soft-delete/RBAC, non-prod daily cap).
+#### 20. Public IP Addresses & Prefixes
+- **Cost optimization:** `AZ-PIP-COST-01`
+- **Performance efficiency:** `AZ-PIP-PERF-01`
+- **Reliability:** `AZ-EIP-REL-01` *(hardcoded / ephemeral public VIP in upstream matrix)*
+- **Security:** `AZ-PIP-SEC-01`
+- **Operational excellence:** `AZ-PIP-OPS-01`
+
+#### 21. Virtual Network Gateways (VPN & ExpressRoute) & Private Endpoints
+- **Gateways — cost optimization:** `AZ-GW-COST-01`, `AZ-GW-COST-02`
+- **Gateways — performance efficiency:** `AZ-GW-PERF-01`
+- **Gateways — reliability:** `AZ-GW-REL-01`
+- **Gateways — security:** `AZ-GW-SEC-01`
+- **Gateways — operational excellence:** `AZ-GW-OPS-01`
+- **Private endpoints — cost optimization:** `AZ-PE-COST-01`
+- **Private endpoints — operational excellence:** `AZ-PE-OPS-01`
+
+#### 22. Azure Front Door & Azure Firewall
+- **Azure Firewall — cost optimization:** `AZ-FW-COST-01`
+- **Azure Firewall — security:** `AZ-FW-SEC-01`
+- **Front Door:** CDN / origin / routing rules — align with Application Gateway & load balancer evaluators and billing lines for the SKU *(no separate `AZ-FD-*` ids in the upstream matrix)*
+
+#### 23. Azure Machine Learning & Azure OpenAI (PTU)
+- **Cost optimization:** `AZ-AI-COST-01` … `AZ-AI-COST-03`
+- **Performance efficiency:** `AZ-AI-PERF-01`
+- **Reliability:** `AZ-AI-REL-01`
+- **Security:** `AZ-AI-SEC-01`
+- **Operational excellence:** `AZ-AI-OPS-01`
+
+#### 24. Log Analytics Workspaces & Azure Key Vault (incl. Managed HSM)
+- **Log Analytics — cost optimization:** `AZ-LOG-COST-01`, `AZ-LOG-COST-02`
+- **Log Analytics — operational excellence:** `AZ-LOG-OPS-01`
+- **Key Vault — cost optimization:** `AZ-KV-COST-01`
+- **Key Vault — performance efficiency:** `AZ-KV-PERF-01`
+- **Key Vault — reliability:** `AZ-KV-REL-01`
+- **Key Vault — security:** `AZ-KV-SEC-01`
 
 ---
 
