@@ -7,6 +7,7 @@ This folder splits the **full provider catalogs** so agents and humans can navig
 | [well_architected_aws.md](./well_architected_aws.md) | AWS discovery, metrics, cost, CloudTrail, 5-pillar rule summary |
 | [aws_extended_billable_resources_5_pillar.md](./aws_extended_billable_resources_5_pillar.md) | **Extended** — 24 billable AWS types, full 5-pillar rule matrices |
 | [well_architected_azure.md](./well_architected_azure.md) | Azure ARG, Monitor, Cost Management, Activity Log, 5-pillar summary |
+| [azure_extended_billable_resources_5_pillar.md](./azure_extended_billable_resources_5_pillar.md) | **Extended** — 24 billable Azure types, full 5-pillar rule matrices |
 | [well_architected_gcp.md](./well_architected_gcp.md) | GCP Asset, Monitoring, BQ billing, Audit logs, 5-pillar summary |
 
 **Cross-cutting agent brief:** `docs/MULTI_CLOUD_WELL_ARCHITECTED_AGENT_SPEC.md` (codebase map + shared ingestion principles).

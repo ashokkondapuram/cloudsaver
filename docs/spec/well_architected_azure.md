@@ -4,6 +4,8 @@
 
 **CloudSaver paths:** `app/scanner.py`, `app/collectors/azure_live.py`, `app/collectors/azure_monitor_batch.py`; target: `app/adapters/azure/` + `app/rules/azure_rules.py`. **Analysis:** `app/analysis_service/*`.
 
+**Extended catalog (24 billable types, full rule matrices):** [azure_extended_billable_resources_5_pillar.md](./azure_extended_billable_resources_5_pillar.md)
+
 **Reliability:** Prefer ARM REST + `provider_retry`; Resource Graph for discovery; retail prices via `app/domain/pricing/retail_cache.py` where applicable.
 
 ---
