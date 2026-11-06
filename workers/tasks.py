@@ -256,10 +256,22 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
             coverage=coverage(inventory, findings, outcomes),
             coverage_manifest=coverage_manifest(inventory, findings, outcomes, scope_results=scope_results),
         )).model_dump()
-        from app.analysis_service.pipeline import attach_pillar_analysis
-        attach_pillar_analysis(scan)
-        from app.drift.scan_baselines import capture_scan_drift_baselines_for_tenant
-        capture_scan_drift_baselines_for_tenant(scan, tenant_id, settings)
+        previous_scan = None
+        if settings.database_url:
+            from app.store import PostgresStore
+            try:
+                prior = PostgresStore(settings.database_url).list(tenant_id, 1)
+                if prior:
+                    previous_scan = prior[0]
+            except Exception:
+                previous_scan = None
+        from app.scanner_pipeline import finalize_scan_payload
+        finalize_scan_payload(
+            scan,
+            tenant_id=tenant_id,
+            settings=settings,
+            previous_completed_scan=previous_scan,
+        )
         heartbeat.ensure_owned()
         if os.getenv('CLOUDSAVER_AUTH_MODE')=='keycloak':
             # Recheck the current configured scope and licence before publishing evidence.

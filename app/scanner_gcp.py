@@ -185,6 +185,16 @@ def scan_gcp_project(source, *, reader=None, now=None):
             from app.collectors.gcp_live import extra_inventory,enrich
             inventory += extra_inventory(reader,project,regions)
             enrich(reader,project,inventory,now)
+            from app.config import Settings
+            from app.collectors.cloud_advisor import enabled as advisor_enabled, enrich_inventory_advisor_signals
+            stack_settings = Settings.load()
+            if advisor_enabled(stack_settings):
+                enrich_inventory_advisor_signals(
+                    reader,
+                    inventory,
+                    gcp_projects=[(project, regions)],
+                    settings=stack_settings,
+                )
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

@@ -492,10 +492,20 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             except Exception:
                 logger.warning('Scan billing materialization failed scan_id=%s', scan_id, exc_info=True)
 
-            from app.analysis_service.pipeline import attach_pillar_analysis
-            attach_pillar_analysis(validated)
-            from app.drift.scan_baselines import capture_scan_drift_baselines_for_tenant
-            capture_scan_drift_baselines_for_tenant(validated, tenant_id, settings)
+            previous_scan = None
+            try:
+                prior = store.list(tenant_id, 1)
+                if prior:
+                    previous_scan = prior[0]
+            except Exception:
+                previous_scan = None
+            from app.scanner_pipeline import finalize_scan_payload
+            finalize_scan_payload(
+                validated,
+                tenant_id=tenant_id,
+                settings=settings,
+                previous_completed_scan=previous_scan,
+            )
 
             if heartbeat:
                 heartbeat.ensure_owned()

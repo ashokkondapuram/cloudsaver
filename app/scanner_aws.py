@@ -101,6 +101,23 @@ def scan_account(source, *, session=None):
             enrich(client,inventory)
             by_id={r['resource_id']:r for r in inventory}
             findings=[dict(r,evidence=by_id[r['resource_id']]['evidence']) for r in findings]
+            from app.config import Settings
+            from app.collectors.cloud_advisor import enabled as advisor_enabled, enrich_inventory_advisor_signals
+            stack_settings = Settings.load()
+            if advisor_enabled(stack_settings):
+                support = None
+                try:
+                    support = session.client('support', region_name='us-east-1', config=config)
+                    clients.append(support)
+                except Exception:
+                    support = None
+                enrich_inventory_advisor_signals(
+                    None,
+                    inventory,
+                    aws_support_client=support,
+                    aws_account_ids=[str(account)],
+                    settings=stack_settings,
+                )
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

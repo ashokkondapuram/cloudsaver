@@ -17,7 +17,7 @@ Branch: `cursor/fix-all-ingestion-analysis-083f` (ingestion → analysis through
 | **Persisted `pillar_analysis`** + HTTP read APIs | **Done** (`542ce7e`) | `app/analysis_service/pipeline.py`, `app/pillar_analysis_api.py`, `app/resource_api.py`, gateway proxy |
 | Azure Monitor **`metrics:getBatch`** in live enrich | **Done** (`ec2f304`) | `app/collectors/azure_monitor_batch.py`, `azure_live.enrich` prefetch + per-resource GET fallback |
 
-**Remaining (optional / future):** AWS Trusted Advisor + GCP Recommender Stream E bodies (Azure Advisor **done** when flag on); **`scanner_pipeline.py`** orchestrator split; activity log **watermark** cursors for incremental ingest.
+**Remaining (optional / future):** Broader GCP Recommender surface (beyond compute/SQL/idle disk); Trusted Advisor **Business/Enterprise** feature checks only; activity log **client-side** incremental cursors (watermarks now merge scan-to-scan on inventory).
 
 ## “Fix rest” wave (`75033f3`)
 
@@ -26,7 +26,9 @@ Branch: `cursor/fix-all-ingestion-analysis-083f` (ingestion → analysis through
 | Drift **baselines from scan** + **`drift_detected`** on evidence/API | **Done** | `app/drift/scan_baselines.py`, `workers/tasks.py`, `resource_api.py` |
 | Optional **AWS Resource Explorer 2** | **Done** (flag) | `CLOUDSAVER_AWS_RESOURCE_EXPLORER`, `aws_resource_explorer.py` |
 | Optional **GCP searchAllResources** | **Done** (flag) | `CLOUDSAVER_GCP_ASSET_SEARCH`, `gcp_asset_search.py` |
-| **Stream E** Azure Advisor signals | **Done** (flag) | `CLOUDSAVER_CLOUD_ADVISOR_ENABLED`, `cloud_advisor.py` |
+| **Stream E** Advisor signals (Azure + AWS TA + GCP Recommender) | **Done** (flag) | `CLOUDSAVER_CLOUD_ADVISOR_ENABLED`, `cloud_advisor.py`, `scanner_aws.py` / `scanner_gcp.py` after live enrich |
+| **`scanner_pipeline`** (watermarks + pillar + baselines) | **Done** | `app/scanner_pipeline.py`; `app/main.py`, `workers/tasks.py` |
+| **Activity ingestion watermarks** | **Done** | `app/collectors/activity_ingestion_watermark.py` |
 | Shared **`_pagination.py`** helper | **Done** (ARM + cloud_http) | `app/collectors/_pagination.py`, `azure_live.pages` delegate |
 | **Pillar analysis-backed assessments** | **Done** | `resource_assessment.overlay_pillar_analysis` |
 
