@@ -54,6 +54,7 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
         'analytics': internal_url('SCANNER_SERVICE_URL', 'http://scanner-service:8002'),
         'notification': internal_url('SCANNER_SERVICE_URL', 'http://scanner-service:8002'),
         'agent': internal_url('AGENT_GATEWAY_URL', 'http://agent-gateway:8006'),
+        'analysis': internal_url('ANALYSIS_SERVICE_URL', 'http://analysis-service:8004'),
     }
 
     async def core_ready():
@@ -470,6 +471,30 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
             )
         }
         return await forward('GET', 'scanner', '/api/v1/finops/azure-resource-costs', authorization, params)
+
+    @app.post('/api/v1/analysis/resources')
+    async def analysis_resources(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream(
+            'POST',
+            targets['analysis'],
+            '/api/v1/analysis/resources',
+            authorization,
+            json=await bounded_json(request),
+            transport=transport,
+        )
+
+    @app.post('/api/v1/analysis/scan')
+    async def analysis_scan(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.gitops_api import bounded_json
+        return await upstream(
+            'POST',
+            targets['analysis'],
+            '/api/v1/analysis/scan',
+            authorization,
+            json=await bounded_json(request),
+            transport=transport,
+        )
 
     @app.post('/api/v1/finops/resource-cost')
     async def resource_cost(request: Request, row=Depends(allowed), authorization: str = Header()):

@@ -13,6 +13,7 @@ from app.route_inventory import ROUTES, classify
 from services.gateway import create_app as gateway
 from app.main import create_app as tenant_service
 from services.agent_gateway import create_app as agent_gateway
+from services.analysis_service_app import create_app as analysis_service
 
 TID = '11111111-1111-4111-8111-111111111111'
 SID = '33333333-3333-4333-8333-333333333333'
@@ -51,6 +52,7 @@ def apps(tmp_path):
         'gateway': gateway(config, Limiter(), transport),
         'scanner': scanner(config, scanner=lambda tenant: []),
         'agent': agent_gateway(config),
+        'analysis': analysis_service(config),
     }
 
 
