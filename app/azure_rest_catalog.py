@@ -25,6 +25,9 @@ AUTHORIZATION_LOCKS_API_VERSION = '2016-09-01'
 # Resource Graph — Resources — Resources (tenant inventory query).
 RESOURCE_GRAPH_API_VERSION = '2024-04-01'
 
+# Advisor — Recommendations — List (subscription scope).
+ADVISOR_RECOMMENDATIONS_API_VERSION = '2023-01-01'
+
 AZURE_REST_CATALOG = {
     'arm_resource_get': {
         'doc': 'https://learn.microsoft.com/en-us/rest/api/resources/resources/get',
@@ -106,6 +109,14 @@ AZURE_REST_CATALOG = {
         'path': '/subscriptions/{subscription_id}/providers/microsoft.insights/eventtypes/management/values',
         'query': {'api-version': ACTIVITY_LOG_EVENTS_API_VERSION, '$filter': '{odata_filter}'},
         'applies_to': 'Resource-scoped management activity for state history.',
+    },
+    'advisor_recommendations_list': {
+        'doc': 'https://learn.microsoft.com/en-us/rest/api/advisor/recommendations/list',
+        'method': 'GET',
+        'host': 'management.azure.com',
+        'path': '/subscriptions/{subscription_id}/providers/Microsoft.Advisor/recommendations',
+        'query': {'api-version': ADVISOR_RECOMMENDATIONS_API_VERSION},
+        'applies_to': 'Subscription-scoped Azure Advisor recommendations (Stream E).',
     },
     'resource_graph_query': {
         'doc': 'https://learn.microsoft.com/en-us/rest/api/azureresourcegraph/resourcegraph/resources/resources',
@@ -218,6 +229,16 @@ def resource_graph_query_url() -> str:
     return arm_url(
         f'/providers/Microsoft.ResourceGraph/resources?api-version={RESOURCE_GRAPH_API_VERSION}'
     )
+
+
+def advisor_recommendations_url(subscription_id: str) -> str:
+    """GET target for Advisor Recommendations/List (Microsoft Learn REST)."""
+    from uuid import UUID
+
+    from app.collectors.azure_endpoint import arm_url
+
+    sid = str(UUID(subscription_id))
+    return arm_url(f'/subscriptions/{sid}/providers/Microsoft.Advisor/recommendations')
 
 
 def monitor_metrics_batch_url(region: str, subscription_id: str) -> str:
