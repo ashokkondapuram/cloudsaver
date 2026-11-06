@@ -1,3 +1,4 @@
+import {GitBranch, Pulse, SealCheck, Sparkle, Wallet} from '@phosphor-icons/react';
 import {governanceTabQuery, governanceTabs, type GovernanceTab} from './governance-tabs';
 import type {PageTab} from '../components/ui/PageTabs';
 
@@ -58,6 +59,40 @@ export const automationWorkspaceTabs: WorkspaceTab[] = [
   },
   {id: 'policies', label: 'Plan guardrails', lead: 'Policies that constrain automation and publishing.'},
   {id: 'execution', label: 'Execution history', lead: 'Sync and execution events for operator review.'},
+];
+
+/** Overview dashboard: mirrors major workspace areas without navigation. */
+export const overviewWorkspaceTabs: WorkspaceTab[] = [
+  {
+    id: 'operations',
+    label: 'Operations',
+    icon: Pulse,
+    lead: 'Notification delivery and observability connector health.',
+  },
+  {
+    id: 'finance',
+    label: 'Finance',
+    icon: Wallet,
+    lead: 'Savings cases and imported cost investigations.',
+  },
+  {
+    id: 'governance',
+    label: 'Governance',
+    icon: SealCheck,
+    lead: 'Risk posture, findings queue, and assessment mix.',
+  },
+  {
+    id: 'change',
+    label: 'Change & agents',
+    icon: GitBranch,
+    lead: 'GitOps reviews, agent tasks, and Kubernetes inventory.',
+  },
+  {
+    id: 'ai',
+    label: 'AI & data',
+    icon: Sparkle,
+    lead: 'Model data-use policy and approved processors.',
+  },
 ];
 
 export const outcomesWorkspaceTabs: WorkspaceTab[] = [

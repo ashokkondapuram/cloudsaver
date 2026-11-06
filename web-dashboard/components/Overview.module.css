@@ -27,50 +27,14 @@
   flex-direction: column;
   gap: 12px;
 }
-.workspaceSummaryGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+.workspaceSummary :global(.overview-workspace-tab-shell) {
+  margin-top: 4px;
 }
-@media (max-width: 900px) {
-  .workspaceSummaryGrid {
-    grid-template-columns: 1fr;
-  }
+.workspaceSummary :global(.overview-workspace-tab-shell .tab-panel-stack > .panel) {
+  margin-bottom: 16px;
 }
-.workspaceSummaryBlock {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-}
-.workspaceSummaryHeading {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--slate-700);
-}
-.workspaceSummaryHeading span:last-child {
-  color: inherit;
-}
-.workspaceSummaryTiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-}
-.workspaceSummaryTiles .metric-card {
-  min-height: 0;
-  padding: 14px 16px;
-}
-.workspaceSummaryTiles .metric-card > strong {
-  font-size: 22px;
-  margin: 8px 0 4px;
+.workspaceSummary :global(.overview-workspace-tab-shell .tab-panel-stack > .panel:last-child) {
+  margin-bottom: 0;
 }
 .workspaceBarChart {
   margin-top: 4px;
