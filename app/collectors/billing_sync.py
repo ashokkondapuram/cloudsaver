@@ -17,6 +17,9 @@ from app.collectors.azure_endpoint import ARM_HOST
 
 MAX_ROWS = 200000
 OPTIONAL_KEYS = {'billing_project','dataset','table','export_type','athena_region','athena_workgroup','athena_database','athena_table'}
+COST_SOURCE_ACTUAL_BILLED = 'ACTUAL_BILLED'
+COST_SOURCE_FOCUS_IMPORT = 'FOCUS_IMPORT'
+COST_SOURCE_RETAIL_ESTIMATED = 'RETAIL_ESTIMATED'
 
 
 NAME = r'[A-Za-z0-9_-]{1,100}'
@@ -160,7 +163,7 @@ def _accumulate_cost_amount(merged, key, field, amount):
     totals[f'{field}_present'] = True
 
 
-def _cost_row_from_totals(day, resource, currency, totals):
+def _cost_row_from_totals(day, resource, currency, totals, *, cost_source=COST_SOURCE_ACTUAL_BILLED):
     billed = totals['billed']
     return dict(
         day=day,
@@ -171,6 +174,37 @@ def _cost_row_from_totals(day, resource, currency, totals):
         billed_present=totals['billed_present'],
         effective_present=totals['effective_present'],
         category='Credit' if totals['billed_present'] and billed is not None and billed < 0 else 'Usage',
+        cost_source=cost_source,
+    )
+
+
+def focus_import_observation_row(day, resource_id, currency, *, billed, effective, category='Usage'):
+    """Internal billing row for operator FOCUS/manual imports (not provider auto-sync)."""
+    return dict(
+        day=day,
+        resource_id=resource_id.lower() if isinstance(resource_id, str) and resource_id.lower().startswith('/subscriptions/') else resource_id,
+        currency=currency,
+        billed=str(billed) if billed is not None else None,
+        effective=str(effective) if effective is not None else None,
+        billed_present=billed is not None,
+        effective_present=effective is not None,
+        category=category,
+        cost_source=COST_SOURCE_FOCUS_IMPORT,
+    )
+
+
+def retail_estimated_observation_row(day, resource_id, currency, *, billed, effective=None, category='Usage'):
+    """Internal billing row when only a retail/list estimate is available (not provider-billed)."""
+    return dict(
+        day=day,
+        resource_id=resource_id.lower() if isinstance(resource_id, str) and resource_id.lower().startswith('/subscriptions/') else resource_id,
+        currency=currency,
+        billed=str(billed) if billed is not None else None,
+        effective=str(effective) if effective is not None else None,
+        billed_present=billed is not None,
+        effective_present=effective is not None,
+        category=category,
+        cost_source=COST_SOURCE_RETAIL_ESTIMATED,
     )
 
 
@@ -297,7 +331,8 @@ def athena_rows(session, binding, start, end, *, sleep=None, max_wait_seconds=12
             day, resource, currency, kind, billed, effective = [c.get('VarCharValue') for c in row['Data']]
             if not Decimal(billed or '0') and not Decimal(effective or '0'): continue
             rows.append(dict(day=datetime.fromisoformat(day).date(), resource_id=resource or None, currency=currency,
-                             billed=billed or '0', effective=effective or '0', category=CUR_CATEGORIES.get(kind,'Usage')))
+                             billed=billed or '0', effective=effective or '0', category=CUR_CATEGORIES.get(kind,'Usage'),
+                             cost_source=COST_SOURCE_ACTUAL_BILLED))
             if len(rows) > MAX_ROWS: raise ValueError('Billing row limit exceeded')
         token = page.get('NextToken')
         if not token: return rows
@@ -327,7 +362,8 @@ def aws_rows(binding, tenant, start, end):
                     kind=group['Keys'][0]
                     result.append(dict(day=datetime.fromisoformat(period['TimePeriod']['Start']).date(),resource_id=None,
                         currency=actual['Unit'],billed=actual['Amount'],effective=effective['Amount'],
-                        category={'Tax':'Tax','Credit':'Credit','Refund':'Adjustment','Fee':'Purchase'}.get(kind,'Usage')))
+                        category={'Tax':'Tax','Credit':'Credit','Refund':'Adjustment','Fee':'Purchase'}.get(kind,'Usage'),
+                        cost_source=COST_SOURCE_ACTUAL_BILLED))
             token=response.get('NextPageToken')
             if not token: break
         else: raise ValueError('Billing pagination limit exceeded')
@@ -360,7 +396,8 @@ def gcp_rows(binding, tenant, start, end):
     for row in response.get('rows',[]):
         day,currency,kind,resource_id,billed,effective=[x['v'] for x in row['f']]
         rows.append(dict(day=datetime.fromisoformat(day).date(),resource_id=resource_id or None,currency=currency,
-                         billed=billed,effective=effective,category={'tax':'Tax','adjustment':'Adjustment'}.get(kind,'Usage')))
+                         billed=billed,effective=effective,category={'tax':'Tax','adjustment':'Adjustment'}.get(kind,'Usage'),
+                         cost_source=COST_SOURCE_ACTUAL_BILLED))
     if detailed:
         return rows, 'resource', ['The detailed BigQuery billing export is summed per resource and day. Export completeness remains unverified.']
     return rows, 'project', ['Standard BigQuery billing export is project-level; resource-level attribution and export completeness remain unverified.']

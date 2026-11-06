@@ -32,7 +32,7 @@ def test_azure_merges_actual_and_amortized_cost_across_pages(monkeypatch):
     rows,granularity,_=billing_sync.azure_rows(dict(provider='azure',scope_id=SUB),workspace(),START,END)
     assert granularity=='resource' and len(calls)==4
     assert delays==[]
-    assert rows==[dict(day=date(2026,10,1),resource_id='/sub/r1',currency='USD',billed='25.0',effective='16.50',billed_present=True,effective_present=True,category='Usage')]
+    assert rows==[dict(day=date(2026,10,1),resource_id='/sub/r1',currency='USD',billed='25.0',effective='16.50',billed_present=True,effective_present=True,category='Usage',cost_source='ACTUAL_BILLED')]
 
 
 def test_azure_pagination_rejects_foreign_hosts(monkeypatch):
