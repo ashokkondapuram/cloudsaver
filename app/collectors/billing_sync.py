@@ -112,6 +112,35 @@ def _post(url, token, body, scope_id=None):
             parse_float=Decimal,attempts=attempts,deadline_seconds=deadline_seconds)
 
 
+GCP_BQ_QUERY_PAGES = 100
+_BQ_QUERY_JOB = re.compile(r'[A-Za-z0-9._-]{1,128}')
+
+
+def _bq_get_query_results(billing_project, job_id, token, page_token):
+    """Continuation page for a completed BigQuery jobs.query result set."""
+    from app.provider_retry import read_json
+    if not isinstance(page_token, str) or not page_token or len(page_token) > 10000:
+        raise ValueError('Unexpected billing pagination cursor')
+    if not isinstance(job_id, str) or not _BQ_QUERY_JOB.fullmatch(job_id):
+        raise ValueError('Unexpected billing pagination cursor')
+    if not re.fullmatch(NAME, billing_project):
+        raise ValueError('Unexpected billing destination')
+    path = f'/bigquery/v2/projects/{billing_project}/queries/{job_id}'
+    if not re.fullmatch(r'/bigquery/v2/projects/[a-z][a-z0-9-]{4,61}[a-z0-9]/queries/[A-Za-z0-9._-]{1,128}', path):
+        raise ValueError('Unexpected billing destination')
+    url = 'https://bigquery.googleapis.com' + path
+    raw_attempts = os.getenv('CLOUDSAVER_GCP_BIGQUERY_ATTEMPTS', '3')
+    attempts = min(5, int(raw_attempts))
+    if not 1 <= int(raw_attempts) <= 12:
+        raise ValueError('CLOUDSAVER_GCP_BIGQUERY_ATTEMPTS must be between 1 and 12')
+    key = 'gcp:bigquery:' + billing_project
+    with httpx.Client(follow_redirects=False) as client:
+        return read_json(client, 'GET', url, headers={'Authorization': 'Bearer ' + token},
+            params={'maxResults': min(10000, MAX_ROWS), 'pageToken': page_token},
+            quota_key=key, interval=0, max_bytes=4_000_000, parse_float=Decimal,
+            attempts=attempts, deadline_seconds=30)
+
+
 def _token(credential):
     """Refresh (or return the still-valid cached) token; azure-identity only hits the network when near expiry.
     Retries transient DNS/connection failures so an hours-long paced sync survives a momentary network blip."""
@@ -325,17 +354,23 @@ def athena_rows(session, binding, start, end, *, sleep=None, max_wait_seconds=12
     raise ValueError('Athena billing pagination limit exceeded')
 
 
+def _aws_cost_explorer_config():
+    from botocore.config import Config
+    # Match provider_retry read budget (three attempts) via botocore adaptive retries.
+    return Config(connect_timeout=5, read_timeout=25, retries={'max_attempts': 3, 'mode': 'adaptive'})
+
+
 def aws_rows(binding, tenant, start, end):
     from app.cloud_identity import aws_session
-    from botocore.config import Config
     source = next(x for x in tenant.get('aws_accounts',[]) if x['account_id']==binding['scope_id'])
     session = aws_session(source, tenant=tenant)
     if binding.get('athena_table'):
         return athena_rows(session, binding, start, end), 'resource', ['CUR 2.0 line items are summed per resource and day. Effective cost follows the AWS amortization fields for Reserved Instances and Savings Plans.']
-    client = session.client('ce', region_name='us-east-1', config=Config(connect_timeout=5,read_timeout=25,retries={'total_max_attempts':1}))
+    client = session.client('ce', region_name='us-east-1', config=_aws_cost_explorer_config())
     result, token = [], None
+    max_pages = MAX_ROWS // 100 + 2
     try:
-        for _ in range(10):
+        for _ in range(max_pages):
             args = dict(TimePeriod={'Start':start.isoformat(),'End':end.isoformat()}, Granularity='DAILY',
                         Metrics=['UnblendedCost','AmortizedCost'],GroupBy=[{'Type':'DIMENSION','Key':'RECORD_TYPE'}],
                         Filter={'Dimensions':{'Key':'LINKED_ACCOUNT','Values':[binding['scope_id']]}})
@@ -350,12 +385,21 @@ def aws_rows(binding, tenant, start, end):
                         currency=actual['Unit'],billed=actual['Amount'],effective=effective['Amount'],
                         category={'Tax':'Tax','Credit':'Credit','Refund':'Adjustment','Fee':'Purchase'}.get(kind,'Usage'),
                         cost_source=COST_SOURCE_ACTUAL_BILLED))
+                    if len(result) > MAX_ROWS: raise ValueError('Billing row limit exceeded')
             token=response.get('NextPageToken')
             if not token: break
         else: raise ValueError('Billing pagination limit exceeded')
         return result, 'account', ['Cost Explorer amounts are account-level; no per-resource charge or export-completeness proof is invented.']
     finally:
         client.close()
+
+
+def _gcp_bq_charge_row(fields):
+    day, currency, kind, resource_id, billed, effective = [x['v'] for x in fields]
+    return dict(day=datetime.fromisoformat(day).date(), resource_id=resource_id or None, currency=currency,
+                billed=billed, effective=effective,
+                category={'tax': 'Tax', 'adjustment': 'Adjustment'}.get(kind, 'Usage'),
+                cost_source=COST_SOURCE_ACTUAL_BILLED)
 
 
 def gcp_rows(binding, tenant, start, end):
@@ -376,14 +420,37 @@ def gcp_rows(binding, tenant, start, end):
     response=_post(f"https://bigquery.googleapis.com/bigquery/v2/projects/{binding['billing_project']}/queries",credential.token,
                    dict(query=query,useLegacySql=False,parameterMode='NAMED',queryParameters=parameters,
                         timeoutMs=20000,maxResults=MAX_ROWS,maximumBytesBilled='5000000000' if detailed else '1000000000'))
-    if response.get('jobComplete') is not True or response.get('pageToken') or int(response.get('totalRows',0))>MAX_ROWS:
+    if response.get('jobComplete') is not True:
         raise ValueError('BigQuery billing query is incomplete or exceeds the bounded result limit')
-    rows=[]
-    for row in response.get('rows',[]):
-        day,currency,kind,resource_id,billed,effective=[x['v'] for x in row['f']]
-        rows.append(dict(day=datetime.fromisoformat(day).date(),resource_id=resource_id or None,currency=currency,
-                         billed=billed,effective=effective,category={'tax':'Tax','adjustment':'Adjustment'}.get(kind,'Usage'),
-                         cost_source=COST_SOURCE_ACTUAL_BILLED))
+    if int(response.get('totalRows', 0)) > MAX_ROWS:
+        raise ValueError('BigQuery billing query is incomplete or exceeds the bounded result limit')
+    rows, seen_tokens = [], set()
+    job_id = (response.get('jobReference') or {}).get('jobId')
+
+    def absorb(page):
+        for row in page.get('rows', []):
+            rows.append(_gcp_bq_charge_row(row['f']))
+            if len(rows) > MAX_ROWS:
+                raise ValueError('Billing row limit exceeded')
+
+    absorb(response)
+    page_token = response.get('pageToken')
+    for _ in range(GCP_BQ_QUERY_PAGES):
+        if not page_token:
+            break
+        if not job_id:
+            raise ValueError('BigQuery billing query is incomplete or exceeds the bounded result limit')
+        if page_token in seen_tokens:
+            raise ValueError('Unexpected billing pagination cursor')
+        seen_tokens.add(page_token)
+        page = _bq_get_query_results(binding['billing_project'], job_id, credential.token, page_token)
+        if page.get('jobComplete') is False:
+            raise ValueError('BigQuery billing query is incomplete or exceeds the bounded result limit')
+        absorb(page)
+        page_token = page.get('pageToken')
+    else:
+        if page_token:
+            raise ValueError('Billing pagination limit exceeded')
     if detailed:
         return rows, 'resource', ['The detailed BigQuery billing export is summed per resource and day. Export completeness remains unverified.']
     return rows, 'project', ['Standard BigQuery billing export is project-level; resource-level attribution and export completeness remain unverified.']
