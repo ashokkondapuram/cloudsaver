@@ -80,7 +80,7 @@ def _catalog_rule_ids() -> frozenset[str]:
 
 
 def route_for_rule(rule_id: str) -> AgentWorkflowRoute:
-    if rule_id.startswith('PLATFORM_'):
+    if rule_id.startswith('PLATFORM_') or rule_id.startswith('WIZ_'):
         return AgentWorkflowRoute(
             primary="manual_assessment_only",
             agent_operations=("manual_review",),

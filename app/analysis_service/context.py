@@ -80,6 +80,7 @@ class UnifiedResourceContext(BaseModel):
     activity: list[ActivityEvent] = Field(default_factory=list)
     drift_detected: bool = False
     advisor_signals: list[dict[str, Any]] = Field(default_factory=list)
+    wiz_issues: list[dict[str, Any]] = Field(default_factory=list)
 
     @property
     def canonical_id(self) -> str:

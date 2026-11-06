@@ -79,6 +79,7 @@ ACTION_CLASS_BY_RULE: dict[str, ActionClass] = {
     "K8S_CONTAINER_UNDERPROVISIONED_RISK": ActionClass.SCALE,
     "PLATFORM_DEFAULT_TAGS": ActionClass.CONFIGURE,
     "PLATFORM_PROD_ENCRYPTION_EXPECTATION": ActionClass.CONFIGURE,
+    "WIZ_SECURITY_POSTURE": ActionClass.CONFIGURE,
 }
 
 # Lower number = higher priority channel when picking a primary match.

@@ -43,7 +43,7 @@ FAMILIES = (
         'policy',
         'operations',
         ('*',),
-        ('PLATFORM_DEFAULT_TAGS', 'PLATFORM_PROD_ENCRYPTION_EXPECTATION'),
+        ('PLATFORM_DEFAULT_TAGS', 'PLATFORM_PROD_ENCRYPTION_EXPECTATION', 'WIZ_SECURITY_POSTURE'),
     ),
 )
 
@@ -51,6 +51,7 @@ FAMILIES = (
 _PLATFORM_POLICY_RULES = (
     ('PLATFORM_DEFAULT_TAGS', 'Default FinOps tag set review (platform)', 'operations'),
     ('PLATFORM_PROD_ENCRYPTION_EXPECTATION', 'Production encryption expectation review (platform)', 'security'),
+    ('WIZ_SECURITY_POSTURE', 'Wiz open security issues (CSPM)', 'security'),
 )
 
 # Human-readable rule titles (stable `rule_id` keys for policy, APIs, and storage).
@@ -106,6 +107,7 @@ RULE_DISPLAY_NAMES = {
     'K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE': 'StatefulSet memory buffer and volume template review',
     'K8S_DAEMONSET_CLUSTER_WIDE_OVERHEAD_TAX': 'DaemonSet cluster-wide allocation overhead review',
     'K8S_ORPHANED_LOADBALANCER_SERVICE': 'LoadBalancer service with empty endpoints review',
+    'WIZ_SECURITY_POSTURE': 'Wiz open security issues (CSPM)',
     'ORPHANED_DISK': 'Unattached managed disk',
     'ORPHANED_DISKS': 'Unattached managed disk',
     'UNASSOCIATED_PUBLIC_IP': 'Unassociated public IP',

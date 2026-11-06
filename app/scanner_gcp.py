@@ -180,14 +180,16 @@ def scan_gcp_project(source, *, reader=None, now=None):
                     validate_finding_scope(result, tenant)
                     result['evidence'].update(evidence)
                     findings.append(result)
+        from app.config import Settings
+        from app.collectors.wiz_security import enrich_inventory_wiz_from_reader
+
+        stack_settings = Settings.load()
         from app.collectors.live_common import enabled
         if enabled():
             from app.collectors.gcp_live import extra_inventory,enrich
             inventory += extra_inventory(reader,project,regions)
             enrich(reader,project,inventory,now)
-            from app.config import Settings
             from app.collectors.cloud_advisor import enabled as advisor_enabled, enrich_inventory_advisor_signals
-            stack_settings = Settings.load()
             if advisor_enabled(stack_settings):
                 enrich_inventory_advisor_signals(
                     reader,
@@ -195,6 +197,7 @@ def scan_gcp_project(source, *, reader=None, now=None):
                     gcp_projects=[(project, regions)],
                     settings=stack_settings,
                 )
+        enrich_inventory_wiz_from_reader(reader, inventory, settings=stack_settings)
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

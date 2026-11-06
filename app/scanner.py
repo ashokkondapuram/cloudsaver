@@ -238,6 +238,9 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
                 subscriptions=subscriptions,
                 settings=stack_settings,
             )
+            from app.collectors.wiz_security import enrich_inventory_wiz_from_reader
+
+            inventory = enrich_inventory_wiz_from_reader(reader, inventory, settings=stack_settings)
             from app.collectors.live_common import enabled
             if enabled(stack_settings):
                 from app.collectors.azure_live import enrich

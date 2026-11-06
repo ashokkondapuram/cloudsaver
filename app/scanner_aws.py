@@ -94,6 +94,10 @@ def scan_account(source, *, session=None):
             add('AWS_IDLE_RDS', 'db', row['DBInstanceIdentifier'], row,
                 'RDS instance is stopped. Storage and backup charges may remain; state does not prove idle duration or deletability.',
                 row.get('DBInstanceStatus') == 'stopped')
+        from app.config import Settings
+        from app.collectors.wiz_security import enrich_inventory_wiz_signals
+
+        stack_settings = Settings.load()
         from app.collectors.live_common import enabled
         if enabled():
             from app.collectors.aws_live import extra_inventory,enrich
@@ -101,9 +105,7 @@ def scan_account(source, *, session=None):
             enrich(client,inventory)
             by_id={r['resource_id']:r for r in inventory}
             findings=[dict(r,evidence=by_id[r['resource_id']]['evidence']) for r in findings]
-            from app.config import Settings
             from app.collectors.cloud_advisor import enabled as advisor_enabled, enrich_inventory_advisor_signals
-            stack_settings = Settings.load()
             if advisor_enabled(stack_settings):
                 support = None
                 try:
@@ -118,6 +120,7 @@ def scan_account(source, *, session=None):
                     aws_account_ids=[str(account)],
                     settings=stack_settings,
                 )
+        enrich_inventory_wiz_signals(inventory, settings=stack_settings)
         return FindingBatch(findings, inventory)
     except ScanError:
         raise

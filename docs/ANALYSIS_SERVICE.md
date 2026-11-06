@@ -100,6 +100,9 @@ Ingestion collectors populate `inventory[].evidence` (metrics series, **`activit
 | **C** Cost + retail | CM / CE / BQ + retail APIs | `billing_sync`, retail cache, scan billing merge + **`billing_enrich`** on FOCUS attach | `cost` snapshot on context (`CostSnapshot`) |
 | **D** Activity | CloudTrail / Activity Log / Audit | Normalized **`activity_events`** on AWS/Azure/GCP live paths; legacy `state_history` fallback in loader | `activity[]`, `drift_detected` (when present on evidence) |
 | **E** Advisor | TA / Advisor / Recommender | **Optional** when `CLOUDSAVER_CLOUD_ADVISOR_ENABLED` (`app/collectors/cloud_advisor.py`) | `advisor_signals[]` optional |
+| **F** Wiz CSPM | Wiz GraphQL `issuesV2` (OAuth client credentials) | **Optional** when `CLOUDSAVER_WIZ_ENABLED` (`app/collectors/wiz_security.py`) | `wiz_issues[]` → **`WIZ_SECURITY_POSTURE`** in pillar analysis |
+
+See **`docs/WIZ_INTEGRATION.md`** for credentials and filters.
 
 ## Platform-extensible analysis rules
 
@@ -112,7 +115,7 @@ Deployments can add **extra** `PillarFinding` rows without forking CloudSaver. T
 | **`register_platform_evaluator(fn)`** | In-process registration (tests or app startup code); see `app/analysis_service/platform_rules.py`. |
 | **`CLOUDSAVER_ANALYSIS_PLATFORM_MAX_FINDINGS_PER_RESOURCE`** | Safety cap per resource (default **50**, max **500**); truncates with a log line if exceeded. |
 | **`CLOUDSAVER_ANALYSIS_DECLARATIVE_RULES`** | Path to UTF-8 JSON (see `examples/declarative_rules.sample.json`); rules with `PLATFORM_*` ids merge into `/api/v1/rules/catalog` and run in the platform pass. |
-| **Built-ins** | `app/analysis_service/builtin_platform_evaluators.py` registers **`PLATFORM_DEFAULT_TAGS`** and **`PLATFORM_PROD_ENCRYPTION_EXPECTATION`** (catalog-backed). |
+| **Built-ins** | `app/analysis_service/builtin_platform_evaluators.py` registers **`PLATFORM_DEFAULT_TAGS`** and **`PLATFORM_PROD_ENCRYPTION_EXPECTATION`** (catalog-backed). Core security evaluators also surface **`WIZ_SECURITY_POSTURE`** when Stream **F** populated `wiz_issues`. |
 
 **Implementation notes**
 

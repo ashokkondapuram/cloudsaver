@@ -139,6 +139,7 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
         activity=_activity_from_history(evidence),
         drift_detected=bool(evidence.get('drift_detected')),
         advisor_signals=list(evidence.get('advisor_signals') or []),
+        wiz_issues=list(evidence.get('wiz_issues') or []),
     )
 
 

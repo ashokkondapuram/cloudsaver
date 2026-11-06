@@ -124,6 +124,7 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — Kubernetes assessment | kubernetes | compute | `K8S_STATEFULSET_SIZING_AND_VOLUME_TEMPLATE` | StatefulSet memory buffer and volume template review | reliability | `manual_assessment_only` | StatefulSet memory buffer and volume template sizing. | — |
 | B — Platform policy (tags / declarative JSON) | platform | operations | `PLATFORM_DEFAULT_TAGS` | Default FinOps tag set review (platform) | operations | `manual_assessment_only` | Built-in platform check on inventory tags/labels (owner, cost center, environment). | — |
 | B — Platform policy (tags / declarative JSON) | platform | operations | `PLATFORM_PROD_ENCRYPTION_EXPECTATION` | Production encryption expectation review (platform) | security | `manual_assessment_only` | Production-scoped resource with encryption_at_rest explicitly false in evidence. | — |
+| B — General manual assessment | platform | operations | `WIZ_SECURITY_POSTURE` | Wiz open security issues (CSPM) | security | `manual_assessment_only` | Complete fresh history, telemetry, and target proof per family contract. | — |
 
 ---
 

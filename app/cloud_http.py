@@ -114,6 +114,14 @@ def _allowed_read_post_url(url):
         return True
     if url.startswith('https://cloudasset.googleapis.com/v1/projects/') and url.endswith(':searchAllResources'):
         return True
+    parsed = urlsplit(url)
+    host = (parsed.hostname or '').lower()
+    path = parsed.path or ''
+    # Wiz — OAuth token (read-only client credentials) and GraphQL issue queries only.
+    if host in ('auth.app.wiz.io', 'auth.gov.wiz.io') and path.rstrip('/') == '/oauth/token':
+        return True
+    if host.endswith('.app.wiz.io') and path.rstrip('/').endswith('/graphql'):
+        return True
     return False
 
 

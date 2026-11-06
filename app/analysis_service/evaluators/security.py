@@ -110,4 +110,68 @@ def evaluate(ctx: UnifiedResourceContext) -> list[PillarFinding]:
             )
         )
 
+    wiz = ctx.wiz_issues or []
+    if wiz:
+        rank = {
+            'CRITICAL': 4,
+            'HIGH': 3,
+            'MEDIUM': 2,
+            'LOW': 1,
+        }
+        sev_from = {
+            'CRITICAL': Severity.CRITICAL,
+            'HIGH': Severity.HIGH,
+            'MEDIUM': Severity.MEDIUM,
+            'LOW': Severity.LOW,
+        }
+        best_rank = 0
+        top_sev = Severity.LOW
+        top_name = ''
+        for item in wiz:
+            if not isinstance(item, dict):
+                continue
+            s = str(item.get('severity') or '').upper()
+            r = rank.get(s, 0)
+            if r > best_rank:
+                best_rank = r
+                top_sev = sev_from.get(s, Severity.MEDIUM)
+                top_name = str(item.get('rule_name') or item.get('rule_id') or '')
+        if best_rank == 0:
+            top_sev = Severity.MEDIUM
+        sample = []
+        for item in wiz[:12]:
+            if isinstance(item, dict):
+                sample.append(
+                    {
+                        'issue_id': item.get('issue_id'),
+                        'severity': item.get('severity'),
+                        'status': item.get('status'),
+                        'rule_name': item.get('rule_name'),
+                    }
+                )
+        findings.append(
+            PillarFinding(
+                finding_id=deterministic_finding_id(
+                    canonical_id=ctx.canonical_id, pillar=Pillar.SECURITY, rule_id='WIZ_SECURITY_POSTURE'
+                ),
+                pillar=Pillar.SECURITY,
+                rule_id='WIZ_SECURITY_POSTURE',
+                severity=top_sev,
+                canonical_id=ctx.canonical_id,
+                provider=ctx.provider,
+                region=ctx.region,
+                resource_type=ctx.resource_type,
+                current_sku=ctx.current_sku,
+                evidence={
+                    'source': 'wiz',
+                    'open_issue_count': len(wiz),
+                    'max_severity': top_sev.value,
+                    'primary_rule': top_name,
+                    'issues_sample': sample,
+                },
+                financial_impact=h.financial(monthly),
+                remediation_action='REMEDIATE_WIZ_ISSUES',
+            )
+        )
+
     return findings
