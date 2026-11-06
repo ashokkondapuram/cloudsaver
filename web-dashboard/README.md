@@ -2,7 +2,7 @@
 
 Next.js 16 App Router, React 19, TypeScript and Tailwind CSS 4 frontend. The inventory uses TanStack Table for filtering/sorting and TanStack Virtual for row rendering at 10,000+ rows. The local `components/ui/button.tsx` is an owned shadcn-style primitive; there is no external design-service dependency.
 
-Marketing-style motion on the sign-in hero uses **[Framer Motion](https://www.framer.com/motion/)**, matching the stack described by **[VengeanceUI](https://github.com/Ashutoshx7/VengeanceUI)** (landing-oriented components; we do not bundle their repo — copy patterns or run their CLI separately if you need additional blocks).
+Marketing-first surfaces (sign-in hero, claim onboarding, overview hero) use a small **`Reveal`** wrapper around **[Framer Motion](https://www.framer.com/motion/)**, matching the stack described by **[VengeanceUI](https://github.com/Ashutoshx7/VengeanceUI)**. Dense data views stay static. Copy extra blocks from VengeanceUI or run their CLI when you need additional sections — we do not bundle the full upstream repo.
 
 Product baseline: see the [root README](../README.md) (currently `main` @ `39def45`). Resource lists call `GET /api/v1/scans/{scan_id}/resources` with default **`cost_scope=billable`** so free topology rows (NIC, NSG, and similar) stay out of the primary cost workspace unless they have findings or billing evidence. Pass `cost_scope=all` to include every merged inventory row.
 

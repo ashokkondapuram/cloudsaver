@@ -46,7 +46,7 @@ import {Notice, ProviderBadge} from './ui/shared';
 import {FindingDrawer, ReviewDrawer} from './drawer/FindingDrawer';
 import {ClaimView} from './ClaimView';
 import {AtlasRouteBoundary} from './atlas/AtlasRouteBoundary';
-import {LoginStoryMotion} from './landing/LoginStoryMotion';
+import {Reveal} from './landing/Reveal';
 
 export const navigation = [
   {href:'/',label:'Overview',icon:Layout,group:'WORKSPACE',shortcut:'G D'},
@@ -158,7 +158,7 @@ function ConnectionForm({switching = false}: {switching?: boolean}) {
 }
 
 function Login() {
-  return <div className="login-page"><section className="login-story"><Brand/><div className="login-story-content"><LoginStoryMotion><span className="login-kicker"><span/>Cloud cost intelligence</span><h2><span className="login-headline-line">Less cloud waste.</span><span className="login-headline-line">More clarity.</span></h2><p>Discover idle resources, read the evidence, and move from finding to review with confidence.</p><div className="login-providers">{['azure','aws','gcp','kubernetes'].map(p => <ProviderBadge key={p} provider={p}/>)}</div></LoginStoryMotion></div><div className="login-story-footer"><SealCheck size={15} weight="regular"/> Read-only discovery · Workspace-scoped access</div></section><section className="login-connect"><div className="login-theme"><ThemeToggle/></div><div className="mobile-brand"><Brand/></div><ConnectionForm/><div className="login-footer">CloudSaver · Multi-cloud FinOps workspace</div></section></div>;
+  return <div className="login-page"><section className="login-story"><Brand/><div className="login-story-content"><Reveal><span className="login-kicker"><span/>Cloud cost intelligence</span><h2><span className="login-headline-line">Less cloud waste.</span><span className="login-headline-line">More clarity.</span></h2><p>Discover idle resources, read the evidence, and move from finding to review with confidence.</p><div className="login-providers">{['azure','aws','gcp','kubernetes'].map(p => <ProviderBadge key={p} provider={p}/>)}</div></Reveal></div><div className="login-story-footer"><SealCheck size={15} weight="regular"/> Read-only discovery · Workspace-scoped access</div></section><section className="login-connect"><div className="login-theme"><ThemeToggle/></div><div className="mobile-brand"><Brand/></div><ConnectionForm/><div className="login-footer">CloudSaver · Multi-cloud FinOps workspace</div></section></div>;
 }
 
 function CommandPalette() {

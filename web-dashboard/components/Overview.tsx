@@ -10,6 +10,7 @@ import {sentence, isLiveSnapshot, useResources, type Summary} from '../lib/resou
 import {EmptyState, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 import styles from './Overview.module.css';
 import {OverviewFinOpsMiniChart} from './OverviewFinOpsMiniChart';
+import {Reveal} from './landing/Reveal';
 
 export function useScopedFindings() {
   const {scan, scope} = useWorkspace();
@@ -43,13 +44,15 @@ export function Overview() {
     : reviewCount ? `${reviewCount.toLocaleString()} resource${reviewCount === 1 ? '' : 's'} need${reviewCount === 1 ? 's' : ''} a closer look`
     : 'Explore your resource evidence';
   return <div className={`${styles.overview} atlas-overview`} data-atlas-rollout="overview">
-    <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
-      <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
-      {error ? <button type="button" className="button secondary" onClick={reload}>Retry evidence</button>
-        : !scan && canAdmin ? <button type="button" className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
-        : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16} weight="regular"/></Link>
-        : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
-    </section>
+    <Reveal>
+      <section className={`${styles.intro} cs-overview-hero`} aria-labelledby="overview-next-step">
+        <div><h2 id="overview-next-step">{headline}</h2>{scope.length > 0 && <span className={styles.scopeNote}>Filtered to {scope.length} selected scope{scope.length === 1 ? '' : 's'}</span>}</div>
+        {error ? <button type="button" className="button secondary" onClick={reload}>Retry evidence</button>
+          : !scan && canAdmin ? <button type="button" className="button primary" disabled={!!scanActivity} onClick={() => setOverlay('scan')}>Run first scan<ArrowRight size={16} weight="regular"/></button>
+          : scan ? <Link className="button primary" href="/resources">Review resources<ArrowRight size={16} weight="regular"/></Link>
+          : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
+      </section>
+    </Reveal>
 
     <EvidenceHealth rows={rows} total={page?.total} ready={complete} error={error}/>
     {error && <Notice tone="error">{error}</Notice>}
