@@ -218,3 +218,14 @@ def resource_graph_query_url() -> str:
     return arm_url(
         f'/providers/Microsoft.ResourceGraph/resources?api-version={RESOURCE_GRAPH_API_VERSION}'
     )
+
+
+def monitor_metrics_batch_url(region: str, subscription_id: str) -> str:
+    """Regional metrics data-plane POST target (Microsoft Learn: metrics:getBatch)."""
+    from uuid import UUID
+
+    sid = str(UUID(subscription_id))
+    endpoint = (region or '').strip().lower().replace(' ', '')
+    if not endpoint:
+        raise ValueError('Azure metrics batch requires a resource region')
+    return f'https://{endpoint}.metrics.monitor.azure.com/subscriptions/{sid}/metrics:getBatch'

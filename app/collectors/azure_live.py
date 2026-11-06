@@ -81,11 +81,30 @@ _AZURE_AGG_VALUE = {
 }
 
 
+def _series_from_platform_metric(metric,*,name,aggregation,now):
+    agg_key = _AZURE_AGG_VALUE.get(aggregation, aggregation.lower())
+    if (metric.get('name') or {}).get('value') != name or metric.get('errorCode') not in (None, 'Success'):
+        return None
+    streams = metric.get('timeseries') or []
+    # Unspecified dimensions cannot be collapsed by max and treated as a total.
+    if len(streams) != 1 or streams[0].get('metadatavalues'):
+        return None
+    points = [
+        (p.get('timeStamp'), p.get(agg_key))
+        for p in streams[0].get('data', [])
+        if p.get(agg_key) is not None
+    ]
+    return dict(
+        **series(points, now, bucket_start=True),
+        source_aggregation=aggregation,
+        azure_metric_name=name,
+    )
+
+
 def fetch_azure_monitor_series(reader,resource,now):
     start,end=window(now);rid=resource['resource_id'];result={}
     for key,spec in METRICS.get(resource['resource_type'].lower(),{}).items():
         name, aggregation = spec if isinstance(spec, tuple) else (spec, 'Maximum')
-        agg_key = _AZURE_AGG_VALUE.get(aggregation, aggregation.lower())
         data=reader.get(
             resource_metrics_url(rid),
             resource_metrics_params(
@@ -96,21 +115,9 @@ def fetch_azure_monitor_series(reader,resource,now):
         )
         values=data.get('value')
         if not isinstance(values,list) or len(values)!=1:continue
-        metric=values[0]
-        if (metric.get('name') or {}).get('value')!=name or metric.get('errorCode') not in (None,'Success'):continue
-        streams=metric.get('timeseries') or []
-        # Unspecified dimensions cannot be collapsed by max and treated as a total.
-        if len(streams)!=1 or streams[0].get('metadatavalues'):continue
-        points=[
-            (p.get('timeStamp'), p.get(agg_key))
-            for p in streams[0].get('data', [])
-            if p.get(agg_key) is not None
-        ]
-        result[key]=dict(
-            **series(points, now, bucket_start=True),
-            source_aggregation=aggregation,
-            azure_metric_name=name,
-        )
+        parsed=_series_from_platform_metric(values[0],name=name,aggregation=aggregation,now=now)
+        if parsed is not None:
+            result[key]=parsed
     return result
 
 def _azure_activity_log_events(reader, resource, now):
@@ -230,6 +237,8 @@ def enrich(reader,inventory,now=None,*,settings=None):
             r.setdefault('evidence', {}).setdefault('live_sources', {})['telemetry'] = 'resource_budget_exceeded'
             enrich_configuration_evidence(r)
     selected = candidates if limit is None else candidates[:limit]
+    from app.collectors.azure_monitor_batch import prefetch_batch_metrics
+    batch_metrics = prefetch_batch_metrics(reader, selected, now)
     for r in selected:
         if r['resource_type'].lower() not in METRICS:continue
         e=r.setdefault('evidence',{})
@@ -239,7 +248,8 @@ def enrich(reader,inventory,now=None,*,settings=None):
         else:e.setdefault('live_sources',{})['recovery_services']='unavailable_or_incomplete'
         guards=collect(e,'operational_guards',lambda:fetch_azure_operational_guards(reader,r,now))
         if guards:e.update(guards)
-        values=collect(e,'azure_monitor',lambda:fetch_azure_monitor_series(reader,r,now))
+        cached=batch_metrics.get(r['resource_id'].lower())
+        values=collect(e,'azure_monitor',lambda cached=cached:cached if cached is not None else fetch_azure_monitor_series(reader,r,now))
         if values:enrich_metrics(e,values,now)
         e['state_history']=collect(e,'activity_log',lambda:fetch_azure_state_history(reader,r,now))
         enrich_configuration_evidence(r)
