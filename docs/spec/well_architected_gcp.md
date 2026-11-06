@@ -4,6 +4,8 @@
 
 **CloudSaver paths:** `app/scanner_gcp.py`, `app/collectors/gcp_live.py`, `app/collectors/cloud_advisor.py` (Recommender); target: `app/adapters/gcp/` + `app/rules/gcp_rules.py`. **Analysis:** `app/analysis_service/*`.
 
+**Extended catalog (24 billable types, full rule matrices):** [gcp_extended_billable_resources_5_pillar.md](./gcp_extended_billable_resources_5_pillar.md)
+
 **Reliability:** Use Cloud Asset, Monitoring, Logging, Billing BQ export, and Recommender REST with `app/cloud_http.py` + pagination helpers.
 
 ---
