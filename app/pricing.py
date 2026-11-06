@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.azure_rest_catalog import retail_prices_base_url
+from app.domain.pricing import retail_cache
 
 ENDPOINT = retail_prices_base_url()
 
@@ -83,6 +84,22 @@ class AzurePricingClient:
             return self._discovered[key]
         filters = {'armRegionName': region, 'productName': product_name, 'skuName': sku_name,
                    'meterName': meter_name, 'priceType': 'Consumption'}
+        cache_key = retail_cache.stable_key(
+            provider='azure',
+            region=region,
+            op='discover',
+            filters=retail_cache.azure_discover_filters(
+                region=region,
+                product_name=product_name,
+                sku_name=sku_name,
+                meter_name=meter_name,
+                unit_of_measure=unit_of_measure,
+            ),
+        )
+        cached = retail_cache.get(cache_key)
+        if cached is not retail_cache.CACHE_MISS:
+            self._discovered[key] = cached
+            return cached
         query = ' and '.join(k + " eq '" + v.replace("'", "''") + "'" for k, v in filters.items())
         params = {'$filter': query, 'currencyCode': 'USD'}
         matches, seen = [], set()
@@ -95,6 +112,7 @@ class AzurePricingClient:
                     data = response.json()
                     if not isinstance(data.get('Items'), list):
                         self._discovered[key] = None
+                        retail_cache.set(cache_key, None)
                         return None
                     for item in data['Items']:
                         if (all(item.get(k) == v for k, v in filters.items() if k != 'priceType')
@@ -112,15 +130,18 @@ class AzurePricingClient:
                             or parsed.path != '/api/retail/prices' or parsed.username or parsed.password
                             or parsed.port not in (None, 443) or parsed.fragment or next_page in seen):
                         self._discovered[key] = None
+                        retail_cache.set(cache_key, None)
                         return None
                     seen.add(next_page)
                     url, params = next_page, None
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
             self._discovered[key] = None
+            retail_cache.set(cache_key, None)
             return None
         meter_ids = {item.get('meterId') for item in matches if isinstance(item.get('meterId'), str) and item['meterId']}
         if len(meter_ids) != 1:
             self._discovered[key] = None
+            retail_cache.set(cache_key, None)
             return None
         item = matches[0]
         resolved = dict(
@@ -132,6 +153,7 @@ class AzurePricingClient:
             unit_of_measure=unit_of_measure,
         )
         self._discovered[key] = resolved
+        retail_cache.set(cache_key, resolved)
         return resolved
 
     def fetch_price(self, evidence):
@@ -141,6 +163,15 @@ class AzurePricingClient:
         filters = {'armRegionName': evidence['region'], 'skuName': evidence['sku_name'],
                    'meterName': evidence['meter_name'], 'productName': evidence['product_name'],
                    'meterId': evidence['meter_id'], 'priceType': 'Consumption'}
+        cache_key = retail_cache.stable_key(
+            provider='azure',
+            region=evidence['region'],
+            op='price',
+            filters=retail_cache.azure_price_filters(evidence),
+        )
+        cached = retail_cache.get(cache_key)
+        if cached is not retail_cache.CACHE_MISS:
+            return cached
         query = ' and '.join(k + " eq '" + v.replace("'", "''") + "'" for k, v in filters.items())
         params = {'$filter': query, 'currencyCode': 'USD'}
         matches, seen = [], set()
@@ -152,6 +183,7 @@ class AzurePricingClient:
                     response.raise_for_status()
                     data = response.json()
                     if not isinstance(data.get('Items'), list):
+                        retail_cache.set(cache_key, None)
                         return None
                     for item in data['Items']:
                         if (all(item.get(k) == v for k, v in filters.items() if k != 'priceType')
@@ -164,16 +196,20 @@ class AzurePricingClient:
                     next_page = data.get('NextPageLink')
                     if not next_page:
                         # Ambiguous meters or historical rates are not silently selected.
-                        return matches[0] if len(matches) == 1 else None
+                        resolved = matches[0] if len(matches) == 1 else None
+                        retail_cache.set(cache_key, resolved)
+                        return resolved
                     parsed = urlparse(next_page)
                     if (parsed.scheme != 'https' or parsed.hostname != 'prices.azure.com'
                             or parsed.path != '/api/retail/prices' or parsed.username or parsed.password
                             or parsed.port not in (None, 443) or parsed.fragment or next_page in seen):
+                        retail_cache.set(cache_key, None)
                         return None
                     seen.add(next_page)
                     url, params = next_page, None
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
             return None
+        retail_cache.set(cache_key, None)
         return None
 
     def component(self, evidence):
