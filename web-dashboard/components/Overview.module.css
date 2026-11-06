@@ -21,3 +21,125 @@
   .metrics article + article { border-left: 0; border-top: 1px solid var(--border); }
 }
 .overviewFinopsLink { margin-left: auto; }
+
+.workspaceSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.workspaceSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .workspaceSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+.workspaceSummaryBlock {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.workspaceSummaryHeading {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--slate-700);
+}
+.workspaceSummaryHeading a {
+  color: inherit;
+  text-decoration: none;
+}
+.workspaceSummaryHeading a:hover {
+  text-decoration: underline;
+}
+.workspaceSummaryTiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.workspaceSummaryTiles .metric-card {
+  min-height: 0;
+  padding: 14px 16px;
+}
+.workspaceSummaryTiles .metric-card > strong {
+  font-size: 22px;
+  margin: 8px 0 4px;
+}
+.workspaceBarChart {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.workspaceBarChartTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.workspaceBarList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.workspaceBarList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.workspaceBarLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspaceBarTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--indigo-50);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.workspaceBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--indigo-500), var(--indigo-600));
+}
+.workspaceBarValue {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 2.5rem;
+  text-align: right;
+}
+.workspacePillList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 12px;
+  color: var(--slate-700);
+}
+.workspacePillList li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

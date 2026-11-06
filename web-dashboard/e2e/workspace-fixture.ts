@@ -122,6 +122,13 @@ export async function mockWorkspace(page:Page,options:{role?:string;human?:boole
     else if(path==='/api/v1/operations/deliveries')response={items:[],next_cursor:null};
     else if(path==='/api/v1/gitops/targets')response={publishing_enabled:!!options.publishing,targets:[{target_id:'infra',repository:'example/infrastructure',base_branch:'main'}]};
     else if(path==='/api/v1/gitops/requests'&&request.method()==='GET')response=[];
+    else if(path==='/api/v1/outcomes/summary')response={currencies:[],implemented_cases:0,validated_cases:0,validated_outcome_pct:null,unsupported_financial_claims:0,warning:''};
+    else if(path==='/api/v1/outcomes/anomalies/metrics')response={investigations:0,unassigned:0,actionable_resolved_pct:null,mean_acknowledgment_seconds:null,mean_resolution_seconds:null,warning:''};
+    else if(path==='/api/v1/governance/capabilities')response={roles:[],subject_id:'',human:true,manage_access:false,readable:false,automatic_execution:false};
+    else if(path==='/api/v1/observability/summary')response={items:[]};
+    else if(path==='/api/v1/agents/catalog')response={enabled:false,connectors:[]};
+    else if(path==='/api/v1/agents/tasks')response={items:[]};
+    else if(/^\/api\/v1\/scans\/[a-fA-F0-9-]+\/kubernetes$/.test(path))response={scan_id:path.split('/')[4],observed_at:scanTime,clusters:[],resources:[],financial_note:'',rule_matrix:[]};
     else if(path==='/api/v1/gitops/preview')response={review_id:'review-test',fingerprint:'a'.repeat(64),repository:'example/infrastructure',title:'Review resource imports',branch:'cloudsaver/review-fixture',files:{'.cloudsaver/reviews/test/imports.tf':'# TEST FIXTURE\nimport {\n  to = azurerm_managed_disk.archive\n  id = "test-resource"\n}\n'},body:'Test-only package'};
     else if(path==='/api/v1/gitops/requests'&&request.method()==='POST')response={id:'request-fixture',repository:'example/infrastructure',branch:'cloudsaver/review-fixture',status:'open',attempts:1,result:{pr_url:'https://github.com/example/infrastructure/pull/42',draft:true,state:'open'}};
     else if(path===`/api/v1/scans/${scanId}/remediation-terraform`)response={hcl:'# TEST FIXTURE import review\nimport {\n  to = azurerm_managed_disk.archive\n  id = "test-resource"\n}\n',filename:'cloudsaver-review.tf'};

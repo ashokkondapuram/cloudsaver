@@ -10,6 +10,7 @@ import {sentence, isLiveSnapshot, useResources, type Summary} from '../lib/resou
 import {EmptyState, Notice, ProviderBadge, SectionTitle} from './ui/shared';
 import styles from './Overview.module.css';
 import {OverviewFinOpsMiniChart} from './OverviewFinOpsMiniChart';
+import {OverviewWorkspaceSummary} from './OverviewWorkspaceSummary';
 import {Reveal} from './landing/Reveal';
 
 export function useScopedFindings() {
@@ -53,6 +54,8 @@ export function Overview() {
           : <Link className="button secondary" href="/settings">View workspace setup<ArrowRight size={16} weight="regular"/></Link>}
       </section>
     </Reveal>
+
+    <OverviewWorkspaceSummary/>
 
     <EvidenceHealth rows={rows} total={page?.total} ready={complete} error={error}/>
     {error && <Notice tone="error">{error}</Notice>}
