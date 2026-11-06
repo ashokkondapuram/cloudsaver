@@ -4,6 +4,8 @@
 
 **CloudSaver paths:** `app/scanner_aws.py`, `app/collectors/aws_live.py`, `app/collectors/aws_resource_explorer.py`; target split: `app/adapters/aws/` + `app/rules/aws_rules.py`. **Pillar analysis:** `app/analysis_service/*` (deterministic, no live HTTP).
 
+**Extended catalog (24 billable types, full rule matrices):** [aws_extended_billable_resources_5_pillar.md](./aws_extended_billable_resources_5_pillar.md)
+
 **Reliability:** Use documented APIs, pagination, and `provider_retry`; map inventory rows to `canonical_resource_id('aws', arn)`.
 
 ---

@@ -5,6 +5,7 @@
 **Full per-provider catalogs (tables + 5-pillar summaries):**
 
 - [spec/well_architected_aws.md](./spec/well_architected_aws.md)
+- [spec/aws_extended_billable_resources_5_pillar.md](./spec/aws_extended_billable_resources_5_pillar.md) (24 types, exhaustive rule tables)
 - [spec/well_architected_azure.md](./spec/well_architected_azure.md)
 - [spec/well_architected_gcp.md](./spec/well_architected_gcp.md)
 - [spec/well_architected_overview.md](./spec/well_architected_overview.md) — index and **platform-specific rule hooks** the analyzer honors
