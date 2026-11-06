@@ -17,7 +17,18 @@ Branch: `cursor/fix-all-ingestion-analysis-083f` (ingestion → analysis through
 | **Persisted `pillar_analysis`** + HTTP read APIs | **Done** (`542ce7e`) | `app/analysis_service/pipeline.py`, `app/pillar_analysis_api.py`, `app/resource_api.py`, gateway proxy |
 | Azure Monitor **`metrics:getBatch`** in live enrich | **Done** (`ec2f304`) | `app/collectors/azure_monitor_batch.py`, `azure_live.enrich` prefetch + per-resource GET fallback |
 
-**Still open (honest gaps):** AWS **Resource Explorer 2** inventory; GCP **`searchAllResources`** (still **ListAssets**); **Stream E** (Advisor / TA / Recommender) not ingested; shared **`_pagination.py`** helper; drift baselines / IaC allowlist / `drift_detected` surfacing; thin **`scanner_pipeline`** module split.
+**Remaining (optional / future):** AWS Trusted Advisor + GCP Recommender Stream E bodies (Azure Advisor **done** when flag on); **`scanner_pipeline.py`** orchestrator split; activity log **watermark** cursors for incremental ingest.
+
+## “Fix rest” wave (`75033f3`)
+
+| Deliverable | Status | Paths |
+|-------------|--------|--------|
+| Drift **baselines from scan** + **`drift_detected`** on evidence/API | **Done** | `app/drift/scan_baselines.py`, `workers/tasks.py`, `resource_api.py` |
+| Optional **AWS Resource Explorer 2** | **Done** (flag) | `CLOUDSAVER_AWS_RESOURCE_EXPLORER`, `aws_resource_explorer.py` |
+| Optional **GCP searchAllResources** | **Done** (flag) | `CLOUDSAVER_GCP_ASSET_SEARCH`, `gcp_asset_search.py` |
+| **Stream E** Azure Advisor signals | **Done** (flag) | `CLOUDSAVER_CLOUD_ADVISOR_ENABLED`, `cloud_advisor.py` |
+| Shared **`_pagination.py`** helper | **Done** (ARM + cloud_http) | `app/collectors/_pagination.py`, `azure_live.pages` delegate |
+| **Pillar analysis-backed assessments** | **Done** | `resource_assessment.overlay_pillar_analysis` |
 
 ---
 
