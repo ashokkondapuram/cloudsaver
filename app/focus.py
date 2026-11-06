@@ -289,8 +289,40 @@ class FocusRepository:
                 billing_basis='imported_FOCUS_not_provider_reconciled',
             )
 
+    def resource_daily_costs(self, tenant, resource_ids, window_days=30, *, as_of=None):
+        """Per-day billed/effective rows for analysis spike detection at billing merge."""
+        if type(window_days) is not int or not 1 <= window_days <= 90:
+            raise FocusError('Resource billing requires a 1–90 day window')
+        ids = [rid for rid in resource_ids if isinstance(rid, str)]
+        if len(ids) > 100000 or any(len(v) > 2048 for v in ids):
+            raise FocusError('Invalid resource billing selection')
+        finish = (as_of or datetime.now(timezone.utc)).astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        begin = finish - timedelta(days=window_days)
+        scopes = [('azure', v) for v in tenant.get('subscription_ids', [])] + [('aws', a['account_id']) for a in tenant.get('aws_accounts', [])] + [('gcp', a['project_id']) for a in tenant.get('gcp_projects', [])]
+        allowed = tenant.get('allowed_providers')
+        scopes = sorted(set((p, a) for p, a in scopes if allowed is None or p in allowed))
+        if not ids or not scopes:
+            return {}
+        fence = ' OR '.join('(provider=%s AND sub_account=%s)' for _ in scopes)
+        args = [v for pair in scopes for v in pair]
+        from app.analysis_service.billing_enrich import resource_daily_cost_rows
+
+        with self.store.transaction(tenant['tenant_id']) as db:
+            return resource_daily_cost_rows(
+                db,
+                tenant,
+                ids,
+                begin=begin,
+                finish=finish,
+                scopes_args=args,
+                fence=fence,
+            )
+
     def attach(self, tenant, scan, *, force=False):
         from copy import deepcopy
+
+        from app.analysis_service.billing_enrich import enrich_inventory_billing_evidence
+
         result = deepcopy(scan)
         skip_side_effects = result.get('billing_materialized') and not force
         rows = [*result.get('inventory', []), *result.get('findings', [])]
@@ -298,6 +330,7 @@ class FocusRepository:
         resource_ids = [r['resource_id'] for r in rows]
         costs = self.resource_costs(tenant, resource_ids, as_of=stamp)
         self._supplement_resource_costs(tenant, scan, resource_ids, costs, as_of=stamp)
+        daily_costs = self.resource_daily_costs(tenant, resource_ids, as_of=stamp)
         inventory = {
             (r.get('cloud_provider', 'azure'), r['resource_id'].lower() if r.get('cloud_provider', 'azure') == 'azure' else r['resource_id']): r
             for r in result.get('inventory', [])
@@ -307,6 +340,7 @@ class FocusRepository:
             # Findings inherit observed inventory evidence before billing is attached.
             e = dict((inventory.get(key) or {}).get('evidence') or {}, **(r.get('evidence') or {}))
             e.update(costs.get(key, {}))
+            enrich_inventory_billing_evidence(e, daily_rows=daily_costs.get(key))
             r['evidence'] = e
         if skip_side_effects:
             return result
