@@ -28,12 +28,19 @@ def parameters(rule_id, overrides=None):
 
 def series(values, now):
     """30 days, five-minute buckets, >=95% coverage, no gap over an hour; no zero filling."""
-    results = {label: evaluate_series(values, TimeSeriesEvidenceContract('metric', aggregation),
-                                     now=now, require_resource_age=False)
-               for label, aggregation in (('p95', 'P95'), ('p99', 'P99'), ('maximum', 'MAX'))}
-    if not all(result.is_sufficient for result in results.values()):
-        return None
-    return {label: result.observed_value for label, result in results.items()} | {'coverage': results['p95'].coverage_ratio}
+    if isinstance(values, dict) and values.get('points'):
+        results = {label: evaluate_series(values, TimeSeriesEvidenceContract('metric', aggregation),
+                                         now=now, require_resource_age=False)
+                   for label, aggregation in (('p95', 'P95'), ('p99', 'P99'), ('maximum', 'MAX'))}
+        if all(result.is_sufficient for result in results.values()):
+            return {label: result.observed_value for label, result in results.items()} | {'coverage': results['p95'].coverage_ratio}
+    return None
+
+
+def metric_series(evidence, key, now):
+    from app.evidence_metric_utilization import metric_window
+
+    return metric_window(evidence, key, now=now)
 
 
 def continuous(evidence, expected, minimum_days, now):
@@ -63,6 +70,15 @@ def legacy_azure_detect(rule_id, evidence, params, now):
     metrics = evidence.get('metrics') or {}
     known = lambda key: type(evidence.get(key)) is bool
     detected = None
+
+    def metric(key, stat='p95'):
+        data = metric_series(evidence, key, now)
+        return data.get(stat) if data else None
+
+    def metric_max(key):
+        data = metric_series(evidence, key, now)
+        return data.get('maximum') if data else None
+
     if rule_id == 'AZURE_DISK_UNATTACHED_RETENTION':
         if evidence.get('disk_state') == 'Unattached':
             detected = continuous(evidence, 'Unattached', params['minimum_days'], now)
@@ -73,7 +89,7 @@ def legacy_azure_detect(rule_id, evidence, params, now):
             if known('recent_snapshot_verified'):
                 detected = not evidence['recent_snapshot_verified']
         else:
-            io, throughput = series(metrics.get('iops'), now), series(metrics.get('throughput'), now)
+            io, throughput = metric_series(evidence, 'iops', now), metric_series(evidence, 'throughput', now)
             target = evidence.get('target_disk') or {}
             if (io and throughput and all(type(target.get(k)) in (int, float) and math.isfinite(target[k]) and target[k] > 0 for k in ('iops', 'throughput'))
                     and known('target_compatible') and known('throttling_observed')):
@@ -85,7 +101,7 @@ def legacy_azure_detect(rule_id, evidence, params, now):
         if known('association_verified'):
             detected = False if evidence['association_verified'] else continuous(evidence, 'Unassociated', params['minimum_days'], now)
     elif rule_id == 'AZURE_PUBLIC_IP_ASSOCIATED_IDLE':
-        traffic = [series(metrics.get(key), now) for key in ('ingress_bytes', 'egress_bytes')]
+        traffic = [metric_series(evidence, key, now) for key in ('ingress_bytes', 'egress_bytes')]
         if evidence.get('association_verified') is True and all(traffic):
             detected = all(item['maximum'] <= params['maximum_bytes'] for item in traffic)
     elif rule_id == 'AZURE_VM_STOPPED_RESIDUAL_COST':
@@ -97,12 +113,12 @@ def legacy_azure_detect(rule_id, evidence, params, now):
         elif state == 'PowerState/running':
             detected = False
     elif rule_id in ('AZURE_VM_RIGHTSIZING_UTILIZATION', 'AZURE_ASP_UNDERUTILIZED_SKU'):
-        cpu, memory = series(metrics.get('cpu_percent'), now), series(metrics.get('memory_percent'), now)
+        cpu, memory = metric_series(evidence, 'cpu_percent', now), metric_series(evidence, 'memory_percent', now)
         created = moment(evidence.get('created_at'))
         if cpu and memory and created and now - created >= timedelta(days=30):
             detected = cpu['p95'] < params['cpu_percent'] and memory['p95'] < params.get('memory_percent', 40)
             if rule_id == 'AZURE_VM_RIGHTSIZING_UTILIZATION':
-                if not series(metrics.get('disk_iops'), now) or not series(metrics.get('network_bytes'), now):
+                if not metric_series(evidence, 'disk_iops', now) or not metric_series(evidence, 'network_bytes', now):
                     return None
                 if not known('burst_credits_depleted'):
                     return None

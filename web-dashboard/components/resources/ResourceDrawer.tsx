@@ -4,9 +4,9 @@ import {useEffect, useRef, useState} from 'react';
 import {Activity, Bot, BrainCircuit, CheckCircle2, CircleDollarSign, FileCode2, Gauge, History, LayoutDashboard, ListChecks, Maximize2, MessageSquareText, Minimize2, ShieldCheck, ShieldAlert} from 'lucide-react';
 import {resourceDrawerLeads} from '../../lib/workspace-tab-leads';
 import {api} from '../../lib/api';
-import {dateTime, money, ruleLabel, shortDate} from '../../lib/finops';
+import {dateTime, money, ruleLabel, shortDate, checkLabel, providerNames, ruleProvider} from '../../lib/finops';
 import type {Finding} from '../../lib/types';
-import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type RuleConflict, type Targets} from '../../lib/resources';
+import {decisionLabels, label, sentence, type DecisionKind, type ResourceDetail, type ResourceHistory, type ResourceRow, type RuleConflict, type Targets} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Dialog} from '../ui/dialog';
 import {TabWorkspaceShell} from '../ui/TabWorkspaceShell';
@@ -43,6 +43,7 @@ function Configuration({detail}: {detail: ResourceDetail}) {
   const snapshot = detail.configuration_detail || detail.observation?.configuration_snapshot || {};
   const text = JSON.stringify(snapshot, null, 2);
   const readiness = detail.analysis_readiness || detail.observation?.evidence?.analysis_readiness;
+  const registry = detail.type_registry || detail.observation?.evidence?.type_registry;
   const armDetail = detail.assessment.arm_detail;
   const hasSnapshot = text !== '{}';
   return <div className="drawer-section"><h3>Configuration</h3>
@@ -50,8 +51,10 @@ function Configuration({detail}: {detail: ResourceDetail}) {
       {armDetail && <div><dt>ARM configuration detail</dt><dd><ArmDetailBadge status={armDetail}/></dd></div>}
       {readiness && <>
         <div><dt>Configuration evidence</dt><dd>{sentence(readiness.configuration || 'unknown')}{readiness.configuration_total ? ` · ${readiness.configuration_observed ?? 0}/${readiness.configuration_total}` : ''}</dd></div>
-        {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.map(ruleLabel).join(', ')}</dd></div>}
+        {!!readiness.telemetry_pending_rule_ids?.length && <div><dt>Telemetry still needed</dt><dd>{readiness.telemetry_pending_rule_ids.filter(id => ruleProvider(id) === detail.assessment.provider).map(ruleLabel).join(', ') || 'None for this provider'}</dd></div>}
       </>}
+      {!!registry?.evidence_fields_pending?.length && <div><dt>Registry fields pending</dt><dd>{registry.evidence_fields_pending.map(label).join(', ')}</dd></div>}
+      {detail.evidence_incomplete && <div><dt>Collection status</dt><dd>Background refresh is filling remaining evidence.</dd></div>}
     </dl>
     {!hasSnapshot && !readiness && !armDetail ? <Notice>No typed configuration snapshot is attached to this observation.</Notice>
       : <details className="drawer-disclosure" open={hasSnapshot}><summary>Saved configuration{text.length > 16000 ? ' (truncated)' : ''}</summary><pre className="config-snapshot">{text.slice(0, 16000)}</pre></details>}
@@ -90,6 +93,11 @@ function Rules({detail}: {detail: ResourceDetail}) {
   const matches = detail.rule_matches;
   const conflicts = detail.rule_conflicts ?? [];
   const primary = matches?.primary_match;
+  const evaluationGroups = detail.rule_evaluation_groups?.length
+    ? detail.rule_evaluation_groups
+    : detail.rule_evaluations?.length
+      ? [{provider: detail.assessment.provider, label: `${providerNames[detail.assessment.provider] || detail.assessment.provider} analysis rules`, evaluations: detail.rule_evaluations}]
+      : [];
   return <div className="drawer-section"><h3>Rules &amp; matching</h3>
     {conflicts.length > 0 && <div className="rule-conflict-list">{conflicts.map((conflict, index) => <Notice key={`${conflict.kind}:${conflict.rule_id ?? index}`} tone={conflictTone(conflict.severity)}>{conflict.rule_id ? <><strong>{ruleLabel(conflict.rule_id)}</strong> · </> : null}{conflict.message}</Notice>)}</div>}
     {(primary || (matches?.alternate_matches?.length ?? 0) > 0 || matches?.opportunity_group_id) && <div className="rule-match-summary">
@@ -99,12 +107,39 @@ function Rules({detail}: {detail: ResourceDetail}) {
         <dl className="settings-key-values compact"><div><dt>Action</dt><dd>{sentence(primary.action_class)}</dd></div><div><dt>Channel</dt><dd>{label(primary.display_channel)}</dd></div></dl>
         {(primary.safety_blocks?.length ?? 0) > 0 && <p className="inline-help">Safety: {primary.safety_blocks!.join(', ')}</p>}
         {(primary.protected_reasons?.length ?? 0) > 0 && <p className="inline-help">Protected: {primary.protected_reasons!.map(sentence).join(', ')}</p>}
-        <small><code>{primary.rule_id}</code></small></article>}
+      </article>}
       {(matches?.alternate_matches?.length ?? 0) > 0 && <div className="rule-alternate-list"><h4 className="rule-alternate-title">Alternate matches</h4><div className="drawer-card-list">{matches!.alternate_matches.map(alt => <article key={alt.rule_id} className="drawer-card rule-match-alternate"><header><h4>{ruleLabel(alt.rule_id)}</h4><span className="assessment-state unknown">{sentence(alt.match_confidence)}</span></header><p className="inline-help">{alt.suppressed_reason ? label(alt.suppressed_reason) : 'Lower rank in action market'}</p><small>{label(alt.display_channel)} · {sentence(alt.action_class)}</small></article>)}</div></div>}
     </div>}
     <h4 className="rule-evaluations-title">Per-rule evaluations</h4>
-    {!detail.rule_evaluations?.length ? <Notice>This observation has no per-rule evaluation records. No findings doesn’t mean a rule passed.</Notice> : <div className="drawer-card-list">{detail.rule_evaluations.map(rule => <article key={rule.rule_id} className="drawer-card">
-    <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small><code>{rule.rule_id}</code> · version {rule.rule_version}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}{rule.safety_blocks?.length ? ` · Safety: ${rule.safety_blocks.join(', ')}` : ''}</small></article>)}</div>}</div>;
+    {!evaluationGroups.length ? <Notice>This observation has no per-rule evaluation records. No findings doesn’t mean a rule passed.</Notice> : evaluationGroups.map(group => <section key={group.provider} className="check-group-section">
+      <h4>{group.label}</h4>
+      <div className="drawer-card-list">{group.evaluations.map(rule => <article key={rule.rule_id} className="drawer-card">
+    <header><h4>{ruleLabel(rule.rule_id)}</h4><span className={`assessment-state ${rule.outcome === 'condition_detected' ? 'risk' : rule.outcome === 'condition_not_detected' ? 'observed' : 'unknown'}`}>{sentence(rule.outcome)}</span></header><p>{rule.reason}</p><small>{rule.rule_version ? `Version ${rule.rule_version}` : 'Current policy'}{rule.destructive_actions_blocked ? ' · Destructive actions blocked' : ''}{rule.safety_blocks?.length ? ` · Safety: ${rule.safety_blocks.join(', ')}` : ''}</small></article>)}</div>
+    </section>)}</div>;
+}
+
+function governanceCollectionLabel(status: string | null | undefined): string {
+  if (status === 'collected') return 'Collected from Azure';
+  if (status === 'unavailable_or_incomplete') return 'Could not be loaded';
+  return 'Not collected yet';
+}
+
+function AzureGovernancePanel({detail}: {detail: ResourceDetail}) {
+  const gov = detail.azure_governance;
+  const policies = gov?.policy_states ?? [];
+  const advisor = gov?.advisor_recommendations ?? [];
+  return <>
+    <div className="drawer-section"><h3>Azure Policy</h3>
+      <p className="inline-help">{governanceCollectionLabel(gov?.collection?.azure_policy)} · Assignment compliance for this resource ID. This is separate from CloudSaver analysis rules.</p>
+      {!policies.length ? <Notice>{gov?.collection?.azure_policy === 'unavailable_or_incomplete' ? 'Azure Policy could not be read. Verify Policy Insights Reader on the subscription.' : 'No policy states were returned for this resource.'}</Notice>
+        : <div className="summary-table-scroll" tabIndex={0} aria-label="Azure Policy states"><table className="summary-table"><thead><tr><th>Assignment</th><th>Definition</th><th>Compliance</th></tr></thead><tbody>{policies.map((row, index) => <tr key={`${row.policy_assignment_id || row.policy_definition_id || index}`}><td>{row.policy_assignment_name || 'Unknown assignment'}{row.policy_set_definition_name ? <small> · {row.policy_set_definition_name}</small> : null}</td><td>{row.policy_definition_name || row.policy_definition_id || 'Unknown definition'}</td><td>{sentence(row.compliance_state || 'unknown')}</td></tr>)}</tbody></table></div>}
+    </div>
+    <div className="drawer-section"><h3>Azure Advisor</h3>
+      <p className="inline-help">{governanceCollectionLabel(gov?.collection?.advisor)} · Active recommendations scoped to this resource.</p>
+      {!advisor.length ? <Notice>{gov?.collection?.advisor === 'unavailable_or_incomplete' ? 'Advisor recommendations could not be loaded. Verify Reader access on Advisor.' : 'Advisor returned no recommendations for this resource.'}</Notice>
+        : <div className="drawer-card-list">{advisor.map(row => <article key={row.recommendation_id || `${row.category}:${row.problem}`} className="drawer-card"><header><h4>{row.problem || row.category || 'Recommendation'}</h4><span className="assessment-state unknown">{sentence(row.impact || row.risk || 'unknown impact')}</span></header>{row.solution ? <p>{row.solution}</p> : null}{row.last_updated ? <small>Updated {dateTime(row.last_updated)}</small> : null}</article>)}</div>}
+    </div>
+  </>;
 }
 
 const utcDayOffset = (days: number) => {
@@ -221,6 +256,8 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
       <div><dt>Billed vs retail</dt><dd>{balanceLabel}</dd></div>
       <div><dt>Retail-modeled waste</dt><dd>{waste == null ? (retail == null ? 'Not estimated' : 'None modeled') : money(waste)}</dd></div>
       <div><dt>Evidence checks</dt><dd>{a.evidence_coverage.total ? `${a.evidence_coverage.observed}/${a.evidence_coverage.total} observed` : 'Not evaluated'}</dd></div>
+      <div><dt>Last analyzed</dt><dd>{detail.refresh_in_progress ? 'Refreshing from Azure…' : detail.last_analyzed_at ? dateTime(detail.last_analyzed_at) : 'Not yet analyzed'}{!detail.refresh_in_progress && detail.analysis_stale ? ' · stale' : ''}</dd></div>
+      <div><dt>Azure status fetched</dt><dd>{detail.azure_status_fetched_at ? dateTime(detail.azure_status_fetched_at) : 'Not fetched'}</dd></div>
     </dl>
     {retail == null && !hasBilled && (
       <p className="inline-help overview-cost-hint">Retail and billed amounts come from Azure Cost Management and billing sync. Open the <button type="button" className="text-link" onClick={() => onOpenTab('costs')}>Costs</button> tab to fetch live Azure charges for this resource.</p>
@@ -235,12 +272,26 @@ function Overview({detail, onOpenTab}: {detail: ResourceDetail; onOpenTab: (tab:
   </>;
 }
 
+function checksByPillar(checks: ResourceDetail['assessment']['pillars'][number]['checks']) {
+  const pillars = new Map<string, typeof checks>();
+  for (const check of checks) {
+    const bucket = pillars.get(check.pillar) || [];
+    bucket.push(check);
+    pillars.set(check.pillar, bucket);
+  }
+  return [...pillars.entries()].map(([pillar, items]) => ({pillar, items}));
+}
+
 function AssessmentChecks({detail}: {detail: ResourceDetail}) {
   const a = detail.assessment;
   const [pillar, setPillar] = useState('');
-  return <div className="drawer-section"><h3>Five-pillar checks</h3>
-    <p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks have observed evidence.</p>
-    <div className="pillar-list">{a.pillars.map(p => <details key={p.pillar} open={pillar ? pillar === p.pillar : p.status === 'risk'}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.status}`}>{pillarState(p.status)}</span></summary><div>{p.checks.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{sentence(c.code)}</h4><p>{c.explanation}</p>{!!c.evidence_fields.length && <small className="inline-help">Evidence: {c.evidence_fields.join(', ')}</small>}</div></article>)}</div></details>)}</div>
+  const groups = a.check_groups?.length ? a.check_groups : [{scope: 'shared' as const, provider: '*', label: 'Evidence checks', checks: a.pillars.flatMap(p => p.checks)}];
+  return <div className="drawer-section"><h3>Evidence checks by cloud</h3>
+    <p className="inline-help">{a.evidence_coverage.observed} of {a.evidence_coverage.total} checks apply to this resource{a.evidence_scope?.family_label ? ` (${a.evidence_scope.family_label})` : ''}. Only controls relevant to {a.resource_type || 'this type'} are evaluated.</p>
+    {groups.map(group => <section key={`${group.scope}:${group.provider}`} className="check-group-section">
+      <h4>{group.label}</h4>
+      <div className="pillar-list">{checksByPillar(group.checks).map(p => <details key={`${group.provider}:${p.pillar}`} open={pillar ? pillar === `${group.provider}:${p.pillar}` : p.items.some(c => c.status === 'risk')} onToggle={event => {if ((event.target as HTMLDetailsElement).open) setPillar(`${group.provider}:${p.pillar}`);}}><summary><strong className="capitalize">{p.pillar}</strong><span className={`assessment-state ${p.items.some(c => c.status === 'risk') ? 'risk' : p.items.every(c => c.status === 'observed') ? 'observed' : 'unknown'}`}>{pillarState(p.items.some(c => c.status === 'risk') ? 'risk' : p.items.every(c => c.status === 'observed') ? 'observed' : 'unknown')}</span></summary><div>{p.items.map(c => <article key={c.code}><span className={`assessment-dot ${c.status}`}/><div><h4>{checkLabel(c.code)}</h4><p>{c.explanation}</p>{c.evidence_json ? <pre className="evidence-json">{JSON.stringify(c.evidence_json, null, 2)}</pre> : null}</div></article>)}</div></details>)}</div>
+    </section>)}
     <details className="drawer-disclosure"><summary>Resource identity</summary><dl className="detail-metadata">
       <div><dt>Resource type</dt><dd>{a.resource_type || 'Not supplied'}</dd></div><div><dt>Service category</dt><dd>{sentence(a.service_category || 'other')}</dd></div>
       {a.region ? <div><dt>Region</dt><dd>{a.region}</dd></div> : null}
@@ -372,10 +423,11 @@ function DecisionTab({detail, onChange}: {detail: ResourceDetail; onChange: () =
   </>;
 }
 
-export function ResourceDrawer({scanId, resourceKey, identity, relatedFindings = [], onClose, onChange}: {
+export function ResourceDrawer({scanId, resourceKey, identity, previewRow = null, relatedFindings = [], onClose, onChange}: {
   scanId: string;
   resourceKey: string | null;
   identity?: ResourceIdentity | null;
+  previewRow?: ResourceRow | null;
   relatedFindings?: Finding[];
   onClose: () => void;
   onChange: () => void;
@@ -386,6 +438,7 @@ export function ResourceDrawer({scanId, resourceKey, identity, relatedFindings =
       scanId={scanId}
       resourceKey={resourceKey}
       identity={identity}
+      previewRow={previewRow}
       relatedFindings={relatedFindings}
       layout="drawer"
       onClose={onClose}
@@ -394,10 +447,30 @@ export function ResourceDrawer({scanId, resourceKey, identity, relatedFindings =
   ) : null;
 }
 
-export function ResourceInsightView({scanId, resourceKey, identity, relatedFindings = [], layout, onClose, onChange}: {
+function fetchStagesPending(stages: ResourceDetail['fetch_stages'] | undefined): boolean {
+  if (!stages) return false;
+  return Object.values(stages).some(s => s === 'pending' || s === 'running');
+}
+
+function FetchStagesNotice({stages}: {stages: ResourceDetail['fetch_stages']}) {
+  if (!stages || !fetchStagesPending(stages)) return null;
+  const labels: Record<string, string> = {
+    costs: 'Billed costs',
+    activity_log: 'Activity log',
+    retail: 'Retail meters',
+    analysis: 'Analysis',
+    recommendations: 'Recommendations',
+  };
+  const pending = Object.entries(stages).filter(([, s]) => s === 'pending' || s === 'running').map(([k]) => labels[k] || k);
+  if (!pending.length) return null;
+  return <Notice tone="info">Still loading for this resource: {pending.join(', ')}. Sections update as each stage completes.</Notice>;
+}
+
+export function ResourceInsightView({scanId, resourceKey, identity, previewRow = null, relatedFindings = [], layout, onClose, onChange}: {
   scanId: string;
   resourceKey: string;
   identity?: ResourceIdentity | null;
+  previewRow?: ResourceRow | null;
   relatedFindings?: Finding[];
   layout: 'drawer' | 'page';
   onClose: () => void;
@@ -405,19 +478,36 @@ export function ResourceInsightView({scanId, resourceKey, identity, relatedFindi
 }) {
   const {token, canAdmin} = useWorkspace();
   const [detail, setDetail] = useState<ResourceDetail | null>(null), [error, setError] = useState(''), [version, setVersion] = useState(0);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const request = new AbortController();
     setDetail(null);
     setError('');
+    setLoading(true);
+  }, [resourceKey]);
+  useEffect(() => {
+    const request = new AbortController();
+    setError('');
+    setLoading(true);
     const query = resourceDetailQuery(identity);
     api<ResourceDetail>(`/scans/${scanId}/resources/${encodeURIComponent(resourceKey)}${query}`, token, {signal: request.signal})
       .then(result => {
         if (request.signal.aborted || result.assessment.resource_key !== resourceKey) return;
         setDetail(result);
+        setError('');
       })
-      .catch(cause => {if (!request.signal.aborted) {setDetail(null); setError((cause as Error).message);}});
+      .catch(cause => {
+        if (!request.signal.aborted) setError((cause as Error).message);
+      })
+      .finally(() => {
+        if (!request.signal.aborted) setLoading(false);
+      });
     return () => request.abort();
   }, [scanId, resourceKey, token, version, identity?.provider, identity?.resourceId]);
+  useEffect(() => {
+    if (!fetchStagesPending(detail?.fetch_stages)) return;
+    const timer = window.setInterval(() => setVersion(v => v + 1), 4000);
+    return () => window.clearInterval(timer);
+  }, [detail?.fetch_stages]);
   const [tab, setTab] = useState('overview');
   const [drawerExpanded, setDrawerExpanded] = useState(false);
   useEffect(() => {setTab('overview'); setDrawerExpanded(false);}, [resourceKey]);
@@ -427,15 +517,17 @@ export function ResourceInsightView({scanId, resourceKey, identity, relatedFindi
   const view = current && !current.findings.length && relatedFindings.length
     ? {...current, findings: relatedFindings}
     : current;
-  const drawerTabIds = ['overview', 'findings', 'evidence', 'costs', 'safety', 'observability', 'ai', 'decision', 'history', 'code'] as const;
+  const preview = !view && previewRow?.resource_key === resourceKey ? previewRow : null;
+  const showAzureGovernance = (view?.assessment.provider ?? preview?.provider) === 'azure';
+  const drawerTabIds: readonly string[] = ['overview', 'findings', 'evidence', ...(showAzureGovernance ? ['azure'] : []), 'costs', 'safety', 'observability', 'ai', 'decision', 'history', 'code'];
   useEffect(() => {
-    if (view && !drawerTabIds.includes(tab as typeof drawerTabIds[number])) setTab('overview');
-  }, [view, tab]);
-  const a = view?.assessment;
-  const tabs = view ? [
+    if (view && !drawerTabIds.includes(tab)) setTab('overview');
+  }, [view, tab, showAzureGovernance]);
+  const tabs = (view || preview) ? [
     {id: 'overview', label: 'Overview', icon: LayoutDashboard},
-    {id: 'findings', label: `Findings (${view.findings.length})`, icon: ListChecks},
+    {id: 'findings', label: `Findings (${(view?.findings.length ?? preview?.finding_count ?? 0)})`, icon: ListChecks},
     {id: 'evidence', label: 'Evidence', icon: Activity},
+    ...(showAzureGovernance ? [{id: 'azure', label: 'Azure Policy & Advisor', icon: ShieldCheck}] : []),
     {id: 'costs', label: 'Costs', icon: CircleDollarSign},
     {id: 'safety', label: 'Action safety', icon: ShieldAlert},
     {id: 'observability', label: 'Observability', icon: Gauge},
@@ -444,14 +536,32 @@ export function ResourceInsightView({scanId, resourceKey, identity, relatedFindi
     {id: 'history', label: 'History', icon: History},
     {id: 'code', label: 'Code', icon: FileCode2},
   ].map(item => ({...item, lead: resourceDrawerLeads[item.id]})) : [];
-  const body = error ? (
+  const body = error && !view && !preview ? (
     <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}><Notice tone="error">{error}</Notice></div>
-  ) : !view || !a ? (
+  ) : !view && !preview ? (
     <div className={layout === 'page' ? 'resource-insight-shell panel' : 'dialog-content'}>
-      <Loading label="Loading resource details…"/>
+      {identity?.resourceId && <p className="inline-help"><code>{identity.resourceId}</code></p>}
+      <Loading label={loading ? 'Loading resource details…' : 'Waiting for resource evidence…'}/>
+      {error && <Notice tone="error">{error}</Notice>}
     </div>
-  ) : (
+  ) : !view && preview ? (
     <>
+      <div className={`finding-drawer-header resource-drawer-header${layout === 'page' ? ' resource-insight-header' : ''}`}>
+        <div className="finding-badges"><ProviderBadge provider={preview.provider}/><span className={`state-badge ${preview.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{preview.disposition === 'protected' ? 'Protected' : 'Review'}</span><span className={`priority-badge priority-${preview.review_priority}`}>{sentence(preview.review_priority)}</span><ArmDetailBadge status={preview.arm_detail}/><AIStatusBadge ai={preview.ai}/>{preview.decision && <span className="state-badge">{decisionLabels[preview.decision.decision]}</span>}</div>
+        <h2>{preview.resource_name || preview.resource_id}</h2>
+        <p>{preview.resource_type.split('/').slice(-1)[0] || 'Resource'}{preview.resource_group ? ` · ${preview.resource_group}` : ''} · <PillarDots pillars={preview.pillars}/></p>
+        <p className="drawer-header-meta">Loading full evidence for this resource…</p>
+      </div>
+      <TabWorkspaceShell id={layout === 'page' ? 'resource-insight' : 'resource-drawer'} label="Resource details sections" className="drawer-tab-shell" tabs={tabs} value={tab} onChange={setTab} panelClassName="drawer-tab-content" tabIcons={false}>
+        <Loading label="Loading resource details…"/>
+      </TabWorkspaceShell>
+      <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
+    </>
+  ) : view ? (
+    (() => {
+      const a = view.assessment;
+      return <>
+      <FetchStagesNotice stages={view.fetch_stages}/>
       <div className={`finding-drawer-header resource-drawer-header${layout === 'page' ? ' resource-insight-header' : ''}`}>
         <div className="finding-badges"><ProviderBadge provider={a.provider}/><span className={`state-badge ${a.disposition === 'protected' ? 'protected-intent' : 'review-required'}`}>{a.disposition === 'protected' ? 'Protected' : 'Review'}</span><span className={`priority-badge priority-${a.review_priority}`}>{sentence(a.review_priority)}</span><ArmDetailBadge status={a.arm_detail}/><AIStatusBadge ai={view.ai}/>{view.decision && <span className="state-badge">{decisionLabels[view.decision.decision]}</span>}</div>
         <h2>{a.resource_name || a.resource_id}</h2>
@@ -466,6 +576,7 @@ export function ResourceInsightView({scanId, resourceKey, identity, relatedFindi
         {tab === 'overview' && <Overview detail={view} onOpenTab={setTab}/>}
         {tab === 'findings' && <Findings detail={view}/>}
         {tab === 'evidence' && <><AssessmentChecks detail={view}/><Evidence detail={view}/><Configuration detail={view}/><Telemetry detail={view}/><Rules detail={view}/><Dependencies detail={view}/></>}
+        {tab === 'azure' && showAzureGovernance && <AzureGovernancePanel detail={view}/>}
         {tab === 'costs' && <Costs detail={view} onFetched={refetch}/>}
         {tab === 'safety' && (
           <ActionSafetyPanel
@@ -483,8 +594,9 @@ export function ResourceInsightView({scanId, resourceKey, identity, relatedFindi
         {tab === 'code' && <div className="drawer-section"><h3>Review code</h3>{view.findings.length ? <CodeReview findings={view.findings}/> : <Notice tone="info">No findings are attached to this resource in this scan. Remediation code requires a flagged finding with a supported rule.</Notice>}</div>}
       </TabWorkspaceShell>
       <div className="drawer-footer"><ShieldCheck size={15}/>AI advice is unverified and never changes cloud resources.</div>
-    </>
-  );
+    </>;
+    })()
+  ) : null;
   if (layout === 'page') {
     return <div className="resource-insight-shell panel">{body}</div>;
   }

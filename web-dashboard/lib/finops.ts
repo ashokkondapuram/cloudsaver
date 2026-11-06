@@ -9,6 +9,15 @@ export const terraformRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP',
 export const bashRules = new Set(['ORPHANED_DISK','UNASSOCIATED_PUBLIC_IP','ORPHANED_NIC','ORPHANED_NSG']);
 const acronyms = new Set(['AWS', 'GCP', 'VM', 'VMS', 'IP', 'IPS', 'EBS', 'EIP', 'RDS', 'NAT', 'SQL', 'ELB', 'ALB', 'NLB', 'EC2', 'S3', 'AKS', 'EKS', 'GKE', 'CPU', 'GPU', 'NIC', 'NSG', 'DNS', 'API', 'AI', 'TLS', 'SKU', 'IOPS', 'PVC', 'LB']);
 export const ruleLabel = (rule: string) => labels[rule] || rule.replace(/^K8S_/, 'Kubernetes ').replaceAll('_', ' ').replace(/\b\w/g, (m, i) => (i === 0 ? m.toUpperCase() : m.toLowerCase()));
+export const checkLabel = (code: string) => labels[code] || ruleLabel(code);
+export const ruleProvider = (ruleId: string) => {
+  const id = (ruleId || '').toUpperCase();
+  if (id.startsWith('AZURE_')) return 'azure';
+  if (id.startsWith('AWS_')) return 'aws';
+  if (id.startsWith('GCP_')) return 'gcp';
+  if (id.startsWith('K8S_')) return 'kubernetes';
+  return 'azure';
+};
 export const providerOf = (finding: Finding) => finding.cloud_provider || 'azure';
 export const scopeOf = (finding: Finding) => finding.scope_id || finding.subscription_id;
 export const findingKey = (finding: Finding) => JSON.stringify([providerOf(finding), providerOf(finding) === 'azure' ? finding.resource_id.toLowerCase() : finding.resource_id, finding.rule_id]);

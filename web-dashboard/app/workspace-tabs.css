@@ -1,4 +1,4 @@
-/* Professional tab workspaces — all page tabs, governance, outcomes, and drawer tabs. */
+/* Tab workspaces — page shells (pill tabs) and drawer shells (underline tabs). */
 .workspace-tab-shell{
   display:flex;
   flex-direction:column;
@@ -10,9 +10,8 @@
   box-shadow:var(--experience-shadow);
   overflow:clip;
 }
-.workspace-tab-shell .workspace-tab-list,
-.workspace-tab-shell .page-tabs.gov-tabs,
-.drawer-tabs.workspace-tab-list{
+.workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list,
+.workspace-tab-shell:not(.drawer-tab-shell) .page-tabs.gov-tabs{
   display:flex;
   align-items:stretch;
   gap:4px;
@@ -24,9 +23,8 @@
   scrollbar-width:thin;
   scrollbar-color:var(--border) transparent;
 }
-.workspace-tab-list>button,
-.workspace-tab-shell .gov-tabs>button,
-.drawer-tabs.workspace-tab-list>button{
+.workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list>button,
+.workspace-tab-shell:not(.drawer-tab-shell) .gov-tabs>button{
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -43,23 +41,20 @@
   white-space:nowrap;
   flex:0 0 auto;
 }
-.workspace-tab-list>button:hover,
-.workspace-tab-shell .gov-tabs>button:hover,
-.drawer-tabs.workspace-tab-list>button:hover{
+.workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list>button:hover,
+.workspace-tab-shell:not(.drawer-tab-shell) .gov-tabs>button:hover{
   color:var(--text);
   background:color-mix(in srgb,var(--surface) 80%,var(--slate-100));
   border-color:var(--border);
 }
-.workspace-tab-list>button[aria-selected=true],
-.workspace-tab-shell .gov-tabs>button[aria-selected=true],
-.drawer-tabs.workspace-tab-list>button[aria-selected=true]{
+.workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list>button[aria-selected=true],
+.workspace-tab-shell:not(.drawer-tab-shell) .gov-tabs>button[aria-selected=true]{
   color:var(--indigo-600);
   background:var(--surface);
   border-color:color-mix(in srgb,var(--indigo-600) 28%,var(--border));
   box-shadow:0 1px 0 color-mix(in srgb,var(--indigo-600) 35%,transparent),0 6px 18px color-mix(in srgb,var(--indigo-600) 8%,transparent);
 }
-.workspace-tab-list>button:focus-visible,
-.drawer-tabs.workspace-tab-list>button:focus-visible{
+.workspace-tab-list>button:focus-visible{
   outline:2px solid var(--indigo-600);
   outline-offset:2px;
 }
@@ -71,7 +66,7 @@
   line-height:1.55;
   color:var(--muted);
 }
-.tab-panel-stack{
+.workspace-tab-shell:not(.drawer-tab-shell) .tab-panel-stack{
   display:flex;
   flex-direction:column;
   gap:22px;
@@ -82,32 +77,137 @@
 .tab-panel-stack:focus-visible{outline:2px solid var(--indigo-600);outline-offset:-2px;border-radius:0 0 var(--experience-radius,14px) var(--experience-radius,14px)}
 .workspace-tab-shell .tab-panel-stack>.panel:first-child{margin-top:0}
 .workspace-tab-shell .automation-principles{margin:8px 0 0}
-.drawer .workspace-tab-shell,
-.drawer .drawer-tabs.workspace-tab-list{border:0;border-radius:0;background:transparent;box-shadow:none}
-.drawer .drawer-tab-shell{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
-.drawer .drawer-tab-shell .workspace-tab-list{
+
+/* Drawer / insight tabs — scrollable underline bar + single scroll region */
+.drawer-tab-shell.workspace-tab-shell,
+.dialog.drawer .workspace-tab-shell.drawer-tab-shell{
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+  margin-bottom:0;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+.drawer-tab-shell .workspace-tab-list{
   flex-shrink:0;
-  position:relative;
-  z-index:2;
+  display:flex;
+  align-items:flex-end;
+  gap:0;
+  margin:0;
+  padding:0 1rem;
+  border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--slate-50) 65%,var(--surface));
+  overflow-x:auto;
+  overflow-y:hidden;
   flex-wrap:nowrap;
+  scrollbar-width:thin;
+  -webkit-overflow-scrolling:touch;
 }
-.drawer .drawer-tab-shell .tab-lead{
+.drawer-tab-shell .workspace-tab-list>button{
+  flex:0 0 auto;
+  min-height:42px;
+  padding:0.55rem 0.75rem 0.65rem;
+  margin-bottom:-1px;
+  border:0;
+  border-radius:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  box-shadow:none;
+  font-size:12px;
+  font-weight:550;
+  line-height:1.35;
+  color:var(--muted);
+}
+.drawer-tab-shell .workspace-tab-list>button:hover{
+  color:var(--text);
+  background:color-mix(in srgb,var(--surface) 50%,transparent);
+  border-color:transparent;
+}
+.drawer-tab-shell .workspace-tab-list>button[aria-selected=true]{
+  color:var(--indigo-600);
+  border-bottom-color:var(--indigo-600);
+  background:transparent;
+  box-shadow:none;
+}
+.drawer-tab-shell .tab-lead{
   flex-shrink:0;
-  position:relative;
-  z-index:1;
+  padding:0.65rem 1.5rem 0;
+  max-width:none;
 }
+.drawer-tab-shell .tab-panel-stack.drawer-tab-content{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:1.25rem 1.5rem 1.5rem;
+  min-width:0;
+}
+.drawer-tab-content .drawer-section{
+  margin-inline:0;
+  padding:0 0 1.25rem;
+}
+.drawer-tab-content .drawer-section+.drawer-section{
+  border-top:1px solid var(--border);
+  padding-top:1.25rem;
+  margin-top:0;
+}
+.drawer-tab-content>.notice:first-child{margin-top:0}
+.drawer-tab-content .panel-bleed{
+  margin-inline:-1.5rem;
+  border-radius:0;
+  border-left:0;
+  border-right:0;
+}
+
 .resource-insight-page .page-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1rem}
 .resource-insight-page .page-heading h1{margin:0;font-size:1.25rem}
-.resource-insight-shell.panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:min(80vh,960px)}
+.resource-insight-shell.panel{
+  padding:0;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height:min(80vh,960px);
+}
 .resource-insight-shell .drawer-tab-shell{flex:1;min-height:0}
-.resource-insight-header{padding:1.25rem 1.5rem 0}
-.drawer .drawer-tabs.workspace-tab-list{padding:0 18px;background:var(--slate-50);border-bottom:1px solid var(--border);flex-wrap:wrap;row-gap:6px}
-.drawer .tab-lead{padding:14px 24px 0}
-.drawer .tab-panel-stack{padding:0;gap:0}
-.drawer .tab-panel-stack.drawer-tab-content,
-.drawer .tab-panel-stack>.drawer-tab-content{padding:24px}
+.resource-insight-shell .resource-drawer-header{flex-shrink:0}
+.resource-insight-shell>.notice{margin:0;border-radius:0;border-left:0;border-right:0;flex-shrink:0}
+.resource-insight-header{padding:1.25rem 1.5rem 0;flex-shrink:0}
 
-/* Legacy page-tabs outside the shell keep underline style for any stragglers */
+/* Legacy drawer-tabs alias (same as drawer-tab-shell list) */
+.drawer-tabs.workspace-tab-list{
+  display:flex;
+  align-items:flex-end;
+  gap:0;
+  margin:0;
+  padding:0 1rem;
+  border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--slate-50) 65%,var(--surface));
+  overflow-x:auto;
+  flex-wrap:nowrap;
+}
+.drawer-tabs.workspace-tab-list>button{
+  flex:0 0 auto;
+  min-height:42px;
+  padding:0.55rem 0.75rem 0.65rem;
+  border:0;
+  border-radius:0;
+  border-bottom:2px solid transparent;
+  background:transparent;
+  box-shadow:none;
+  font-size:12px;
+  font-weight:550;
+  color:var(--muted);
+}
+.drawer-tabs.workspace-tab-list>button[aria-selected=true]{
+  color:var(--indigo-600);
+  border-bottom-color:var(--indigo-600);
+}
+
 .page-tabs:not(.workspace-tab-list){
   display:flex;
   gap:22px;
@@ -135,10 +235,11 @@
 }
 
 @media(max-width:720px){
-  .workspace-tab-shell .workspace-tab-list,
-  .drawer-tabs.workspace-tab-list{padding:8px 10px}
-  .workspace-tab-list>button,
-  .drawer-tabs.workspace-tab-list>button{min-height:38px;padding:7px 11px;font-size:12px}
-  .tab-lead{padding:14px 16px 0;font-size:12px}
-  .tab-panel-stack{padding:16px 16px 20px;gap:18px}
+  .workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list{padding:8px 10px}
+  .workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list>button{min-height:38px;padding:7px 11px;font-size:12px}
+  .drawer-tab-shell .workspace-tab-list{padding:0 0.75rem}
+  .drawer-tab-shell .workspace-tab-list>button{padding-inline:0.65rem;font-size:11px}
+  .drawer-tab-shell .tab-panel-stack.drawer-tab-content{padding:1rem 1rem 1.25rem}
+  .tab-lead{padding:0.65rem 1rem 0;font-size:12px}
+  .workspace-tab-shell:not(.drawer-tab-shell) .tab-panel-stack{padding:16px 16px 20px;gap:18px}
 }

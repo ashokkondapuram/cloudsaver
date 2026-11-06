@@ -59,6 +59,32 @@ class ScanProgress:
             observed_at=self.timestamp,
         )
 
+    def record_resource_bundle(self, observation, *, findings=None, evaluations=None):
+        """Persist one resource's observation, priced findings, and rule evaluations."""
+        if not self._seeded:
+            return
+        if hasattr(self.store, 'upsert_running_scan_resource'):
+            self.store.upsert_running_scan_resource(
+                self.workspace['tenant_id'],
+                self.scan_id,
+                observation,
+                workspace=self.workspace,
+                observed_at=self.timestamp,
+                findings=findings,
+                evaluations=evaluations,
+            )
+        else:
+            self.record_observation(observation)
+        from app.resources_redis import put_scan_resource
+
+        put_scan_resource(
+            self.workspace['tenant_id'],
+            self.scan_id,
+            observation,
+            findings=findings,
+            evaluations=evaluations,
+        )
+
     def complete(self):
         self._completed = True
 

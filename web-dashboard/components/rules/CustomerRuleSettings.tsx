@@ -1,6 +1,6 @@
 'use client';
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {api, ApiError} from '../../lib/api';
 import {useUnsavedPolicy} from '../../lib/useUnsavedPolicy';
 import {providerNames} from '../../lib/finops';
@@ -27,7 +27,7 @@ export function CustomerRuleSettings() {
 function RuleSettings() {
   const {token, canAdmin, workspace} = useWorkspace();
   const [data, setData] = useState<Policy | null>(null), [error, setError] = useState('');
-  const [draft, setDraft] = useState<Record<string, Change>>({}), [provider, setProvider] = useState('');
+  const [draft, setDraft] = useState<Record<string, Change>>({}), [provider, setProvider] = useState('azure');
   const [preview, setPreview] = useState<Preview | null>(null), [busy, setBusy] = useState(false);
   const [service, setService] = useState(''), [search, setSearch] = useState(''), [state, setState] = useState(''), [pillar, setPillar] = useState('');
   const [needsReload, setNeedsReload] = useState(false), [notice, setNotice] = useState('');
@@ -44,9 +44,14 @@ function RuleSettings() {
     } catch (cause) {if (!signal?.aborted) setError((cause as Error).message);}
   }, [token]);
   useEffect(() => {const controller = new AbortController(); void load(controller.signal); return () => controller.abort();}, [load]);
+  const catalogProviders = useMemo(() => data ? [...new Set(data.items.map(rule => rule.provider))].sort() : [], [data]);
+  useEffect(() => {
+    if (!catalogProviders.length) return;
+    if (!provider || !catalogProviders.includes(provider)) setProvider(catalogProviders[0]);
+  }, [catalogProviders, provider]);
   const restricted = !!workspace?.scope_restrictions;
   const canEdit = canAdmin && !restricted;
-  const rows = data ? data.items.filter(rule => (!provider || rule.provider === provider) && (!service || rule.service_category === service) && (!pillar || rule.pillar === pillar) && (!state || effectiveState(rule) === state) && (!search || [rule.id, rule.name, rule.resource_type, rule.description].join(' ').toLowerCase().includes(search.toLowerCase()))) : [];
+  const rows = data ? data.items.filter(rule => rule.provider === provider && (!service || rule.service_category === service) && (!pillar || rule.pillar === pillar) && (!state || effectiveState(rule) === state) && (!search || [rule.id, rule.name, rule.resource_type, rule.description].join(' ').toLowerCase().includes(search.toLowerCase()))) : [];
   const changes = Object.values(draft);
   useUnsavedPolicy(changes.length > 0);
   const invalid = changes.some(change => {
@@ -92,14 +97,14 @@ function RuleSettings() {
       {needsReload && <Notice tone="warning">The current policy must be checked before another write. Your draft is retained in this session. <button className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Reload current policy</button></Notice>}
       {!data ? error ? <button className="button secondary" disabled={busy} onClick={() => void reloadPolicy()}>Retry loading rules</button> : <Loading label="Loading published rules…"/> : <>
         <div className="rule-catalog-filters">
-          <label>Provider<select value={provider} onChange={event => setProvider(event.target.value)}><option value="">All providers</option>{[...new Set(data.items.map(rule => rule.provider))].sort().map(value => <option key={value} value={value}>{providerNames[value] ?? value}</option>)}</select></label>
-          <label>Service category<select value={service} onChange={event => setService(event.target.value)}><option value="">All services</option>{[...new Set(data.items.map(rule => rule.service_category).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
-          <label>Pillar<select value={pillar} onChange={event => setPillar(event.target.value)}><option value="">All pillars</option>{[...new Set(data.items.map(rule => rule.pillar).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
-          <label>Effective state<select aria-label="Effective state" value={state} onChange={event => setState(event.target.value)}><option value="">All states</option>{[...new Set(data.items.map(effectiveState))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
+          <div className="provider-pills" role="group" aria-label="Cloud providers">{catalogProviders.map(value => <button key={value} type="button" className={`cloud-pill cloud-${value}`} aria-pressed={provider === value} onClick={() => setProvider(value)}><span className="cloud-pill-dot"/>{providerNames[value] ?? value}</button>)}</div>
+          <label>Service category<select value={service} onChange={event => setService(event.target.value)}><option value="">All services</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(rule => rule.service_category).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
+          <label>Pillar<select value={pillar} onChange={event => setPillar(event.target.value)}><option value="">All pillars</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(rule => rule.pillar).filter(Boolean))].sort().map(value => <option key={value} value={value}>{sentence(value!)}</option>)}</select></label>
+          <label>Effective state<select aria-label="Effective state" value={state} onChange={event => setState(event.target.value)}><option value="">All states</option>{[...new Set(data.items.filter(rule => rule.provider === provider).map(effectiveState))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
           <label>Find a resource rule<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Name, ID or resource type"/></label>
-          <button className="button secondary" onClick={() => {setProvider(''); setService(''); setPillar(''); setState(''); setSearch('');}}>Reset rule filters</button>
+          <button className="button secondary" onClick={() => {setService(''); setPillar(''); setState(''); setSearch('');}}>Reset rule filters</button>
         </div>
-        <p className="rule-catalog-caption" role="status">{rows.length} of {data.items.length} rules · filters use saved effective policy; drafts apply after review.</p>
+        <p className="rule-catalog-caption" role="status">{rows.length} {providerNames[provider] ?? provider} rules · switch provider to review another catalog. Drafts can span providers.</p>
         <div className="summary-table-scroll" tabIndex={0} aria-label="Analysis rule catalog"><table className="summary-table"><thead><tr><th>Rule and service</th><th>Effective state</th><th>Delegated parameters</th></tr></thead><tbody>
           {rows.map(rule => {
             const pending = draft[rule.id];

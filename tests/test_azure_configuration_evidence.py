@@ -1,6 +1,19 @@
 from app.collectors.azure_configuration_evidence import enrich_configuration_evidence, enrich_inventory_configuration
 
 
+def test_hydrate_typed_configuration_from_arg_flat_fields():
+    resource = dict(
+        resource_type='microsoft.compute/disks',
+        resource_id='/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg/providers/Microsoft.Compute/disks/d1',
+        evidence=dict(source='Azure Resource Graph', disk_state='Unattached', size_gb=64, encrypted=True),
+    )
+    enrich_configuration_evidence(resource)
+    typed = resource['evidence']['typed_configuration']
+    assert typed['diskState'] == 'Unattached'
+    assert typed['diskSizeGB'] == 64
+    assert resource['evidence']['encrypted'] is True
+
+
 def test_disk_configuration_from_arm_typed_configuration():
     resource = dict(
         resource_type='microsoft.compute/disks',

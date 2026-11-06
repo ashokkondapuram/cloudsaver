@@ -12,52 +12,9 @@ from app.collectors.live_common import window,series,collect,enrich_metrics,tran
 from app.telemetry_contract import moment
 
 ARM=ARM_ROOT
-METRICS={
- 'microsoft.compute/virtualmachines':{
-  'cpu_percent':('Percentage CPU','Maximum'),
-  'memory_free_bytes':('Available Memory Bytes','Minimum'),
-  'disk_iops':('Disk Read Operations/Sec','Maximum'),
-  'network_bytes':('Network In Total','Maximum'),
-  'burst_credits':('CPU Credits Remaining','Maximum'),
- },
- 'microsoft.compute/disks':{
-  'iops':('Composite Disk Read Operations/sec','Maximum'),
-  'throughput':('Composite Disk Read Bytes/sec','Maximum'),
-  'burst_credits':('Disk Paid Burst IO Percentage','Maximum'),
- },
- 'microsoft.network/publicipaddresses':{'ingress_bytes':('ByteCount','Maximum')},
- 'microsoft.network/natgateways':{'network_bytes':('ByteCount','Maximum'),'connections':('SNATConnectionCount','Maximum')},
- 'microsoft.network/applicationgateways':{
-  'requests':('TotalRequests','Maximum'),
-  'healthy_targets':('HealthyHostCount','Maximum'),
-  'capacity_units':('CapacityUnits','Maximum'),
-  'latency':('BackendLastByteResponseTime','Maximum'),
- },
- 'microsoft.web/serverfarms':{
-  'cpu_percent':('CpuPercentage','Maximum'),
-  'memory_percent':('MemoryPercentage','Maximum'),
-  'http_queue':('HttpQueueLength','Maximum'),
- },
- 'microsoft.dbforpostgresql/flexibleservers':{
-  'cpu_percent':('cpu_percent','Maximum'),
-  'memory_percent':('memory_percent','Maximum'),
-  'connections':('active_connections','Maximum'),
-  'iops':('iops','Maximum'),
- },
- 'microsoft.sql/servers/databases':{'cpu_percent':('cpu_percent','Maximum'),'connections':('connection_successful','Maximum')},
- 'microsoft.documentdb/databaseaccounts':{'normalized_ru_consumption':('NormalizedRUConsumption','Maximum')},
- 'microsoft.cache/redis':{
-  'memory_percent':('usedmemorypercentage','Maximum'),
-  'cpu_percent':('serverLoad','Maximum'),
-  'connections':('connectedclients','Maximum'),
-  'evictions':('evictedkeys','Maximum'),
- },
- 'microsoft.storage/storageaccounts':{'bytes':('UsedCapacity','Average'),'requests':('Transactions','Total')},
- 'microsoft.cognitiveservices/accounts':{
-  'ptu_utilization':('ProvisionedManagedUtilizationV2','Maximum'),
-  'invocations':('AzureOpenAIRequests','Total'),
- },
-}
+from app.azure_resource_registry import azure_monitor_metrics_catalog
+
+METRICS = azure_monitor_metrics_catalog()
 
 def pages(reader,url,params=None):
     from app.collectors._pagination import iter_arm_next_link_values
@@ -110,10 +67,11 @@ def fetch_azure_monitor_series(reader,resource,now):
             ),
         )
         values=data.get('value')
-        if not isinstance(values,list) or len(values)!=1:continue
-        parsed=_series_from_platform_metric(values[0],name=name,aggregation=aggregation,now=now)
+        if not isinstance(values, list) or len(values) != 1:
+            continue
+        parsed = _series_from_platform_metric(values[0], name=name, aggregation=aggregation, now=now)
         if parsed is not None:
-            result[key]=parsed
+            result[key] = parsed
     return result
 
 def _azure_activity_log_events(reader, resource, now):
@@ -170,6 +128,25 @@ def fetch_azure_activity_events(reader, resource, now):
     collect_azure_activity_log_evidence(reader, resource, now)
     return (resource.get('evidence') or {}).get('activity_events')
 
+def fetch_flow_logs_enabled(reader, subscription_id, region):
+    """True when any NSG flow log is enabled in the resource region (subscription watchers)."""
+    if not isinstance(region, str) or not region.strip():
+        return None
+    region_key = region.replace(' ', '').lower()
+    saw_disabled = False
+    url = ARM + '/subscriptions/' + subscription_id + '/providers/Microsoft.Network/networkWatchers'
+    for watcher in pages(reader, url, {'api-version': '2023-05-01'}):
+        if (watcher.get('location') or '').replace(' ', '').lower() != region_key:
+            continue
+        wid = watcher.get('id') or ''
+        for fl in pages(reader, ARM + wid + '/flowLogs', {'api-version': '2023-05-01'}):
+            props = fl.get('properties') or {}
+            if props.get('enabled') is True:
+                return True
+            if props.get('enabled') is False:
+                saw_disabled = True
+    return False if saw_disabled else None
+
 def fetch_azure_operational_guards(reader,resource,now):
     rid=resource['resource_id'];group='/'.join(rid.split('/')[:5]);result={}
     locks=[]
@@ -189,6 +166,17 @@ def fetch_azure_operational_guards(reader,resource,now):
             if (site.get('properties') or {}).get('serverFarmId','').lower()!=rid.lower():raise ValueError('Unrelated App Service site')
             slots+=len(list(pages(reader,ARM+site['id']+'/slots',{'api-version':'2023-12-01'})))
         result.update(deployment_slot_count=slots,hosted_app_count=len(sites))
+        paths=[((s.get('properties') or {}).get('siteConfig') or {}).get('healthCheckPath') for s in sites]
+        paths=[p for p in paths if isinstance(p,str) and p]
+        if paths:
+            result['health_probes_enabled']=True
+            result['health_check_paths']=paths[:20]
+        elif sites:
+            result['health_probes_enabled']=False
+    if resource['resource_type'].lower().startswith('microsoft.network/'):
+        flow = fetch_flow_logs_enabled(reader, resource['subscription_id'], resource.get('region'))
+        if type(flow) is bool:
+            result['flow_logs_enabled'] = flow
     return result
 
 def fetch_backup_replication(reader,subscription):
@@ -221,6 +209,44 @@ def _live_resource_limit(settings=None):
     return value
 
 
+def enrich_live_row(reader, resource, *, now=None, recovery=None, batch_metrics=None):
+    now = now or datetime.now(timezone.utc)
+    recovery = recovery if recovery is not None else {}
+    if resource['resource_type'].lower() not in METRICS:
+        return resource
+    e = resource.setdefault('evidence', {})
+    sub = resource['subscription_id']
+    if sub not in recovery:
+        recovery[sub] = collect(e, 'recovery_services', lambda: fetch_backup_replication(reader, sub))
+    if recovery[sub] is not None:
+        e.update(
+            backup_enrolled=resource['resource_id'].lower() in recovery[sub][0],
+            replication_enrolled=resource['resource_id'].lower() in recovery[sub][1],
+        )
+    else:
+        e.setdefault('live_sources', {})['recovery_services'] = 'unavailable_or_incomplete'
+    guards = collect(e, 'operational_guards', lambda: fetch_azure_operational_guards(reader, resource, now))
+    if guards:
+        e.update(guards)
+    def load_monitor():
+        if batch_metrics is not None:
+            cached = batch_metrics.get((resource.get('resource_id') or '').lower())
+            if cached is not None:
+                return cached
+        return fetch_azure_monitor_series(reader, resource, now)
+
+    values = collect(e, 'azure_monitor', load_monitor)
+    if values:
+        enrich_metrics(e, values, now)
+    e['state_history'] = collect(e, 'activity_log', lambda: fetch_azure_state_history(reader, resource, now))
+    from app.collectors.azure_configuration_evidence import enrich_configuration_evidence
+    enrich_configuration_evidence(resource)
+    from app.resource_timestamps import touch_azure_status_fetched
+
+    touch_azure_status_fetched(e, now=now)
+    return resource
+
+
 def enrich(reader,inventory,now=None,*,settings=None):
     now=now or datetime.now(timezone.utc)
     limit = _live_resource_limit(settings)
@@ -236,17 +262,5 @@ def enrich(reader,inventory,now=None,*,settings=None):
     from app.collectors.azure_monitor_batch import prefetch_batch_metrics
     batch_metrics = prefetch_batch_metrics(reader, selected, now)
     for r in selected:
-        if r['resource_type'].lower() not in METRICS:continue
-        e=r.setdefault('evidence',{})
-        sub=r['subscription_id']
-        if sub not in recovery:recovery[sub]=collect(e,'recovery_services',lambda:fetch_backup_replication(reader,sub))
-        if recovery[sub] is not None:e.update(backup_enrolled=r['resource_id'].lower() in recovery[sub][0],replication_enrolled=r['resource_id'].lower() in recovery[sub][1])
-        else:e.setdefault('live_sources',{})['recovery_services']='unavailable_or_incomplete'
-        guards=collect(e,'operational_guards',lambda:fetch_azure_operational_guards(reader,r,now))
-        if guards:e.update(guards)
-        cached=batch_metrics.get(r['resource_id'].lower())
-        values=collect(e,'azure_monitor',lambda cached=cached:cached if cached is not None else fetch_azure_monitor_series(reader,r,now))
-        if values:enrich_metrics(e,values,now)
-        e['state_history']=collect(e,'activity_log',lambda:fetch_azure_state_history(reader,r,now))
-        enrich_configuration_evidence(r)
+        enrich_live_row(reader, r, now=now, recovery=recovery, batch_metrics=batch_metrics)
     return inventory

@@ -83,22 +83,27 @@ def _fetch_policy(reader, resource_id: str, scope_lower: str) -> tuple[dict | No
     return body, False
 
 
+def enrich_storage_row(reader, resource) -> dict:
+    if (resource.get('resource_type') or '').lower() != _STORAGE:
+        return resource
+    rid = resource.get('resource_id') or ''
+    scope = rid.split('/providers/')[0].lower() if '/providers/' in rid else ''
+    evidence = resource.setdefault('evidence', {})
+
+    def load():
+        body, absent = _fetch_policy(reader, rid, scope)
+        parsed = parse_management_policy(body, absent=absent)
+        evidence.update(parsed)
+        return parsed
+
+    collect(evidence, 'storage_management_policy', load)
+    enrich_configuration_evidence(resource)
+    return resource
+
+
 def enrich_storage_management_policies(reader, inventory, *, settings=None) -> list[dict]:
     """Attach lifecycle policy evidence to Azure storage account inventory rows."""
     del settings  # reserved for future platform limits
     for resource in inventory:
-        if (resource.get('resource_type') or '').lower() != _STORAGE:
-            continue
-        rid = resource.get('resource_id') or ''
-        scope = rid.split('/providers/')[0].lower() if '/providers/' in rid else ''
-        evidence = resource.setdefault('evidence', {})
-
-        def load():
-            body, absent = _fetch_policy(reader, rid, scope)
-            parsed = parse_management_policy(body, absent=absent)
-            evidence.update(parsed)
-            return parsed
-
-        collect(evidence, 'storage_management_policy', load)
-        enrich_configuration_evidence(resource)
+        enrich_storage_row(reader, resource)
     return inventory

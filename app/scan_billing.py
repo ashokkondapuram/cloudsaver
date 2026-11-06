@@ -80,4 +80,9 @@ def materialize_scan_billing(tenant, scan, repository):
     attached['billing_materialized'] = True
     attached['billing_window_start'] = start.isoformat()
     attached['billing_window_end'] = end.isoformat()
-    return attached
+    from app.resource_fetch_stages import sync_fetch_stages
+    for obs in attached.get('inventory') or []:
+        sync_fetch_stages((obs.get('evidence') or {}))
+    from app.resource_analysis_service import reanalyze_scan_snapshot
+
+    return reanalyze_scan_snapshot(attached)

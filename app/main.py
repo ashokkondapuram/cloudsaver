@@ -387,10 +387,12 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
 
             from app.scanner import scan_live
             from app.effective_rules import policy_for_tenant
+            from app.resource_analysis_service import build_scan_rule_policies
             rule_policy = policy_for_tenant(tenant_id)
             rule_ids = set(rule_policy['enabled_rule_ids']) if rule_policy is not None else None
             if tenant.get('key_id') and rule_policy is None:
                 raise ScanError('Analysis policy is unavailable; no scan was saved. Retry when identity-service is available.')
+            scan_policies = build_scan_rule_policies(rule_policy, rule_ids)
             inventory = []
             if providers:
                 from app.multi_cloud import scan_multi_cloud
@@ -402,7 +404,13 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
                 else:
                     raw_findings = scanned
             else:
-                raw_findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids, progress=progress)
+                raw_findings, inventory = scan_live(
+                    tenant,
+                    enabled_rule_ids=rule_ids,
+                    progress=progress,
+                    policies=scan_policies,
+                    observed_at=observation_time,
+                )
 
             resource_count = len(inventory) if inventory else len(raw_findings)
             logger.info(
@@ -441,12 +449,9 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
             from app.multi_cloud import scope_fingerprint
             from app.analysis_rules import evaluate_inventory, VERSION as rule_version
             from app.inventory import coverage, coverage_manifest
-            policies = {item['id']: item for item in (rule_policy or {}).get('items', [])}
-            if rule_ids is not None:
-                from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
-                from app.resource_catalog import definitions
-                for rid, *_ in (*KUBERNETES_RULES, *definitions()):
-                    policies.setdefault(rid, {'enabled': rid in rule_ids})
+            policies = scan_policies
+            if not policies:
+                policies = build_scan_rule_policies(rule_policy, rule_ids)
             evaluations = evaluate_inventory(inventory, observed_at=observation_time, policies=policies)
             from app.multicloud_rules import materialize
             enriched_findings=group_opportunities(materialize(enriched_findings,inventory,evaluations),inventory)

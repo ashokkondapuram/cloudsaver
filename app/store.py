@@ -308,6 +308,84 @@ class PostgresStore:
                 from app.typed_resources.persist import persist_typed_resource_row
                 persist_typed_resource_row(db, workspace, scan_id, observed_at, observation)
 
+    def upsert_running_scan_resource(
+        self,
+        tenant_id,
+        scan_id,
+        observation,
+        *,
+        workspace,
+        observed_at,
+        findings=None,
+        evaluations=None,
+    ):
+        """Merge one resource observation, findings, and evaluations into a running scan payload."""
+        from uuid import UUID
+        from psycopg.types.json import Jsonb
+
+        tenant_id = str(UUID(tenant_id))
+        scan_id = str(UUID(scan_id))
+        provider = observation.get('cloud_provider', 'azure')
+        rid = (observation.get('resource_id') or '').lower()
+        with self.connection(tenant_id) as db:
+            row = db.execute(
+                'SELECT payload FROM public.scans WHERE id=%s AND tenant_id=%s FOR UPDATE',
+                (scan_id, tenant_id),
+            ).fetchone()
+            if row is None:
+                return
+            payload = dict(row[0])
+            inventory = []
+            replaced = False
+            for item in payload.get('inventory') or []:
+                if (item.get('resource_id') or '').lower() == rid:
+                    inventory.append(observation)
+                    replaced = True
+                else:
+                    inventory.append(item)
+            if not replaced:
+                inventory.append(observation)
+            payload['inventory'] = inventory
+            evidence = observation.get('evidence') or {}
+            if evidence.get('arm_detail') == 'collected':
+                payload['items_arm_detail_collected'] = int(payload.get('items_arm_detail_collected') or 0) + 1
+            elif evidence.get('arm_detail'):
+                payload['items_arm_detail_processed'] = int(payload.get('items_arm_detail_processed') or 0) + 1
+
+            if findings is not None:
+                kept = [
+                    f
+                    for f in (payload.get('findings') or [])
+                    if not (
+                        (f.get('cloud_provider') or 'azure') == provider
+                        and (f.get('resource_id') or '').lower() == rid
+                    )
+                ]
+                payload['findings'] = kept + list(findings)
+
+            if evaluations:
+                existing = list(payload.get('rule_evaluations') or [])
+                keys = {
+                    (e.get('cloud_provider', 'azure'), (e.get('resource_id') or '').lower(), e.get('rule_id'))
+                    for e in evaluations
+                }
+                merged = [
+                    e
+                    for e in existing
+                    if (e.get('cloud_provider', 'azure'), (e.get('resource_id') or '').lower(), e.get('rule_id'))
+                    not in keys
+                ]
+                merged.extend(evaluations)
+                payload['rule_evaluations'] = merged
+
+            db.execute(
+                'UPDATE public.scans SET payload=%s WHERE id=%s AND tenant_id=%s',
+                (Jsonb(payload), scan_id, tenant_id),
+            )
+            if self.has_typed_resource_tables and evidence.get('arm_detail') == 'collected':
+                from app.typed_resources.persist import persist_typed_resource_row
+                persist_typed_resource_row(db, workspace, scan_id, observed_at, observation)
+
     def abandon_running_scan(self, tenant_id, scan_id):
         from uuid import UUID
         tenant_id = str(UUID(tenant_id))

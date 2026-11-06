@@ -12,7 +12,7 @@ import hashlib
 from typing import Literal
 from uuid import UUID
 
-from fastapi import Header, APIRouter, Depends, HTTPException
+from fastapi import Header, APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from app.auth import Role, require_workspace_role
@@ -295,6 +295,23 @@ def create_router(settings, current_tenant, identity_client=None, scan_store=Non
         from app.resource_catalog import VERSION, rules_catalog_items
 
         return dict(version=VERSION, items=rules_catalog_items())
+
+    @router.get('/api/v1/rules/catalog/by-pillar')
+    def rules_catalog_by_pillar(
+        tenant=Depends(current_tenant),
+        provider: str | None = Query(None, pattern=r'^(azure|aws|gcp|kubernetes)$'),
+    ):
+        from app.analysis_rule_catalog import catalog_by_pillar
+        from app.resource_catalog import VERSION
+
+        return dict(version=VERSION, **catalog_by_pillar(provider=provider))
+
+    @router.get('/api/v1/rules/catalog/azure-compute')
+    def rules_catalog_azure_compute(tenant=Depends(current_tenant)):
+        from app.analysis_rule_catalog import azure_compute_rule_matrix
+        from app.resource_catalog import VERSION
+
+        return dict(version=VERSION, items=azure_compute_rule_matrix())
 
     @router.put('/api/v1/rules/overrides')
     def save_rules(body: PolicyChange, tenant=Depends(current_tenant), authorization: str = Header()):

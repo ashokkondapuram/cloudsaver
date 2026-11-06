@@ -20,9 +20,11 @@ def condition(rid,e,p,now):
     from app.analysis_rules import series,continuous,legacy_azure_detect,LEGACY_AZURE_RULE_IDS
     if rid in LEGACY_AZURE_RULE_IDS:
         return legacy_azure_detect(rid, e, p, now)
-    def metric(key,stat='p95'):
-        data=series((e.get('metrics') or {}).get(key),now)
-        return data[stat] if data else None
+    from app.analysis_rules import metric_series
+
+    def metric(key, stat='p95'):
+        data = metric_series(e, key, now)
+        return data[stat] if data and stat in data else None
     def low(key,limit,stat='p95'):
         v=metric(key,stat);return None if v is None else v<limit
     def all_known(*values):return None if any(type(v) is not bool for v in values) else all(values)
@@ -49,14 +51,65 @@ def condition(rid,e,p,now):
         return rightsize(20,45)
     if rid=='AWS_IDLE_RDS':return retained('Stopped',7) if e.get('power_state')=='stopped' else all_known(e.get('nonproduction'),low('connections',1,'maximum'),low('cpu_percent',5))
     if rid=='GCP_IDLE_CLOUD_SQL':return e.get('aligned_hours')==336 and e.get('maximum_connections')==0 if 'aligned_hours' in e else None
-    if rid in ('AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR','AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION','GCP_LB_EMPTY_BACKEND_FORWARDING_RULE'):return empty_backend()
+    if rid in ('AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR','AWS_ELB_ORPHANED_AND_INGRESS_CONSOLIDATION','GCP_LB_EMPTY_BACKEND_FORWARDING_RULE','AZURE_LB_EMPTY_OR_IDLE_BACKEND'):return empty_backend()
+    if rid == 'AZURE_WEB_APP_IDLE_LOW_REQUESTS':
+        state = e.get('site_state')
+        if isinstance(state, str) and state.lower() not in ('running',):
+            return False
+        return low('requests', p.get('utilization_percent', 5), 'maximum')
+    if rid in ('AZURE_AKS_CLUSTER_UTILIZATION_REVIEW', 'AZURE_ACI_IDLE_LOW_UTILIZATION', 'AZURE_VMSS_LOW_UTILIZATION_REVIEW'):
+        return rightsize(20, 45)
+    if rid == 'AZURE_MESSAGING_IDLE_NAMESPACE':
+        return all_known(low('requests', 1, 'maximum'), low('connections', 1, 'maximum'))
+    if rid == 'AZURE_KEYVAULT_LOW_ACTIVITY':
+        return low('requests', 1, 'maximum')
+    if rid == 'AZURE_LOGIC_WORKFLOW_IDLE':
+        return low('requests', 1, 'maximum')
+    if rid == 'AZURE_SYNAPSE_IDLE_WORKSPACE':
+        return low('requests', 1, 'maximum')
+    if rid == 'AZURE_NAT_GATEWAY_IDLE_LOW_TRAFFIC':
+        if e.get('routing_verified') is not True:
+            return None
+        idle_conn = low('connections', 10, 'maximum')
+        idle_bytes = low('network_bytes', 1024, 'maximum')
+        return all_known(idle_conn, idle_bytes)
+    if rid == 'AZURE_DATABASE_PUBLIC_NETWORK_REVIEW':
+        if e.get('publicly_accessible') is True:
+            return True
+        if e.get('publicly_accessible') is False:
+            return False
+        return None
+    if rid == 'AZURE_STORAGE_PUBLIC_BLOB_ACCESS_REVIEW':
+        if e.get('allow_blob_public_access') is True:
+            return True
+        if e.get('allow_blob_public_access') is False:
+            return False
+        return None
+    if rid == 'AZURE_REDIS_LEGACY_TLS_REVIEW':
+        if e.get('tls_required') is False:
+            return True
+        if e.get('tls_required') is True:
+            return False
+        return None
+    if rid == 'ORPHANED_NIC':
+        if e.get('nic_orphaned') is True or e.get('association_verified') is False:
+            return True
+        if e.get('nic_orphaned') is False or e.get('association_verified') is True:
+            return False
+        return None
+    if rid == 'ORPHANED_NSG':
+        if e.get('nsg_orphaned') is True:
+            return True
+        if e.get('nsg_orphaned') is False:
+            return False
+        return None
     if rid in ('AZURE_NAT_GATEWAY_SERVICE_ENDPOINT_BYPASS','AWS_NAT_GW_ENDPOINT_BYPASS_AND_IDLE','GCP_CLOUD_NAT_PRIVATE_GOOGLE_ACCESS'):
         if e.get('routing_verified') is not True or e.get('flow_log_coverage_ratio',0)<.95:return None
         return metric('endpoint_eligible_bytes','maximum')>0 if metric('endpoint_eligible_bytes','maximum') is not None else None
     if rid=='AZURE_COSMOSDB_MANUAL_RU_TO_AUTOSCALE':
-        values=series((e.get('metrics') or {}).get('normalized_ru_consumption'),now)
+        values=metric_series(e, 'normalized_ru_consumption', now)
         mean=e.get('ru_average_percent')
-        return None if not values or type(mean) not in (int,float) or mean<=0 or 'manual_throughput' not in e else e['manual_throughput'] is True and values['p99']<p.get('utilization_percent',30) and values['maximum']/mean>3
+        return None if not values or type(mean) not in (int,float) or mean<=0 or 'manual_throughput' not in e else e['manual_throughput'] is True and values.get('p99', values.get('maximum', 0))<p.get('utilization_percent',30) and values.get('maximum', 0)/mean>3
     if rid in ('AZURE_REDIS_UNDERUTILIZED_TIER_REVIEW','AWS_ELASTICACHE_GRAVITON_AND_VALKEY_UPGRADE'):
         return all_known(low('memory_percent',35,'p99'),low('cpu_percent',p.get('utilization_percent',25)),low('evictions',1,'maximum'),e.get('target_compatible'))
     if rid=='AWS_DYNAMODB_BILLING_MODE_AND_UNUSED_GSI':return all_known(low('read_utilization_percent',p.get('utilization_percent',18)),low('write_utilization_percent',p.get('utilization_percent',18)),low('throttle_events',1,'maximum'),e.get('spiky_traffic_verified'))
@@ -80,16 +133,32 @@ def condition(rid,e,p,now):
 def evaluate_inventory(inventory,*,policies=None,observed_at=None,now=None,providers=None):
     from app.analysis_rules import LEGACY_AZURE_RULE_IDS
     from app.azure_evidence_contracts import rule_resource_type_suffix
+    from app.azure_resource_registry import analysis_rule_ids_for
     now=now or datetime.now(timezone.utc);lookup={r[0]:r for r in definitions()};result=[]
     for resource in inventory:
+        provider=resource.get('cloud_provider','azure')
         f=family(resource)
-        if not f or f[0]=='kubernetes' or providers and f[0] not in providers:continue
-        for rid in f[4]:
+        if provider=='kubernetes' or f and f[0]=='kubernetes' or providers and provider not in providers:
+            continue
+        if provider=='azure':
+            rule_ids=analysis_rule_ids_for(resource)
+            cloud='azure'
+        elif f:
+            rule_ids=f[4]
+            cloud=f[0]
+        else:
+            continue
+        if not rule_ids:
+            continue
+        for rid in rule_ids:
             suffix = rule_resource_type_suffix(rid)
             if rid in LEGACY_AZURE_RULE_IDS and suffix and resource['resource_type'].lower().rsplit('/', 1)[-1] != suffix:
                 continue
-            rule=lookup[rid];policy=(policies or {}).get(rid,{})
-            output=dict(rule_id=rid,rule_version='1.4.0',name=rule[4],cloud_provider=f[0],resource_id=resource['resource_id'],
+            rule=lookup.get(rid)
+            if not rule:
+                continue
+            policy=(policies or {}).get(rid,{})
+            output=dict(rule_id=rid,rule_version='1.4.0',name=rule[4],cloud_provider=cloud,resource_id=resource['resource_id'],
                 resource_type=resource['resource_type'],subscription_id=resource.get('subscription_id'),scope_id=resource.get('scope_id'),
                 outcome='insufficient_evidence',reason='Complete fresh history, telemetry and target proof are required.',
                 automatic_execution=False,estimated_savings=None,protected_reasons=protection(resource),destructive_actions_blocked=True)

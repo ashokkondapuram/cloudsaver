@@ -88,6 +88,12 @@ def overlay_pillar_analysis(assessment, scan):
     return updated
 
 
+def _merge_check_groups(checks, provider):
+    from app.provider_rules import group_checks
+
+    return group_checks(checks, provider)
+
+
 def _sync_evidence_coverage(assessment):
     checks = [c for pillar in assessment.get('pillars', []) for c in pillar.get('checks', [])]
     return dict(
@@ -123,13 +129,44 @@ def _dependency_evidence_from_observation(obs):
         patch['dependency_inventory_complete'] = all(
             isinstance(edge, dict) and edge.get('verification_state') == 'verified' for edge in refs
         )
+    else:
+        patch['verified_dependencies'] = []
+        patch['dependency_inventory_complete'] = True
     return patch
+
+
+def _prepare_observation_for_assessment(obs: dict) -> dict:
+    """Enrich saved inventory once before assess/merge (list API does not re-run the scan pipeline)."""
+    if not isinstance(obs, dict):
+        return obs
+    row = dict(obs)
+    row['evidence'] = dict(obs.get('evidence') or {})
+    if isinstance(obs.get('dependency_refs'), list):
+        row['dependency_refs'] = list(obs['dependency_refs'])
+    from app.collectors.azure_configuration_evidence import enrich_configuration_evidence
+
+    enrich_configuration_evidence(row)
+    evidence = row['evidence']
+    if evidence.get('billed_cost_usd') is not None and evidence.get('billing_coverage') is not True:
+        evidence['billing_coverage'] = True
+    if type(evidence.get('commitment_locked')) is bool and type(evidence.get('commitment_lock_conflict')) is not bool:
+        evidence['commitment_lock_conflict'] = evidence['commitment_locked']
+    if (row.get('cloud_provider') or 'azure') == 'azure' and not evidence.get('pricing_evidence'):
+        from app.azure_pricing_evidence import enrich_azure_pricing_evidence
+
+        pseudo = inventory_observation(row)
+        enriched = enrich_azure_pricing_evidence(pseudo, row)
+        pricing = enriched.get('pricing_evidence')
+        if isinstance(pricing, dict):
+            evidence['pricing_evidence'] = pricing
+    return row
 
 
 def _enrich_finding_for_assessment(finding, observation=None):
     finding = dict(finding)
     evidence = dict(finding.get('evidence') or {})
     if observation:
+        observation = _prepare_observation_for_assessment(observation)
         obs_evidence = observation.get('evidence') or {}
         evidence = {**obs_evidence, **evidence}
         evidence.update(_dependency_evidence_from_observation(observation))
@@ -211,6 +248,73 @@ def scan_indexes(scan):
     return findings_by_key, inventory_by_key
 
 
+def prepare_observation(obs: dict | None) -> dict | None:
+    """Run configuration enrichment and autofill before assessment or API projection."""
+    if not isinstance(obs, dict):
+        return obs
+    return _prepare_observation_for_assessment(dict(obs))
+
+
+def observation_list_extras(observation: dict | None) -> dict:
+    """List/detail freshness plus registry readiness derived from current saved evidence."""
+    if not observation:
+        from app.resource_timestamps import observation_row_fields
+
+        base = observation_row_fields(None)
+        return dict(
+            base,
+            analysis_readiness=None,
+            type_registry=None,
+        )
+    prepared = prepare_observation(observation)
+    evidence = prepared.get('evidence') or {}
+    from app.resource_timestamps import observation_row_fields
+
+    return dict(
+        observation_row_fields(prepared),
+        analysis_readiness=evidence.get('analysis_readiness'),
+        type_registry=evidence.get('type_registry'),
+    )
+
+
+def rebuild_assessment_from_observation(
+    scan,
+    resource_key: str,
+    findings: list,
+    observation: dict | None,
+    *,
+    list_view: bool = False,
+):
+    """Re-merge pillars and digest from prepared inventory evidence."""
+    observation = prepare_observation(observation) if observation else None
+    observed_at = scan.get('timestamp')
+    if findings:
+        assessment, context = merge(
+            resource_key,
+            findings,
+            observed_at=observed_at,
+            list_view=list_view,
+            observation=observation,
+        )
+    elif observation:
+        assessment, context = merge_inventory(
+            resource_key,
+            observation,
+            observed_at=observed_at,
+            list_view=list_view,
+        )
+    else:
+        raise ValueError('Resource assessment requires findings or inventory observation')
+    context = augment_ai_context_from_scan(
+        scan,
+        assessment,
+        findings,
+        context,
+        observation=observation,
+    )
+    return _apply_evidence_digest(assessment, context)
+
+
 def _apply_evidence_digest(assessment, context):
     from app.ai_resource_context import stable_digest_context
 
@@ -232,10 +336,11 @@ def assess_resource(scan, key, *, now=None, list_view=False, findings_by_key=Non
         findings_by_key, inventory_by_key = scan_indexes(scan)
     observed_at = scan.get('timestamp')
     observation = inventory_by_key.get(key)
-    if key in findings_by_key:
+    grouped = findings_by_key.get(key) or []
+    if grouped:
         assessment, context = merge(
             key,
-            findings_by_key[key],
+            grouped,
             observed_at=observed_at,
             now=now,
             list_view=list_view,
@@ -243,7 +348,7 @@ def assess_resource(scan, key, *, now=None, list_view=False, findings_by_key=Non
         )
         if observation:
             assessment = overlay_inventory_billing(assessment, observation)
-        findings = findings_by_key[key]
+        findings = grouped
     elif observation:
         assessment, context = merge_inventory(
             key,
@@ -297,6 +402,8 @@ def merge(key, findings, *, observed_at=None, now=None, list_view=False, observa
     """Return (assessment, sanitized AI context) for one resource."""
     from app.rule_id_canonical import normalize_finding
 
+    if observation is not None:
+        observation = prepare_observation(observation)
     if not findings:
         raise ValueError('At least one finding observation is required to merge an assessment')
     deduped = []
@@ -323,6 +430,8 @@ def merge(key, findings, *, observed_at=None, now=None, list_view=False, observa
                     if SEVERITY[check['status']] > SEVERITY[current['status']]:
                         current.update(status=check['status'], explanation=check['explanation'])
                     current['evidence_fields'] = sorted(set(current['evidence_fields']) | set(check['evidence_fields']))
+                    if check.get('providers'):
+                        current['providers'] = sorted(set(current.get('providers') or []) | set(check['providers']))
     merged_checks = list(checks.values())
     pillars = []
     for name in PILLARS:
@@ -368,11 +477,13 @@ def merge(key, findings, *, observed_at=None, now=None, list_view=False, observa
         risk_level='high' if any(code!='OBSERVATION_FRESHNESS' for code in risk_codes) else 'unknown', risk_check_codes=risk_codes,
         evidence_gap_codes=sorted({c['code'] for c in merged_checks if c['status'] == 'unknown'}),
         pillars=pillars, guardrails=guardrails,
+        check_groups=_merge_check_groups(merged_checks, provider),
         evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in merged_checks), total=len(merged_checks)),
         retail_estimate_usd=retail_estimate,
         billed_cost_usd=_first_cost('billed_cost_usd'), effective_cost_usd=_first_cost('effective_cost_usd'),
         commitment_locked=any(r.get('commitment_locked') for r in results), currency=_first_cost('currency'),
-        realizable_savings_usd=None, automatic_execution=False)
+        realizable_savings_usd=None, automatic_execution=False,
+        evidence_scope=results[0].get('evidence_scope'))
     context = build_resource_ai_context(assessment, findings, per_finding_assessments=results)
     from app.ai_resource_context import stable_digest_context
 
@@ -409,7 +520,15 @@ def merge_inventory(key, obs, *, observed_at=None, now=None, list_view=False):
     """Assessment for a resource present in inventory but without a finding rule hit."""
     if not isinstance(obs, dict) or not obs.get('resource_id'):
         raise ValueError('Inventory observation must include resource_id')
-    result, context = merge(key, [inventory_observation(obs)], observed_at=observed_at, now=now, list_view=list_view)
+    obs = prepare_observation(obs)
+    result, context = merge(
+        key,
+        [inventory_observation(obs)],
+        observed_at=observed_at,
+        now=now,
+        list_view=list_view,
+        observation=obs,
+    )
     result.update(
         finding_count=0,
         rule_ids=[],

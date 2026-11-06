@@ -74,10 +74,16 @@ def protection(finding):
 def assess(finding, *, observed_at=None, now=None):
     evidence = finding.get('evidence') or {}
     kind = category(finding)
+    provider = finding.get('cloud_provider', 'azure')
     protected = protection(finding)
+    from app.resource_evidence_scope import check_allowed, evidence_profile
+
+    profile = evidence_profile(finding)
     checks = []
 
-    def check(pillar, code, state, message, fields=None):
+    def check(pillar, code, state, message, fields=None, *, providers=('*',)):
+        if not check_allowed(code, profile):
+            return
         default_fields = {
             'RETAIL_ESTIMATE': ['estimated_monthly_waste_usd'], 'BILLED_COST': ['billing_records'],
             'RECOVERY_SNAPSHOT': ['recent_snapshot_verified'], 'FAILOVER_TOPOLOGY': ['multi_az'],
@@ -86,9 +92,22 @@ def assess(finding, *, observed_at=None, now=None):
             'DEPENDENCY_GRAPH': ['verified_dependencies'], 'PROTECTED_INTENT': ['tags', 'labels', 'deletion_protection'],
             'UTILIZATION_WINDOW': ['p95_usage', 'minimum_request', 'window_days', 'window_start', 'window_end', 'samples', 'step_seconds', 'dimension', 'unit', 'percentile_method'],
         }
-        checks.append(dict(pillar=pillar, code=code, status=state, explanation=message, evidence_fields=fields if fields is not None else default_fields.get(code, [])))
+        checks.append(
+            dict(
+                pillar=pillar,
+                code=code,
+                status=state,
+                explanation=message,
+                evidence_fields=fields if fields is not None else default_fields.get(code, []),
+                providers=list(providers),
+            )
+        )
 
     amount = number(finding.get('estimated_monthly_waste_usd'))
+    if amount is None:
+        from app.resource_assessment import _retail_from_saved_evidence
+
+        amount = _retail_from_saved_evidence(finding)
     check('cost', 'RETAIL_ESTIMATE', 'observed' if amount is not None else 'unknown',
           'A saved retail estimate is available; billed spend and realizable savings are unverified.' if amount is not None else 'No verified retail estimate is attached.')
     billed, effective = number(evidence.get('billed_cost_usd')), number(evidence.get('effective_cost_usd'))
@@ -98,35 +117,44 @@ def assess(finding, *, observed_at=None, now=None):
           'Imported charges indicate commitment coverage; verify reallocation before a change.' if locked else
           f'Imported 30-day USD charges: billed {billed:.2f}; effective {effective:.2f}. Coverage must be reviewed.' if billed is not None and effective is not None else
           'Resource-period USD billing evidence is unavailable.', ['billed_cost_usd','effective_cost_usd','billing_coverage','commitment_locked'])
-    if kind == 'storage':
+    if check_allowed('RECOVERY_SNAPSHOT', profile):
         backup = evidence.get('recent_snapshot_verified')
         check('reliability', 'RECOVERY_SNAPSHOT', 'observed' if backup is True else 'risk' if backup is False else 'unknown',
               'Snapshot evidence is present; restore acceptance still requires independent review.' if backup is True else 'A recovery snapshot is absent or its freshness is unverified.')
-    else:
+    if check_allowed('FAILOVER_TOPOLOGY', profile):
         multi_az = evidence.get('multi_az')
         check('reliability', 'FAILOVER_TOPOLOGY', 'observed' if multi_az is True else 'risk' if multi_az is False else 'unknown',
               'Multi-zone configuration is observed; failover has not been tested.' if multi_az is True else 'Redundancy and failover acceptance need review.')
     retention = number(evidence.get('backup_retention_days'))
-    if kind == 'database':
+    if check_allowed('DATABASE_RECOVERY', profile):
         check('reliability', 'DATABASE_RECOVERY', 'unknown' if retention is None else 'risk' if retention < 2 else 'observed',
               'Backup retention is unknown.' if retention is None else f'Observed backup retention: {retention:g} days; production recovery objectives need review.')
     legacy_utilization = utilization(evidence, observed_at)
     complete_utilization = legacy_utilization
-    if not complete_utilization:
-        from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
+    if not complete_utilization and check_allowed('UTILIZATION_WINDOW', profile):
+        from app.collectors.live_common import metrics_utilization_complete
 
-        metrics = evidence.get('metrics') or {}
-        now_ts = timestamp(now) or datetime.now(timezone.utc)
-        for metric_key in ('cpu_percent', 'memory_percent', 'iops', 'normalized_ru_consumption', 'ptu_utilization'):
-            series = metrics.get(metric_key)
-            if not isinstance(series, dict):
-                continue
-            contract = TimeSeriesEvidenceContract(metric_key)
-            if evaluate_series(series, contract, now=now_ts, require_resource_age=False).is_sufficient:
-                complete_utilization = True
-                break
-    check('performance', 'UTILIZATION_WINDOW', 'observed' if complete_utilization else 'unknown',
-          'Saved 14-day hourly P95 evidence has a complete collector summary; peaks and SLOs still need review.' if complete_utilization else 'Complete utilization/headroom evidence is unavailable; do not infer idle duration from stopped state.')
+        if metrics_utilization_complete(evidence, profile.utilization_metrics, now=timestamp(now) or datetime.now(timezone.utc)):
+            complete_utilization = True
+        else:
+            from app.telemetry_contract import TimeSeriesEvidenceContract, evaluate_series
+
+            metrics = evidence.get('metrics') or {}
+            now_ts = timestamp(now) or datetime.now(timezone.utc)
+            metric_keys = profile.utilization_metrics or (
+                'cpu_percent', 'memory_percent', 'iops', 'normalized_ru_consumption', 'ptu_utilization'
+            )
+            for metric_key in metric_keys:
+                series = metrics.get(metric_key)
+                if not isinstance(series, dict):
+                    continue
+                contract = TimeSeriesEvidenceContract(metric_key)
+                if evaluate_series(series, contract, now=now_ts, require_resource_age=False).is_sufficient:
+                    complete_utilization = True
+                    break
+    if check_allowed('UTILIZATION_WINDOW', profile):
+        check('performance', 'UTILIZATION_WINDOW', 'observed' if complete_utilization else 'unknown',
+              'Saved 14-day hourly P95 evidence has a complete collector summary; peaks and SLOs still need review.' if complete_utilization else 'Complete utilization/headroom evidence is unavailable; do not infer idle duration from stopped state.')
     if finding.get('cloud_provider')=='kubernetes' and finding.get('resource_type','').startswith('kubernetes.io/') and isinstance(evidence.get('metrics'),dict):
         from app.telemetry_contract import moment
         metrics=evidence.get('metrics') or {}
@@ -136,45 +164,54 @@ def assess(finding, *, observed_at=None, now=None):
             end=moment(value.get('window_end'))
             return value if value.get('sufficient') is True and end and 0 <= ((now or datetime.now(timezone.utc))-end).total_seconds() < 86400 else None
         cpu,memory,throttle,oom,restarts=(metric(key) for key in ('cpu','memory','throttling','oom','restarts'))
+        k8s_providers=('kubernetes',)
         check('performance','K8S_FIVE_MINUTE_TELEMETRY','observed' if cpu and memory else 'unknown',
-              'CPU rate and memory working-set evidence use validated 30-day five-minute windows.' if cpu and memory else 'Complete five-minute CPU and memory evidence is unavailable.',['metrics.cpu','metrics.memory'])
+              'CPU rate and memory working-set evidence use validated 30-day five-minute windows.' if cpu and memory else 'Complete five-minute CPU and memory evidence is unavailable.',['metrics.cpu','metrics.memory'], providers=k8s_providers)
         check('performance','K8S_CPU_THROTTLING','unknown' if not throttle else 'risk' if throttle['p95']>.02 else 'observed',
-              'CPU throttling above 2% blocks request reduction.' if throttle and throttle['p95']>.02 else 'Throttling requires measured five-minute evidence.',['metrics.throttling'])
+              'CPU throttling above 2% blocks request reduction.' if throttle and throttle['p95']>.02 else 'Throttling requires measured five-minute evidence.',['metrics.throttling'], providers=k8s_providers)
         oom_risk=oom and oom['maximum']>0
         zero_verified=oom and restarts and oom['maximum']==0 and restarts['maximum']==restarts['minimum']
         check('reliability','K8S_OOM_HISTORY','risk' if oom_risk else 'observed' if zero_verified else 'unknown',
-              'OOMKill evidence blocks memory reduction.' if oom_risk else 'A last termination reason alone does not prove a full zero-OOM history.',['metrics.oom','metrics.restarts'])
+              'OOMKill evidence blocks memory reduction.' if oom_risk else 'A last termination reason alone does not prove a full zero-OOM history.',['metrics.oom','metrics.restarts'], providers=k8s_providers)
         check('operations','K8S_SOURCE_RECONCILIATION','risk' if finding.get('reconciliation_status')=='source_conflict' else 'unknown',
-              'Conflicting sources require reconciliation.' if finding.get('reconciliation_status')=='source_conflict' else 'Complete cross-source state and transition agreement is unverified.',['reconciliation_status'])
-    if kind in ('storage', 'database'):
+              'Conflicting sources require reconciliation.' if finding.get('reconciliation_status')=='source_conflict' else 'Complete cross-source state and transition agreement is unverified.',['reconciliation_status'], providers=k8s_providers)
+    if check_allowed('ENCRYPTION_AT_REST', profile) and kind in ('storage', 'database'):
         encrypted = evidence.get('encrypted')
         check('security', 'ENCRYPTION_AT_REST', 'observed' if encrypted is True else 'risk' if encrypted is False else 'unknown',
               'Encryption is reported enabled.' if encrypted is True else 'Encryption is explicitly disabled.' if encrypted is False else 'Encryption evidence is unavailable.')
-    else:
+    elif check_allowed('ACCESS_AND_EXPOSURE', profile):
         if kind == 'compute':
             ingress, identity = evidence.get('public_admin_ingress'), evidence.get('imds_v2_required')
-            safe = False if ingress is True or identity is False else True if ingress is False and identity is True else None
+            if provider == 'aws':
+                safe = False if ingress is True or identity is False else True if ingress is False and identity is True else None
+                access_fields = ['public_admin_ingress', 'imds_v2_required']
+            else:
+                safe = False if ingress is True else True if ingress is False else None
+                access_fields = ['public_admin_ingress']
         elif kind == 'network':
             ingress, waf = evidence.get('unrestricted_ingress'), evidence.get('ddos_or_waf_enabled')
             safe = False if ingress is True else True if ingress is False and waf is True else None
+            access_fields = ['unrestricted_ingress', 'ddos_or_waf_enabled']
         elif kind == 'application':
             https = evidence.get('https_only')
             safe = https if type(https) is bool else None
+            access_fields = ['https_only']
         else:
             safe = None
+            access_fields = ['https_only']
         check('security', 'ACCESS_AND_EXPOSURE', 'unknown' if safe is None else 'observed' if safe else 'risk',
               'Observed access controls support this specific check; other access paths require separate evidence.' if safe else
               'An explicit exposure or identity control requires review.' if safe is False else 'Complete service-specific access evidence is unavailable.',
-              ['public_admin_ingress','imds_v2_required','unrestricted_ingress','ddos_or_waf_enabled','https_only'])
+              access_fields)
     public = evidence.get('publicly_accessible')
-    if kind == 'database':
+    if check_allowed('PUBLIC_DATABASE', profile):
         check('security', 'PUBLIC_DATABASE', 'risk' if public is True else 'observed' if public is False else 'unknown',
               'Database public accessibility is enabled.' if public is True else 'Database public accessibility is disabled.' if public is False else 'Database exposure evidence is unavailable.')
-    service_checks(kind, evidence, check)
+    service_checks(kind, evidence, check, provider, profile=profile)
     from app.pillar_checks import checks as concrete_checks
-    # Existing codes remain stable; combine duplicate checks conservatively below.
-    concrete_checks(kind,evidence,check,observed_at=observed_at,now=now,protected=protected)
-    if legacy_utilization:
+
+    concrete_checks(kind, evidence, check, observed_at=observed_at, now=now, protected=protected, profile=profile)
+    if legacy_utilization and check_allowed('REQUEST_HEADROOM', profile):
         ratio = evidence['p95_usage'] / evidence['minimum_request']
         check('performance', 'REQUEST_HEADROOM', 'risk' if ratio > 1 else 'observed',
               f'Saved P95/request ratio: {ratio:.3g}. This is request-sizing evidence, not a memory limit or safety guarantee.',
@@ -196,23 +233,32 @@ def assess(finding, *, observed_at=None, now=None):
           f'{len(deps)} active association(s) observed; inspect before modification.' if state == 'risk' else
           'Complete associations and fresh continuous history establish no observed attachments; this is not change approval.' if state == 'observed' else
           'Complete dependency coverage and state history are required. Missing edges are not proof of zero blast radius.')
-    if protected:
+    if protected and check_allowed('PROTECTED_INTENT', profile):
         check('reliability', 'PROTECTED_INTENT', 'risk', 'Explicit recovery, witness, retention or deletion-protection intent suppresses destructive recommendations.')
     observation = freshness(observed_at, now)
-    check(
-        'operations',
-        'OBSERVATION_FRESHNESS',
-        'observed' if observation['status'] == 'recent' else 'risk' if observation['status'] == 'invalid' else 'unknown',
-        'Observation timestamp is within the configured freshness window.'
-        if observation['status'] == 'recent'
-        else 'Observation timestamp is missing, invalid, or stale; run a new scan before planning changes.',
-        ['observed_at'],
-    )
+    if check_allowed('OBSERVATION_FRESHNESS', profile):
+        check(
+            'operations',
+            'OBSERVATION_FRESHNESS',
+            'observed' if observation['status'] == 'recent' else 'risk' if observation['status'] == 'invalid' else 'unknown',
+            'Observation timestamp is within the configured freshness window.'
+            if observation['status'] == 'recent'
+            else 'Observation timestamp is missing, invalid, or stale; run a new scan before planning changes.',
+            ['observed_at'],
+        )
+    from app.provider_rules import group_checks
+
+    def applies(row):
+        allowed = row.get('providers') or ['*']
+        return '*' in allowed or provider in allowed
+
+    scoped = [c for c in checks if applies(c)]
     pillars = []
     for pillar in PILLARS:
-        items = [c for c in checks if c['pillar'] == pillar]
+        items = [c for c in scoped if c['pillar'] == pillar]
         state = 'risk' if any(c['status'] == 'risk' for c in items) else 'unknown' if any(c['status'] == 'unknown' for c in items) else 'observed'
         pillars.append(dict(pillar=pillar, status=state, checks=items))
+    check_groups = group_checks(scoped, provider)
     guardrails = ['VERIFY_CURRENT_STATE', 'REVIEW_DEPENDENCIES', 'CONFIRM_OWNER_AND_RETENTION', 'INDEPENDENT_CHANGE_APPROVAL']
     if kind == 'storage':
         guardrails += ['CREATE_PRE_DELETION_SNAPSHOT', 'VERIFY_RESTORE_AND_RETENTION']
@@ -220,17 +266,18 @@ def assess(finding, *, observed_at=None, now=None):
         guardrails.append('REFRESH_OBSERVATION')
     if protected:
         guardrails.append('NO_DESTRUCTIVE_RECOMMENDATION')
-    risk_codes = [c['code'] for c in checks if c['status'] == 'risk']
-    gaps = [c['code'] for c in checks if c['status'] == 'unknown']
+    risk_codes = [c['code'] for c in scoped if c['status'] == 'risk']
+    gaps = [c['code'] for c in scoped if c['status'] == 'unknown']
     priority = 'critical' if any(c in risk_codes for c in ('PUBLIC_DATABASE', 'ENCRYPTION_AT_REST', 'ADMIN_INGRESS', 'SNAPSHOT_EXPOSURE')) else 'high' if risk_codes else 'evidence_required'
     result = dict(resource_key=resource_key(finding), service_category=kind,scope_id=finding.get('scope_id') or finding.get('subscription_id'),opportunity_group_id=finding.get('opportunity_group_id'),
                 policy_version=POLICY_VERSION, observation=observation,
                 review_priority=priority, risk_check_codes=risk_codes, evidence_gap_codes=gaps,
                 disposition='protected' if protected else 'requires_review', protected_reasons=protected,
-                risk_level='high' if any(c['status']=='risk' and c['code']!='OBSERVATION_FRESHNESS' for c in checks) else 'unknown',
-                automatic_execution=False, pillars=pillars, guardrails=guardrails,
-                evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in checks), total=len(checks)),
-                retail_estimate_usd=amount, billed_cost_usd=billed, effective_cost_usd=effective, commitment_locked=locked, currency=currency, realizable_savings_usd=None)
+                risk_level='high' if any(c['status']=='risk' and c['code']!='OBSERVATION_FRESHNESS' for c in scoped) else 'unknown',
+                automatic_execution=False, pillars=pillars, check_groups=check_groups, guardrails=guardrails,
+                evidence_coverage=dict(observed=sum(c['status'] != 'unknown' for c in scoped), total=len(scoped)),
+                retail_estimate_usd=amount, billed_cost_usd=billed, effective_cost_usd=effective, commitment_locked=locked, currency=currency, realizable_savings_usd=None,
+                evidence_scope=dict(family=profile.family, family_label=profile.family_label, resource_type=profile.resource_type, applicable_checks=len(profile.checks)))
     # The digest covers only evaluated evidence and policy, never free text or raw identities.
     result['evidence_digest'] = hashlib.sha256(json.dumps(dict(context=ai_context(finding, result), retail_estimate_usd=amount), sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return result

@@ -119,6 +119,7 @@ ROUTES = {
     ('POST', '/internal/v1/agent/tasks/{task_id}/draft'): 'service_identity',
     ('POST', '/internal/v1/agent/tasks/{task_id}/steps/{index}/{action}'): 'service_identity',
     ('POST', '/internal/v1/agent/tasks/{task_id}/fail'): 'service_identity',
+    ('POST', '/internal/v1/analysis/resource'): 'service_identity',
     ('GET', '/api/v1/scans/{scan_id}/kubernetes'): 'scoped_read',
     ('POST', '/api/v1/scans/{scan_id}/kubernetes/patch-preview'): 'scan_write',
     ('GET', '/api/v1/rules/effective'): 'agnostic',

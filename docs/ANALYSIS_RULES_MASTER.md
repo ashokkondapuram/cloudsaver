@@ -86,6 +86,8 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — General manual assessment | aws | storage | `AWS_S3_INTELLIGENT_TIERING_AND_MULTIPART_CLEANUP` | S3 Intelligent-Tiering and multipart cleanup review | cost | `manual_assessment_only` | Multipart abort policy gaps or lifecycle gaps. | — |
 | B — Import / bash review artifact | aws | network | `AWS_UNASSOCIATED_EIP` | Unassociated Elastic IP address review | cost | `remediation_terraform_import` | Unassociated address state history (7d default). | minimum_days=7 |
 | B — Import / bash review artifact | aws | storage | `AWS_UNATTACHED_EBS` | Unattached EBS volume retention review | cost | `remediation_terraform_import` | Unattached volume state + snapshot verification within 24h when required. | minimum_days=14 |
+| B — General manual assessment | azure | compute | `AZURE_ACI_IDLE_LOW_UTILIZATION` | Container instance low utilization review | cost | `manual_assessment_only` | Low CPU/memory P95 + SLO gate + target_compatible. | utilization_percent=20 |
+| A — FinOps resize (telemetry + SLO) | azure | compute | `AZURE_AKS_CLUSTER_UTILIZATION_REVIEW` | AKS cluster node utilization review | cost | `finops_autopilot_resize` | Cluster node CPU/memory P95 below thresholds. | utilization_percent=20 |
 | B — General manual assessment | azure | ai | `AZURE_AI_FOUNDRY_PTU_VS_PAYG_ARBITRAGE` | Azure AI Foundry PTU vs pay-as-you-go review | cost | `manual_assessment_only` | PTU utilization review via ai_capacity.ptu_review. | utilization_percent=35 |
 | B — Import / bash review artifact | azure | network | `AZURE_APPGW_EMPTY_OR_HIGH_AUTOSCALE_FLOOR` | Empty Application Gateway or high autoscale floor review | cost | `remediation_terraform_import` | dependencies_verified; request/healthy_target metrics; Empty state history (7d default). | minimum_days=7 |
 | B — General manual assessment | azure | application | `AZURE_ASP_EMPTY_PAID_PLAN` | Empty paid App Service plan review | cost | `manual_assessment_only` | Paid SKU with zero apps/slots + Empty state history. | — |
@@ -100,7 +102,18 @@ and **no `safety_blocks`** over legacy ARG-only findings without `rule_evaluatio
 | B — General manual assessment | azure | database | `AZURE_SQL_PG_IDLE_AND_NONPROD_HA_REVIEW` | Azure SQL / PostgreSQL idle and non-production HA review | cost | `manual_assessment_only` | Low CPU/memory utilization + SLO gate + target_compatible. | — |
 | B — Engineering zero-downtime review | azure | storage | `AZURE_STORAGE_LIFECYCLE_AND_ORPHANED_VHD` | Storage lifecycle and orphaned VHD page blob review | cost | `engineering_review_plan` | Lifecycle verified without multipart abort rules, or orphaned VHD signals. | — |
 | A — FinOps resize (telemetry + SLO) | azure | compute | `AZURE_VM_RIGHTSIZING_UTILIZATION` | Evidence-based VM rightsizing review | cost | `finops_autopilot_resize` | 30d CPU/memory P95 below thresholds; disk IOPS & network series; burst credits; SLO gate pass. | utilization_percent=15 |
+| B — General manual assessment | azure | database | `AZURE_DATABASE_PUBLIC_NETWORK_REVIEW` | Database public network access review | cost | `manual_assessment_only` | publicly_accessible true on SQL/Postgres/MySQL/Synapse. | — |
+| B — General manual assessment | azure | platform | `AZURE_KEYVAULT_LOW_ACTIVITY` | Key Vault low API activity review | cost | `manual_assessment_only` | ServiceApiHit total near zero over observation window. | utilization_percent=5 |
+| C — Network / architecture | azure | network | `AZURE_LB_EMPTY_OR_IDLE_BACKEND` | Load balancer empty backend or idle traffic review | cost | `manual_assessment_only` | Empty backend / low DipAvailability and byte count pattern. | minimum_days=7 |
+| B — General manual assessment | azure | application | `AZURE_LOGIC_WORKFLOW_IDLE` | Logic App idle workflow review | cost | `manual_assessment_only` | RunsStarted total near zero. | utilization_percent=5 |
+| B — General manual assessment | azure | application | `AZURE_MESSAGING_IDLE_NAMESPACE` | Service Bus or Event Hubs idle namespace review | cost | `manual_assessment_only` | Incoming requests/messages and connections near zero. | utilization_percent=5 |
+| C — Network / architecture | azure | network | `AZURE_NAT_GATEWAY_IDLE_LOW_TRAFFIC` | NAT gateway idle low traffic review | cost | `manual_assessment_only` | routing_verified; SNAT connections and bytes below thresholds. | — |
+| B — General manual assessment | azure | database | `AZURE_REDIS_LEGACY_TLS_REVIEW` | Azure Cache for Redis legacy TLS review | cost | `manual_assessment_only` | tls_required false with minimum TLS below 1.2. | — |
+| B — General manual assessment | azure | storage | `AZURE_STORAGE_PUBLIC_BLOB_ACCESS_REVIEW` | Storage account public blob access review | cost | `manual_assessment_only` | allow_blob_public_access true. | — |
+| B — General manual assessment | azure | database | `AZURE_SYNAPSE_IDLE_WORKSPACE` | Synapse workspace idle compute review | cost | `manual_assessment_only` | SQL streaming / workspace activity metrics near zero. | utilization_percent=5 |
+| A — FinOps resize (telemetry + SLO) | azure | compute | `AZURE_VMSS_LOW_UTILIZATION_REVIEW` | Virtual machine scale set utilization review | cost | `finops_autopilot_resize` | Scale set CPU/memory P95 below thresholds. | utilization_percent=20 |
 | B — General manual assessment | azure | compute | `AZURE_VM_STOPPED_RESIDUAL_COST` | Stopped VM residual charge review | cost | `manual_assessment_only` | Power stopped/deallocated with duration history where applicable. | minimum_days=14 |
+| B — General manual assessment | azure | application | `AZURE_WEB_APP_IDLE_LOW_REQUESTS` | Web app low request volume review | cost | `manual_assessment_only` | Running site with Requests total below threshold. | utilization_percent=5 |
 | B — General manual assessment | gcp | database | `GCP_BIGQUERY_SLOT_AUTOSCALE_AND_STORAGE` | BigQuery slot autoscale and storage review | cost | `manual_assessment_only` | Low slot utilization + target_compatible + no commitment conflict. | utilization_percent=25 |
 | B — General manual assessment | gcp | application | `GCP_CLOUDRUN_MIN_INSTANCE_AND_MEMORYSTORE` | Cloud Run min instances and Memorystore review | cost | `manual_assessment_only` | Zero requests with min instances > 0 on non-prod signals. | — |
 | B — Capacity / tier review (manual) | gcp | database | `GCP_CLOUDSQL_ALLOYDB_RIGHTSIZING_AND_HA` | Cloud SQL / AlloyDB rightsizing and HA review | cost | `manual_assessment_only` | Low utilization + SLO gate + target_compatible. | utilization_percent=20 |
@@ -172,4 +185,27 @@ These **`rule_id`** values may appear in `scan.findings` without catalog `rule_e
 | `STOPPED_VM` / `EMPTY_APP_SERVICE_PLAN` | Stopped VM / empty plan | Manual + catalog rules when live evidence exists |
 
 Prefer **catalog outcomes** on inventory rows when both exist; legacy rows are review **signals**, not savings proof.
+
+---
+
+## Five-pillar rule catalog (API)
+
+Analysis rules are grouped under the same five pillars as resource assessment: **Cost**, **Reliability**, **Performance**, **Security**, **Operations**.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v1/rules/catalog/by-pillar?provider=azure` | All Azure rules nested under each pillar (includes exact `resource_types` per rule) |
+| `GET /api/v1/rules/catalog/azure-compute` | VM vs VMSS vs AKS vs ACI matrix with `by_pillar` per type |
+| `GET /api/v1/rules/catalog` | Flat list; each item includes `pillar` and `resource_types` |
+
+Source of truth: [`app/analysis_rule_catalog.py`](../app/analysis_rule_catalog.py) (`_AZURE_RULE_BINDINGS`). Registry evaluation imports this map so **standalone VMs** and **VM scale sets** never share the wrong rules.
+
+### Azure compute analysis (VM ≠ VMSS)
+
+| ARM type | Label | Typical rules |
+| --- | --- | --- |
+| `microsoft.compute/virtualmachines` | Virtual machine | Stopped residual cost (**cost**); rightsizing utilization (**performance**) |
+| `microsoft.compute/virtualmachinescalesets` | Virtual machine scale set | Scale set utilization review (**performance**) only — no stopped-VM rule |
+| `microsoft.containerservice/managedclusters` | AKS cluster | Cluster node utilization (**performance**) |
+| `microsoft.containerinstance/containergroups` | Container instance | Low utilization (**performance**) |
 

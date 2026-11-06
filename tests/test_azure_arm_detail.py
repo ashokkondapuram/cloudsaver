@@ -46,7 +46,7 @@ def test_resolve_arm_api_version_from_provider_metadata():
 
     cache = {}
     version = resolve_arm_api_version(Reader(), 'sub-id', 'microsoft.network/loadbalancers', cache)
-    assert version is None
+    assert version == '2023-05-01'
     version = resolve_arm_api_version(Reader(), 'sub-id', 'microsoft.compute/disks', cache)
     assert version == '2023-04-02'
 

@@ -51,13 +51,18 @@ function groupActions(actions: Action[]) {
   return groups;
 }
 
+function EvidenceJson({value}: {value: Record<string, unknown> | undefined}) {
+  if (!value || !Object.keys(value).length) return null;
+  return <pre className="evidence-json">{JSON.stringify(value, null, 2)}</pre>;
+}
+
 function ActionRow({a}: {a: Action}) {
   return (
     <li>
       <div className="action-heading"><strong>{a.title}</strong><span className="action-kind">{sentence(a.kind)}</span></div>
       <p>{a.rationale}</p>
       <small><span className="capitalize">{a.pillar}</span> · Effort {sentence(a.effort)} · Change risk {sentence(a.change_risk)} · Confidence {sentence(a.confidence)}</small>
-      {!!a.evidence_codes.length && <small>Evidence: {a.evidence_codes.map(sentence).join(', ')}</small>}
+      <EvidenceJson value={a.evidence_json}/>
       {!!a.prerequisites.length && <small>Before you start: {a.prerequisites.join(' · ')}</small>}
     </li>
   );

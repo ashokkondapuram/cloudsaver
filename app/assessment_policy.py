@@ -41,42 +41,80 @@ def utilization(evidence, observed_at):
     return bool(valid)
 
 
-# kind(s), pillar, code, evidence field, desired boolean, positive/negative description
+# providers, kind(s), pillar, code, evidence field, desired boolean, positive/negative description
 BOOLEAN_RULES = (
-    (('compute',), 'security', 'INSTANCE_METADATA', 'imds_v2_required', True, 'Instance metadata v2 is required.', 'Instance metadata v2 is not required.'),
-    (('compute',), 'security', 'ADMIN_INGRESS', 'public_admin_ingress', False, 'No public administrative ingress is reported.', 'Public administrative ingress is reported.'),
-    (('compute',), 'operations', 'MONITORING_AGENT', 'monitoring_enabled', True, 'Monitoring is reported enabled.', 'Monitoring is explicitly disabled.'),
-    (('database',), 'security', 'DATABASE_TLS', 'tls_required', True, 'Database TLS is reported required.', 'Database TLS is not required.'),
-    (('database',), 'operations', 'ENGINE_SUPPORT', 'engine_supported', True, 'Engine support is reported current.', 'Engine support is reported expired.'),
-    (('database',), 'operations', 'AUTO_MINOR_UPGRADE', 'auto_minor_upgrade', True, 'Automatic minor upgrades are enabled.', 'Automatic minor upgrades are disabled.'),
-    (('application',), 'reliability', 'HEALTH_PROBES', 'health_probes_enabled', True, 'Health probes are configured.', 'Health probes are explicitly disabled.'),
-    (('application',), 'security', 'MANAGED_SECRETS', 'managed_secrets', True, 'Managed secret injection is reported.', 'Unmanaged secret configuration requires review.'),
-    (('network',), 'operations', 'FLOW_LOGS', 'flow_logs_enabled', True, 'Flow logging is reported enabled.', 'Flow logging is explicitly disabled.'),
-    (('storage',), 'security', 'SNAPSHOT_EXPOSURE', 'public_snapshot', False, 'Snapshot exposure is reported private.', 'Public snapshot exposure is reported.'),
+    (('aws',), ('compute',), 'security', 'INSTANCE_METADATA', 'imds_v2_required', True, 'Instance metadata v2 is required.', 'Instance metadata v2 is not required.'),
+    (('azure', 'aws', 'gcp'), ('compute',), 'security', 'ADMIN_INGRESS', 'public_admin_ingress', False, 'No public administrative ingress is reported.', 'Public administrative ingress is reported.'),
+    (('azure', 'aws', 'gcp'), ('compute',), 'operations', 'MONITORING_AGENT', 'monitoring_enabled', True, 'Monitoring is reported enabled.', 'Monitoring is explicitly disabled.'),
+    (('azure', 'aws', 'gcp'), ('database',), 'security', 'DATABASE_TLS', 'tls_required', True, 'Database TLS is reported required.', 'Database TLS is not required.'),
+    (('azure', 'aws', 'gcp'), ('database',), 'operations', 'ENGINE_SUPPORT', 'engine_supported', True, 'Engine support is reported current.', 'Engine support is reported expired.'),
+    (('azure', 'aws', 'gcp'), ('database',), 'operations', 'AUTO_MINOR_UPGRADE', 'auto_minor_upgrade', True, 'Automatic minor upgrades are enabled.', 'Automatic minor upgrades are disabled.'),
+    (('azure', 'aws', 'gcp'), ('application',), 'reliability', 'HEALTH_PROBES', 'health_probes_enabled', True, 'Health probes are configured.', 'Health probes are explicitly disabled.'),
+    (('azure', 'aws', 'gcp'), ('application',), 'security', 'MANAGED_SECRETS', 'managed_secrets', True, 'Managed secret injection is reported.', 'Unmanaged secret configuration requires review.'),
+    (('azure', 'aws', 'gcp'), ('network',), 'operations', 'FLOW_LOGS', 'flow_logs_enabled', True, 'Flow logging is reported enabled.', 'Flow logging is explicitly disabled.'),
+    (('azure', 'aws', 'gcp'), ('storage',), 'security', 'SNAPSHOT_EXPOSURE', 'public_snapshot', False, 'Snapshot exposure is reported private.', 'Public snapshot exposure is reported.'),
 )
 
 
-def service_checks(kind, evidence, add):
-    for kinds, pillar, code, field, positive, yes, no in BOOLEAN_RULES:
-        if kind in kinds:
-            value = evidence.get(field)
-            known = type(value) is bool
-            add(pillar, code, 'unknown' if not known else 'observed' if value is positive else 'risk',
-                (yes if value is positive else no) if known else 'This control was not collected; independent verification is required.', [field])
-    if kind == 'application':
-        sites = number(evidence.get('hosted_app_count'))
-        add('cost', 'APPLICATION_DENSITY', 'unknown' if sites is None or int(sites) != sites else 'risk' if sites == 0 else 'observed',
-            'Hosted application count is unavailable.' if sites is None else f'Observed hosted applications: {sites:g}. Capacity intent and tier pricing need review.', ['hosted_app_count'])
-    if kind == 'compute':
-        age = number(evidence.get('patch_age_days'))
-        add('operations', 'PATCH_CURRENCY', 'unknown' if age is None else 'risk' if age > 90 else 'observed',
-            'Patch age is unavailable.' if age is None else f'Observed patch age: {age:g} days; workload patch policy still applies.', ['patch_age_days'])
-    if kind == 'storage':
-        days = number(evidence.get('unattached_days'))
-        add('cost', 'UNATTACHED_DURATION', 'unknown' if days is None else 'risk' if days > 14 else 'observed',
-            'Unattached duration was not measured; current unattached state is insufficient.' if days is None else f'Observed unattached duration: {days:g} days; retention intent must be checked.', ['unattached_days'])
-        age = number(evidence.get('snapshot_age_hours'))
-        add('reliability', 'SNAPSHOT_FRESHNESS', 'unknown' if age is None else 'risk' if age > 24 else 'observed',
-            'Snapshot age is unavailable.' if age is None else f'Observed snapshot age: {age:g} hours; restore acceptance is unverified.', ['snapshot_age_hours'])
+def service_checks(kind, evidence, add, provider, *, profile=None):
+    from app.resource_evidence_scope import check_allowed
 
-MODEL_BASE_CODES={r[2] for r in BOOLEAN_RULES}|{'RETAIL_ESTIMATE','BILLED_COST','RECOVERY_SNAPSHOT','FAILOVER_TOPOLOGY','DATABASE_RECOVERY','UTILIZATION_WINDOW','ENCRYPTION_AT_REST','PUBLIC_DATABASE','APPLICATION_DENSITY','PATCH_CURRENCY','UNATTACHED_DURATION','SNAPSHOT_FRESHNESS','OWNERSHIP','DEPENDENCY_GRAPH','PROTECTED_INTENT','REQUEST_HEADROOM'}
+    def gated(pillar, code, state, message, fields=None, *, providers=('*',)):
+        if profile is not None and not check_allowed(code, profile):
+            return
+        add(pillar, code, state, message, fields, providers=providers)
+
+    for providers, kinds, pillar, code, field, positive, yes, no in BOOLEAN_RULES:
+        if provider not in providers or kind not in kinds:
+            continue
+        value = evidence.get(field)
+        known = type(value) is bool
+        gated(
+            pillar,
+            code,
+            'unknown' if not known else 'observed' if value is positive else 'risk',
+            (yes if value is positive else no) if known else 'This control was not collected; independent verification is required.',
+            [field],
+            providers=providers,
+        )
+    if kind == 'application' and provider in ('azure', 'aws', 'gcp'):
+        sites = number(evidence.get('hosted_app_count'))
+        gated(
+            'cost',
+            'APPLICATION_DENSITY',
+            'unknown' if sites is None or int(sites) != sites else 'risk' if sites == 0 else 'observed',
+            'Hosted application count is unavailable.' if sites is None else f'Observed hosted applications: {sites:g}. Capacity intent and tier pricing need review.',
+            ['hosted_app_count'],
+            providers=('azure', 'aws', 'gcp'),
+        )
+    if kind == 'compute' and provider in ('azure', 'aws', 'gcp', 'kubernetes'):
+        age = number(evidence.get('patch_age_days'))
+        gated(
+            'operations',
+            'PATCH_CURRENCY',
+            'unknown' if age is None else 'risk' if age > 90 else 'observed',
+            'Patch age is unavailable.' if age is None else f'Observed patch age: {age:g} days; workload patch policy still applies.',
+            ['patch_age_days'],
+            providers=('azure', 'aws', 'gcp', 'kubernetes'),
+        )
+    if kind == 'storage' and provider in ('azure', 'aws', 'gcp'):
+        days = number(evidence.get('unattached_days'))
+        gated(
+            'cost',
+            'UNATTACHED_DURATION',
+            'unknown' if days is None else 'risk' if days > 14 else 'observed',
+            'Unattached duration was not measured; current unattached state is insufficient.' if days is None else f'Observed unattached duration: {days:g} days; retention intent must be checked.',
+            ['unattached_days'],
+            providers=('azure', 'aws', 'gcp'),
+        )
+        age = number(evidence.get('snapshot_age_hours'))
+        gated(
+            'reliability',
+            'SNAPSHOT_FRESHNESS',
+            'unknown' if age is None else 'risk' if age > 24 else 'observed',
+            'Snapshot age is unavailable.' if age is None else f'Observed snapshot age: {age:g} hours; restore acceptance is unverified.',
+            ['snapshot_age_hours'],
+            providers=('azure', 'aws', 'gcp'),
+        )
+
+MODEL_BASE_CODES={r[3] for r in BOOLEAN_RULES}|{'RETAIL_ESTIMATE','BILLED_COST','RECOVERY_SNAPSHOT','FAILOVER_TOPOLOGY','DATABASE_RECOVERY','UTILIZATION_WINDOW','ENCRYPTION_AT_REST','PUBLIC_DATABASE','APPLICATION_DENSITY','PATCH_CURRENCY','UNATTACHED_DURATION','SNAPSHOT_FRESHNESS','OWNERSHIP','DEPENDENCY_GRAPH','PROTECTED_INTENT','REQUEST_HEADROOM'}

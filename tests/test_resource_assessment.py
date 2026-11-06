@@ -14,7 +14,18 @@ from app.enterprise_store import EnterpriseStore
 from app.inference_ledger import InferenceLedger
 from app.main import create_app
 from app.analysis_service.pipeline import attach_pillar_analysis
-from app.resource_assessment import assessments, assess_resource, changes, csv_report, history, merge, resource_key, scan_indexes
+from app.resource_assessment import (
+    assessments,
+    assess_resource,
+    changes,
+    csv_report,
+    history,
+    inventory_observation,
+    merge,
+    merge_inventory,
+    resource_key,
+    scan_indexes,
+)
 from app.resource_batches import process_batches
 from app.resource_store import ResourceStore
 from app.store import Store
@@ -117,6 +128,40 @@ def test_assess_resource_matches_full_assessments_for_one_key():
     assert single is not None
     assert single[0]['evidence_digest'] == full[0]['evidence_digest']
     assert single[0]['rule_ids'] == full[0]['rule_ids']
+
+
+def test_assess_resource_empty_findings_list_uses_inventory():
+    """Redis re-analysis can store findings: [] — must not call merge() with zero observations."""
+    base = disk('disk-a')
+    obs = dict(
+        resource_id=base['resource_id'],
+        cloud_provider='azure',
+        resource_type=base['resource_type'],
+        resource_name=base['resource_name'],
+        resource_group=base['resource_group'],
+        subscription_id=SUB,
+        evidence=dict(OBSERVED),
+        dependency_refs=[],
+    )
+    key = resource_key(inventory_observation(obs))
+    scan = dict(
+        scan_id=str(uuid4()),
+        status='completed',
+        timestamp='2026-10-22T00:00:00+00:00',
+        findings=[base],
+        inventory=[obs],
+    )
+    findings_by_key, inventory_by_key = scan_indexes(scan)
+    findings_by_key[key] = []
+    assessment = assess_resource(
+        scan,
+        key,
+        findings_by_key=findings_by_key,
+        inventory_by_key=inventory_by_key,
+    )
+    expected, _ = merge_inventory(key, obs, observed_at=scan['timestamp'], list_view=False)
+    assert assessment is not None
+    assert assessment['finding_count'] == expected['finding_count'] == 0
 
 
 def test_merge_inventory_observation_enriches_thin_finding_evidence():

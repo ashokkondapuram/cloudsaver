@@ -5,7 +5,7 @@ import {useRouter,useSearchParams} from 'next/navigation';
 import {api} from '../../lib/api';
 import {loadWorkloadInputs,type Projection} from '../../lib/workloads.mjs';
 import {Layers} from 'lucide-react';
-import {dateTime} from '../../lib/finops';
+import {checkLabel, dateTime} from '../../lib/finops';
 import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState,Loading,Notice,SectionTitle} from '../ui/shared';
@@ -52,7 +52,7 @@ function Assessment({token,scanId}:{token:string;scanId:string}){
           <h3>{member.resource_name}</h3><p>{member.provider} · {member.scope_id} · Owner: {member.owner||'Unassigned'} · Team: {member.team||'Unassigned'}</p>
           <p style={{overflowWrap:'anywhere'}}>{member.resource_id}</p>
           <Link href={`/resources?resource=${encodeURIComponent(member.resource_key)}`}>Inspect resource evidence</Link>
-          {!!member.evidence_gap_codes.length&&<p>Evidence gaps: {member.evidence_gap_codes.map(sentence).join(', ')}</p>}
+          {!!member.evidence_gap_codes.length&&<p>Evidence gaps: {member.evidence_gap_codes.map(c => checkLabel(c)).join(', ')}</p>}
           {!!member.preview.protected_reasons.length&&<p>Existing protections remain in force: {member.preview.protected_reasons.map(sentence).join(', ')}</p>}
           {!member.preview.actions.length&&<p>No supported remediation template for these findings.</p>}
           {member.preview.actions.map(action=><details key={action.id}><summary>{action.title} — needs live checks and approval</summary>

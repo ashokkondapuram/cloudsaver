@@ -94,7 +94,8 @@ INVENTORY_QUERY = inventory_query_body()
 def scan_inventory_observations(credential, subscriptions: list[str], *, settings=None) -> list[dict]:
     """All scoped resources observed in Azure Resource Graph (not limited to finding rules)."""
     rows = []
-    observed_at = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
+    observed_at = now.isoformat()
     query = inventory_query(settings=settings)
     for row in execute_pages(credential, query, subscriptions):
         evidence = {'source': 'Azure Resource Graph', 'tags': row.get('tags') or {}}
@@ -162,7 +163,12 @@ def scan_inventory_observations(credential, subscriptions: list[str], *, setting
             'collector_version': 'azure-arg-2026-10-24',
         })
     from app.collectors.azure_configuration_evidence import enrich_inventory_configuration
-    return enrich_inventory_configuration(rows)
+    from app.resource_timestamps import touch_azure_status_fetched
+
+    rows = enrich_inventory_configuration(rows)
+    for resource in rows:
+        touch_azure_status_fetched(resource.setdefault('evidence', {}), now=now)
+    return rows
 
 
 def _findings(credential, subscriptions: list[str], enabled_rule_ids: set[str] | None = None) -> list[dict]:
@@ -201,7 +207,14 @@ def _findings(credential, subscriptions: list[str], enabled_rule_ids: set[str] |
     return findings
 
 
-def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progress=None) -> tuple[list[dict], list[dict]]:
+def scan_live(
+    tenant: dict,
+    *,
+    enabled_rule_ids: set[str] | None = None,
+    progress=None,
+    policies: dict | None = None,
+    observed_at: str | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Scan only authorized subscriptions with a keyless credential for the customer tenant.
 
     Reader RBAC on each subscription is granted by the customer during onboarding.
@@ -224,27 +237,41 @@ def scan_live(tenant: dict, *, enabled_rule_ids: set[str] | None = None, progres
         from app.cloud_http import BearerTokenCache, JSONReader
         arm_auth = BearerTokenCache(credential, 'https://management.azure.com/.default')
         reader = JSONReader(headers_factory=arm_auth)
+        arg_findings = _findings(credential, subscriptions, enabled_rule_ids)
+        stamp = observed_at or datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
         try:
-            from app.collectors.azure_arm_detail import enabled as arm_detail_enabled, enrich_arm_details
+            from app.collectors.azure_arm_detail import enrich_arm_details, enabled as arm_detail_enabled
+            from app.collectors.azure_storage_policy import enrich_storage_management_policies
+            from app.collectors.cloud_advisor import enrich_inventory_advisor_signals
+            from app.collectors.resource_pipeline import enrich_inventory_pipeline
+            from app.collectors.wiz_security import enrich_inventory_wiz_from_reader
+
             if arm_detail_enabled(stack_settings):
                 inventory = enrich_arm_details(reader, inventory, settings=stack_settings, progress=progress)
-            from app.collectors.azure_storage_policy import enrich_storage_management_policies
             inventory = enrich_storage_management_policies(reader, inventory, settings=stack_settings)
-            from app.collectors.cloud_advisor import enrich_inventory_advisor_signals
-
             inventory = enrich_inventory_advisor_signals(
                 reader,
                 inventory,
                 subscriptions=subscriptions,
                 settings=stack_settings,
             )
-            from app.collectors.wiz_security import enrich_inventory_wiz_from_reader
-
             inventory = enrich_inventory_wiz_from_reader(reader, inventory, settings=stack_settings)
-            from app.collectors.live_common import enabled
-            if enabled(stack_settings):
-                from app.collectors.azure_live import enrich
-                inventory = enrich(reader, inventory, settings=stack_settings)
+            inventory, pipeline_findings = enrich_inventory_pipeline(
+                reader,
+                inventory,
+                settings=stack_settings,
+                progress=progress,
+                arg_findings=arg_findings,
+                policies=policies,
+                observed_at=stamp,
+            )
         finally:
             reader.close()
-        return _findings(credential, subscriptions, enabled_rule_ids), inventory
+        merged = list(arg_findings)
+        seen = {(f.get('cloud_provider', 'azure'), (f.get('resource_id') or '').lower(), f.get('rule_id')) for f in merged}
+        for f in pipeline_findings:
+            key = (f.get('cloud_provider', 'azure'), (f.get('resource_id') or '').lower(), f.get('rule_id'))
+            if key not in seen:
+                seen.add(key)
+                merged.append(f)
+        return merged, inventory

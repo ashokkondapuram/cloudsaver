@@ -283,7 +283,7 @@ class FocusRepository:
                 commitment_locked=False,
                 commitment_lock_conflict=False,
                 currency=currency or reporting_currency(tenant, scan),
-                billing_coverage=False,
+                billing_coverage=True,
                 billing_window_start=datetime.combine(begin, time.min, tzinfo=timezone.utc).isoformat(),
                 billing_window_end=datetime.combine(finish, time.min, tzinfo=timezone.utc).isoformat(),
                 billing_basis='imported_FOCUS_not_provider_reconciled',

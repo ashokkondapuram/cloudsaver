@@ -5,6 +5,8 @@ export const RESOURCE_PAGE_SIZE = 1000;
 export const RUNNING_RESOURCE_PAGE_SIZE = 100;
 /** Matches GET /scans/{id}/resources default limit and explorer incremental page size. */
 export const EXPLORER_RESOURCE_PAGE_SIZE = 100;
+/** First paint: show a small slice quickly, then load remaining pages in the background. */
+export const FIRST_RESOURCE_PAGE_SIZE = 40;
 export const MAX_RESOURCE_ROWS = 10000;
 
 export type ResourceLoadProgress = {loaded: number; total: number; complete: boolean};
@@ -27,6 +29,11 @@ function validRow(value: unknown): value is ResourceRow {
   if (decision !== null && (!object(decision) || !['accept','dismiss','defer','none'].includes(String(decision.decision)) || typeof decision.created_at !== 'string')) return false;
   if(value.retail_estimate_usd===undefined||!/^[a-f0-9]{64}$/.test(String(value.evidence_digest)))return false;
   if (value.arm_detail != null && value.arm_detail !== undefined && !ARM_DETAIL_STATUSES.includes(value.arm_detail as ArmDetailStatus)) return false;
+  const readiness = value.analysis_readiness;
+  if (readiness != null && readiness !== undefined && !object(readiness)) return false;
+  const registry = value.type_registry;
+  if (registry != null && registry !== undefined && !object(registry)) return false;
+  if (value.evidence_incomplete != null && value.evidence_incomplete !== undefined && typeof value.evidence_incomplete !== 'boolean') return false;
   return ['billed_cost_usd','effective_cost_usd','retail_estimate_usd'].every(key => finiteMoney(value[key]));
 }
 
@@ -36,10 +43,10 @@ export async function loadResourcePages(
   scanId: string,
   signal?: AbortSignal,
   options: {
-    partial?: boolean;
     incremental?: boolean;
     costScope?: 'billable' | 'all';
     pageSize?: number;
+    firstPageSize?: number;
     armDetail?: ArmDetailStatus;
     /** Load only the first API page (dashboard overview); do not walk the full inventory. */
     overview?: boolean;
@@ -48,13 +55,10 @@ export async function loadResourcePages(
 ): Promise<ResourcePage> {
   const costQuery = options.costScope === 'all' ? '&cost_scope=all' : '';
   const armQuery = options.armDetail ? `&arm_detail=${encodeURIComponent(options.armDetail)}` : '';
-  const pageSize = options.pageSize ?? (options.overview
+  const steadyPageSize = options.pageSize ?? (options.overview
     ? RESOURCE_PAGE_SIZE
-    : options.partial
-    ? RUNNING_RESOURCE_PAGE_SIZE
-    : options.incremental
-      ? EXPLORER_RESOURCE_PAGE_SIZE
-      : RESOURCE_PAGE_SIZE);
+    : EXPLORER_RESOURCE_PAGE_SIZE);
+  const firstPageSize = options.firstPageSize ?? FIRST_RESOURCE_PAGE_SIZE;
   let first: ResourcePage | null = null;
   const items: ResourceRow[] = [], seen = new Set<string>();
   const emit = (inventoryOffset: number, forceComplete = false) => {
@@ -65,8 +69,9 @@ export async function loadResourcePages(
       complete: forceComplete || options.overview || inventoryOffset >= first.total,
     });
   };
-  for (let inventoryOffset = 0; inventoryOffset < MAX_RESOURCE_ROWS; inventoryOffset += pageSize) {
+  for (let inventoryOffset = 0, pass = 0; inventoryOffset < MAX_RESOURCE_ROWS; pass += 1) {
     signal?.throwIfAborted();
+    const pageSize = pass === 0 ? Math.min(firstPageSize, steadyPageSize) : steadyPageSize;
     const raw=await request(`/scans/${encodeURIComponent(scanId)}/resources?limit=${pageSize}&offset=${inventoryOffset}${costQuery}${armQuery}`, {signal});
     signal?.throwIfAborted();
     if(object(raw)&&Number.isSafeInteger(raw.total)&&Number(raw.total)>MAX_RESOURCE_ROWS)throw new Error('Resource evidence is incomplete: the explorer supports up to 10,000 resources per scan. Select smaller scan scopes before reviewing this estate.');
@@ -91,8 +96,8 @@ export async function loadResourcePages(
       return {...first, items: [...items]};
     }
     emit(nextOffset);
-    if (options.partial && first) return {...first, items: [...items]};
     if (nextOffset >= page.total) return {...first, items: [...items]};
+    inventoryOffset = nextOffset;
   }
   throw invalid();
 }
@@ -103,9 +108,9 @@ export async function loadResourcePagesIncremental(
   scanId: string,
   signal: AbortSignal | undefined,
   onProgress: (page: ResourcePage, progress: ResourceLoadProgress) => void,
-  options: Omit<Parameters<typeof loadResourcePages>[3], 'incremental' | 'onProgress' | 'partial'> = {},
+  options: Omit<Parameters<typeof loadResourcePages>[3], 'onProgress'> = {},
 ): Promise<ResourcePage> {
-  return loadResourcePages(request, scanId, signal, {...options, incremental: true, onProgress});
+  return loadResourcePages(request, scanId, signal, {...options, onProgress});
 }
 
 /** A missing progress counter must not become zero, NaN or permission to queue duplicate work. */

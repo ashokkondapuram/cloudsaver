@@ -41,6 +41,15 @@ if not 10 <= ai_tick <= 3600:
 if enabled('CLOUDSAVER_AI_ENABLED'):
     celery_app.conf.beat_schedule['process-ai-batches'] = {
         'task': 'workers.tasks.process_ai_batches', 'schedule': float(ai_tick), 'options': {'expires': ai_tick}}
+if os.getenv('CLOUDSAVER_CONTINUOUS_ANALYSIS_ENABLED', 'true').lower() == 'true':
+    analysis_tick = int(os.getenv('CLOUDSAVER_CONTINUOUS_ANALYSIS_TICK_SECONDS', '120'))
+    if not 30 <= analysis_tick <= 3600:
+        raise ValueError('Continuous analysis tick must be between 30 and 3600 seconds')
+    celery_app.conf.beat_schedule['refresh-incomplete-resource-evidence'] = {
+        'task': 'workers.tasks.refresh_incomplete_resource_evidence',
+        'schedule': float(analysis_tick),
+        'options': {'expires': analysis_tick},
+    }
 if enabled('CLOUDSAVER_PLATFORM_OUTBOX_DISPATCH'):
     celery_app.conf.beat_schedule['dispatch-platform-outbox'] = {
         'task': 'workers.tasks.dispatch_platform_outbox_all',
@@ -191,6 +200,9 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         if key_verifier() == 'identity' and policy is None:
             from app.scanner import ScanError
             raise ScanError('Analysis policy is unavailable; no scan was saved.')
+        from app.scanner import scan_live
+        from app.resource_analysis_service import build_scan_rule_policies
+        scan_policies = build_scan_rule_policies(policy, rule_ids)
         inventory = []
         if scanner:
             scanned = scanner(tenant)
@@ -203,7 +215,12 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
                 from app.multi_cloud import scan_multi_cloud
                 findings,inventory=scan_multi_cloud(tenant,selected_providers,enabled_rule_ids=rule_ids)
             else:
-                findings, inventory = scan_live(tenant, enabled_rule_ids=rule_ids)
+                findings, inventory = scan_live(
+                    tenant,
+                    enabled_rule_ids=rule_ids,
+                    policies=scan_policies,
+                    observed_at=observed_at,
+                )
         resource_count = len(inventory) if inventory else len(findings)
         if resource_count > entitlements.max_resources_per_scan:
             raise UnauthorizedJob('Scan exceeds workspace resource quota')
@@ -229,12 +246,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         source_ledger = compact(inventory, findings, observed_at)
         from app.scan_scope_manifest import completed_scopes
         findings = group_opportunities(findings, inventory)
-        policies = {item['id']: item for item in (policy or {}).get('items', [])}
-        if rule_ids is not None:
-            from app.kubernetes_rules import DEFINITIONS as KUBERNETES_RULES
-            from app.resource_catalog import definitions
-            for rid, *_ in (*KUBERNETES_RULES, *definitions()):
-                policies.setdefault(rid, {'enabled': rid in rule_ids})
+        policies = scan_policies
         outcomes = evaluate_inventory(inventory, policies=policies, observed_at=observed_at)
         from app.multicloud_rules import materialize
         findings=group_opportunities(materialize(findings,inventory,outcomes),inventory)
@@ -417,6 +429,17 @@ def process_ai_batches():
             client.close()
         except Exception:
             pass
+
+
+@celery_app.task(name='workers.tasks.refresh_incomplete_resource_evidence')
+def refresh_incomplete_resource_evidence():
+    """Keep filling stale or partial evidence on the latest completed scan per workspace."""
+    from app.continuous_analysis import refresh_incomplete_resources
+    from app.store import PostgresStore, Store
+
+    settings = Settings.load()
+    store = PostgresStore(settings.database_url) if settings.database_url else Store(settings.database)
+    return refresh_incomplete_resources(settings=settings, store=store)
 
 
 @celery_app.task(name='workers.tasks.dispatch_platform_outbox_all')

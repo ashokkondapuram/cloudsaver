@@ -58,10 +58,11 @@ def collect_evidence_items(assessment, *, add):
             add(dict(GAP_ACTIONS[code]))
         elif code in MODEL_BASE_CODES or code in checks:
             check = checks.get(code, {})
+            title = check.get('explanation') or 'Required evidence for this check is incomplete.'
             add(
                 action(
-                    title=f'Close evidence gap: {code.replace("_", " ").title()}',
-                    rationale=check.get('explanation') or 'Required evidence for this check is incomplete.',
+                    title=f'Close evidence gap: {title.split(".")[0]}',
+                    rationale=check.get('explanation') or title,
                     kind='verify',
                     pillar=check.get('pillar', 'operations'),
                     category='evidence',

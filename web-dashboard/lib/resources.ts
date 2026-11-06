@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import {api} from './api';
-import {loadResourcePages, readBatchPage, RUNNING_RESOURCE_PAGE_SIZE, type ResourceLoadProgress} from './resource-pages';
+import {loadResourcePages, readBatchPage, type ResourceLoadProgress} from './resource-pages';
 import {lookupResourceSignals} from './resource-signals';
 import type {ArmDetailStatus} from './arm-detail';
 export type {ArmDetailStatus} from './arm-detail';
@@ -16,7 +16,7 @@ export function isLiveSnapshot(scan: Scan | undefined): boolean {
 export type PillarStatus = 'observed' | 'risk' | 'unknown';
 export type AIStatus = 'not_run' | 'queued' | 'running' | 'completed' | 'stale' | 'failed';
 export type DecisionKind = 'accept' | 'dismiss' | 'defer';
-export type Action = {title: string; rationale: string; kind: string; pillar: string; category?: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]};
+export type Action = {title: string; rationale: string; kind: string; pillar: string; category?: string; effort: string; change_risk: string; confidence: string; evidence_codes: string[]; prerequisites: string[]; evidence_json?: Record<string, unknown>};
 export type Decision = {id: string; decision: DecisionKind; note: string; defer_until: string | null; evidence_digest: string; created_at: string; scan_id: string; evidence_changed?: boolean};
 export type AIState = {status: AIStatus; risk_level: string | null; summary: string | null; actions: Action[]; assessment_id: string | null; created_at: string | null; reason: string | null};
 export type ResourceRow = {
@@ -26,13 +26,37 @@ export type ResourceRow = {
   billed_cost_usd?:number|null;effective_cost_usd?:number|null;commitment_locked?:boolean;lifecycle_delta?:'new'|'persisting'|'regressed';
   retail_estimate_usd: number | null; evidence_digest: string; pillars: Record<string, PillarStatus>; ai: AIState; decision: Decision | null;
   arm_detail?: ArmDetailStatus | null;
+  last_analyzed_at?: string | null;
+  azure_status_fetched_at?: string | null;
+  analysis_stale?: boolean;
+  refresh_in_progress?: boolean;
+  evidence_incomplete?: boolean;
+  analysis_readiness?: {
+    configuration?: string;
+    configuration_observed?: number;
+    configuration_total?: number;
+    telemetry_pending_rule_ids?: string[];
+  } | null;
+  type_registry?: {
+    resource_type?: string;
+    family_id?: string | null;
+    evidence_fields?: string[];
+    evidence_fields_pending?: string[];
+    telemetry_rule_ids?: string[];
+    analysis_rule_ids?: string[];
+    monitor_metrics?: string[];
+  } | null;
 };
 export type Summary = {total: number; ai_status: Record<string, number>; ai_risk: Record<string, number>; decision: Record<string, number>; review_priority: Record<string, number>;resolved_count?:number|null;no_longer_observed_count?:number|null};
 export type ResourcePage = {scan_id: string; observed_at: string; summary: Summary;commitment_baseline?:{status:string;clean_steady_state_hr:string|null;recommended_new_commitment_hr:string|null;warning:string}; total: number; items: ResourceRow[]};
-export type Check = {pillar: string; code: string; status: PillarStatus; explanation: string; evidence_fields: string[]};
+export type Check = {pillar: string; code: string; status: PillarStatus; explanation: string; evidence_fields: string[]; evidence_json?: Record<string, unknown>; providers?: string[]};
+export type CheckGroup = {scope: 'shared' | 'provider'; provider: string; label: string; checks: Check[]};
+export type RuleEvaluationRow = {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean; safety_blocks?: string[]; cloud_provider?: string};
+export type RuleEvaluationGroup = {provider: string; label: string; evaluations: RuleEvaluationRow[]};
 export type ResourceAssessment = Omit<ResourceRow, 'pillars' | 'ai' | 'decision'> & {
-  pillars: {pillar: string; status: PillarStatus; checks: Check[]}[]; guardrails: string[]; policy_version: string;
+  pillars: {pillar: string; status: PillarStatus; checks: Check[]}[]; check_groups?: CheckGroup[]; guardrails: string[]; policy_version: string;
   region?: string | null;
+  evidence_scope?: {family: string | null; family_label: string; resource_type: string; applicable_checks: number};
   observation: {status: string; observed_at: string | null; max_age_hours: number};
 };
 export type Followup = {id: string; question: string; created_at: string; answer: {answer: string; evidence_codes: string[]; limitations: string[]}};
@@ -42,16 +66,34 @@ export type AIResult = {model: string; target_id: string; warning: string; cache
 export type RuleMatchRow = {rule_id: string; display_channel: string; action_class: string; match_confidence: string; safety_blocks?: string[]; protected_reasons?: string[]; suppressed_reason?: string};
 export type RuleMatches = {resource_id: string; cloud_provider: string; primary_match: RuleMatchRow | null; alternate_matches: RuleMatchRow[]; opportunity_group_id?: string | null; overlap_policy: string; strategy_version?: string};
 export type RuleConflict = {kind: 'source_reconciliation' | 'finding_without_evaluation' | 'outcome_mismatch' | 'evaluation_without_finding'; severity: 'block' | 'review' | 'info'; rule_id: string | null; message: string};
+export type AzurePolicyStateRow = {policy_definition_id?: string | null; policy_definition_name?: string | null; policy_assignment_id?: string | null; policy_assignment_name?: string | null; policy_set_definition_name?: string | null; compliance_state?: string | null; timestamp?: string | null};
+export type AzureAdvisorRow = {recommendation_id?: string | null; category?: string | null; impact?: string | null; problem?: string | null; solution?: string | null; last_updated?: string | null; risk?: string | null};
+export type AzureGovernance = {policy_states: AzurePolicyStateRow[]; advisor_recommendations: AzureAdvisorRow[]; collection?: {azure_policy?: string | null; advisor?: string | null}};
 export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; findings: Finding[]; ai_context: Record<string, unknown>; ai: AIState;
+  last_analyzed_at?: string | null;
+  azure_status_fetched_at?: string | null;
+  analysis_stale?: boolean;
+  refresh_in_progress?: boolean;
+  evidence_incomplete?: boolean;
   ai_result: AIResult | null; decision: Decision | null; followups: Followup[]; followups_remaining: number;
   analysis_readiness?: {configuration?: string; configuration_observed?: number; configuration_total?: number; telemetry_pending_rule_ids?: string[]};
+  type_registry?: {
+    resource_type?: string;
+    family_id?: string | null;
+    evidence_fields?: string[];
+    evidence_fields_pending?: string[];
+    telemetry_rule_ids?: string[];
+    analysis_rule_ids?: string[];
+    monitor_metrics?: string[];
+  } | null;
   configuration_detail?: Record<string, unknown> | null;
   evidence_schema_version?: string | null;
-  observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;analysis_readiness?:{configuration?:string;configuration_observed?:number;configuration_total?:number;telemetry_pending_rule_ids?:string[]}};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
+  observation?: {evidence?:{metrics?:Record<string,{window_start?:string;window_end?:string;points?:{at:string;value:number}[];sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;metric_summaries?:Record<string,{sufficient?:boolean;p95?:number;p99?:number;coverage_ratio?:number}>;analysis_readiness?:{configuration?:string;configuration_observed?:number;configuration_total?:number;telemetry_pending_rule_ids?:string[]};type_registry?:ResourceRow['type_registry']};observed_at?: string; collector_version?: string; evidence_schema_version?: string; configuration_snapshot?: Record<string, unknown>;
     reconciliation_status?: string | null; region?: string | null; location?: string | null;
     data_sources?: {source_id?: string; collector_type?: string; status?: string; reason_code?: string | null}[];
     dependency_refs?: {relationship: string; from_resource_id: string; to_resource_id: string; verification_state: string; observed_at: string | null}[]};
-  rule_evaluations?: {rule_id: string; rule_version: string; outcome: string; reason: string; destructive_actions_blocked?: boolean; safety_blocks?: string[]}[];
+  rule_evaluations?: RuleEvaluationRow[];
+  rule_evaluation_groups?: RuleEvaluationGroup[];
   rule_matches?: RuleMatches;
   rule_conflicts?: RuleConflict[];
   reconciliation_status?: string | null;
@@ -74,7 +116,10 @@ export type ResourceDetail = {scan_id: string; assessment: ResourceAssessment; f
   };
   financial_overlaps?: {resource_id: string; resource_name?: string; rule_id: string}[];
   action_items?: Action[];
-  observability?: ObservedSignals | null};
+  observability?: ObservedSignals | null;
+  fetch_stages?: Partial<Record<'costs' | 'activity_log' | 'retail' | 'analysis' | 'recommendations', 'pending' | 'running' | 'completed' | 'failed' | 'skipped'>>;
+  azure_governance?: AzureGovernance | null;
+};
 export type ObservedMetric = {connector: string; query_id: string; metric: string; unit: string; window_start: string | null; window_end: string | null;
   samples: number; coverage_pct: number; p50: number; p95: number; max: number; avg: number};
 export type ObservedService = {connector: string; service: string; requests_per_second: number | null; error_rate_pct: number | null;
@@ -165,11 +210,8 @@ function startResourceLoad(key: string, scanId: string, token: string, options: 
     scanId,
     request.signal,
     {
-      partial: options.running,
-      incremental: !options.running && !options.overview,
       overview: options.overview,
       costScope: options.running ? 'all' : 'billable',
-      pageSize: options.running ? RUNNING_RESOURCE_PAGE_SIZE : undefined,
       armDetail: options.armDetail,
       onProgress: (page, progress) => {
         if (request.signal.aborted) return;
@@ -184,11 +226,12 @@ function startResourceLoad(key: string, scanId: string, token: string, options: 
   )
     .then(page => {
       if (request.signal.aborted) return;
+      const complete = page.items.length >= page.total;
       publishResourceCache(key, {
         page,
         error: '',
         loading: false,
-        progress: {loaded: page.items.length, total: page.total, complete: true},
+        progress: {loaded: page.items.length, total: page.total, complete},
       });
     })
     .catch(cause => {
@@ -235,7 +278,11 @@ export function useResources(scanId: string | undefined, token: string, enabled 
 
   useEffect(() => {
     if (!running || !scanId || !enabled || !key) return;
-    const timer = window.setInterval(() => startResourceLoad(key, scanId, token, {running, armDetail, overview}, true), 3000);
+    const timer = window.setInterval(() => {
+      const cached = readResourceCache(key);
+      if (cached.loading && cached.progress && !cached.progress.complete) return;
+      startResourceLoad(key, scanId, token, {running, armDetail, overview}, true);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [running, scanId, enabled, key, token, armDetail, overview]);
 

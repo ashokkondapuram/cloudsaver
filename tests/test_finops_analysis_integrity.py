@@ -63,9 +63,16 @@ def _synthetic_resource(provider: str, resource_type: str) -> dict:
 
 
 def expected_rule_ids(*, cloud_provider: str, resource_type: str) -> frozenset[str]:
-    """Mirror evaluate_inventory rule selection (legacy suffix, K8 kind, multicloud family)."""
+    """Mirror evaluate_inventory rule selection (legacy suffix, K8 kind, registry / multicloud)."""
     expected: set[str] = set()
     if cloud_provider == "azure":
+        from app.azure_resource_registry import analysis_rule_ids_for
+
+        expected |= set(
+            analysis_rule_ids_for(
+                _synthetic_resource(cloud_provider, resource_type),
+            )
+        )
         suffix = resource_type.lower().rsplit("/", 1)[-1]
         for rule_id, type_suffix, *_rest in azure_evidence_contracts():
             if suffix == type_suffix:
@@ -76,7 +83,7 @@ def expected_rule_ids(*, cloud_provider: str, resource_type: str) -> frozenset[s
             if kind in kinds:
                 expected.add(rule_id)
     row = family({"cloud_provider": cloud_provider, "resource_type": resource_type})
-    if row and row[0] != "kubernetes":
+    if row and row[0] != "kubernetes" and cloud_provider != "azure":
         for rule_id in row[4]:
             if rule_id not in AZURE_EVIDENCE_CONTRACT_IDS:
                 expected.add(rule_id)

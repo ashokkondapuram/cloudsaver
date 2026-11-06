@@ -110,6 +110,7 @@ x-observability-environment: &observability-environment
 x-worker-environment: &worker-environment
   <<: [*environment, *delivery-environment]
   REDIS_URL: redis://redis:6379/1
+  CLOUDSAVER_ANALYSIS_INTERNAL_TOKEN: ${CLOUDSAVER_ANALYSIS_INTERNAL_TOKEN:-${CLOUDSAVER_IDENTITY_TOKEN_SCANNER:-}}
   CLOUDSAVER_SCHEDULER_TICK_SECONDS: ${CLOUDSAVER_SCHEDULER_TICK_SECONDS:-300}
   CLOUDSAVER_AI_ENABLED: ${CLOUDSAVER_AI_ENABLED:-false}
   CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
@@ -163,6 +164,7 @@ services:
       CLOUDSAVER_AI_TARGETS: ${CLOUDSAVER_AI_TARGETS:-[]}
       CLOUDSAVER_AI_HOURLY_ATTEMPTS: ${CLOUDSAVER_AI_HOURLY_ATTEMPTS:-10}
       CLOUDSAVER_IDENTITY_TOKEN: ${CLOUDSAVER_IDENTITY_TOKEN_SCANNER:-}
+      CLOUDSAVER_ANALYSIS_INTERNAL_TOKEN: ${CLOUDSAVER_ANALYSIS_INTERNAL_TOKEN:-${CLOUDSAVER_IDENTITY_TOKEN_SCANNER:-}}
       AZURE_CONFIG_DIR: /home/appuser/.azure
       # Restored reviewed export/GitOps configuration is scoped to the core API.
       CLOUDSAVER_GITOPS_TARGETS: ${CLOUDSAVER_GITOPS_TARGETS:-[]}
@@ -182,6 +184,7 @@ services:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
+      analysis-service: {condition: service_healthy}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/readyz')"]
       interval: 15s

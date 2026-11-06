@@ -344,17 +344,26 @@ html[data-ui-preset=atlas] .app-footer {
   background: var(--cs-surface);
 }
 
-html[data-ui-preset=atlas] .workspace-tabs [role='tablist'] {
+html[data-ui-preset=atlas] .workspace-tabs [role='tablist'],
+html[data-ui-preset=atlas] .workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list {
   border-bottom: 1px solid var(--cs-border);
   gap: 4px;
 }
 
-html[data-ui-preset=atlas] .workspace-tabs [role='tab'][aria-selected='true'] {
+html[data-ui-preset=atlas] .workspace-tabs [role='tab'][aria-selected='true'],
+html[data-ui-preset=atlas] .workspace-tab-shell:not(.drawer-tab-shell) .workspace-tab-list>button[aria-selected='true'] {
   border-color: var(--cs-border);
   border-bottom-color: var(--cs-surface);
   background: var(--cs-surface);
   color: var(--cs-primary);
   font-weight: 600;
+}
+
+html[data-ui-preset=atlas] .drawer-tab-shell .workspace-tab-list>button[aria-selected='true'] {
+  color: var(--cs-primary);
+  border-bottom-color: var(--cs-primary);
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Settings appearance picker */

@@ -16,8 +16,9 @@ from app.schemas import bounded_json
 from app.inference_ledger import attribution
 from app.resource_assessment import (FILTERS, ai_state, assessments, assess_resource, csv_report, decision_state, group, history,
                                      inventory_observation, merge, merge_inventory, observation_arm_detail,
-                                     overlay_inventory_billing, planning_summary, matches, resource_key, row, scan_indexes,
-                                     summarize_resource_rows)
+                                     observation_list_extras, overlay_inventory_billing, planning_summary, matches,
+                                     prepare_observation, rebuild_assessment_from_observation, resource_key, row,
+                                     scan_indexes, summarize_resource_rows)
 from app.resource_store import ResourceConflict, ResourceStore
 
 KEY = r'^[a-f0-9]{64}$'
@@ -81,6 +82,33 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
     from app.inference_ledger import InferenceLedger
     ledger = InferenceLedger(evidence_store)
 
+    def refresh_observation_if_stale(tenant, scan_id, observation):
+        if not observation:
+            return observation
+        scan = store.get(tenant['tenant_id'], str(scan_id))
+        if scan is None:
+            return observation
+        from app.effective_rules import policy_for_tenant
+        from app.resource_refresh import maybe_refresh_observation
+
+        return maybe_refresh_observation(
+            tenant,
+            scan,
+            observation,
+            store=store,
+            policies=policy_for_tenant(tenant['tenant_id']),
+        )
+
+    def overlay_obs(tenant, scan_id, observation):
+        from app.resources_redis import apply_scan_resource
+
+        return apply_scan_resource(tenant['tenant_id'], str(scan_id), observation)
+
+    def overlay_page(tenant, scan_id, observations, findings_by_key):
+        from app.resources_redis import apply_scan_resources_page
+
+        return apply_scan_resources_page(tenant['tenant_id'], str(scan_id), observations, findings_by_key)
+
     def owned(scan_id, tenant):
         scan = store.get(tenant['tenant_id'], str(scan_id))
         if scan is None:
@@ -120,6 +148,19 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         deltas, comparison = lifecycle(merged, previous)
         scan['_lifecycle_comparison']=comparison
         keys = set(merged)
+        findings_by_key, _ = scan_indexes(scan)
+        inventory_by_key = {}
+        for obs in scan.get('inventory') or []:
+            pseudo = inventory_observation(obs)
+            inventory_by_key[resource_key(pseudo)] = obs
+        from app.resources_redis import apply_scan_inventory_map
+
+        inventory_by_key, findings_by_key = apply_scan_inventory_map(
+            tenant['tenant_id'],
+            scan['scan_id'],
+            inventory_by_key,
+            findings_by_key,
+        )
         if scan['status'] == 'running':
             results, decisions = {}, {}
             states = {}
@@ -127,16 +168,27 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             results = repo.results(tenant['tenant_id'], keys)
             states = repo.item_states(tenant['tenant_id'], scan['scan_id'])
             decisions = repo.latest_decisions(tenant['tenant_id'], keys)
-        inventory_by_key = {}
-        for obs in scan.get('inventory') or []:
-            pseudo = inventory_observation(obs)
-            inventory_by_key[resource_key(pseudo)] = obs
         items = []
-        for key, (assessment, _) in merged.items():
+        observed_at = scan.get('timestamp')
+        for key, (_, _) in merged.items():
             obs = inventory_by_key.get(key)
+            findings = findings_by_key.get(key, [])
+            if obs and findings:
+                assessment, _ = merge(
+                    key,
+                    findings,
+                    observed_at=observed_at,
+                    list_view=True,
+                    observation=obs,
+                )
+            elif obs:
+                assessment, _ = merge_inventory(key, obs, observed_at=observed_at, list_view=True)
+            else:
+                assessment, _ = merged[key]
             arm_detail = observation_arm_detail(obs)
             row_item = dict(row(assessment), lifecycle_delta=deltas[key], ai=ai_state(assessment, results.get(key), states.get(key)),
-                              decision=decision_state(assessment, decisions.get(key)), arm_detail=arm_detail)
+                              decision=decision_state(assessment, decisions.get(key)), arm_detail=arm_detail,
+                              **observation_list_extras(obs))
             if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=inventory_by_key.get(key)):
                 continue
             items.append(row_item)
@@ -182,6 +234,18 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             raise HTTPException(409, 'Resource evidence requires a live scan snapshot')
         observation = bundle.get('observation')
         findings = list(bundle.get('findings') or [])
+        if observation:
+            from app.resources_redis import apply_scan_resource_bundle
+
+            observation, findings = apply_scan_resource_bundle(tenant['tenant_id'], str(scan_id), observation, findings)
+            observation = refresh_observation_if_stale(tenant, scan_id, observation)
+            bundle = store.scan_resource_bundle(tenant['tenant_id'], str(scan_id), provider, resource_id) or bundle
+            observation, findings = apply_scan_resource_bundle(
+                tenant['tenant_id'],
+                str(scan_id),
+                bundle.get('observation') or observation,
+                list(bundle.get('findings') or findings),
+            )
         if not findings and hasattr(store, 'findings_for_resource'):
             findings = store.findings_for_resource(tenant['tenant_id'], str(scan_id), provider, resource_id)
         elif not findings and hasattr(store, 'findings_for_resource_key'):
@@ -224,6 +288,15 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
         return scan, findings, assessment, context, observation
 
     def resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant):
+        if observation:
+            observation = prepare_observation(observation)
+            assessment, context = rebuild_assessment_from_observation(
+                scan,
+                resource_key,
+                findings,
+                observation,
+                list_view=False,
+            )
         result = repo.results(tenant['tenant_id'], {resource_key}).get(resource_key)
         state = repo.item_states(tenant['tenant_id'], scan['scan_id']).get(resource_key)
         decision = repo.latest_decisions(tenant['tenant_id'], {resource_key}).get(resource_key)
@@ -237,6 +310,17 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             provider=provider,
             resource_id=assessment['resource_id'],
         )
+        from app.provider_rules import provider_label, rule_provider
+
+        evaluation_groups = []
+        buckets: dict[str, list] = {}
+        for row in evaluations:
+            bucket = row.get('cloud_provider') or rule_provider(row.get('rule_id', ''))
+            buckets.setdefault(bucket, []).append(row)
+        for bucket, rows in sorted(buckets.items()):
+            evaluation_groups.append(
+                dict(provider=bucket, label=f'{provider_label(bucket)} analysis rules', evaluations=rows)
+            )
         groups = {row['opportunity_group_id'] for row in findings if row.get('opportunity_group_id')}
         opportunity_group_id = next(iter(groups), None) if len(groups) == 1 else None
         rule_detail = build_resource_rule_detail(
@@ -281,24 +365,62 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             assessment_payload['drift_detected'] = True
         from app.resource_action_items import derive_action_items
 
-        action_items = derive_action_items(assessment, findings, evaluations)
+        action_items = (observation or {}).get('recommendations') if observation else None
+        if not action_items:
+            action_items = derive_action_items(assessment, findings, evaluations)
+        from app.evidence_extraction import attach_action_item_evidence, attach_check_evidence
         from app.pillar_analysis_api import pillar_scores_for_resource
 
+        assessment_payload = attach_check_evidence(dict(assessment_payload), observation)
+        action_items = attach_action_item_evidence(action_items, assessment_payload, observation)
+        live_sources = obs_evidence.get('live_sources') or {}
+        azure_governance = None
+        if provider == 'azure':
+            azure_governance = dict(
+                policy_states=obs_evidence.get('azure_policy_states') or [],
+                advisor_recommendations=obs_evidence.get('azure_advisor_recommendations') or [],
+                collection=dict(
+                    azure_policy=live_sources.get('azure_policy'),
+                    advisor=live_sources.get('advisor'),
+                ),
+            )
         pillar_scores = pillar_scores_for_resource(scan, provider, assessment['resource_id'])
-        payload = dict(scan_id=scan['scan_id'], assessment=assessment_payload, findings=findings, ai_context=context,
-                       ai=ai_state(assessment, result, state), ai_result=result['response'] if result else None,
-                       decision=decision_state(assessment, decision), followups=followups,
-                       followups_remaining=max(0, MAX_QUESTIONS - len(followups)), observation=observation,
-                       configuration_detail=configuration_detail,
-                       analysis_readiness=obs_evidence.get('analysis_readiness'),
-                       evidence_schema_version=obs_evidence.get('evidence_schema_version') or (observation or {}).get('evidence_schema_version'),
-                       rule_evaluations=evaluations, costs=costs, financial_overlaps=overlaps,
-                       rule_matches=rule_detail['rule_matches'],
-                       rule_conflicts=rule_detail['rule_conflicts'],
-                       reconciliation_status=rule_detail.get('reconciliation_status'),
-                       action_items=action_items,
-                       observability=next((r.get('evidence', {}).get('observed_signals') for r in [observation or {}, *findings]
-                                           if r.get('evidence', {}).get('observed_signals')), None))
+        payload = dict(
+            scan_id=scan['scan_id'],
+            assessment=assessment_payload,
+            findings=findings,
+            ai_context=context,
+            ai=ai_state(assessment, result, state),
+            ai_result=result['response'] if result else None,
+            decision=decision_state(assessment, decision),
+            followups=followups,
+            followups_remaining=max(0, MAX_QUESTIONS - len(followups)),
+            observation=observation,
+            configuration_detail=configuration_detail,
+            analysis_readiness=obs_evidence.get('analysis_readiness'),
+            type_registry=obs_evidence.get('type_registry'),
+            evidence_schema_version=obs_evidence.get('evidence_schema_version')
+            or (observation or {}).get('evidence_schema_version'),
+            rule_evaluations=evaluations,
+            rule_evaluation_groups=evaluation_groups,
+            costs=costs,
+            financial_overlaps=overlaps,
+            rule_matches=rule_detail['rule_matches'],
+            rule_conflicts=rule_detail['rule_conflicts'],
+            reconciliation_status=rule_detail.get('reconciliation_status'),
+            action_items=action_items,
+            observability=next(
+                (
+                    r.get('evidence', {}).get('observed_signals')
+                    for r in [observation or {}, *findings]
+                    if r.get('evidence', {}).get('observed_signals')
+                ),
+                None,
+            ),
+            fetch_stages=obs_evidence.get('fetch_stages'),
+            azure_governance=azure_governance,
+            **observation_list_extras(observation),
+        )
         if pillar_scores is not None:
             payload['pillar_scores'] = pillar_scores
         return payload
@@ -308,20 +430,19 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
 
     def inventory_db_page(scan_id, tenant, *, cost_scope, limit, offset, arm_detail=None):
         """Serve one inventory slice from Postgres without loading the full scan payload."""
-        # Billable filtering happens after the inventory slice is loaded; inventory_total is unfiltered.
-        if cost_scope == 'billable' and not arm_detail:
-            return None
         from app.billable_resources import include_in_cost_workspace
 
         def observation_rows(observations, findings_by_key, observed_at):
+            observations, findings_by_key = overlay_page(tenant, scan_id, observations, findings_by_key)
             rows = []
             for obs in observations:
                 pseudo = inventory_observation(obs)
                 key = resource_key(pseudo)
-                if key in findings_by_key:
+                grouped = findings_by_key.get(key) or []
+                if grouped:
                     assessment, _ = merge(
                         key,
-                        findings_by_key[key],
+                        grouped,
                         observed_at=observed_at,
                         list_view=True,
                         observation=obs,
@@ -334,6 +455,7 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     ai=ai_state(assessment, None, None),
                     decision=None,
                     arm_detail=observation_arm_detail(obs),
+                    **observation_list_extras(obs),
                 )
                 if cost_scope == 'billable' and not include_in_cost_workspace(row_item, observation=obs):
                     continue
@@ -423,6 +545,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             total = snap['inventory_total']
             review_priority = {'critical': 0, 'high': 0, 'evidence_required': 0}
             for key, grouped in findings_by_key.items():
+                if not grouped:
+                    continue
                 assessment, _ = merge(
                     key,
                     grouped,
@@ -601,9 +725,29 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             )
             return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
         scan = owned(scan_id, tenant)
-        findings, assessment, context = one(scan, resource_key)
-        _, inventory_by_key = scan_indexes(scan)
+        findings_by_key, inventory_by_key = scan_indexes(scan)
+        findings = list(findings_by_key.get(resource_key, []))
         observation = inventory_by_key.get(resource_key)
+        if observation:
+            from app.resources_redis import apply_scan_resource_bundle
+
+            observation, findings = apply_scan_resource_bundle(tenant['tenant_id'], str(scan_id), observation, findings)
+            observation = refresh_observation_if_stale(tenant, scan_id, observation)
+            scan = store.get(tenant['tenant_id'], str(scan_id)) or scan
+            findings_by_key, inventory_by_key = scan_indexes(scan)
+            observation, findings = apply_scan_resource_bundle(
+                tenant['tenant_id'],
+                str(scan_id),
+                inventory_by_key.get(resource_key) or observation,
+                list(findings_by_key.get(resource_key, findings)),
+            )
+            observed_at = scan.get('timestamp')
+            if findings:
+                assessment, context = merge(resource_key, findings, observed_at=observed_at, list_view=False, observation=observation)
+            else:
+                assessment, context = merge_inventory(resource_key, observation, observed_at=observed_at, list_view=False)
+        else:
+            findings, assessment, context = one(scan, resource_key)
         return resource_payload(scan_id, scan, findings, assessment, context, observation, resource_key, tenant)
 
     @router.post('/scans/{scan_id}/ai-batches', status_code=202)
