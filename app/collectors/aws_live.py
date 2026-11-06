@@ -146,6 +146,9 @@ def extra_inventory(client,account,region):
         full=sm.describe_endpoint(EndpointName=r['EndpointName']);add('aws:sagemaker:endpoint',full['EndpointArn'],full['EndpointName'],dict(state=full.get('EndpointStatus')))
     bedrock=client('bedrock')
     for r in pages(bedrock,'list_provisioned_model_throughputs','provisionedModelSummaries',token_key='nextToken',request_key='nextToken',maxResults=100):add('aws:bedrock:provisioned-throughput',r['provisionedModelArn'],r['provisionedModelName'],dict(state=r.get('status'),commitment_lock_conflict=r.get('commitmentDuration') is not None))
+    from app.collectors.aws_resource_explorer import enabled as resource_explorer_enabled, inventory_rows as resource_explorer_rows, merge_by_arn
+    if resource_explorer_enabled():
+        rows = merge_by_arn(rows, resource_explorer_rows(client, account, region, now=now))
     return rows
 
 # Billable catalog types: expanded inventory (compute/network/db) before legacy scanner rows when capped.
