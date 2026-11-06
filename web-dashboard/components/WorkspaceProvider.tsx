@@ -6,8 +6,9 @@ import {validateProfile,validateScan,validateWorkspaceEvidence} from '../lib/ses
 import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
 import {UiThemeApplier} from './UiThemeApplier';
+import {AutoScanOrchestrator} from './AutoScanOrchestrator';
 
-type Overlay = 'command' | 'scan' | 'workspace' | 'notifications' | 'finding' | 'review' | null;
+type Overlay = 'command' | 'workspace' | 'notifications' | 'finding' | 'review' | null;
 type WorkspaceState = {
   token: string; workspace: Workspace | null; entitlements: Entitlements | null;
   scans: Scan[]; scan: Scan | undefined; busy: string; scanActivity: string; error: string;
@@ -20,7 +21,8 @@ type WorkspaceState = {
   notice: {text: string; tone: 'success' | 'error' | 'info' | 'warning'} | null;
   notify: (text: string, tone?: 'success' | 'error' | 'info' | 'warning') => void; clearNotice: () => void;
   connect: (token: string) => Promise<void>; disconnect: () => void;
-  selectScan: (id: string) => void; runScan: (providers: string[]) => void;
+  selectScan: (id: string) => void;
+  runScan: (providers: string[], options?: {automatic?: boolean}) => void;
   refresh: () => Promise<void>; reloadProfile: () => Promise<void>;
   liveScanEpoch: number;
   planName: string; planProviders: (providers: string[]) => string[];
@@ -171,12 +173,12 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
     }
   }
 
-  function runScan(providers: string[]) {
+  function runScan(providers: string[], options?: {automatic?: boolean}) {
     const version = session.current;
     setScanActivity('Scan in progress');
     setError('');
     setOverlay(null);
-    notify('Scan started. You can keep working while inventory loads.', 'info');
+    if (!options?.automatic) notify('Scan started. You can keep working while inventory loads.', 'info');
     let poll: number | undefined;
     const stop = () => {
       if (poll) window.clearInterval(poll);
@@ -259,5 +261,5 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   return <Context.Provider value={{token, workspace, entitlements, scans, scan, busy, scanActivity, error, canAdmin, canBill: canAdmin || !!workspace?.roles.includes('BillingAdmin'), planName, planProviders,
     scope, setScope: value => {setScope(value); setSelection([]);}, overlay, setOverlay, finding, findingContext, findingFocusKey:findingFocusKey.current, openFinding,
     review, openReview, selection, setSelection,
-    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, liveScanEpoch}}><UiThemeApplier/>{children}</Context.Provider>;
+    density, setDensity, notice, notify, clearNotice: () => setNotice(null), connect, disconnect, selectScan, runScan, refresh, reloadProfile, liveScanEpoch}}><UiThemeApplier/><AutoScanOrchestrator/>{children}</Context.Provider>;
 }

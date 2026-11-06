@@ -1,8 +1,5 @@
 'use client';
 
-import Link from 'next/link';
-import {ArrowsClockwise, CaretDown, Download, Plus, Stack} from '@phosphor-icons/react';
-import {downloadFile, exportFindings} from '../lib/finops';
 import {useWorkspace} from './WorkspaceProvider';
 import {Overview} from './Overview';
 import type {Category,Intent,Pricing} from '../lib/resource-insights';
@@ -27,15 +24,9 @@ function DiscoverResources({provider='',category='',intent='',pricing='',armDeta
 }
 
 export function ConsolePage({view,provider='',category='',intent='',pricing='',armDetail=''}:{view:View;provider?:string;category?:Category|'';intent?:Intent;pricing?:Pricing;armDetail?:import('../lib/resources').ArmDetailStatus|''}) {
-  const {workspace,scan,canAdmin,busy,setOverlay,refresh,notify} = useWorkspace();
+  const {workspace,scan} = useWorkspace();
   const heading=headings[view];
-  function exportSnapshot(format:'json'|'csv') {
-    if(!scan)return;
-    if(format==='json')downloadFile(JSON.stringify(scan,null,2),`cloudsaver-${scan.scan_id}.json`,'application/json');
-    else exportFindings(scan.findings,'csv',`cloudsaver-${scan.scan_id}`);
-    notify(`${format.toUpperCase()} download is ready.`);
-  }
-  return <><div className="page-heading" data-atlas-rollout={`console-${view}`}>{view!=='overview'&&<h1>{heading}</h1>}<div className="page-heading-actions">{view==='resources'&&<Link className="button secondary" href="/workloads"><Stack size={15} weight="regular"/>Workload assessments</Link>}{['overview','resources','allocation'].includes(view)&&<><button type="button" className="icon-button refresh-workspace" aria-label="Refresh workspace" disabled={!!busy} onClick={refresh}><ArrowsClockwise size={17} weight="regular"/></button>{view!=='overview'&&<details className="export-menu"><summary className={`button secondary ${!scan?'unavailable':''}`} aria-disabled={!scan}><Download size={15} weight="regular"/><span>Export snapshot</span><CaretDown size={13} weight="regular"/></summary><div className="menu-surface"><span className="menu-label">COMPLETE SELECTED SNAPSHOT</span><button type="button" disabled={!scan} onClick={()=>exportSnapshot('csv')}>Export CSV</button><button type="button" disabled={!scan} onClick={()=>exportSnapshot('json')}>Export JSON</button></div></details>}{canAdmin&&(view!=='overview'||!!scan)&&<button type="button" className="button primary" disabled={!!busy} onClick={()=>setOverlay('scan')}><Plus size={17} weight="regular"/>Run new scan</button>}</>}</div></div>
+  return <><div className="page-heading" data-atlas-rollout={`console-${view}`}>{view!=='overview'&&<h1>{heading}</h1>}</div>
     {view==='overview'?<Overview/>:view==='resources'?<DiscoverResources key={`${workspace?.tenant_id}-${scan?.scan_id||'empty'}`} provider={provider} category={category} intent={intent} pricing={pricing} armDetail={armDetail}/>:view==='allocation'?<Allocation/>:view==='automation'?<Automation/>:view==='activity'?<ActivityView/>:<SettingsView/>}
   </>;
 }

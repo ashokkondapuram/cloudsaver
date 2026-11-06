@@ -19,7 +19,6 @@ import {
   List,
   LockKey,
   MagnifyingGlass,
-  Plus,
   Pulse,
   SealCheck,
   SignOut,
@@ -162,7 +161,7 @@ function Login() {
 }
 
 function CommandPalette() {
-  const {overlay, setOverlay, scan, canAdmin} = useWorkspace();
+  const {overlay, setOverlay, scan} = useWorkspace();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const router = useRouter();
@@ -172,10 +171,9 @@ function CommandPalette() {
   const commands = useMemo(() => {
     const links = navigation.map(item => ({id: item.href, label: item.label, note: 'Navigate', icon: item.icon, action: () => {setOverlay(null); router.push(item.href);}}));
     const explorers = [{id:'storage-view',label:'Explore storage findings',note:'Quick view · disks & volumes',icon:Database,action:()=>{setOverlay(null);router.push('/resources?category=storage');}},{id:'protected-view',label:'Inspect protected resources',note:'Quick view · recovery & retention',icon:SealCheck,action:()=>{setOverlay(null);router.push('/resources?intent=protected');}},{id:'unpriced-view',label:'Find missing price evidence',note:'Quick view · unknown costs',icon:Wallet,action:()=>{setOverlay(null);router.push('/resources?pricing=unknown');}}];
-    const actions = canAdmin ? [{id:'new-scan',label:'Run a new scan',note:'Action',icon:Plus,action:()=>setOverlay('scan')}] : [];
     const resources = query.trim().length >= 2 ? (scan?.findings || []).filter(f => matchesQuery(`${f.resource_name} ${ruleLabel(f.rule_id)} ${f.resource_id} ${f.resource_group} ${scopeOf(f)}`,query)).slice(0,7).map(f => ({id: f.resource_id + f.rule_id, label:f.resource_name,note:ruleLabel(f.rule_id),icon:SquaresFour,action:()=>{setOverlay(null);router.push(`/resources?provider=${providerOf(f)}&resource_id=${encodeURIComponent(f.resource_id)}`);}})) : [];
-    return [...links, ...explorers, ...actions].filter(c => matchesQuery(c.label,query)).concat(resources);
-  }, [query, scan, canAdmin, router, setOverlay]);
+    return [...links, ...explorers].filter(c => matchesQuery(c.label,query)).concat(resources);
+  }, [query, scan, router, setOverlay]);
   useEffect(() => {
     setActive(index => {
       if (!commands.length) return 0;
@@ -192,8 +190,6 @@ function CommandPalette() {
     <div className="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span><span><kbd>↵</kbd> to open</span><span><kbd>esc</kbd> to close</span></div>
   </Dialog>;
 }
-
-const NO_PROVIDERS = "This workspace key doesn't include any cloud providers. Ask your administrator for a new key.";
 
 function KeyNotices() {
   const {workspace, entitlements} = useWorkspace();
@@ -236,18 +232,6 @@ function KeyNotices() {
         return <Notice key={n.id} tone={toast.tone}>{toast.text}</Notice>;
       })}
   </>;
-}
-
-function ScanDialog() {
-  const {overlay,setOverlay,workspace,runScan,scanActivity,entitlements,planName,planProviders} = useWorkspace();
-  const [providers,setProviders] = useState<string[]>([]);
-  const allowed = planProviders(workspace?.allowed_providers ?? workspace?.providers ?? ['azure']);
-  const allowedKey = allowed.join();
-  useEffect(() => {if (overlay === 'scan') setProviders(allowedKey ? allowedKey.split(',') : []);}, [overlay,allowedKey]);
-  return <Dialog open={overlay === 'scan'} onClose={() => setOverlay(null)} title="Run a resource scan">
-    <div className="dialog-content"><p>Choose the cloud providers to scan. CloudSaver reads resources within your authorized workspace scopes.</p>{!allowed.length && <Notice tone="warning">{NO_PROVIDERS}</Notice>}<div className="scan-provider-options">{allowed.map(provider => <label key={provider} className={providers.includes(provider) ? 'chosen' : ''}><input type="checkbox" checked={providers.includes(provider)} onChange={() => setProviders(previous => previous.includes(provider) ? previous.filter(p => p !== provider) : [...previous,provider])}/><ProviderBadge provider={provider}/><span>Read-only inventory</span></label>)}</div><div className="scan-scope-summary"><SealCheck size={18} weight="regular"/><div><strong>{workspace?.configured_scope_count ?? workspace?.subscription_ids?.length ?? 0} configured scopes</strong><small>{workspace?.max_scopes_per_scan || entitlements?.max_subscriptions || 'Plan-limited'} scopes per scan · {planName} plan</small></div></div><Notice>The scan runs in the background. You can keep using the dashboard while inventory loads.</Notice></div>
-    <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setOverlay(null)}>Cancel</button><button type="button" className="button primary" disabled={!!scanActivity || !providers.length} onClick={() => { runScan(providers); }}><MagnifyingGlass size={16} weight="regular"/>Start scan</button></div>
-  </Dialog>;
 }
 
 export function AppShell({children}: {children: ReactNode}) {
@@ -304,11 +288,11 @@ export function AppShell({children}: {children: ReactNode}) {
           <span className="atlas-strip-muted">{workspace.configured_scope_count ?? workspace.subscription_ids.length} authorized scopes</span>
         </div>
       )}
-      <div className="scope-toolbar"><div className="scope-context"><details className="scope-picker"><summary><Funnel size={13} weight="regular"/>{scope.length ? `${scope.length} scope${scope.length > 1 ? 's' : ''}` : 'All scopes'}<CaretDown size={13} weight="regular"/></summary><div className="menu-surface"><div className="section-title"><strong>Filter resources by scope</strong><button type="button" className="text-button" onClick={() => setScope([])} disabled={!scope.length}>Clear scope filter</button></div>{scopeOptions.length ? scopeOptions.map(id => {const configuredOnly = (workspace.subscription_ids || []).includes(id) && !(scan?.findings || []).some(f => scopeOf(f) === id); return <label key={id}><input type="checkbox" aria-label={id} checked={scope.includes(id)} onChange={() => setScope(scope.includes(id) ? scope.filter(s => s !== id) : [...scope, id])}/><span title={id}>{id}{configuredOnly ? <small className="scope-awaiting-scan"> · awaiting scan</small> : null}</span></label>;}) : <p>No scopes configured yet. Add subscriptions in workspace settings, then run a scan.</p>}</div></details></div><div className="snapshot-selector"><span>Snapshot</span><select aria-label="Selected scan snapshot" value={scan?.scan_id || ''} disabled={!scans.length} onChange={e => selectScan(e.target.value)}>{!scans.length && <option value="">No scans yet</option>}{scans.map(s => <option key={s.scan_id} value={s.scan_id}>{dateTime(s.timestamp)} · {s.scan_id.slice(0,8)}</option>)}</select></div></div>
+      <div className="scope-toolbar"><div className="scope-context"><details className="scope-picker"><summary><Funnel size={13} weight="regular"/>{scope.length ? `${scope.length} scope${scope.length > 1 ? 's' : ''}` : 'All scopes'}<CaretDown size={13} weight="regular"/></summary><div className="menu-surface"><div className="section-title"><strong>Filter resources by scope</strong><button type="button" className="text-button" onClick={() => setScope([])} disabled={!scope.length}>Clear scope filter</button></div>{scopeOptions.length ? scopeOptions.map(id => {const configuredOnly = (workspace.subscription_ids || []).includes(id) && !(scan?.findings || []).some(f => scopeOf(f) === id); return <label key={id}><input type="checkbox" aria-label={id} checked={scope.includes(id)} onChange={() => setScope(scope.includes(id) ? scope.filter(s => s !== id) : [...scope, id])}/><span title={id}>{id}{configuredOnly ? <small className="scope-awaiting-scan"> · awaiting inventory refresh</small> : null}</span></label>;}) : <p>No scopes configured yet. Add subscriptions in workspace settings; inventory refreshes automatically when evidence is stale.</p>}</div></details></div><div className="snapshot-selector"><span>Snapshot</span><select aria-label="Selected scan snapshot" value={scan?.scan_id || ''} disabled={!scans.length} onChange={e => selectScan(e.target.value)}>{!scans.length && <option value="">No scans yet</option>}{scans.map(s => <option key={s.scan_id} value={s.scan_id}>{dateTime(s.timestamp)} · {s.scan_id.slice(0,8)}</option>)}</select></div></div>
       <main id="main-content" tabIndex={-1} className="page-content"><KeyNotices/>{scan?.data_origin === 'legacy_synthetic' && <Notice tone="warning">Historical synthetic snapshot. Illustrative prices are hidden and code export is unavailable.</Notice>}{!!scanActivity && <div className="workspace-progress scan-activity" role="status"><SpinnerGap size={15} weight="regular" className="spin"/>{scanActivity}<span>Inventory saves as the scan runs. Other pages stay available.</span></div>}{!!busy && <div className="workspace-progress" role="status"><SpinnerGap size={15} weight="regular" className="spin"/>{busy}<span>Keep this workspace open while the request completes.</span></div>}<AtlasRouteBoundary>{children}</AtlasRouteBoundary></main>
       <footer className="app-footer"><span><span className="footer-brand">CloudSaver</span>Multi-cloud FinOps</span><span><SealCheck size={13} weight="regular"/>Evidence before action</span></footer>
     </div>
-    <FindingDrawer/><ReviewDrawer/><CommandPalette/><ScanDialog/>
+    <FindingDrawer/><ReviewDrawer/><CommandPalette/>
     <Dialog open={overlay === 'workspace'} onClose={() => setOverlay(null)} title="Connect another workspace"><div className="dialog-content"><ConnectionForm switching/></div></Dialog>
     <Dialog open={overlay === 'notifications'} onClose={() => setOverlay(null)} title="Workspace notifications" drawer><div className="dialog-content">{failures ? <><Notice tone="warning">{failures} delivery event{failures === 1 ? '' : 's'} need attention.</Notice><p>Inspect delivery failures and their audit history before choosing a replay.</p></> : <div className="notifications-empty"><Bell size={28} weight="regular"/><h3>{reliability ? 'No failed deliveries' : 'Status not available'}</h3><p>{reliability ? 'No failed deliveries were reported at the last refresh.' : 'Open Activity to inspect operational state.'}</p></div>}<Link className="button secondary" href="/activity" onClick={() => setOverlay(null)}>Open activity<ArrowRight size={16} weight="regular"/></Link></div></Dialog>
     <Dialog open={mobileOpen} onClose={() => setMobileOpen(false)} title="Navigation" className="mobile-navigation"><WorkspaceNavigation mobile onNavigate={() => setMobileOpen(false)}/></Dialog>
