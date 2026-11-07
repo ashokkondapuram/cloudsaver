@@ -305,6 +305,7 @@ def rebuild_assessment_from_observation(
         )
     else:
         raise ValueError('Resource assessment requires findings or inventory observation')
+    assessment = overlay_pillar_analysis(assessment, scan)
     context = augment_ai_context_from_scan(
         scan,
         assessment,

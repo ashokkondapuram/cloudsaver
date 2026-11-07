@@ -19,7 +19,7 @@ def pillar_analysis_row_for_resource(scan: dict, provider: str, resource_id: str
         return None
     target = canonical_resource_id(provider, resource_id)
     for row in block.get('resources') or []:
-        if isinstance(row, dict) and row.get('canonical_id') == target:
+        if isinstance(row, dict) and row.get('provider') == provider and row.get('canonical_id') == target:
             return row
     return None
 

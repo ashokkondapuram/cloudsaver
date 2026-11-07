@@ -20,6 +20,9 @@ def persist_typed_resource_row(db, workspace, scan_id, observed_at, observation,
     fields = extract_row_fields(observation, spec)
     evidence = observation.get('evidence') or {}
     rid_key = observation['resource_id'].lower()
+    parts = observation['resource_id'].split('/')
+    group_index = next((i for i, part in enumerate(parts[:-1]) if part.lower() == 'resourcegroups'), None)
+    resource_group = observation.get('resource_group') or (parts[group_index + 1] if group_index is not None else '')
     cost = costs.get(rid_key, costs.get(observation['resource_id'], {}))
     reporting_currency = cost.get('reporting_currency') or 'USD'
     columns = [
@@ -37,8 +40,8 @@ def persist_typed_resource_row(db, workspace, scan_id, observed_at, observation,
         scan_id,
         observation['resource_id'],
         observation['subscription_id'],
-        observation['resource_group'],
-        observation['resource_name'],
+        resource_group,
+        observation.get('resource_name') or parts[-1],
         observation.get('region'),
         Jsonb(observation.get('evidence', {}).get('tags') or {}),
         observed_at,

@@ -727,13 +727,12 @@ def financial_postgres():
         owner = target(os.environ["CLOUDSAVER_TEST_OWNER_URL"])
         url = target(os.environ["CLOUDSAVER_TEST_APP_URL"])
         env = {**os.environ, "CLOUDSAVER_MIGRATION_URL": owner}
-        subprocess.run(
+        migration = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=Path(__file__).resolve().parents[1],
-            env=env,
-            check=True,
-            capture_output=True,
+            cwd=Path(__file__).resolve().parents[1], env=env,
+            capture_output=True, text=True,
         )
+        assert migration.returncode == 0, migration.stderr
         yield url
     finally:
         from database.connection import dispose

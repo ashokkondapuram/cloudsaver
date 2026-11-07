@@ -24,8 +24,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def migrate(owner, revision):
     env = os.environ.copy()
     env['CLOUDSAVER_MIGRATION_URL'] = owner
-    subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', revision], cwd=ROOT, env=env,
-                   check=True, capture_output=True, text=True)
+    result = subprocess.run([sys.executable, '-m', 'alembic', 'upgrade', revision], cwd=ROOT, env=env,
+                            capture_output=True, text=True)
+    try:
+        result.check_returncode()
+    except subprocess.CalledProcessError as error:
+        error.add_note(result.stderr)
+        raise
 
 
 @pytest.fixture(scope='module')
@@ -39,7 +44,7 @@ def database():
         assert db.execute("SELECT to_regclass('public.alembic_version')").fetchone()[0] is None, 'Requires an empty disposable database'
     migrate(owner, '0001_domain')
     legacy_tenant, legacy_id = uuid4(), uuid4()
-    legacy = {'scan_id': str(legacy_id), 'findings': [], 'mode': 'azure'}
+    legacy = {'scan_id': str(legacy_id), 'findings': [], 'mode': 'azure', 'rule_evaluations': []}
     with psycopg.connect(owner) as db:
         db.execute((ROOT / 'database/001_schema.sql').read_text())
         db.execute("SELECT set_config('app.current_tenant_id', %s, true)", (str(legacy_tenant),))
@@ -365,7 +370,7 @@ def test_job_and_billing_tables_are_isolated_and_migrations_have_one_head(databa
             assert db.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone() == (True,True)
             assert db.execute(sql.SQL('SELECT count(*) FROM {}').format(sql.Identifier(table))).fetchone()[0] == 0
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0027_engineering_workloads',)]
+        assert db.execute('SELECT version_num FROM alembic_version').fetchall() == [('0038_code_mode_runs',)]
 
 
 
@@ -447,7 +452,7 @@ def test_ai_data_governance_erasure_hold_and_usage_fences_use_real_database_priv
     rollback=subprocess.run([sys.executable,'-m','alembic','downgrade','0017_agent_execution'],cwd=ROOT,env=env,capture_output=True,text=True)
     assert rollback.returncode!=0 and 'Erased content is irreversible' in rollback.stderr
     with psycopg.connect(database[0]) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0027_engineering_workloads'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0038_code_mode_runs'
         assert db.execute("SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid='ai_inference_attempts'::regclass").fetchone()==(True,True)
 
 

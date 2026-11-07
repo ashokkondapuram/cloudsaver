@@ -51,8 +51,6 @@ def series(points,now,*,bucket_start=False,scale=1,strict=True):
             continue
         seen[bucket]=value*scale
     if not seen:
-        if strict:
-            raise ValueError('Invalid or duplicate metric sample')
         return dict(window_start=start.isoformat(),window_end=end.isoformat(),points=[])
     return dict(window_start=start.isoformat(),window_end=end.isoformat(),points=[dict(at=t.isoformat(),value=v) for t,v in sorted(seen.items())])
 
@@ -70,11 +68,7 @@ def summary(value,name,now):
     results={stat:evaluate_series(value,TimeSeriesEvidenceContract(name,agg),now=now,require_resource_age=False)
         for stat,agg in (('p95','P95'),('p99','P99'),('maximum','MAX'))}
     r=results['p95']
-    sufficient=r.is_sufficient or (
-        r.valid_samples >= math.ceil(r.expected_samples * contract.min_coverage_ratio)
-        and r.observed_value is not None
-        and r.gap_reason in (None, 'unexplained_telemetry_gap')
-    )
+    sufficient = r.is_sufficient
     return dict(sufficient=sufficient,coverage_ratio=r.coverage_ratio,
         window_start=r.window_start.isoformat() if r.window_start else None,window_end=r.window_end.isoformat() if r.window_end else None,
         samples=r.valid_samples,step_seconds=300,max_gap_seconds=r.max_observed_gap_minutes*60 if r.max_observed_gap_minutes is not None else None,

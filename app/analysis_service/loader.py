@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from app.analysis_service.context import (
     ActivityEvent,
@@ -16,7 +17,7 @@ from datetime import datetime, timezone
 
 def _metric_p95(metrics: dict, key: str, now: datetime) -> float | None:
     raw = metrics.get(key)
-    if not isinstance(raw, list):
+    if not isinstance(raw, (list, dict)):
         return None
     result = evaluate_series(raw, TimeSeriesEvidenceContract('metric', 'P95'), now=now, require_resource_age=False)
     if not result.is_sufficient:
@@ -26,7 +27,7 @@ def _metric_p95(metrics: dict, key: str, now: datetime) -> float | None:
 
 def _metric_max(metrics: dict, key: str, now: datetime) -> float | None:
     raw = metrics.get(key)
-    if not isinstance(raw, list):
+    if not isinstance(raw, (list, dict)):
         return None
     result = evaluate_series(raw, TimeSeriesEvidenceContract('metric', 'MAX'), now=now, require_resource_age=False)
     if not result.is_sufficient:
@@ -74,10 +75,10 @@ def context_from_inventory_row(row: dict, *, observed_at: str | None = None) -> 
         tags = {}
 
     cost = CostSnapshot(
-        actual_amortized_30d_usd=_float(evidence.get('effective_cost_usd') or evidence.get('amortized_cost_usd')),
+        actual_amortized_30d_usd=_float(evidence.get('effective_cost_usd') if evidence.get('effective_cost_usd') is not None else evidence.get('amortized_cost_usd')),
         actual_unblended_30d_usd=_float(evidence.get('billed_cost_usd')),
         retail_hourly_rate_usd=_float(evidence.get('retail_hourly_usd')),
-        retail_monthly_equivalent_usd=_float(evidence.get('retail_monthly_usd') or evidence.get('retail_estimate_usd')),
+        retail_monthly_equivalent_usd=_float(evidence.get('retail_monthly_usd') if evidence.get('retail_monthly_usd') is not None else evidence.get('retail_estimate_usd')),
         effective_discount_rate=_float(evidence.get('effective_discount_rate')),
         cost_source=evidence.get('cost_source'),
         daily_cost_spike_pct=_float(evidence.get('daily_cost_spike_pct')),
@@ -158,10 +159,10 @@ def _float(value: Any) -> float | None:
         if value is None:
             return None
         out = float(value)
-        if out != out:  # NaN
+        if not math.isfinite(out):
             return None
         return out
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -170,5 +171,5 @@ def _int(value: Any) -> int | None:
         if value is None:
             return None
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None

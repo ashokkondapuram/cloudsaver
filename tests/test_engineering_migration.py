@@ -35,7 +35,7 @@ def test_upgrade_from_0026_preserves_history_and_refuses_populated_downgrade(fin
     result=migration('downgrade','0026_control_plane')
     assert result.returncode!=0 and 'data-preserving rollback' in result.stderr
     with psycopg.connect(owner) as db:
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0027_engineering_workloads'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='0038_code_mode_runs'
     with store.transaction(tenant) as db:
         assert str(db.execute('SELECT id FROM engineering_workloads').fetchone()[0])==workload['id']
         assert db.execute("SELECT relforcerowsecurity FROM pg_class WHERE oid='engineering_workloads'::regclass").fetchone()[0]

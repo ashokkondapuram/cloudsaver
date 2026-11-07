@@ -60,3 +60,19 @@ def test_typed_tables_registered_in_arm_catalog():
 
     for rtype in TYPE_TO_SPEC:
         assert rtype in reg._CATALOG, f'typed table {rtype} missing from ARM catalog'
+
+
+def test_typed_persistence_derives_missing_display_fields_from_native_id():
+    from uuid import uuid4
+    from app.typed_resources.persist import persist_typed_resource_row
+
+    db = MagicMock()
+    rid = '/subscriptions/sub/resourceGroups/Accounting/providers/Microsoft.Compute/disks/archive'
+    table = persist_typed_resource_row(
+        db, {'tenant_id': str(uuid4())}, str(uuid4()), '2026-11-07T00:00:00Z',
+        {'resource_id': rid, 'subscription_id': 'sub', 'resource_type': 'Microsoft.Compute/disks'},
+    )
+    assert table == AZURE_COMPUTE_DISKS['table']
+    statement, values = db.execute.call_args.args
+    assert values[3:7] == [rid, 'sub', 'Accounting', 'archive']
+    assert 'ON CONFLICT' in statement

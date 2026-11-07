@@ -9,7 +9,9 @@ from services.analysis_service import create_app
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_ANALYSIS_INTERNAL_TOKEN', 'test-analysis-token')
-    app = create_app()
+    from app.config import Settings
+    from tests.test_enterprise import workspace
+    app = create_app(Settings('azure', ':memory:', (workspace(),)))
     with TestClient(app) as test_client:
         yield test_client
 

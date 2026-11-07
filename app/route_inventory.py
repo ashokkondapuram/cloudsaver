@@ -247,6 +247,8 @@ ROUTES = {
     ('GET', '/api/v1/finops/autopilot/playbooks'): 'scoped_read',
     ('GET', '/api/v1/finops/autopilot/resize-metrics'): 'scoped_read',
     ('POST', '/api/v1/finops/autopilot/resize'): 'full_scope',
+    ('GET', '/api/v1/rules/catalog/azure-compute'): 'scoped_read',
+    ('GET', '/api/v1/rules/catalog/by-pillar'): 'scoped_read',
     ('POST', '/api/v1/analysis/resources'): 'scoped_read',
     ('POST', '/api/v1/analysis/scan'): 'scoped_read',
 }

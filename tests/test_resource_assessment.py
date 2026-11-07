@@ -153,7 +153,7 @@ def test_assess_resource_empty_findings_list_uses_inventory():
     )
     findings_by_key, inventory_by_key = scan_indexes(scan)
     findings_by_key[key] = []
-    assessment = assess_resource(
+    assessment, _ = assess_resource(
         scan,
         key,
         findings_by_key=findings_by_key,
@@ -377,7 +377,7 @@ def test_resources_batches_decisions_questions_and_export(app_state):
     listing = client.get(base + '/resources', headers=auth()).json()
     assert listing['total'] == 2 and listing['summary']['ai_status'] == {'not_run': 2}
     disk_a = next(i for i in listing['items'] if i['resource_name'] == 'disk-a')
-    assert disk_a['finding_count'] == 2 and disk_a['ai']['status'] == 'not_run' and disk_a['decision'] is None
+    assert disk_a['finding_count'] == 1 and disk_a['ai']['status'] == 'not_run' and disk_a['decision'] is None
     signals = client.post(
         base + '/resource-signals/lookup',
         headers=auth(),
@@ -388,7 +388,7 @@ def test_resources_batches_decisions_questions_and_export(app_state):
     assert client.get(base + '/resources', headers=auth(OTHER)).status_code == 404
     assert client.get(base + '/resources?ai_status=bogus', headers=auth()).status_code == 422
     detail = client.get(f"{base}/resources/{disk_a['resource_key']}", headers=auth()).json()
-    assert len(detail['findings']) == 2 and detail['followups_remaining'] == 5
+    assert len(detail['findings']) == 1 and detail['followups_remaining'] == 5
     assert disk_a['resource_id'] not in json.dumps(detail['ai_context'])
     assert detail['assessment'].get('arm_detail') is None
 

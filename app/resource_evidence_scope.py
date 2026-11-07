@@ -147,6 +147,8 @@ for _alias, _source in (
     if _source in FAMILY_CHECKS:
         FAMILY_CHECKS[_alias] = FAMILY_CHECKS[_source]
 
+FAMILY_CHECKS['ec2'] |= frozenset({'INSTANCE_METADATA'})
+
 # Azure Monitor keys used to satisfy UTILIZATION_WINDOW / FIVE_MINUTE_UTILIZATION.
 FAMILY_UTILIZATION_METRICS: dict[str, tuple[str, ...]] = {
     'managed-disks': ('iops', 'throughput'),
@@ -202,7 +204,7 @@ TYPE_UTILIZATION_METRICS: dict[str, tuple[str, ...]] = {}
 _KIND_FALLBACK: dict[str, FrozenSet[str]] = {
     'compute': BASELINE | _OPS_COMPUTE | frozenset({'ACCESS_AND_EXPOSURE', 'PUBLIC_EXPOSURE'}) | _UTIL_COMPUTE | _PERF_VM,
     'storage': BASELINE | _COST_DISK | _RELIABILITY_SNAP | _SECURITY_ENCRYPT | frozenset({'PUBLIC_EXPOSURE'}) | _UTIL_STANDARD,
-    'database': BASELINE | _RELIABILITY_DB | _SECURITY_DB | _UTIL_DATA | _PERF_DATA,
+    'database': BASELINE | _RELIABILITY_DB | _RELIABILITY_HA | _SECURITY_DB | _SECURITY_ENCRYPT | _UTIL_DATA | _PERF_DATA,
     'application': BASELINE | _COST_APP | _SECURITY_APP | frozenset({'PUBLIC_EXPOSURE'}) | _UTIL_COMPUTE,
     'network': BASELINE | _SECURITY_NET | frozenset({'PUBLIC_EXPOSURE', 'ACCESS_AND_EXPOSURE'}) | _UTIL_STANDARD,
     'ai': BASELINE | frozenset({'KEYLESS_LOCAL_AUTH', 'MODEL_GUARDRAIL', 'PUBLIC_EXPOSURE'}) | _UTIL_DATA,

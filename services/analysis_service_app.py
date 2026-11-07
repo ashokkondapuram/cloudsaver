@@ -21,6 +21,9 @@ class AnalyzeScanRequest(BaseModel):
 def create_app(settings=None, identity_validator=None):
     app, settings, tenant = service('analysis-service', settings, identity_validator)
 
+    from app.analysis_api import register
+    register(app)
+
     @app.get('/readyz')
     def readyz():
         return {'status': 'ready', 'service': 'analysis-service'}

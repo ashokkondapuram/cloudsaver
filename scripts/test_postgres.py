@@ -22,8 +22,12 @@ def docker(*args):
     env = os.environ.copy()
     for key in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH'):
         env.pop(key, None)
-    return subprocess.check_output(['docker', '--host=unix:///var/run/docker.sock', *args],
-                                   env=env, text=True, stderr=subprocess.PIPE).strip()
+    try:
+        return subprocess.check_output(['docker', '--host=unix:///var/run/docker.sock', *args],
+                                       env=env, text=True, stderr=subprocess.PIPE).strip()
+    except subprocess.CalledProcessError as error:
+        error.add_note(error.stderr or 'Docker returned no error details.')
+        raise
 
 
 def main():

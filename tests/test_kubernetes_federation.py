@@ -277,8 +277,9 @@ def test_workspace_and_patch_preview_use_saved_evidence_and_no_live_cluster_muta
     assert len(view['rule_matrix'])==10 and row['costs']['billed_node_cost_usd'] is None
     body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
     preview=api.post(path+'/patch-preview',headers=headers,json=body)
-    assert preview.status_code==200
-    assert preview.json()['automatic_execution'] is False
+    # This fixture has infrastructure telemetry but no measured application SLO.
+    assert preview.status_code==409
+    assert 'SLO' in preview.json()['detail']
     assert api.post(path+'/patch-preview',headers=headers,json=dict(body,evidence_digest='0'*64)).status_code==409
     assert api.get(f'/api/v1/scans/{uuid4()}/kubernetes',headers=headers).status_code==404
 

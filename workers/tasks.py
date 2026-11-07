@@ -203,6 +203,7 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         from app.scanner import scan_live
         from app.resource_analysis_service import build_scan_rule_policies
         scan_policies = build_scan_rule_policies(policy, rule_ids)
+        observed_at = datetime.now(timezone.utc).isoformat()
         inventory = []
         if scanner:
             scanned = scanner(tenant)
@@ -240,7 +241,6 @@ def run_scan_job(settings, tenant_id, subscriptions, job_id, repository, lease, 
         from app.inventory import coverage, coverage_manifest
         from app.dependencies import canonical_inventory, group_opportunities
         from app.pricing import opportunity_totals
-        observed_at = datetime.now(timezone.utc).isoformat()
         inventory = canonical_inventory(inventory, observed_at)
         from app.collectors.provenance import compact
         source_ledger = compact(inventory, findings, observed_at)

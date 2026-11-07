@@ -163,6 +163,10 @@ def stable_digest_context(context: dict) -> dict:
         checks=checks,
     )
     stable.pop('review_priority', None)
+    stable.pop('evidence_coverage', None)
+    for key in ('evidence_gap_codes', 'observed_check_codes'):
+        if key in stable:
+            stable[key] = [code for code in stable[key] if code != 'OBSERVATION_FRESHNESS']
     if stable.get('risk_check_codes'):
         stable['risk_check_codes'] = [code for code in stable['risk_check_codes'] if code != 'OBSERVATION_FRESHNESS']
     return stable

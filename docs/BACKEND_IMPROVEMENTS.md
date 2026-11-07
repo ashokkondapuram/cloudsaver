@@ -424,3 +424,72 @@ Identity head in the tree is **i0016_workspace_ui_themes**.
 - A 200 from a webhook is not proof a human acted. A model answer is not a control pass. A missing dependency edge is not proof there is no dependency.
 
 **Representative regression entry points:** tests/test_high_impact_improvements.py, tests/test_resource_evidence_contracts.py, tests/test_enterprise_backend_contracts.py, tests/test_platform_outbox_lease.py, tests/test_finops_analysis_integrity.py, tests/test_engineering_zero_downtime.py, tests/test_agent_workflow_routing.py, tests/test_grafana_rightsizing.py, tests/test_grafana_k8s_store.py, tests/test_grafana_telemetry.py, tests/test_grafana_k8s_policy.py, tests/test_kubernetes_slo_evidence.py, tests/test_scan_commitment_evidence.py, tests/test_optimization_topology_edges.py, tests/test_backend_improvements_doc.py, and platform/tests/test_readme_improvements.py.
+
+Grafana telemetry validation lives in `app/collectors/grafana_telemetry.py`; strict request contracts live in `app/kubernetes_grafana_schemas.py`.
+
+### CI recovery after 6f5af32
+
+Backend migrations run as a restricted schema owner. Revision `0032` previously
+attempted `CREATE EXTENSION vector`, which PostgreSQL rejects for that role.
+The semantic tables use portable JSONB storage; the vector column and HNSW index
+are optional and are created only when a database administrator has already
+installed the extension. Do not grant SUPERUSER or BYPASSRLS to the application
+or migration owner to work around this error. For a fresh deployment requiring
+vector indexing, provision `vector` in that database before upgrading. Databases
+already upgraded without it need a separately reviewed additive migration to
+install the optional column/index later.
+
+Migration fixtures now expose captured Alembic stderr so the failing revision
+and SQL error are visible in CI. Backend head is `0038_code_mode_runs`; the
+independent identity head is `i0016_workspace_ui_themes`. Upgrade, downgrade
+refusal, and retained-history checks must use the intended release boundary.
+
+Resource detail freshness fields come from `observation_list_extras` once, with
+that prepared observation taking precedence. Evidence fingerprints exclude
+wall-clock freshness fields while responses continue to expose current freshness.
+Saved scans with findings but no inventory use the existing full assessment path;
+the inventory pagination shortcut must not hide their resources. Fetch-stage tests
+keep billing pending until billing evidence exists. Kubernetes request-reduction
+previews remain blocked when measured application SLO evidence is absent.
+
+Local verification on 2026-11-07 after these repairs: the full backend run without
+service URLs completed with **1,497 passed and 101 skipped**. Four additional
+provider/scope authorization regressions passed; appending their coverage to the
+same run produced **85.28%** across the unchanged CI coverage module set and
+passed the unchanged 85% threshold. The typed-resource and optional-extension
+regression selection separately passed all seven tests. This is combined local
+coverage, not a fresh GitHub Actions result. Final disposable-service validation
+remains incomplete: Docker failed to create its Redis container with
+`mkdir /var/lib/docker/containers/...: no space left on device`. Rerun the exact
+backend workflow on a host with free space before declaring CI or release green.
+
+### Backend boundary recheck (2026-11-07)
+
+A further source and regression-test review found and corrected these issues:
+
+- Restricted scan projections retained the full `pillar_analysis` block, including
+  hidden resource IDs, findings and aggregate scores. `filter_scan` now projects
+  results using authorized provider/native-ID pairs and recomputes totals from
+  visible resources. Empty visible results have no aggregate score. Lightweight
+  scan projections omit the heavy analysis block.
+- Restricted resource bundles retained scan-wide rule evaluations. Their evaluation
+  projection now checks the requested provider, canonical resource ID and scope.
+  Pillar resource lookup also binds provider so identical IDs cannot collide.
+- Billing snapshots calculated booked savings from incomplete periods or missing
+  cost components. Incomplete coverage now blocks that calculation; known zero
+  amounts remain available and partial source totals retain an incomplete marker.
+- Metric summaries could override an excessive-gap failure when sample coverage
+  exceeded 95%. Summaries now preserve the telemetry evaluator's sufficiency result.
+- The analysis adapter accepted metric lists but discarded collector-produced
+  metric envelopes. Both shapes now pass through the same evidence validator;
+  missing/invalid series remain unavailable. Zero effective and retail costs no
+  longer fall through to other estimates. Non-finite numeric inputs are rejected.
+
+Regression cases live in `tests/test_backend_boundary_regressions.py`. These
+repairs do not establish complete provider coverage or live-cloud acceptance.
+
+Recheck verification: **1,510 passed, 101 skipped, one deprecation warning** in the
+full local backend run; the unchanged coverage gate passed at **85.31%**. This is
+a fresh single run, not appended coverage. PostgreSQL/Redis cases requiring test
+service URLs were skipped. The Docker filesystem remains full, so these results
+do not establish real-service, live-provider or deployment acceptance.

@@ -42,12 +42,15 @@ def aggregate_rows(rows, *, expected_days: int):
             coverage_basis='distinct_billing_days_in_cost_management_response',
         )
     billed = effective = None
+    billed_complete = effective_complete = True
     currency = rows[0]['currency']
     days = set()
     for row in rows:
         if row['currency'] != currency:
             raise ValueError('Multiple currencies in one resource billing response')
         days.add(row['day'])
+        billed_complete = billed_complete and row.get('billed') is not None
+        effective_complete = effective_complete and row.get('effective') is not None
         if row.get('billed') is not None:
             billed = (billed or Decimal(0)) + Decimal(str(row['billed']))
         if row.get('effective') is not None:
@@ -60,7 +63,7 @@ def aggregate_rows(rows, *, expected_days: int):
         currency=currency,
         day_count=day_count,
         expected_days=expected_days,
-        coverage_complete=day_count == expected_days,
+        coverage_complete=day_count == expected_days and billed_complete and effective_complete,
         coverage_basis='distinct_billing_days_in_cost_management_response',
     )
 
@@ -197,6 +200,8 @@ def build_financial_snapshot(
             booked_skip_reason = 'Booked savings omitted because baseline and observation currencies differ.'
         elif base_days != obs_days:
             booked_skip_reason = 'Booked savings omitted because baseline and observation windows differ in length.'
+        elif not baseline.get('coverage_complete') or not observation.get('coverage_complete'):
+            booked_skip_reason = 'Booked savings omitted because billing coverage is incomplete in one or both windows.'
         elif baseline.get('billed_cost_usd') is None or observation.get('billed_cost_usd') is None:
             booked_skip_reason = 'Booked savings omitted because billed cost is incomplete in one or both windows.'
         else:

@@ -90,6 +90,25 @@ def finding_in_scope(finding, scopes):
     return str(value or '').lower() in {s.lower() for s in scopes[provider]}
 
 
+def scoped_pillar_analysis(block, visible_rows):
+    """Project persisted results without exposing hidden targets or account totals."""
+    if not isinstance(block, dict):
+        return None
+    from app.domain.resource.identity import canonical_resource_id
+    targets = {(row.get('cloud_provider', 'azure'), canonical_resource_id(row.get('cloud_provider', 'azure'), row['resource_id']))
+               for row in visible_rows if isinstance(row.get('resource_id'), str)}
+    resources = [row for row in block.get('resources') or [] if isinstance(row, dict)
+                 and (row.get('provider'), row.get('canonical_id')) in targets]
+    scores = {}
+    for row in resources:
+        for pillar, score in (row.get('pillar_scores') or {}).items():
+            scores.setdefault(pillar, []).append(score)
+    return dict(version=block.get('version'), engine=block.get('engine'), resources=resources,
+                finding_count=sum(len(row.get('findings') or []) for row in resources),
+                account_pillar_scores={pillar: round(sum(values) / len(values), 2) for pillar, values in scores.items()},
+                aggregate_scope='authorized_resources')
+
+
 def filter_scan(scan, allowed, strict=False, scopes=None):
     if scan is None:
         return None
@@ -149,6 +168,7 @@ def filter_scan(scan, allowed, strict=False, scopes=None):
                        if (source.get('provider'),source.get('scope_id')) in visible_scopes],
         scope_results=scope_results_in_scope,
         subscriptions_scanned_scope='filtered_count_unavailable',
+        **({'pillar_analysis': scoped_pillar_analysis(scan['pillar_analysis'], inventory_in_scope + in_scope)} if 'pillar_analysis' in scan else {}),
         provider_filtered=True, scope_filtered=bool(scopes))
 
 
@@ -161,7 +181,7 @@ def _filter(scan, current, strict=None):
 class ScopedStore:
     """Read-side wrapper; writes and other attributes go straight to the underlying store."""
 
-    _LIGHT_HEAVY = frozenset({'inventory', 'source_ledger', 'rule_evaluations', 'coverage_manifest'})
+    _LIGHT_HEAVY = frozenset({'inventory', 'source_ledger', 'rule_evaluations', 'coverage_manifest', 'pillar_analysis'})
 
     def __init__(self, inner):
         self.inner = inner
@@ -230,7 +250,13 @@ class ScopedStore:
                     if f.get('cloud_provider', 'azure') in providers and finding_in_scope(f, scopes)]
         if not observation and not findings:
             return None
-        return dict(bundle, observation=observation, findings=findings)
+        from app.domain.resource.identity import canonical_resource_id
+        evaluations = [row for row in bundle.get('rule_evaluations') or []
+                       if row.get('cloud_provider', 'azure') == provider
+                       and isinstance(row.get('resource_id'), str)
+                       and canonical_resource_id(provider, row['resource_id']) == canonical_resource_id(provider, resource_id)
+                       and finding_in_scope(row, scopes)]
+        return dict(bundle, observation=observation, findings=findings, rule_evaluations=evaluations)
 
     def findings_for_resource_key(self, tenant_id, scan_id, key):
         findings = self.inner.findings_for_resource_key(tenant_id, scan_id, key)

@@ -285,8 +285,9 @@ def test_hpa_query_failure_blocks_cpu_downsize(monkeypatch):
 
 def test_api_connectors_and_job(evidence, monkeypatch):
     from app.collectors import grafana_rightsizing as mod
+    monkeypatch.setenv('CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE', 'true')
 
-    def stub_rightsizing(config, *, cluster=None, window_days=14):
+    def stub_rightsizing(config, *, cluster=None, window_days=14, deadline_at=None):
         return dict(policy_version=mod.POLICY_VERSION, items=[], item_count=0, queried_at=datetime.now(timezone.utc).isoformat(),
                     window_days=window_days, window_start='', window_end='', cluster=cluster)
 

@@ -124,7 +124,7 @@ def test_freshness_boundaries_are_explicit_and_never_remove_existing_risks(obser
     ('microsoft.web/serverfarms', {'health_probes_enabled':False}, 'HEALTH_PROBES'),
     ('aws:rds:db', {'auto_minor_upgrade':False}, 'AUTO_MINOR_UPGRADE'),
     ('aws:rds:db', {'tls_required':False}, 'DATABASE_TLS'),
-    ('microsoft.network/publicipaddresses', {'flow_logs_enabled':False}, 'FLOW_LOGS'),
+    ('microsoft.network/applicationgateways', {'flow_logs_enabled':False}, 'FLOW_LOGS'),
 ])
 def test_service_matrix_has_explicit_risk_evidence_and_fields(kind,evidence,code):
     result = assess(finding(resource_type=kind,evidence=evidence))

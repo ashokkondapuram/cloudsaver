@@ -145,5 +145,5 @@ def test_platform_bootstrap_and_explicit_password_repair_preserve_data(platform_
     subprocess.run([sys.executable, '-m', 'alembic', '-c', 'identity_alembic.ini', 'upgrade', 'head'],
                    cwd=ROOT / 'platform', env=env, check=True, capture_output=True, text=True)
     with connect('identity_owner', replacement['identity_owner']) as db:
-        assert db.execute('SELECT version_num FROM identity.alembic_version').fetchone()[0] == 'i0013_multicloud_analysis_catalog'
+        assert db.execute('SELECT version_num FROM identity.alembic_version').fetchone()[0] == 'i0016_workspace_ui_themes'
         assert db.execute('SELECT value FROM public.recovery_test').fetchone()[0] == 'retained history'

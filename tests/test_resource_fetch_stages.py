@@ -11,7 +11,9 @@ def test_sync_fetch_stages_marks_activity_and_analysis():
     assert evidence['fetch_stages']['activity_log'] == 'completed'
     assert evidence['fetch_stages']['analysis'] == 'completed'
     assert evidence['fetch_stages']['retail'] == 'completed'
-    assert not any_pending(evidence['fetch_stages'])
+    # Completing analysis and retail does not establish billing evidence.
+    assert evidence['fetch_stages']['costs'] == 'pending'
+    assert any_pending(evidence['fetch_stages'])
 
 
 def test_costs_stays_pending_without_billing():

@@ -397,8 +397,6 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             followups_remaining=max(0, MAX_QUESTIONS - len(followups)),
             observation=observation,
             configuration_detail=configuration_detail,
-            analysis_readiness=obs_evidence.get('analysis_readiness'),
-            type_registry=obs_evidence.get('type_registry'),
             evidence_schema_version=obs_evidence.get('evidence_schema_version')
             or (observation or {}).get('evidence_schema_version'),
             rule_evaluations=evaluations,
@@ -496,6 +494,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                     break
             if snap is None:
                 raise HTTPException(404, 'Scan not found')
+            if snap['status'] == 'completed' and not snap.get('inventory_total'):
+                return None
             if snap['status'] == 'completed':
                 try:
                     for finding in snap['findings']:
@@ -521,6 +521,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             if snap is None:
                 raise HTTPException(404, 'Scan not found')
             if snap.get('status') not in ('running', 'completed') or snap.get('data_origin') == 'legacy_synthetic':
+                return None
+            if snap['status'] == 'completed' and not snap.get('inventory_total'):
                 return None
             if snap['status'] == 'completed':
                 try:

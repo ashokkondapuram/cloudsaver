@@ -174,5 +174,6 @@ def reanalyze_scan_snapshot(scan: dict, *, policies: dict | None = None) -> dict
                 eval_keys.add(key)
                 evaluations.append(row)
     scan['findings'] = list(finding_index.values())
+    scan['total_items_found'] = len(scan.get('inventory') or scan['findings'])
     scan['rule_evaluations'] = evaluations
     return scan

@@ -73,7 +73,8 @@ def normalize_scan(scan: dict) -> dict:
             evaluations.append(dict(row, rule_id=canonical_rule_id(row["rule_id"])))
         else:
             evaluations.append(row)
-    result["rule_evaluations"] = evaluations
+    if "rule_evaluations" in scan:
+        result["rule_evaluations"] = evaluations
     manifest = scan.get("rule_manifest")
     if isinstance(manifest, dict) and isinstance(manifest.get("enabled_rule_ids"), list):
         enabled = normalize_enabled_rule_ids({value for value in manifest["enabled_rule_ids"] if isinstance(value, str)})

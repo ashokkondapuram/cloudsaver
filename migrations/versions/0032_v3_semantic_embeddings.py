@@ -10,7 +10,9 @@ def upgrade():
     from alembic import op
 
     owner = "tenant_id=NULLIF(current_setting('app.current_tenant_id',true),'')::uuid"
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    # Extensions are provisioned by a database administrator, never the runtime or migration owner.
+    from sqlalchemy import text
+    vector_enabled = op.get_bind().execute(text("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')")).scalar()
     for table, ddl in TABLES.items():
         op.execute(ddl)
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
@@ -22,6 +24,8 @@ def upgrade():
         op.execute(f"GRANT SELECT,INSERT,UPDATE,DELETE ON {table} TO cloudsaver_app")
     for ddl in INDEXES:
         op.execute(ddl)
+    if not vector_enabled:
+        return
     op.execute(
         "ALTER TABLE semantic_resource_embeddings ADD COLUMN IF NOT EXISTS embedding_vector vector(1536)"
     )
