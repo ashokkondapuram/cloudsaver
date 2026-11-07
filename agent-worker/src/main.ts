@@ -35,7 +35,7 @@ while (!stop) {
       const prefix = '/internal/v1/agent/tasks/'+a.task.id;
       const lease = {tenant_id,lease_token:a.lease_token};
       let heartbeatFailed = false;
-      const timer = setInterval(()=>{gateway(prefix+'/heartbeat',lease).catch(()=>{heartbeatFailed=true;});},20_000);
+      const timer = setInterval(()=>{gateway(prefix+'/heartbeat',lease).then(()=>health.touch(!heartbeatFailed)).catch(()=>{heartbeatFailed=true;health.touch(false);});},20_000);
       try {
         if (a.phase==='draft') await gateway(prefix+'/draft',lease);
         else if (a.phase==='execute') await runCode(a,local,(path,body)=>{

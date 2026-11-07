@@ -110,7 +110,8 @@ def enrich_arm_detail_row(
     enrich_configuration_evidence(resource)
     from app.resource_timestamps import touch_azure_status_fetched
 
-    touch_azure_status_fetched(evidence, now=now)
+    if detail:
+        touch_azure_status_fetched(evidence, now=now)
     if progress is not None:
         progress.record_observation(resource)
     return resource

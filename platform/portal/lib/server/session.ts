@@ -1,4 +1,6 @@
 import {randomBytes} from 'node:crypto';
+import {SessionStore} from './session-store';
+import {serverConfig} from './config';
 import type {NextRequest, NextResponse} from 'next/server';
 import {isProduction, type AuthMode} from './config';
 
@@ -30,43 +32,32 @@ export type PortalSession = {
   last_seen: number;
 };
 
-type Store = {sessions: Map<string, PortalSession>};
-const globalStore = globalThis as typeof globalThis & {__cloudsaverPortalSessions?: Store};
-const store: Store = globalStore.__cloudsaverPortalSessions ??= {sessions: new Map()};
-
-function expired(session: PortalSession, now: number) {
-  return now - session.created_at > MAX_AGE_MS || now - session.last_seen > IDLE_MS;
+let persistent: SessionStore | undefined;
+function store() {
+  return persistent ??= new SessionStore(process.env.PORTAL_SESSION_DB || '/tmp/cloudsaver-portal/sessions.sqlite', serverConfig().identityToken);
 }
-
-function sweep(now: number) {
-  for (const [id, session] of store.sessions) if (expired(session, now)) store.sessions.delete(id);
-}
+export function claimSessionRefresh(id: string) {return store().claimRefresh(id, Date.now());}
+export function finishSessionRefresh(session: PortalSession, fence: number) {return store().finishRefresh(session.id,fence,session,Date.now());}
+export function reloadSession(id: string) {return store().read<PortalSession>(id,Date.now(),false,IDLE_MS);}
 
 export function createSession(input: Omit<PortalSession, 'id' | 'created_at' | 'last_seen'>): PortalSession {
   const now = Date.now();
-  sweep(now);
   const session: PortalSession = {...input, id: randomBytes(32).toString('base64url'), created_at: now, last_seen: now};
-  store.sessions.set(session.id, session);
+  store().create(session.id, session, now+MAX_AGE_MS, now+IDLE_MS);
   return session;
 }
 
 export function readSession(request: NextRequest, touch = true): PortalSession | null {
   const id = request.cookies.get(SESSION_COOKIE)?.value;
   if (!id) return null;
-  const session = store.sessions.get(id);
-  if (!session) return null;
-  const now = Date.now();
-  if (expired(session, now)) {
-    store.sessions.delete(id);
-    return null;
-  }
-  if (touch) session.last_seen = now;
+  const session=store().read<PortalSession>(id,Date.now(),touch,IDLE_MS);
+  if (session && touch) session.last_seen=Date.now();
   return session;
 }
 
 export function deleteSession(request: NextRequest) {
   const id = request.cookies.get(SESSION_COOKIE)?.value;
-  if (id) store.sessions.delete(id);
+  if (id) store().delete(id);
 }
 
 export function hasRecentSignIn(session: PortalSession) {
@@ -87,3 +78,6 @@ export function setSessionCookie(response: NextResponse, request: NextRequest, s
 export function clearSessionCookie(response: NextResponse, request: NextRequest) {
   response.cookies.set(SESSION_COOKIE, '', {httpOnly: true, sameSite: 'strict', path: '/', secure: secureCookies(request), maxAge: 0});
 }
+
+export function savePending(id: string, value: unknown, ttl: number) {store().create('oauth:'+id,value,Date.now()+ttl,Date.now()+ttl);}
+export function takePendingValue<T>(id: string): T|null {return store().take<T>('oauth:'+id,Date.now());}

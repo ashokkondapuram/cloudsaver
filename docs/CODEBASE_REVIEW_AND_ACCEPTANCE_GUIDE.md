@@ -152,3 +152,26 @@ Record expected API status, persistent state, audit event and visible result for
 First close authorization and execution boundaries, then durable job/freshness behavior, then financial/assessment meaning, then scalability. Keep fixes small enough to review with compatibility and migration details. Avoid building a parallel identity, job queue or API hierarchy when the existing foundations can be extended.
 
 A repair is complete only with: failing trigger/reproduction; reviewed source change; negative and concurrency tests when applicable; required real-service/sandbox evidence; safe error and recovery behavior; updated contract/documentation; and the exact release SHA/artifact references. Track unknowns explicitly. This guide recommends checks across the whole repository; it does not claim every file or deployed integration has been exhaustively verified.
+
+## Subsequent implementation pass
+
+The follow-up working tree implements these additional controls:
+
+- **CR-01:** encrypted persistent portal sessions and atomic OAuth-state consumption, shared between processes on a local volume; refresh-token rotation is leased and fenced. Compose mounts the volume with runtime-user ownership. Multi-host distributed sessions remain outside this adapter's supported topology; see the portal README.
+- **CR-02:** dashboard critical route/list validation, bounded response bytes and JSON structure, rejection of nonfinite numbers, and optional typed route decoders. This does not claim a complete generated schema for every legacy endpoint.
+- **CR-03:** explicit method/path admission for Grafana and rule-catalog routes missing from the browser proxy; internal paths remain denied. Complete generated method/path parity for legacy routes remains open.
+- **CR-05:** resource GET paths now always serve persisted evidence; authorized scan jobs are the existing collection/refresh mechanism. Azure detail failures no longer advance the successful status-fetch timestamp. Inventory bounds fail visibly rather than return fabricated not-found/partial rollups.
+- **CR-06/10:** successful agent heartbeats maintain health during long assignments; failed heartbeats mark it unready. Python worker dependency probes have a bounded wait and at most one outstanding probe, preserving liveness under a blocked dependency.
+- **CR-07:** processor access requires explicit boolean opt-in and an explicit nonempty purpose allowlist. Empty account analysis is unassessed with no perfect scores; finding-severity scores are explicitly labeled as partial and cannot override unknown legacy evidence with a pass.
+
+The broad checks also found and repaired two stale fixtures: a pagination URL assertion that ignored a following query parameter, and a Node-agent plan fixture whose operation type widened to a generic string. Production safety contracts were preserved.
+
+External acceptance remains necessary for provider credentials/API behavior, real migrations/RLS/Redis, actual IdP and protected CI, restore exercises, vulnerability policy and image provenance. Code Mode remains disabled until isolated execution acceptance; a stub is not that acceptance. No cloud mutation or deployment was performed.
+
+### Verification for the subsequent pass
+
+- Backend suite: **1,519 passed, 101 skipped**, one warning, 134.55 seconds (`/tmp/backend-completion-final.log`). The subsequent explicit-consent guard also passed its focused regression/master-plan suite (29 tests). Azure freshness/read tests passed (29 tests).
+- Independent identity/platform suite: **113 passed, 9 skipped** (`/tmp/platform-completion-tests.log`).
+- Supported Node 24.22.1: portal typecheck and **15 unit tests**, agent typecheck and **26 tests**, dashboard typecheck and **34 unit tests** passed. Both Next.js production builds completed successfully on that runtime.
+- No coverage percentage is inferred from these invocations. Temporary log paths are local evidence and must be replaced by retained CI artifacts for release approval.
+- No real-service skip, browser unit test, or successful build is represented as live-provider, full-browser, RLS, disaster recovery, or deployment acceptance. Full generated route/response schema parity, distributed multi-host session storage, and re-enabling isolated Code Mode remain separate implementation items.

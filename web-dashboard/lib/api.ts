@@ -1,5 +1,8 @@
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public uncertain = false, public requestId: string | null = null) {super(message);}
+  status: number;
+  uncertain: boolean;
+  requestId: string | null;
+  constructor(message: string, status: number, uncertain = false, requestId: string | null = null) {super(message);this.status=status;this.uncertain=uncertain;this.requestId=requestId;}
 }
 
 // Bind invalidation to the exact active credential. A late response from a
@@ -12,7 +15,29 @@ export function watchUnauthorized(token: string, callback: () => void) {
 }
 const unknownOutcome='The request outcome could not be confirmed. Check its status or activity before submitting again.';
 
-export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; idempotencyKey?: string; version?: number; timeoutMs?: number} = {}): Promise<T> {
+/** Validate critical route envelopes before components consume their fields. */
+export function validateApiPayload(path: string, value: unknown) {
+  const object=(v:unknown):v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
+  const pending:unknown[]=[value];let nodes=0;
+  while(pending.length){
+    if(++nodes>250_000)throw new Error('Response exceeds structural budget');
+    const next=pending.pop();
+    if(typeof next==='number'&&!Number.isFinite(next))throw new Error('Invalid numeric evidence');
+    if(Array.isArray(next)){if(next.length>100_000)throw new Error('Response exceeds collection budget');for(const item of next)pending.push(item);}
+    else if(object(next))pending.push(...Object.values(next));
+  }
+  const route=path.split('?')[0];
+  if(route==='/scans') {
+    if(!Array.isArray(value)||value.some(v=>!object(v)||typeof v.scan_id!=='string'||typeof v.status!=='string'||!Array.isArray(v.findings)))throw new Error('Invalid scan history');
+  } else if(route==='/me') {
+    if(!object(value)||typeof value.tenant_id!=='string'||typeof value.name!=='string'||!Array.isArray(value.roles)||!Array.isArray(value.subscription_ids))throw new Error('Invalid workspace');
+  } else if(object(value) && 'items' in value) {
+    if(!Array.isArray(value.items))throw new Error('Invalid list envelope');
+    if('next_cursor' in value && value.next_cursor!==null && typeof value.next_cursor!=='string')throw new Error('Invalid pagination cursor');
+  }
+}
+
+export async function api<T>(path: string, token: string, options: {body?: unknown; rawBody?: string; signal?: AbortSignal; method?: 'GET' | 'POST' | 'PUT' | 'PATCH'; idempotencyKey?: string; version?: number; timeoutMs?: number; decode?: (value:unknown)=>T} = {}): Promise<T> {
   const hasBody=options.body!==undefined||options.rawBody!==undefined;
   const method=options.method??(hasBody?'POST':'GET'), mutation=method!=='GET';
   const controller=new AbortController();
@@ -30,7 +55,10 @@ export async function api<T>(path: string, token: string, options: {body?: unkno
     // Revoke the session before waiting for any untrusted error response body.
     if(response.status===401) for(const callback of [...(unauthorized.get(token)||[])]) callback();
     if(response.status===204)return undefined as T;
-    const text=await response.text();
+    const reader=response.body?.getReader();let size=0;const decoder=new TextDecoder();let text='';
+    if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.byteLength;
+      if(size>20_000_000){await reader.cancel();throw new Error('Response exceeds byte budget');}
+      text+=decoder.decode(chunk.value,{stream:true});}text+=decoder.decode();}
     try {raw=JSON.parse(text);} catch {raw=undefined;}
   } catch(cause) {
     if(options.signal?.aborted)throw cause;
@@ -43,5 +71,10 @@ export async function api<T>(path: string, token: string, options: {body?: unkno
     throw new ApiError(uncertain?unknownOutcome:message,response.status,uncertain,response.headers.get('x-request-id'));
   }
   if(raw===undefined||raw===null||typeof raw!=='object')throw new ApiError(mutation?unknownOutcome:'The service returned incomplete evidence. Refresh to try again.',response.status,mutation,response.headers.get('x-request-id'));
-  return raw as T;
+  try {
+    validateApiPayload(path,raw);
+    return options.decode ? options.decode(raw) : raw as T;
+  } catch {
+    throw new ApiError(mutation?unknownOutcome:'The service returned incomplete evidence. Refresh to try again.',response.status,mutation,response.headers.get('x-request-id'));
+  }
 }

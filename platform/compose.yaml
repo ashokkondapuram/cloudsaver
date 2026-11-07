@@ -114,9 +114,11 @@ services:
     build:
       context: ./portal
     restart: unless-stopped
+    volumes: [portal-session-data:/app/session-data]
     networks: [platform-internal, portal-edge]
     ports: ['127.0.0.1:3100:3100']
     environment:
+      PORTAL_SESSION_DB: /app/session-data/sessions.sqlite
       IDENTITY_SERVICE_URL: http://identity-service:8005
       PLATFORM_PORTAL_TOKEN: ${PLATFORM_PORTAL_TOKEN:?Run scripts/setup_platform.py}
       PLATFORM_PORTAL_AUTH: ${PLATFORM_PORTAL_AUTH:-entra}
@@ -154,6 +156,7 @@ networks:
     internal: true
 
 volumes:
+  portal-session-data:
   # Reuses the volume created by the CloudSaver 1.2.0 project (token-db). Rename in a maintenance window.
   platform-db-data:
     name: cloudsaver_token-db-data

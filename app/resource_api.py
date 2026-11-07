@@ -83,21 +83,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
     ledger = InferenceLedger(evidence_store)
 
     def refresh_observation_if_stale(tenant, scan_id, observation):
-        if not observation:
-            return observation
-        scan = store.get(tenant['tenant_id'], str(scan_id))
-        if scan is None:
-            return observation
-        from app.effective_rules import policy_for_tenant
-        from app.resource_refresh import maybe_refresh_observation
-
-        return maybe_refresh_observation(
-            tenant,
-            scan,
-            observation,
-            store=store,
-            policies=policy_for_tenant(tenant['tenant_id']),
-        )
+        # Reads serve the stored snapshot. Collection belongs to authorized jobs.
+        return observation
 
     def overlay_obs(tenant, scan_id, observation):
         from app.resources_redis import apply_scan_resource
@@ -224,6 +211,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
             offset += limit
             if offset >= snap['inventory_total']:
                 break
+        else:
+            raise HTTPException(503, 'Inventory lookup exceeded its bound; narrow the selection and retry')
         return None
 
     def resource_from_bundle(scan_id, tenant, key, provider, resource_id):
@@ -492,6 +481,8 @@ def create_router(settings, store, current_tenant, gateway, evidence_store):
                 inv_offset += chunk
                 if inv_offset >= inventory_total:
                     break
+            else:
+                raise HTTPException(503, 'Inventory filter exceeded its bound; narrow the selection and retry')
             if snap is None:
                 raise HTTPException(404, 'Scan not found')
             if snap['status'] == 'completed' and not snap.get('inventory_total'):

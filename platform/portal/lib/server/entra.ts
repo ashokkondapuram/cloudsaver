@@ -1,3 +1,4 @@
+import {claimSessionRefresh, finishSessionRefresh, reloadSession, savePending, takePendingValue} from './session';
 import {createHash, randomBytes} from 'node:crypto';
 import {serverConfig} from './config';
 import type {PortalSession} from './session';
@@ -6,8 +7,6 @@ const PENDING_TTL_MS = 10 * 60 * 1000;
 export const OAUTH_STATE_COOKIE = 'cloudsaver_portal_oauth';
 
 type Pending = {verifier: string; nonce: string; return_to: string; created_at: number};
-const globalStore = globalThis as typeof globalThis & {__cloudsaverPortalPending?: Map<string, Pending>};
-const pending: Map<string, Pending> = globalStore.__cloudsaverPortalPending ??= new Map();
 
 export function entraConfigured() {
   const {tenantId, clientId, clientSecret} = serverConfig().entra;
@@ -24,11 +23,10 @@ function scope() {
 
 export function beginLogin(options: {returnTo: string; stepUp: boolean}) {
   const now = Date.now();
-  for (const [key, value] of pending) if (now - value.created_at > PENDING_TTL_MS) pending.delete(key);
   const state = randomBytes(32).toString('base64url');
   const verifier = randomBytes(48).toString('base64url');
   const nonce = randomBytes(32).toString('base64url');
-  pending.set(state, {verifier, nonce, return_to: options.returnTo, created_at: now});
+  savePending(state, {verifier, nonce, return_to: options.returnTo, created_at: now}, PENDING_TTL_MS);
   const {clientId, redirectUri} = serverConfig().entra;
   const params = new URLSearchParams({
     client_id: clientId,
@@ -49,10 +47,7 @@ export function beginLogin(options: {returnTo: string; stepUp: boolean}) {
 }
 
 export function takePending(state: string): Pending | null {
-  const entry = pending.get(state);
-  pending.delete(state);
-  if (!entry || Date.now() - entry.created_at > PENDING_TTL_MS) return null;
-  return entry;
+  return takePendingValue<Pending>(state);
 }
 
 type TokenResponse = {access_token?: string; refresh_token?: string; id_token?: string; expires_in?: number; error?: string};
@@ -92,12 +87,18 @@ export async function ensureFreshCredential(session: PortalSession): Promise<boo
   if (session.profile.auth_mode !== 'entra' || !session.credential_expires_at) return true;
   if (session.credential_expires_at - Date.now() > 120_000) return true;
   if (!session.refresh_token) return false;
+  const fence=claimSessionRefresh(session.id);
+  if(fence===null)throw new Error('Session refresh is already in progress'); // Another request is rotating this credential; never reuse its refresh token.
+  const current=reloadSession(session.id);
+  if(!current)return false;
+  Object.assign(session,current);
+  if(session.credential_expires_at && session.credential_expires_at-Date.now()>120_000)return finishSessionRefresh(session,fence);
   try {
     const tokens = await tokenRequest({grant_type: 'refresh_token', refresh_token: session.refresh_token, scope: scope()});
     session.credential = tokens.access_token as string;
     session.refresh_token = tokens.refresh_token || session.refresh_token;
     session.credential_expires_at = Date.now() + (tokens.expires_in ?? 3600) * 1000;
-    return true;
+    return finishSessionRefresh(session,fence);
   } catch {
     return false;
   }

@@ -81,7 +81,9 @@ async function forward(request: NextRequest, context: {params: Promise<{path: st
   if (method !== 'GET' && !session.profile.roles.includes('PlatformOperator')) {
     return problem(403, "You don't have permission to make changes. Ask a platform operator for help.");
   }
-  if (!(await ensureFreshCredential(session))) {
+  let fresh: boolean;
+  try {fresh=await ensureFreshCredential(session);} catch {return identityUnavailable();}
+  if (!fresh) {
     deleteSession(request);
     const response = sessionEnded();
     clearSessionCookie(response, request);

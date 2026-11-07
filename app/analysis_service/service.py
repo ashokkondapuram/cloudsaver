@@ -18,12 +18,15 @@ class ResourceAnalysisResult(BaseModel):
     region: str | None = None
     pillar_scores: dict[str, float]
     findings: list[PillarFinding] = Field(default_factory=list)
+    assessment_status: str = 'partial'
+    score_basis: str = 'finding_severity_only_not_evidence_coverage'
 
 
 class AccountAnalysisResult(BaseModel):
     resources: list[ResourceAnalysisResult] = Field(default_factory=list)
     account_pillar_scores: dict[str, float] = Field(default_factory=dict)
     finding_count: int = 0
+    assessment_status: str = 'partial'
 
 
 class AnalysisService:
@@ -53,7 +56,7 @@ class AnalysisService:
             for pillar, score in item.pillar_scores.items():
                 account_scores[pillar].append(score)
         rolled = {
-            pillar: round(sum(values) / len(values), 2) if values else 100.0
-            for pillar, values in account_scores.items()
+            pillar: round(sum(values) / len(values), 2)
+            for pillar, values in account_scores.items() if values
         }
-        return AccountAnalysisResult(resources=resources, account_pillar_scores=rolled, finding_count=total_findings)
+        return AccountAnalysisResult(resources=resources, account_pillar_scores=rolled, finding_count=total_findings, assessment_status='partial' if resources else 'unassessed')

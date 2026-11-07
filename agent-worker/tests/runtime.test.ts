@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {checkAssignment,renderCode} from '../src/contracts.ts';
-import type {Assignment,Connector} from '../src/contracts.ts';
+import type {Assignment,Connector,Plan} from '../src/contracts.ts';
 import {runCode} from '../src/runtime.ts';
 import {connectorExecutor} from '../src/connectors.ts';
 import {boundedRequest} from '../src/http.ts';
@@ -131,7 +131,7 @@ test('paired rightsize repository action must match the approved resize target',
   const target={tenant_id:tid,target_id:'infra',repository:'example/infra',repository_id:123,base_branch:'main',installation_id:456};
   const resizeConnector:Connector={...connector,id:'azure-resize',operations:['resource.inspect','compute.resize']};
   const c:Connector={...connector,id:'repo-sync',kind:'gitops_terraform',operations:['gitops.terraform.sync'],target_id:'infra',target_binding:target};
-  const plan={summary:'Resize',steps:[
+  const plan:Plan={summary:'Resize',steps:[
     {connector_id:resizeConnector.id,operation:'resource.inspect' as const,arguments:{expected_state:{vm_size:'Standard_D4s_v5'}},purpose:'Read',verification:'Read',rollback:'Read-only'},
     {connector_id:resizeConnector.id,operation:'compute.resize' as const,arguments:{target_size:'Standard_D8s_v5',restore_power:true},purpose:'Resize',verification:'Readback',rollback:'Separate review'},
     {connector_id:c.id,operation:'gitops.terraform.sync',arguments:{target_id:'infra',patch_mode:'rightsize_sku',attributes:{target_size:'Standard_D8s_v5',terraform_attribute:'sku_name'}},purpose:'Review',verification:'Inspect draft PR',rollback:'Reconcile without replay'},

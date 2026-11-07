@@ -53,3 +53,41 @@ def test_remote_code_mode_fails_closed(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_CODE_MODE_STUB', 'false')
     with pytest.raises(RuntimeError, match='disabled'):
         execute_snippet(run_id='r', tenant_id='t', snippet='function transform(input) { return input; }', input_value={})
+
+
+def test_worker_readiness_dependency_cannot_block_liveness():
+    from threading import Event
+    from time import monotonic
+    from workers.health import WorkerHealth
+    release = Event()
+    calls = []
+    def blocked():
+        calls.append(True)
+        release.wait(5)
+    health = WorkerHealth(dependency=blocked, dependency_timeout=0.01)
+    health.touch()
+    try:
+        start = monotonic()
+        assert health.status('/health/ready')[0] == 503
+        assert health.status('/health/ready')[0] == 503
+        assert health.status('/health/live')[0] == 200
+        assert monotonic() - start < 0.5
+        assert len(calls) == 1
+    finally:
+        release.set()
+
+
+def test_empty_account_is_unassessed_instead_of_perfect():
+    from app.analysis_service.service import AnalysisService
+    result = AnalysisService().analyze_account([])
+    assert result.assessment_status == 'unassessed'
+    assert result.account_pillar_scores == {}
+
+
+def test_processor_requires_explicit_opt_in_and_purpose():
+    import pytest
+    from app.ai_processor_guard import assert_processor_allowed
+    for tenant in ({}, {'ai_enabled': True}, {'ai_enabled': True, 'ai_purposes': []}, {'ai_enabled': 'true', 'ai_purposes': ['investigation']}):
+        with pytest.raises(PermissionError):
+            assert_processor_allowed(tenant, purpose='investigation', payload={})
+    assert_processor_allowed({'ai_enabled': True, 'ai_purposes': ['investigation']}, purpose='investigation', payload={})

@@ -80,7 +80,8 @@ def overlay_pillar_analysis(assessment, scan):
         if severity:
             status = _status_from_analysis_severity(severity)
         elif float(scores[analysis_pillar]) >= 100.0:
-            status = 'observed'
+            # A score with no findings cannot prove missing legacy evidence passed.
+            status = pillar.get('status', 'unknown')
         else:
             status = 'risk'
         pillars.append(dict(pillar, status=status))

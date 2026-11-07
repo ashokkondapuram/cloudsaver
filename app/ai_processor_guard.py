@@ -19,9 +19,11 @@ def scrub_secrets(text: str) -> str:
 
 
 def assert_processor_allowed(tenant: dict, *, purpose: str, payload: dict[str, Any]) -> None:
-    if tenant.get("ai_enabled") is False:
+    if tenant.get("ai_enabled") is not True:
         raise PermissionError("AI processing is disabled for this workspace")
-    allowed = tenant.get("ai_purposes") or ["drift_classification", "investigation"]
+    allowed = tenant.get("ai_purposes")
+    if not isinstance(allowed, list) or not allowed or any(not isinstance(item, str) for item in allowed):
+        raise PermissionError("AI purposes are not explicitly approved")
     if purpose not in allowed:
         raise PermissionError("AI purpose is not approved")
     blob = scrub_secrets(str(payload))

@@ -115,9 +115,6 @@ def _collect_resource_evidence(
             enrich_azure_governance_row(reader, resource)
     if live_enabled(settings) and live_selected and resource['resource_type'].lower() in METRICS:
         enrich_live_row(reader, resource, now=now, recovery=recovery)
-    from app.resource_timestamps import touch_azure_status_fetched
-
-    touch_azure_status_fetched(resource.setdefault('evidence', {}), now=now)
 
 
 def enrich_single_resource(
