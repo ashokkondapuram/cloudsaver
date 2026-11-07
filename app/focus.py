@@ -112,7 +112,11 @@ def authorized(provider,account,tenant):
     if provider=='azure':
         try: account=str(UUID(account))
         except ValueError: return False
-        return account in tenant.get('subscription_ids',[])
+        try:
+            memberships = {str(UUID(value)) for value in tenant.get('subscription_ids', [])}
+        except ValueError:
+            return False
+        return account in memberships
     if provider=='aws': return account in {a['account_id'] for a in tenant.get('aws_accounts',[])}
     return account in {p['project_id'] for p in tenant.get('gcp_projects',[])}
 

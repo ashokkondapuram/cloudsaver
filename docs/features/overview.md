@@ -58,7 +58,7 @@ Role and scope classifications come from `require_workspace_role` in [app/auth.p
   - Retail opportunity is an estimate, not realized or verified savings.
   - A finding that's "no longer observed" doesn't prove remediation, deletion or savings.
   - A monthly total can't establish an hourly commitment floor. The commitment ceiling is a planning value with `purchase_authorized: false`.
-  - `commitment_evidence` is written during scan completion only when imported FOCUS usage is hour-complete and open-waste cleanup can be modeled ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py), invoked from [app/scan_billing.py](../../app/scan_billing.py) after [app/main.py](../../app/main.py) persists the scan). Partial billing or missing snapshots leave the ceiling `Unknown`.
+  - `commitment_evidence` is attached at scan completion when saved FOCUS usage covers every hour in the 30-day window and open-waste cleanup can be modeled ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py) via [app/scan_billing.py](../../app/scan_billing.py)). This still runs when `CLOUDSAVER_SCAN_BILLING_REFRESH=false` if usage is already imported. Partial billing or missing commitment snapshots leave the ceiling `Unknown`.
 
 ## Permissions
 

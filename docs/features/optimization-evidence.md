@@ -75,10 +75,15 @@ This page writes nothing. It reads the saved scan (inventory, findings and evide
 - `blast_radius_verified`, `change_authorized` and `purchase_authorized` are always false. `savings_usd` and `verified_realized_savings_usd` are always null.
 - A monthly total cannot establish a steady hourly commitment floor. Commitment math requires complete hourly evidence.
 - Future demand, commitment utilization, contract eligibility and amortization basis are not verified.
+<<<<<<< HEAD
 - **`commitment_evidence`** is attached at scan completion when billing materialization succeeds and 30 days of USD Usage FOCUS charges cover every hour with modelable open-waste cleanup ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py) via [app/scan_billing.py](../../app/scan_billing.py)).
 - **`verified_dependencies`**, **`slo_burn_rate`**, and network traffic fields such as **`network_egress_bytes_per_sec`** are derived on inventory rows when saved configuration and telemetry support them ([app/evidence_derived_facts.py](../../app/evidence_derived_facts.py)).
 - Federation Kubernetes scans attach per-container **`slo_evidence`** when Prometheus CPU and throttling matrices are sufficient ([app/kubernetes_slo_evidence.py](../../app/kubernetes_slo_evidence.py)); patch preview and multi-cloud rules consume that packet separately from the optimization SLO panel.
 - Until each engine’s required signals are complete, it reports **`insufficient_evidence`** (never a synthetic pass).
+=======
+- **`commitment_evidence`** is attached at scan completion when 30 days of saved USD Usage FOCUS charges cover every hour with modelable open-waste cleanup ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py) via [app/scan_billing.py](../../app/scan_billing.py)), including when `CLOUDSAVER_SCAN_BILLING_REFRESH=false` skips Azure Cost Management pull but FOCUS usage is already imported.
+- Topology, SLO, and network traffic fields are still not populated by default collectors; those engines report `insufficient_evidence` until supplied.
+>>>>>>> cursor/commitment-evidence-harden-083f
 
 ## Permissions
 

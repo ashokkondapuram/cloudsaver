@@ -27,8 +27,16 @@ def connector_config(**extra):
 def test_validate_grafana_connector():
     item = connector_config()
     assert item['kind'] == 'grafana_mimir'
+    assert item['latency_query'] is None
     with pytest.raises(ValueError, match='Mimir datasource'):
         connector_config(mimir_datasource_uid='x')
+
+
+def test_validate_latency_query_on_connector():
+    item = connector_config(latency_query='histogram_quantile(0.99, sum by (namespace, pod, container, le) (rate(http_request_duration_seconds_bucket{{{cluster_matcher}}}[5m])))')
+    assert 'latency_query' in item and item['latency_datasource_uid'] == item['mimir_datasource_uid']
+    with pytest.raises(ValueError, match='latency_datasource_uid'):
+        connector_config(latency_datasource_uid='bad')
 
 
 def test_grafana_test_and_rightsizing_with_mock_frames(monkeypatch):
@@ -83,6 +91,65 @@ def test_grafana_test_and_rightsizing_with_mock_frames(monkeypatch):
     assert row['namespace'] == 'ns' and row['suggested_cpu_request'] is not None
     assert row['workload_kind'] == 'Deployment' and row['workload_name'] == 'app'
     assert 'safety_blocks' in row
+    assert row.get('latency_basis') is None
+
+
+def test_rightsizing_latency_series_when_query_configured(monkeypatch):
+    latency_query = (
+        'histogram_quantile(0.99, sum by (namespace, pod, container) '
+        '(rate(latency_bucket{' + '{cluster_matcher},container!=""' + '}[5m])))'
+    )
+
+    def handler(request):
+        if request.url.path.endswith('/api/datasources/uid/mimir-uid-1'):
+            return httpx.Response(200, json=dict(name='Mimir', type='prometheus', uid='mimir-uid-1'))
+        if request.url.path.endswith('/api/ds/query'):
+            payload = request.read().decode()
+            if 'latency_bucket' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000, 1700000300000], [25.0, 30.0]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'kube_pod_owner' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', owner_kind='ReplicaSet', owner_name='rs-1'))]),
+                             data=dict(values=[[1], [1]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'kube_replicaset_owner' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', replicaset='rs-1', owner_kind='Deployment', owner_name='app'))]),
+                             data=dict(values=[[1], [1]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'horizontalpodautoscaler' in payload or 'OOMKilled' in payload or 'last_terminated' in payload:
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[]))))
+            if 'throttled_periods' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.0]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'container_cpu_usage' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.1, 0.2]]))
+            elif 'memory_working_set' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [100000000, 120000000]]))
+            elif 'resource_requests' in payload and 'resource=\\"cpu\\"' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app', resource='cpu'))]),
+                             data=dict(values=[[1700000000000], [0.5]]))
+            else:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app', resource='memory'))]),
+                             data=dict(values=[[1700000000000], [536870912]]))
+            return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+        return httpx.Response(404)
+
+    real_client = httpx.Client
+
+    def client_factory(**kwargs):
+        kwargs['transport'] = httpx.MockTransport(handler)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr(gk.httpx, 'Client', client_factory)
+    config = connector_config(latency_query=latency_query, latency_unit='milliseconds')
+    row = gk.run_rightsizing(config, cluster='dev-cluster', window_days=7)['items'][0]
+    assert row['latency_basis'] == 'observability_latency_query'
+    assert row['latency_p99_ms'] == 30.0
+    assert row['latency_p99_series']['points'][0]['value'] == 25.0
 
 
 def test_api_connectors_and_job(evidence, monkeypatch):

@@ -14,6 +14,10 @@ from app.collectors.grafana_k8s_policy import (
     memory_safety_blocks, scan_aligned_cpu_target, scan_aligned_memory_target,
 )
 from app.collectors.observability import AUTH_KINDS, FORBIDDEN_HEADERS, HEADER, SECRET_REF, SourceError, check_url, _match
+from app.kubernetes_latency_evidence import (
+    OBSERVABILITY_LATENCY_BASIS, latency_points_from_grafana_frames, render_latency_query, validate_latency_query,
+    validate_latency_unit,
+)
 
 POLICY_VERSION = 'grafana-k8s-rightsizing-v2'
 DEFAULT_WINDOW_DAYS = 14
@@ -30,6 +34,7 @@ def validate_connector(raw, tenant):
     if not isinstance(raw, dict):
         raise ValueError('Connector details are required.')
     allowed = {'name', 'kind', 'base_url', 'auth_kind', 'secret_ref', 'header_name', 'mimir_datasource_uid',
+               'latency_datasource_uid', 'latency_query', 'latency_unit', 'slo_latency_target_ms',
                'cluster_label', 'cluster_values', 'org_id', 'schedule'}
     extra = set(raw) - allowed
     if extra:
@@ -64,8 +69,23 @@ def validate_connector(raw, tenant):
     schedule = raw.get('schedule', 'manual')
     if schedule not in ('manual',):
         raise ValueError('Grafana rightsizing connectors use a manual schedule.')
+    latency_query = validate_latency_query(raw.get('latency_query'))
+    latency_uid = raw.get('latency_datasource_uid')
+    if latency_uid is not None:
+        if not _match(DS_UID, latency_uid):
+            raise ValueError('Enter a valid datasource UID for latency queries.')
+    if latency_uid and not latency_query:
+        raise ValueError('Add a latency_query when latency_datasource_uid is set.')
+    if latency_query and not latency_uid:
+        latency_uid = uid
+    latency_unit = validate_latency_unit(raw.get('latency_unit'))
+    slo_target = raw.get('slo_latency_target_ms', 100.0)
+    if type(slo_target) not in (int, float) or not 1 <= slo_target <= 600_000:
+        raise ValueError('slo_latency_target_ms must be between 1 and 600000 when set.')
     item = dict(name=name, kind='grafana_mimir', base_url=base, auth_kind=auth, secret_ref=None, header_name=None,
-                mimir_datasource_uid=uid, cluster_label=cluster_label, cluster_values=sorted(set(str(v) for v in values)),
+                mimir_datasource_uid=uid, latency_datasource_uid=latency_uid, latency_query=latency_query,
+                latency_unit=latency_unit, slo_latency_target_ms=float(slo_target),
+                cluster_label=cluster_label, cluster_values=sorted(set(str(v) for v in values)),
                 org_id=org_id, schedule='manual', queries=[], services=[], mappings={}, thresholds={},
                 trace_window_hours=1, aws_account_id=None, gcp_project_id=None)
     if auth in ('bearer_env', 'header_env'):
@@ -161,10 +181,11 @@ class GrafanaClient:
                 raise SourceError('datasource_type')
             return dict(ok=True, name=body.get('name'), type=body.get('type'), uid=self.uid)
 
-    def query_range(self, expr: str, start: datetime, end: datetime, *, step=STEP_SECONDS):
+    def query_range(self, expr: str, start: datetime, end: datetime, *, step=STEP_SECONDS, datasource_uid: str | None = None):
         if len(expr) > MAX_QUERY_LENGTH:
             raise SourceError('query_too_long')
-        payload = {'queries': [dict(refId='A', datasource=dict(type='prometheus', uid=self.uid), expr=expr,
+        uid = datasource_uid or self.uid
+        payload = {'queries': [dict(refId='A', datasource=dict(type='prometheus', uid=uid), expr=expr,
                                    intervalMs=step * 1000, maxDataPoints=11000, range=True)],
                      'from': str(int(start.timestamp() * 1000)), 'to': str(int(end.timestamp() * 1000))}
         with self._client() as client:
@@ -301,6 +322,19 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
     oom_usage = _series_from_frames(client.query_range(oom_expr, start, end))
     cpu_req = _requests_from_frames(client.query_range(cpu_requests, end, end, step=STEP_SECONDS), 'cpu')
     mem_req = _requests_from_frames(client.query_range(mem_requests, end, end, step=STEP_SECONDS), 'memory')
+    latency_by_key: dict[tuple, list[dict]] = {}
+    if config.get('latency_query'):
+        try:
+            latency_expr = render_latency_query(config['latency_query'], cluster_matcher=matcher)
+            latency_payload = client.query_range(
+                latency_expr,
+                start,
+                end,
+                datasource_uid=config.get('latency_datasource_uid') or config['mimir_datasource_uid'],
+            )
+            latency_by_key = latency_points_from_grafana_frames(latency_payload, unit=config.get('latency_unit', 'milliseconds'))
+        except SourceError:
+            latency_by_key = {}
     expected_samples = window_days * 24 * 12
     keys = sorted(set(cpu_usage) | set(mem_usage) | set(cpu_req) | set(mem_req))[:MAX_ITEMS]
     items = []
@@ -335,7 +369,19 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
         needs_review = bool(safety) or coverage < COVERAGE_MIN or (direction == 'decrease' and not (cpu_detected or mem_detected))
         eligible_cpu = cpu_detected and not safety and direction == 'decrease'
         eligible_mem = mem_detected and not safety and suggested_mem and current_mem and suggested_mem < current_mem
-        items.append(dict(
+        latency_points = latency_by_key.get((ns, pod, container), [])
+        latency_p99 = _p99([p['value'] for p in latency_points]) if latency_points else None
+        latency_series = None
+        row_latency_basis = None
+        if latency_points:
+            row_latency_basis = OBSERVABILITY_LATENCY_BASIS
+            latency_series = dict(
+                window_start=start.isoformat(),
+                window_end=end.isoformat(),
+                points=latency_points,
+                basis=OBSERVABILITY_LATENCY_BASIS,
+            )
+        item = dict(
             namespace=ns, pod=pod, container=container, workload_kind=wl_kind, workload_name=wl_name,
             cluster=cluster or ','.join(config['cluster_values']),
             current_cpu_request=current_cpu, current_memory_request=current_mem,
@@ -350,7 +396,14 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
             needs_review=needs_review, patch_eligible=eligible_cpu or eligible_mem,
             rationale='Advisory sizing uses scan-aligned headroom (CPU P95×1.5, memory P99×1.35). '
                       + f'Policy {POLICY_VERSION}.',
-        ))
+        )
+        if latency_p99 is not None:
+            item['latency_p99_ms'] = latency_p99
+        if row_latency_basis is not None:
+            item['latency_basis'] = row_latency_basis
+        if latency_series is not None:
+            item['latency_p99_series'] = latency_series
+        items.append(item)
     return dict(policy_version=POLICY_VERSION, queried_at=end.isoformat(), window_days=window_days,
                 window_start=start.isoformat(), window_end=end.isoformat(), cluster=cluster, items=items,
                 item_count=len(items), truncated=len(keys) >= MAX_ITEMS)

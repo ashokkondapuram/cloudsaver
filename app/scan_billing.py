@@ -70,11 +70,27 @@ def refresh_azure_billing_for_scan(tenant, repository, scan):
                 )
 
 
+def _attach_commitment_evidence(tenant, scan, store):
+    try:
+        from app.scan_commitment_evidence import attach_commitment_evidence
+
+        return attach_commitment_evidence(tenant, scan, store)
+    except Exception:
+        logger.warning('Scan commitment evidence unavailable scan_id=%s', scan.get('scan_id'), exc_info=True)
+        return scan
+
+
 def materialize_scan_billing(tenant, scan, repository):
     """Refresh Azure CM (when configured), attach FOCUS costs to inventory/findings, freeze on the scan."""
     if scan.get('status') != 'completed':
         return scan
-    refresh_azure_billing_for_scan(tenant, repository, scan)
+    if os.getenv('CLOUDSAVER_SCAN_BILLING_REFRESH', 'true').lower() == 'true':
+        refresh_azure_billing_for_scan(tenant, repository, scan)
+    elif logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            'Scan billing CM refresh skipped; using saved FOCUS charges scan_id=%s',
+            scan.get('scan_id'),
+        )
     attached = repository.attach(tenant, scan)
     start, end = billing_window_dates(scan)
     attached['billing_materialized'] = True
@@ -86,10 +102,4 @@ def materialize_scan_billing(tenant, scan, repository):
     from app.resource_analysis_service import reanalyze_scan_snapshot
 
     analyzed = reanalyze_scan_snapshot(attached)
-    try:
-        from app.scan_commitment_evidence import attach_commitment_evidence
-
-        return attach_commitment_evidence(tenant, analyzed, repository.store)
-    except Exception:
-        logger.warning('Scan commitment evidence unavailable scan_id=%s', scan.get('scan_id'), exc_info=True)
-        return analyzed
+    return _attach_commitment_evidence(tenant, analyzed, repository.store)
