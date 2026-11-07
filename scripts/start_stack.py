@@ -130,11 +130,9 @@ def sync_secrets(env_file, home, auth_mode=None, local_creds=True):
     if selected in ('license','keycloak','workspace'):values['CLOUDSAVER_AUTH_MODE']=selected
     if (home/'config/keycloak.env').exists():
         values.setdefault('KEYCLOAK_ADMIN_USER','bootstrap-admin')
-    operator=home/'operator-login.txt'
-    if operator.exists():
-        prefix='Operator access key (shown once): '
-        for line in operator.read_text().splitlines():
-            if line.startswith(prefix):values['PLATFORM_OPERATOR_ACCESS_KEY']=line[len(prefix):]
+    key = operator_access_key(home)
+    if key:
+        values['PLATFORM_OPERATOR_ACCESS_KEY'] = key
     user=home/'config/user-credentials.json'
     if user.exists():
         credential=json.loads(user.read_text())
@@ -204,9 +202,13 @@ def prepare_settings(env_file, home):
         raise ValueError('This launcher is for development only; use your reviewed deployment for other environments')
     platform=module(ROOT/'platform/scripts/setup_platform.py','local_platform_setup')
     if not platform.path.exists():
-        captured=io.StringIO()
-        with contextlib.redirect_stdout(captured):platform.create()
-        private_write(home/'operator-login.txt',captured.getvalue())
+        with contextlib.redirect_stdout(io.StringIO()):
+            platform.create()
+        key_file = ROOT / 'platform' / 'operator-access.key'
+        note = f'Platform operator access key: {key_file}\n'
+        if key_file.is_file():
+            note += 'Read that file to sign in at http://127.0.0.1:3100.\n'
+        private_write(home/'operator-login.txt', note)
     # The unified file quotes values; register the decoded token, not its quotes.
     platform.parse=env_values
     with contextlib.redirect_stdout(io.StringIO()):platform.add_callers(env_file)
@@ -230,6 +232,11 @@ def prepare_settings(env_file, home):
 
 
 def operator_access_key(home):
+    key_file = ROOT / 'platform' / 'operator-access.key'
+    if key_file.is_file():
+        text = key_file.read_text().strip()
+        if text:
+            return text.splitlines()[0].strip()
     operator = home / 'operator-login.txt'
     if not operator.exists():
         return None

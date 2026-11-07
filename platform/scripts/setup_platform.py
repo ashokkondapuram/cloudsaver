@@ -4,9 +4,9 @@
   python3 scripts/setup_platform.py --migrate-from ../.env   move platform values from a CloudSaver 1.2 .env
   python3 scripts/setup_platform.py --add-callers ../.env    allow CloudSaver's service tokens to call identity-service
 
-Secrets are generated locally and written only to the untracked platform/.env with mode 0600. Values are never
-printed, except the operator access key of a new install, which is shown once. --add-callers reads CloudSaver's
-CLOUDSAVER_IDENTITY_TOKEN_* values and stores only their SHA-256 digests.
+Secrets are generated locally and written only to the untracked platform/.env with mode 0600. The operator access
+key for portal sign-in is written to platform/operator-access.key (mode 0600, gitignored); it is not printed.
+--add-callers reads CloudSaver's CLOUDSAVER_IDENTITY_TOKEN_* values and stores only their SHA-256 digests.
 """
 import argparse
 import hashlib
@@ -15,7 +15,9 @@ import os
 import secrets
 from pathlib import Path
 
-path = Path(__file__).resolve().parents[1] / '.env'
+root = Path(__file__).resolve().parents[1]
+path = root / '.env'
+operator_key_path = root / 'operator-access.key'
 CLOUDSAVER_CALLERS = ('gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent')
 MIGRATED = {
     'TOKEN_DB_PASSWORD': 'PLATFORM_DB_PASSWORD',
@@ -38,6 +40,23 @@ REQUIRED = ('PLATFORM_DB_PASSWORD', 'PLATFORM_DB_OWNER_PASSWORD', 'PLATFORM_DB_A
 
 def digest(token):
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def read_operator_access_key():
+    """Return the operator access key from operator-access.key if present."""
+    if not operator_key_path.is_file():
+        return None
+    text = operator_key_path.read_text().strip()
+    return text.splitlines()[0].strip() if text else None
+
+
+def write_operator_access_key(key):
+    try:
+        descriptor = os.open(operator_key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise SystemExit(f'{operator_key_path.name} already exists. Remove it only if you are rotating keys.')
+    with os.fdopen(descriptor, 'w') as stream:
+        stream.write(key + '\n')
 
 
 def parse(file):
@@ -90,10 +109,11 @@ def create():
         'PLATFORM_PROVIDER_SCOPED_KEYS=true',
     ] + defaults()
     write_new(lines)
+    write_operator_access_key(operator_key)
     print('Created platform/.env.')
     print('Next: python3 scripts/setup_platform.py --add-callers ../.env (after CloudSaver has its service tokens),')
     print('then: docker compose up --build -d, and sign in to the portal at http://127.0.0.1:3100.')
-    print('Operator access key (shown once): ' + operator_key)
+    print(f'Operator access key: {operator_key_path} (mode 0600). Use this file to sign in; do not commit it.')
 
 
 def migrate(source):
@@ -108,8 +128,14 @@ def migrate(source):
     if missing:
         raise SystemExit('The source .env is missing values for: ' + ', '.join(missing) + '. No file was changed.')
     write_new(lines + defaults())
+    migrated_plain = (old.get('PLATFORM_OPERATOR_ACCESS_KEY') or old.get('CLOUDSAVER_OPERATOR_ACCESS_KEY') or '').strip()
+    if migrated_plain and not operator_key_path.exists():
+        write_operator_access_key(migrated_plain)
+        print(f'Operator access key copied to {operator_key_path} (mode 0600).')
     print('Created platform/.env with: ' + ', '.join(moved))
     print('The key pepper and operator key are unchanged, so existing keys and portal sign-in keep working.')
+    if not operator_key_path.exists():
+        print('No operator-access.key was written (no plaintext key in the source .env). Use your existing key or rotate.')
 
 
 def add_callers(source):

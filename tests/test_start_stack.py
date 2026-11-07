@@ -21,7 +21,7 @@ def test_first_run_and_repeat_preserve_credentials(tmp_path,monkeypatch,capsys):
     home=setup_root(tmp_path,monkeypatch)
     env=tmp_path/'.env'
     tenant=start_stack.prepare_settings(env,home)
-    paths=[env,tmp_path/'platform/.env',home/'operator-login.txt',home/'runtime.env',home/'settings.json']
+    paths=[env,tmp_path/'platform/.env',tmp_path/'platform'/'operator-access.key',home/'operator-login.txt',home/'runtime.env',home/'settings.json']
     before={p:p.read_bytes() for p in paths}
     assert capsys.readouterr().out==''
     assert start_stack.prepare_settings(env,home)==tenant

@@ -26,6 +26,18 @@ def operator_headers(key):
     return {'Authorization': 'Bearer ' + key}
 
 
+def resolve_operator_key(env):
+    operator = (env.get('PLATFORM_OPERATOR_ACCESS_KEY') or os.getenv('PLATFORM_OPERATOR_ACCESS_KEY') or '').strip()
+    if operator:
+        return operator
+    key_file = ROOT / 'platform' / 'operator-access.key'
+    if key_file.is_file():
+        text = key_file.read_text().strip()
+        if text:
+            return text.splitlines()[0].strip()
+    return ''
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace-id', default=TID)
@@ -40,9 +52,9 @@ def main():
     args = parser.parse_args()
     env_path = args.env_file
     env = load_env(env_path) if env_path.exists() else {}
-    operator = (sys.stdin.readline().strip() if args.operator_stdin else None) or env.get('PLATFORM_OPERATOR_ACCESS_KEY') or os.getenv('PLATFORM_OPERATOR_ACCESS_KEY')
+    operator = (sys.stdin.readline().strip() if args.operator_stdin else None) or resolve_operator_key(env)
     if not operator:
-        raise SystemExit('PLATFORM_OPERATOR_ACCESS_KEY missing from .env')
+        raise SystemExit('PLATFORM_OPERATOR_ACCESS_KEY missing from .env and platform/operator-access.key')
 
     identity_base = env.get('CLOUDSAVER_IDENTITY_URL', args.identity_url).rstrip('/')
     if 'identity-service' in identity_base:

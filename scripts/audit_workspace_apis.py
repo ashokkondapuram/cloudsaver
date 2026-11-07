@@ -87,12 +87,25 @@ def check(name: str, response: httpx.Response, *, expect_json=True) -> dict:
     return detail
 
 
+def resolve_operator_key(env: dict[str, str]) -> str:
+    operator = env.get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
+    if operator:
+        return operator
+    key_file = ROOT / 'platform' / 'operator-access.key'
+    if key_file.is_file():
+        text = key_file.read_text().strip()
+        if text:
+            return text.splitlines()[0].strip()
+    return ''
+
+
 def main() -> int:
     env = load_env(ENV)
-    operator = env.get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
-    portal_token = env.get('PLATFORM_PORTAL_TOKEN', '').strip()
+    operator = resolve_operator_key(env)
+    platform_env = load_env(ROOT / 'platform' / '.env')
+    portal_token = (env.get('PLATFORM_PORTAL_TOKEN') or platform_env.get('PLATFORM_PORTAL_TOKEN', '')).strip()
     if not operator or not portal_token:
-        print('Missing PLATFORM_OPERATOR_ACCESS_KEY or PLATFORM_PORTAL_TOKEN in .env', file=sys.stderr)
+        print('Missing operator key (platform/operator-access.key or PLATFORM_OPERATOR_ACCESS_KEY) or PLATFORM_PORTAL_TOKEN', file=sys.stderr)
         return 2
     results: list[dict] = []
     with httpx.Client(timeout=120, trust_env=False) as client:
