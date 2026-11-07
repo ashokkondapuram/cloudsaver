@@ -2,7 +2,7 @@
 
 The optimization evidence page shows the planning inputs CloudSaver can derive automatically from the scan you selected, together with the imported billing attached to that scan. It reports four input groups: verified dependency edges (topology), SLO burn-rate signals, network traffic observations, and a commitment baseline. Each group shows either the saved observations or an explicit "insufficient evidence" status. The page does not generate synthetic savings, does not authorize commitment purchases, and does not execute changes.
 
-Last reviewed: Oct 25, 2026.
+Last reviewed: Nov 7, 2026.
 
 ## Where to find it
 
@@ -75,7 +75,10 @@ This page writes nothing. It reads the saved scan (inventory, findings and evide
 - `blast_radius_verified`, `change_authorized` and `purchase_authorized` are always false. `savings_usd` and `verified_realized_savings_usd` are always null.
 - A monthly total cannot establish a steady hourly commitment floor. Commitment math requires complete hourly evidence.
 - Future demand, commitment utilization, contract eligibility and amortization basis are not verified.
-- No collector in this repository currently writes `commitment_evidence`, `verified_dependencies`, `slo_burn_rate` or the network traffic fields. In a typical scan, all four engines therefore report `insufficient_evidence` until those fields are supplied.
+- **`commitment_evidence`** is attached at scan completion when billing materialization succeeds and 30 days of USD Usage FOCUS charges cover every hour with modelable open-waste cleanup ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py) via [app/scan_billing.py](../../app/scan_billing.py)).
+- **`verified_dependencies`**, **`slo_burn_rate`**, and network traffic fields such as **`network_egress_bytes_per_sec`** are derived on inventory rows when saved configuration and telemetry support them ([app/evidence_derived_facts.py](../../app/evidence_derived_facts.py)).
+- Federation Kubernetes scans attach per-container **`slo_evidence`** when Prometheus CPU and throttling matrices are sufficient ([app/kubernetes_slo_evidence.py](../../app/kubernetes_slo_evidence.py)); patch preview and multi-cloud rules consume that packet separately from the optimization SLO panel.
+- Until each engine’s required signals are complete, it reports **`insufficient_evidence`** (never a synthetic pass).
 
 ## Permissions
 
