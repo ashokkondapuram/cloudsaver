@@ -11,6 +11,7 @@ type Kind = 'prometheus' | 'rest_metrics' | 'tempo' | 'jaeger' | 'grafana_mimir'
 type Connector = {id: string; name: string; kind: Kind; base_url: string; auth_kind: string; secret_ref: string | null; header_name: string | null;
   aws_account_id: string | null; gcp_project_id: string | null; queries: unknown[]; services: string[]; schedule: string; trace_window_hours: number;
   mimir_datasource_uid?: string; cluster_label?: string; cluster_values?: string[]; org_id?: number | null;
+  latency_datasource_uid?: string | null; latency_query?: string | null; latency_unit?: string; slo_latency_target_ms?: number;
   mappings: {resource_label?: string; service_resources?: Record<string, string>}; thresholds: {latency_p95_ms: number; error_rate_pct: number};
   enabled: boolean; version: number; updated_at: string};
 type SummaryItem = {id: string; status: string; observed_at: string | null; error?: string; warnings?: string[];
@@ -30,7 +31,8 @@ const kindLabel = (kind: string) => kinds.find(k => k.id === kind)?.label || sen
 const blank = () => ({id: '', version: 0, name: '', kind: 'prometheus' as Kind, base_url: '', auth_kind: 'bearer_env', secret_ref: 'CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY',
   header_name: '', aws_account_id: '', gcp_project_id: '', schedule: 'hourly', trace_window_hours: 1, resource_label: 'instance',
   queries: JSON.stringify(templates.prometheus, null, 2), services: '', latency: 500, errors: 1,
-  mimir_datasource_uid: '', cluster_label: 'cluster', cluster_values: '', org_id: ''});
+  mimir_datasource_uid: '', cluster_label: 'cluster', cluster_values: '', org_id: '',
+  latency_datasource_uid: '', latency_query: '', latency_unit: 'milliseconds' as 'milliseconds' | 'seconds', slo_latency_target_ms: 100});
 type Draft = ReturnType<typeof blank>;
 
 function toDraft(c: Connector): Draft {
@@ -40,7 +42,10 @@ function toDraft(c: Connector): Draft {
     resource_label: c.mappings.resource_label || '', queries: JSON.stringify(c.queries, null, 2),
     services: c.services.map(s => mapping[s] ? `${s} = ${mapping[s]}` : s).join('\n'), latency: c.thresholds.latency_p95_ms, errors: c.thresholds.error_rate_pct,
     mimir_datasource_uid: c.mimir_datasource_uid || '', cluster_label: c.cluster_label || 'cluster',
-    cluster_values: (c.cluster_values || []).join('\n'), org_id: c.org_id != null ? String(c.org_id) : ''};
+    cluster_values: (c.cluster_values || []).join('\n'), org_id: c.org_id != null ? String(c.org_id) : '',
+    latency_datasource_uid: c.latency_datasource_uid || '', latency_query: c.latency_query || '',
+    latency_unit: c.latency_unit === 'seconds' ? 'seconds' : 'milliseconds',
+    slo_latency_target_ms: c.slo_latency_target_ms ?? 100};
 }
 
 function toConnector(d: Draft) {
@@ -53,6 +58,12 @@ function toConnector(d: Draft) {
     if (['bearer_env', 'header_env'].includes(d.auth_kind)) body.secret_ref = d.secret_ref;
     if (d.auth_kind === 'header_env') body.header_name = d.header_name;
     if (d.org_id.trim()) body.org_id = Number(d.org_id);
+    const latencyQuery = d.latency_query.trim();
+    const latencyDs = d.latency_datasource_uid.trim();
+    if (latencyQuery) body.latency_query = latencyQuery;
+    if (latencyDs) body.latency_datasource_uid = latencyDs;
+    body.latency_unit = d.latency_unit;
+    body.slo_latency_target_ms = Number(d.slo_latency_target_ms);
     return body;
   }
   const metrics = d.kind === 'prometheus' || d.kind === 'rest_metrics';
@@ -161,6 +172,9 @@ export function ObservabilitySettings() {
           <label>Mimir datasource UID<input required pattern="[A-Za-z0-9_-]{3,64}" value={draft.mimir_datasource_uid} onChange={e => setDraft({...draft, mimir_datasource_uid: e.target.value})}/></label>
           <label>Cluster label<input required value={draft.cluster_label} onChange={e => setDraft({...draft, cluster_label: e.target.value})}/></label>
           <label>Grafana org ID (optional)<input pattern="[0-9]+" value={draft.org_id} onChange={e => setDraft({...draft, org_id: e.target.value})}/></label>
+          <label>Latency datasource UID (optional)<input pattern="[A-Za-z0-9_-]{3,64}" value={draft.latency_datasource_uid} onChange={e => setDraft({...draft, latency_datasource_uid: e.target.value})}/></label>
+          <label>Latency unit<select value={draft.latency_unit} onChange={e => setDraft({...draft, latency_unit: e.target.value as 'milliseconds' | 'seconds'})}><option value="milliseconds">Milliseconds</option><option value="seconds">Seconds</option></select></label>
+          <label>SLO latency target (ms)<input type="number" min={1} max={600000} required value={draft.slo_latency_target_ms} onChange={e => setDraft({...draft, slo_latency_target_ms: Number(e.target.value)})}/></label>
         </>}
         {metrics ? <label>Resource label<input required value={draft.resource_label} placeholder="instance or azure_resource_id" onChange={e => setDraft({...draft, resource_label: e.target.value})}/></label>
           : !grafana ? <label>Trace window (hours)<input type="number" min={1} max={24} value={draft.trace_window_hours} onChange={e => setDraft({...draft, trace_window_hours: Number(e.target.value)})}/></label> : null}

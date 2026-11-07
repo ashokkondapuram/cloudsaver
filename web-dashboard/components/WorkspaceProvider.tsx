@@ -5,6 +5,7 @@ import {api, watchUnauthorized, ApiError} from '../lib/api';
 import {validateProfile,validateScan,validateWorkspaceEvidence} from '../lib/session-contract';
 import {findingKey} from '../lib/finops';
 import type {Density, Entitlements, Finding, Scan, Workspace} from '../lib/types';
+import {nextPollDelayMs, shouldContinuePolling, type ScanLifecyclePhase} from '../lib/scan-lifecycle';
 import {UiThemeApplier} from './UiThemeApplier';
 import {AutoScanOrchestrator} from './AutoScanOrchestrator';
 
@@ -73,6 +74,89 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
   selectedRef.current = selected;
   const activeCredential=useRef('');
   const connecting = useRef<AbortController | null>(null);
+  const scanPoll = useRef<{version: number; abort: AbortController; failures: number; submitting: boolean} | null>(null);
+  const scanPhase = useRef<ScanLifecyclePhase>('idle');
+
+  function scanActivityLabel(phase: ScanLifecyclePhase, degraded: boolean) {
+    if (degraded) return 'Scan status temporarily unavailable';
+    if (phase === 'submitting') return 'Submitting scan…';
+    if (phase === 'reconciling') return 'Confirming scan status…';
+    if (phase === 'running') return 'Scan in progress';
+    return '';
+  }
+
+  function stopScanPoll(version?: number) {
+    const current = scanPoll.current;
+    if (!current) return;
+    if (version !== undefined && current.version !== version) return;
+    current.abort.abort();
+    scanPoll.current = null;
+    scanPhase.current = 'idle';
+    if (version === undefined || version === session.current) setScanActivity('');
+  }
+
+  function scheduleScanPoll(version: number, delayMs: number) {
+    const current = scanPoll.current;
+    if (!current || current.version !== version) return;
+    window.setTimeout(() => void tickScanPoll(version), delayMs);
+  }
+
+  async function tickScanPoll(version: number) {
+    const current = scanPoll.current;
+    if (!current || current.version !== version || version !== session.current) return;
+    let phase: ScanLifecyclePhase = current.submitting ? 'submitting' : 'running';
+    try {
+      const history = await api<Scan[]>('/scans', token, {signal: current.abort.signal});
+      if (version !== session.current || scanPoll.current?.version !== version) return;
+      const running = history.find(entry => entry.status === 'running');
+      setScans(history);
+      current.failures = 0;
+      if (running) {
+        phase = 'running';
+        current.submitting = false;
+        const active = selectedRef.current;
+        const next = !active || !history.some(s => s.scan_id === active) ? running.scan_id : active;
+        if (next !== active) setSelected(next);
+        if (next === running.scan_id) setLiveScanEpoch(epoch => epoch + 1);
+      } else if (current.submitting) {
+        phase = 'reconciling';
+      } else {
+        const latest = history[0];
+        if (latest?.status === 'completed') {
+          setSelected(prev => (prev && history.some(s => s.scan_id === prev) ? prev : latest.scan_id));
+          clearContext();
+          notify(`Scan completed. ${latest.total_items_found.toLocaleString()} findings ready to review.`);
+          stopScanPoll(version);
+          return;
+        }
+        if (latest?.status === 'failed' || latest?.status === 'cancelled') {
+          phase = 'failed';
+          stopScanPoll(version);
+          return;
+        }
+        phase = 'reconciling';
+      }
+      scanPhase.current = phase;
+      setScanActivity(scanActivityLabel(phase, false));
+    } catch {
+      if (version !== session.current || scanPoll.current?.version !== version) return;
+      current.failures += 1;
+      scanPhase.current = current.submitting ? 'reconciling' : 'running';
+      setScanActivity(scanActivityLabel(scanPhase.current, true));
+    }
+    if (scanPoll.current?.version === version && shouldContinuePolling(scanPhase.current)) {
+      scheduleScanPoll(version, nextPollDelayMs(current.failures));
+    }
+  }
+
+  function startScanPoll(version: number, submitting: boolean) {
+    stopScanPoll();
+    const abort = new AbortController();
+    scanPoll.current = {version, abort, failures: 0, submitting};
+    scanPhase.current = submitting ? 'submitting' : 'running';
+    setScanActivity(scanActivityLabel(scanPhase.current, false));
+    void tickScanPoll(version);
+  }
 
   useEffect(() => {try {const saved = localStorage.getItem('cloudsaver:ui:density'); if (saved === 'compact' || saved === 'medium' || saved === 'relaxed') updateDensity(saved);} catch {}}, []);
   useEffect(() => {if (!notice) return; const timer = setTimeout(() => setNotice(null), 6500); return () => clearTimeout(timer);}, [notice]);
@@ -141,90 +225,56 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
 
   function disconnect() {
     activeCredential.current='';
-    session.current++; connecting.current?.abort();
+    session.current++; connecting.current?.abort(); stopScanPoll();
     try {sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(ACTIVITY_KEY);} catch {}
     setToken(''); setWorkspace(null); setEntitlements(null); setScans([]); setSelected('');
     setBusy(''); setScanActivity(''); setError(''); setOverlay(null); setNotice(null); clearContext();
   }
 
-  async function syncRunningScan(version: number) {
-    if (version !== session.current) return false;
-    try {
-      const history = await api<Scan[]>('/scans', token);
-      if (version !== session.current) return false;
-      const running = history.find(entry => entry.status === 'running');
-      setScans(history);
-      if (running) {
-        const current = selectedRef.current;
-        const next = !current || !history.some(s => s.scan_id === current) ? running.scan_id : current;
-        if (next !== current) setSelected(next);
-        if (next === running.scan_id) setLiveScanEpoch(epoch => epoch + 1);
-        return true;
-      }
-      const latest = history[0];
-      if (latest?.status === 'completed' && scanActivity) {
-        setSelected(current => (current && history.some(s => s.scan_id === current) ? current : latest.scan_id));
-        clearContext();
-        notify(`Scan completed. ${latest.total_items_found.toLocaleString()} findings ready to review.`);
-      }
-      return false;
-    } catch {
-      return true;
-    }
-  }
-
   function runScan(providers: string[], options?: {automatic?: boolean}) {
     const version = session.current;
-    setScanActivity('Scan in progress');
     setError('');
     setOverlay(null);
     if (!options?.automatic) notify('Scan started. You can keep working while inventory loads.', 'info');
-    let poll: number | undefined;
-    const stop = () => {
-      if (poll) window.clearInterval(poll);
-      poll = undefined;
-      if (version === session.current) setScanActivity('');
-    };
-    const tick = async () => {
-      const stillRunning = await syncRunningScan(version);
-      if (!stillRunning) stop();
-    };
-    poll = window.setInterval(() => { void tick(); }, 8000);
-    void tick();
+    startScanPoll(version, true);
     void api<Scan>('/scans/multi-cloud', token, {body: {providers}, timeoutMs: 120_000}).then(result => {
       if (version !== session.current) return;
       validateScan(result);
       setScans(previous => [result, ...previous.filter(s => s.scan_id !== result.scan_id)]);
       setSelected(result.scan_id);
+      if (scanPoll.current?.version === version) scanPoll.current.submitting = false;
       if (result.status === 'completed') {
         clearContext();
         notify(`Scan completed. ${result.total_items_found.toLocaleString()} findings ready to review.`);
-        stop();
+        stopScanPoll(version);
+        return;
       }
+      scanPhase.current = result.status === 'running' ? 'running' : 'reconciling';
+      setScanActivity(scanActivityLabel(scanPhase.current, false));
+      if (!scanPoll.current) startScanPoll(version, false);
     }).catch(cause => {
       if (version !== session.current) return;
       if (cause instanceof ApiError && cause.uncertain) {
-        notify('Scan may still be running. Check scan history before you start another.', 'info');
+        if (scanPoll.current?.version === version) scanPoll.current.submitting = false;
+        scanPhase.current = 'reconciling';
+        setScanActivity(scanActivityLabel('reconciling', false));
+        notify('Scan may still be running. Status will refresh automatically.', 'info');
+        if (!scanPoll.current) startScanPoll(version, false);
         return;
       }
       const message = cause instanceof Error ? cause.message : 'Scan could not be completed.';
       setError(message);
       notify(message, 'error');
-      stop();
+      stopScanPoll(version);
     });
   }
 
   useEffect(() => {
-    if (!token || scanActivity || !scans.some(entry => entry.status === 'running')) return;
-    setScanActivity('Scan in progress');
-    const version = session.current;
-    const poll = window.setInterval(() => {
-      void syncRunningScan(version).then(stillRunning => {
-        if (!stillRunning && version === session.current) setScanActivity('');
-      });
-    }, 8000);
-    return () => window.clearInterval(poll);
-  }, [token, scans, scanActivity]);
+    if (!token || scanPoll.current || !scans.some(entry => entry.status === 'running')) return;
+    startScanPoll(session.current, false);
+  }, [token, scans]);
+
+  useEffect(() => () => stopScanPoll(), []);
 
   async function refresh() {
     const version = session.current;

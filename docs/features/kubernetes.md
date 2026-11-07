@@ -4,7 +4,7 @@ The Kubernetes workspace shows what CloudSaver observed in your authorized clust
 
 Last reviewed: Nov 7, 2026.
 
-**Live Grafana rightsizing:** implemented (advisory Mimir path; separate from scan ledger) — [BACKEND_IMPROVEMENTS.md §5b](../BACKEND_IMPROVEMENTS.md), [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md).
+**Live Grafana rightsizing:** implemented (advisory Mimir path; separate from scan ledger) — [BACKEND_IMPROVEMENTS.md §5b](../BACKEND_IMPROVEMENTS.md), [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md). Runs are **async**: `POST .../rightsizing/run` returns 202 and a poll URL; a scanner-side worker process must run [workers/grafana_k8s_rightsizing.py](../../workers/grafana_k8s_rightsizing.py) (or set `CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE=true` in tests only).
 
 ## Where to find it
 
@@ -90,6 +90,17 @@ Every outcome is one of `condition_detected`, `condition_not_detected`, `insuffi
 
 The response contains the filename (`<controller>.requests-review.patch.yaml`), a `strategic-merge-patch`, a unified diff, `replicas_reviewed`, `automatic_execution: false` and two review commands (`kubectl patch ... --dry-run=server` and `kubectl diff`).
 
+### Live Grafana rightsizing (Mimir)
+
+This path is **not** part of the scan ledger. It queries Grafana → Mimir for a selected cluster value, applies policy `grafana-k8s-rightsizing-v2`, and returns advisory rows with `patch_eligible` and `safety_blocks[]`. Container series are keyed by `(cluster, namespace, pod, container)`; [app/collectors/grafana_telemetry.py](../../app/collectors/grafana_telemetry.py) enforces timestamp alignment and coverage before percentiles.
+
+1. A `TenantAdmin` registers a `grafana_mimir` connector (Settings → Observability or the kubernetes/grafana mirror routes).
+2. The UI calls `POST /api/v1/kubernetes/grafana/rightsizing/run` with a UUID `idempotency_key`, `connector_id`, optional `cluster`, and `window_days` (1–30, default 14). The same idempotency key with different parameters returns `409`.
+3. [app/grafana_k8s_store.py](../../app/grafana_k8s_store.py) enqueues `observability_jobs` and returns job metadata with `poll_url`. The client polls `GET /api/v1/kubernetes/grafana/rightsizing/jobs/{job_id}` until `completed` or `failed`. Completed jobs include recommendations; failures expose fixed `GRAFANA_*` codes only.
+4. Unless `CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE=true`, [workers/grafana_k8s_rightsizing.py](../../workers/grafana_k8s_rightsizing.py) must be running with `CLOUDSAVER_GRAFANA_RIGHTSIZING_WORKER=true` (default) so queued jobs are claimed with a leased worker id.
+
+Optional connector `latency_query` / `latency_datasource_uid` pull measured p99 latency for live rows ([app/kubernetes_latency_evidence.py](../../app/kubernetes_latency_evidence.py)). That path is independent of saved-scan `slo_evidence` used by patch preview above.
+
 ## API reference
 
 The gateway ([services/gateway.py](../../services/gateway.py)) exposes these paths and forwards them to the scanner service, which mounts the router from [app/kubernetes_api.py](../../app/kubernetes_api.py). The dashboard calls them through its `/api` proxy ([web-dashboard/app/api/[...path]/route.ts](../../web-dashboard/app/api/[...path]/route.ts)).
@@ -100,8 +111,15 @@ The gateway ([services/gateway.py](../../services/gateway.py)) exposes these pat
 | POST | `/api/v1/scans/{scan_id}/kubernetes/patch-preview` | Generate a review-only request patch. Body: `resource_id`, `rule_id` (CPU or memory overrequest), `evidence_digest`. | `TenantAdmin`. Route class `scan_write`. |
 | POST | `/api/v1/scans/multi-cloud` | Run a scan that includes the `kubernetes` provider. Defined in [app/main.py](../../app/main.py). | `TenantAdmin`. Route class `body`. |
 | GET | `/api/v1/providers` | List configured providers. Reports `kubernetes_window_days: 14` for the metrics-only scanner. | Any workspace role. Route class `agnostic`. |
+| GET | `/api/v1/kubernetes/grafana/connectors` | List saved Grafana Mimir connectors for live rightsizing. | Any workspace role. Route class `full_scope`. |
+| POST | `/api/v1/kubernetes/grafana/connectors` | Create a Grafana Mimir connector. | `TenantAdmin`. Route class `full_scope`. |
+| POST | `/api/v1/kubernetes/grafana/connectors/test` | Test a draft connector configuration. | `TenantAdmin`. Route class `full_scope`. |
+| POST | `/api/v1/kubernetes/grafana/connectors/{connector_id}` | Update a connector (`version` required). | `TenantAdmin`. Route class `full_scope`. |
+| POST | `/api/v1/kubernetes/grafana/connectors/{connector_id}/test` | Probe a saved connector. | `TenantAdmin`. Route class `full_scope`. |
+| POST | `/api/v1/kubernetes/grafana/rightsizing/run` | Start an async rightsizing job (202, `Location`, `Retry-After`). Body: [app/kubernetes_grafana_schemas.py](../../app/kubernetes_grafana_schemas.py) `RightsizingRunRequest`. | `TenantAdmin`. Route class `full_scope`. |
+| GET | `/api/v1/kubernetes/grafana/rightsizing/jobs/{job_id}` | Poll job status and payload (`queued`, `running`, `completed`, `failed`). | Any workspace role. Route class `full_scope`. |
 
-Route classes come from [app/route_inventory.py](../../app/route_inventory.py) and apply to provider-limited or scope-limited workspace keys.
+Route classes come from [app/route_inventory.py](../../app/route_inventory.py) and apply to provider-limited or scope-limited workspace keys. Grafana routes are implemented in [app/kubernetes_grafana_api.py](../../app/kubernetes_grafana_api.py).
 
 ## Data and evidence
 
@@ -148,6 +166,12 @@ Store secrets only in your deployment's secret store. The variables below hold r
 | `CLOUDSAVER_KUBERNETES_BINDINGS` | JSON list (up to 100) of tenant- and cluster-bound bindings with `tenant_id`, `cluster_id`, `api_url`, `api_token_env` and the optional `opencost_url`, `opencost_token_env`, `telemetry_backend`, `region`, `role_arn`, `service_account`, `hosting_provider`. URLs must be HTTPS with no credentials, query or fragment. | `[]` (metrics-only mode) |
 | `CLOUDSAVER_PROMETHEUS_TOKEN_*` | Prometheus bearer token, named by the cluster's `bearer_token_env`. Used by the metrics-only scanner and the `prometheus_http` backend. | None |
 | `CLOUDSAVER_K8S_*` | Kubernetes API and OpenCost tokens, named by `api_token_env` and `opencost_token_env`. | None |
+| `CLOUDSAVER_OBSERVABILITY_SECRET_*` | Grafana/Mimir bearer or header tokens for observability connectors (scanner only). | None |
+| `CLOUDSAVER_GRAFANA_RIGHTSIZING_WORKER` | When true, `workers/grafana_k8s_rightsizing.py` claims queued Grafana jobs. | `true` |
+| `CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE` | When true, `submit` runs the job in-process (tests only). | `false` |
+| `CLOUDSAVER_GRAFANA_JOB_LEASE_MINUTES` | Worker lease while a rightsizing job is running. | `15` |
+| `CLOUDSAVER_GRAFANA_JOB_MAX_ATTEMPTS` | Failed claim attempts before `GRAFANA_JOB_ATTEMPTS_EXCEEDED`. | `3` |
+| `CLOUDSAVER_GRAFANA_JOB_DEADLINE_MINUTES` | Reserved job deadline metadata for operators. | `60` |
 
 The `kubernetes_clusters` list in the workspace configuration supplies `cluster_id`, `prometheus_url` and `bearer_token_env`. See [Cloud sources](../CLOUD_SOURCES.md).
 
@@ -167,6 +191,7 @@ The `kubernetes_clusters` list in the workspace configuration supplies `cluster_
 - [tests/test_lean_core.py](../../tests/test_lean_core.py): node financials require complete billing and verified scheduling.
 - [tests/test_v140.py](../../tests/test_v140.py) and [tests/test_route_inventory.py](../../tests/test_route_inventory.py): rule registration and route classification.
 - [web-dashboard/e2e/kubernetes.spec.ts](../../web-dashboard/e2e/kubernetes.spec.ts): missing-source evidence and review-only patches, the viewer view on mobile, and the empty-scan state.
+- [tests/test_grafana_rightsizing.py](../../tests/test_grafana_rightsizing.py), [tests/test_grafana_k8s_store.py](../../tests/test_grafana_k8s_store.py), and [tests/test_grafana_telemetry.py](../../tests/test_grafana_telemetry.py): Grafana policy gates, async job idempotency and lease commits, and frame coverage parsing.
 
 ## Related docs
 
