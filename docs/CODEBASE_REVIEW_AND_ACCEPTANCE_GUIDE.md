@@ -208,3 +208,29 @@ supersede earlier counts for their respective checks, but not missing cloud,
 RLS, full-browser, restore, schema-generation or artifact-provenance acceptance.
 
 The final Compose/setup/identity contract selection passed **54 tests**; the portal dependency audit reported **0 vulnerabilities** at this check. Redis does not replace the remaining isolated execution, generated-schema parity or authorized cloud/restore acceptance.
+
+
+## Generated browser admission follow-up
+
+The handwritten browser route expressions have been replaced by a generated
+method/path table. A committed manifest explicitly reviews **211 browser
+operations and 7 exclusions**. New backend operations need an explicit decision;
+they are not auto-published. Internal/service operations and provider callbacks
+cannot be published by ordinary manifest entries. Parameter formats are bounded
+and reviewed, and malformed/doubly encoded paths are refused.
+
+CI now checks the manifest against the backend inventory, verifies the generated
+file is current, runs the dashboard unit contracts, and tests the actual built
+Next proxy against a synthetic local gateway. The transport test verifies header
+preservation and that rejected operations never reach the gateway. It makes no
+cloud, database or identity calls and is not provider/authorization acceptance.
+
+Verification: **8 route/parity tests**, **36 dashboard unit tests**, dashboard
+typecheck and production build passed; the built proxy transport acceptance also
+passed. Source and generated files are checked with
+`python scripts/generate_browser_routes.py --check`.
+
+CR-03's admission drift is addressed by this contract. Full typed response-schema
+coverage remains separate work; a route admission pattern does not establish
+that every legacy response field is declared or validated. Cloud/runtime,
+restore and isolated execution gates remain open as previously documented.

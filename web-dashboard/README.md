@@ -48,3 +48,32 @@ The engineering MVP uses manually provisioned workspace keys rather than a brows
 ## Browser acceptance checks
 
 With the built dashboard running, install a Playwright Chromium browser with `npx playwright install chromium` (or select an existing binary with `CLOUDSAVER_BROWSER_EXECUTABLE`) and run `npm run test:e2e`. `CLOUDSAVER_DASHBOARD_URL` selects the test dashboard URL. For the enterprise control-plane, FinOps ladder, governance, and related UI regressions only, run `npm run test:enterprise-ui` (Playwright `enterprise-ui` project). See `e2e/ENTERPRISE_UI.md` for the maintained spec list, governance/workloads deep-link conventions, and cross-view refresh behavior. The full dashboard suite runs both Playwright projects via `npm run test:e2e`. The suite intercepts API calls with test-only fixtures; it verifies admin replay acknowledgment, Viewer restrictions, escaped audit text and mobile layout without sending alerts or scanning clouds. Backend RLS, roles and delivery recovery are tested separately against disposable PostgreSQL/Redis by the root verification runner.
+
+
+## Browser API admission contract
+
+`lib/browser-operations.json` records a reviewed allow/deny decision for every
+versioned API operation in `app/route_inventory.py`. The browser proxy consumes
+`lib/generated/browser-routes.ts`; it no longer maintains independent broad
+route regular expressions. Backend role/scope authorization remains mandatory.
+
+After adding or changing an API operation:
+
+1. Classify it in the backend authorization inventory.
+2. Add an explicit browser decision and reason to the JSON contract. Provider
+   callbacks, machine ingestion and maintenance operations are not automatically
+   browser-accessible. New path parameter types need review in the generator.
+3. Run `python scripts/generate_browser_routes.py` from the repository root.
+4. Run `python scripts/generate_browser_routes.py --check`, backend route tests,
+   `npm run typecheck`, and dashboard unit tests.
+5. Build the dashboard and run `python scripts/test_browser_proxy_contract.py`
+   from the root, using the supported Node runtime. The transport test starts
+   only a temporary localhost fake gateway and the built Next server; it uses
+   synthetic credentials, terminates both, and does not test provider APIs.
+
+CI verifies the generated file, runs all dashboard unit contracts, and executes
+the built proxy transport test. Wrong methods, malformed identifiers, traversal,
+encoded separators, and unreviewed operations are rejected before forwarding.
+This route contract is not a complete generated response schema. Existing
+runtime payload decoders remain necessary until all handlers declare complete
+request/response contracts.

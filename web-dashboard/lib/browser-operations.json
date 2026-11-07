@@ -1,0 +1,1313 @@
+{
+  "version": 1,
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/catalog",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/tasks",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/tasks/{task_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai-batches",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai-batches/{batch_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/assessments",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/assessments/{assessment_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/governance",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/targets",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/usage",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/analytics",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/consent-url",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/billing/entitlements",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/billing/plan-requests",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/billing/plans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/azure-resource-types",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/typed-resource-tables",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/code-mode/runs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/code-mode/runs/{run_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/code-mode/status",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/control-plane/plan-versions/{version_id}/engineering-outbox",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/control-plane/plans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/control-plane/plans/{plan_id}/versions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/access-export",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/audit",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/keys",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/me",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/members",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/service-accounts",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customer/users",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/capabilities",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/plans/{plan_id}/versions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/workloads",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/workloads/{workload_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/workloads/{workload_id}/events",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/workloads/{workload_id}/members",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/engineering/workloads/{workload_id}/plans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/autopilot/playbooks",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/autopilot/resize-metrics",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/azure-resource-costs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/azure-rest-catalog",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/commitment-ladder/preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/commitments",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/imports",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/saas-connectors",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/spot-arbitrage/preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/summary",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/sync-jobs/{job_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/sync-status",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finops/unit-economics/preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/gitops/requests",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/gitops/requests/{request_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/gitops/resource-mapping",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/gitops/syncs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/gitops/targets",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/access",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/capabilities",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/controls",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/directory",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/exceptions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/findings",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/findings/{finding_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/findings/{finding_id}/export",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/risks",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/governance/summary",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/kubernetes/grafana/connectors",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/kubernetes/grafana/rightsizing/jobs/{job_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/connectors",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/summary",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/sync-jobs/{job_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/operations/deliveries",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/operations/deliveries/{event_id}/audit",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/operations/reliability",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/optimization/scans/{scan_id}/auto-scenarios",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/anomalies",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/anomalies/metrics",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/anomalies/{anomaly_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/cases",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/cases/{case_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/cases/{case_id}/billing-evidence",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/ownership",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/ownership/history",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/outcomes/summary",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/providers",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/billable-catalog",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/{key}/decisions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/{key}/history",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/{resource_key}/decisions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/{resource_key}/history",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rules/catalog",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rules/catalog/azure-compute",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rules/catalog/by-pillar",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rules/effective",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scan-jobs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scan-jobs/{job_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/analysis",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/kubernetes",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/pillar-analysis",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/resources",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/resources/export",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/resources/{key}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/scans/{scan_id}/resources/{resource_key}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/services/{service_name}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/services/{service}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/ai",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/cloud-status",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/trends",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/customer/service-accounts/{account_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/engineering/workloads/{workload_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/tasks",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/tasks/{task_id}/review",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai-batches/{batch_id}/cancel",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/governance/holds/{hold_id}/release",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/governance/records/{attempt_id}/erase",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/governance/records/{attempt_id}/hold",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/governance/records/{attempt_id}/{decision}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/analysis/resources",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/analysis/scan",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/billing/checkout",
+      "browser": false,
+      "reason": "Retired checkout endpoint; not a browser workflow."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/billing/plan-requests",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/billing/webhook",
+      "browser": false,
+      "reason": "Retired provider callback; not a browser workflow."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/code-mode/runs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/action-assessments",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/financial-scenarios",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/plan-versions/{version_id}/approvals",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/plan-versions/{version_id}/transitions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/plans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/control-plane/plans/{plan_id}/versions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/keys",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/keys/{key_id}/revoke",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/keys/{key_id}/rotate",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/members/{user_id}/remove",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/ownership/transfer",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/service-accounts",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/users/invite",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/users/{user_id}/reactivate",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customer/users/{user_id}/suspend",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/drift/cloud-events/ingest",
+      "browser": false,
+      "reason": "Provider event ingestion requires its own source authentication."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/drift/cloud-events/subscriptions/ensure",
+      "browser": false,
+      "reason": "Provider bootstrap operation; use the authorized integration setup."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/engineering/workloads",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/engineering/workloads/{workload_id}/members",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/engineering/workloads/{workload_id}/plans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/engineering/workloads/{workload_id}/plans/{plan_id}/versions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/autopilot/resize",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/ebpf-flows/ingest",
+      "browser": false,
+      "reason": "Machine telemetry ingestion; not a browser workflow."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/imports",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/resource-cost",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/saas-focus/import",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/sync",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finops/sync-jobs/{job_id}/cancel",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/ast/index-repositories",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/ast/sync",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/pre-merge/evaluate",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/preview-and-evaluate",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/pull-requests",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/requests",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/gitops/sync-agent",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/assessments",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/controls",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/evidence/receipts",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/exceptions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/exceptions/{exception_id}/actions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/findings/{finding_id}/actions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/monitor",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/risks",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/governance/risks/{risk_id}/actions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/kubernetes/grafana/connectors",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/kubernetes/grafana/connectors/test",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/kubernetes/grafana/connectors/{connector_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/kubernetes/grafana/connectors/{connector_id}/test",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/kubernetes/grafana/rightsizing/run",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/{scan_id}",
+      "browser": false,
+      "reason": "Background delivery trigger; not a browser workflow."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors/test",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors/{connector_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors/{connector_id}/disable",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors/{connector_id}/enable",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/connectors/{connector_id}/test",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/observability/sync",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/onboarding/claim",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/operations/deliveries/{event_id}/retry",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/anomalies/detect",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/anomalies/{anomaly_id}/actions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/cases",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/cases/{case_id}/actions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/evidence/receipts",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/outcomes/suppressions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/policies/terraform/evaluate",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/resources/{key}/decisions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/resources/{resource_key}/decisions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rules/preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scan-jobs",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/multi-cloud",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/ai-batches",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/ai-risk-evaluation",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/analysis/resource",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/cancel",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/kubernetes/patch-preview",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/remediation",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/remediation-terraform",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/resource-signals/lookup",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/resources/{key}/questions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/scans/{scan_id}/resources/{resource_key}/questions",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/semantic/embeddings/backfill-vectors",
+      "browser": false,
+      "reason": "Maintenance backfill; not exposed by the browser proxy."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/access-test",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/ai/test-connection",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/customer/members/{user_id}",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/governance/access",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/outcomes/ownership",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rules/overrides",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/ai",
+      "browser": true,
+      "reason": "Authenticated product workflow; backend enforces role and scope."
+    }
+  ]
+}
