@@ -1,7 +1,7 @@
 # Kubernetes workload right-sizing via Grafana and Mimir
 
 - **Author:** Product / engineering (imported design)
-- **Status:** Draft, awaiting review
+- **Status:** In progress (v1 backend + Kubernetes UI landed Nov 7, 2026)
 - **Date:** Nov 7, 2026
 - **Related:** [KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md](../../docs/KUBERNETES_MULTI_SOURCE_IMPLEMENTATION.md), [kubernetes.md](../../docs/features/kubernetes.md), [FINOPS_RESIZE_METRICS.md](../../docs/FINOPS_RESIZE_METRICS.md), rules `K8S_CONTAINER_CPU_OVERREQUEST` / `K8S_CONTAINER_MEMORY_OVERREQUEST`
 

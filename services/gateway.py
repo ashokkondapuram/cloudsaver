@@ -637,6 +637,37 @@ def create_app(settings=None, limiter=None, transport=None, identity_validator=N
     async def kubernetes_patch(scan_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
         return await post_json(f'/api/v1/scans/{scan_id}/kubernetes/patch-preview', request, authorization)
 
+    @app.get('/api/v1/kubernetes/grafana/connectors')
+    async def grafana_k8s_connectors(row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', '/api/v1/kubernetes/grafana/connectors', authorization)
+
+    @app.post('/api/v1/kubernetes/grafana/connectors', status_code=201)
+    async def create_grafana_k8s_connector(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/kubernetes/grafana/connectors', request, authorization)
+
+    @app.post('/api/v1/kubernetes/grafana/connectors/test')
+    async def test_grafana_k8s_draft(request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json('/api/v1/kubernetes/grafana/connectors/test', request, authorization)
+
+    @app.post('/api/v1/kubernetes/grafana/connectors/{connector_id}/test')
+    async def test_grafana_k8s_connector(connector_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/kubernetes/grafana/connectors/{connector_id}/test', request, authorization)
+
+    @app.post('/api/v1/kubernetes/grafana/connectors/{connector_id}')
+    async def update_grafana_k8s_connector(connector_id: UUID, request: Request, row=Depends(allowed), authorization: str = Header()):
+        return await post_json(f'/api/v1/kubernetes/grafana/connectors/{connector_id}', request, authorization)
+
+    @app.post('/api/v1/kubernetes/grafana/rightsizing/run', status_code=202)
+    async def grafana_k8s_rightsizing_run(request: Request, row=Depends(allowed), authorization: str = Header()):
+        from app.schemas import bounded_json
+        result = await upstream('POST', targets['scanner'], '/api/v1/kubernetes/grafana/rightsizing/run',
+                                authorization, json=await bounded_json(request), transport=transport)
+        return JSONResponse(result, status_code=202, headers={'Location': result['poll_url'], 'Retry-After': '3'})
+
+    @app.get('/api/v1/kubernetes/grafana/rightsizing/jobs/{job_id}')
+    async def grafana_k8s_rightsizing_job(job_id: UUID, row=Depends(allowed), authorization: str = Header()):
+        return await forward('GET', 'scanner', f'/api/v1/kubernetes/grafana/rightsizing/jobs/{job_id}', authorization)
+
     def selected_params(request, names):
         return {k: v for k, v in request.query_params.items() if k in names}
 

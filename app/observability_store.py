@@ -96,7 +96,9 @@ class ObservabilityStore:
 
     def submit(self, tenant, key, *, trigger='manual', connector_ids=None):
         tid, now = tenant['tenant_id'], _now().isoformat()
-        selected = [c['id'] for c in self.connectors(tid, enabled_only=True) if connector_ids is None or c['id'] in connector_ids]
+        from app.collectors.observability import READERS
+        selected = [c['id'] for c in self.connectors(tid, enabled_only=True)
+                    if (connector_ids is None or c['id'] in connector_ids) and c['kind'] in READERS]
         if not selected:
             raise WorkflowConflict('Add or enable an observability connector first.')
         with self.store.transaction(tid, write=True) as db:

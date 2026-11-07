@@ -108,6 +108,8 @@ def create_app(settings=None, scanner=None, identity_validator=None, delivery_ta
     api.include_router(settings_router(settings, current_tenant, identity_client=identity_client, scan_store=store))
     from app.kubernetes_api import create_router as kubernetes_router
     api.include_router(kubernetes_router(store, current_tenant, evidence_store=evidence_store))
+    from app.kubernetes_grafana_api import create_router as kubernetes_grafana_router
+    api.include_router(kubernetes_grafana_router(evidence_store, current_tenant))
     from app.assessment_api import create_router as assessment_router
     api.include_router(assessment_router(settings, store, current_tenant, ai_gateway, ledger))
     from app.pillar_analysis_api import create_router as pillar_analysis_router

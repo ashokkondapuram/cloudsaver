@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-KINDS = ('prometheus', 'rest_metrics', 'tempo', 'jaeger')
+KINDS = ('prometheus', 'rest_metrics', 'tempo', 'jaeger', 'grafana_mimir')
 AUTH_KINDS = ('none', 'bearer_env', 'basic_env', 'header_env', 'azure_managed', 'aws_sigv4', 'gcp_managed')
 METRICS = ('cpu_percent', 'memory_percent', 'requests_per_second', 'error_rate_pct', 'latency_p95_ms', 'custom')
 SCHEDULES = ('hourly', 'daily', 'manual')
@@ -78,7 +78,10 @@ def validate(raw, tenant):
         raise ValueError('Enter a connector name of 1–80 characters.')
     kind = raw.get('kind')
     if kind not in KINDS:
-        raise ValueError('Choose Prometheus, REST metrics, Tempo or Jaeger.')
+        raise ValueError('Choose Prometheus, REST metrics, Tempo, Jaeger or Grafana Mimir.')
+    if kind == 'grafana_mimir':
+        from app.collectors import grafana_rightsizing
+        return grafana_rightsizing.validate_connector(raw, tenant)
     base = str(raw.get('base_url', '')).strip()
     base = base if base.endswith('/') else base + '/'
     host = check_url(base, resolve=False)
