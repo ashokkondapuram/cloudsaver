@@ -75,7 +75,8 @@ This page writes nothing. It reads the saved scan (inventory, findings and evide
 - `blast_radius_verified`, `change_authorized` and `purchase_authorized` are always false. `savings_usd` and `verified_realized_savings_usd` are always null.
 - A monthly total cannot establish a steady hourly commitment floor. Commitment math requires complete hourly evidence.
 - Future demand, commitment utilization, contract eligibility and amortization basis are not verified.
-- No collector in this repository currently writes `commitment_evidence`, `verified_dependencies`, `slo_burn_rate` or the network traffic fields. In a typical scan, all four engines therefore report `insufficient_evidence` until those fields are supplied.
+- **`commitment_evidence`** is attached at scan completion when 30 days of saved USD Usage FOCUS charges cover every hour with modelable open-waste cleanup ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py) via [app/scan_billing.py](../../app/scan_billing.py)), including when `CLOUDSAVER_SCAN_BILLING_REFRESH=false` skips Azure Cost Management pull but FOCUS usage is already imported.
+- Topology, SLO, and network traffic fields are still not populated by default collectors; those engines report `insufficient_evidence` until supplied.
 
 ## Permissions
 
