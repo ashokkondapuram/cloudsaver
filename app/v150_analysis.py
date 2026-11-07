@@ -43,7 +43,21 @@ def create_router(store, current_tenant, finance):
         for resource in resources:
             evidence=resource.get('evidence') or {}
             edges=evidence.get('verified_dependencies',[])
-            safe_edges=[e for e in edges if isinstance(e,dict) and e.get('from_resource_id') in visible_ids and e.get('to_resource_id') in visible_ids] if isinstance(edges,list) else []
+            safe_edges=[]
+            if isinstance(edges,list):
+                for entry in edges:
+                    if isinstance(entry,dict) and entry.get('from_resource_id') in visible_ids and entry.get('to_resource_id') in visible_ids:
+                        safe_edges.append(entry)
+                    elif isinstance(entry,str) and entry in visible_ids:
+                        safe_edges.append(dict(from_resource_id=resource['resource_id'],to_resource_id=entry,verification_state='verified'))
+            refs=resource.get('dependency_refs') or []
+            if isinstance(refs,list):
+                for edge in refs:
+                    if not isinstance(edge,dict) or edge.get('verification_state')!='verified':
+                        continue
+                    a,b=edge.get('from_resource_id'),edge.get('to_resource_id')
+                    if a in visible_ids and b in visible_ids:
+                        safe_edges.append(edge)
             if safe_edges:
                 dependencies.append(dict(resource_id=resource['resource_id'],dependencies=safe_edges,
                                          inventory_complete=False))

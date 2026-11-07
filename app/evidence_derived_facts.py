@@ -177,6 +177,19 @@ def apply_derived_facts(resource: dict) -> dict:
         p95 = _summary_stat(evidence, 'cpu_percent', 'p95')
         _set_number(evidence, 'cfs_throttling_p95_pct', p95 * 100 if p95 <= 1 else p95)
 
+    slo = evidence.get('slo_evidence')
+    if isinstance(slo, dict) and type(slo.get('error_budget_burn_rate_30d')) in (int, float):
+        _set_number(evidence, 'slo_burn_rate', float(slo['error_budget_burn_rate_30d']))
+        observed = moment(slo.get('observed_at'))
+        if observed:
+            evidence.setdefault('slo_observed_at', observed.isoformat())
+    if isinstance(slo, dict) and slo.get('pearson_r') is not None:
+        evidence.setdefault('cpu_latency_correlation_r', slo.get('pearson_r'))
+
+    network = (evidence.get('metrics') or {}).get('network') if isinstance(evidence.get('metrics'), dict) else None
+    if isinstance(network, dict) and network.get('sufficient') and type(network.get('maximum')) in (int, float):
+        _set_number(evidence, 'network_egress_bytes_per_sec', float(network['maximum']))
+
     if not isinstance(evidence.get('state_history'), list):
         label = None
         if rtype == 'microsoft.web/serverfarms' and type(evidence.get('hosted_app_count')) is int:

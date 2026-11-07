@@ -38,7 +38,7 @@ Plan limits come from the platform entitlement projection (0013_billing_projecti
 - The hourly commitment ceiling runs only when the saved scan already has commitment_evidence with source_verified and commitment_coverage_verified, aligned USD/hour series, and existing coverage. Cleanup is subtracted hour by hour; nearest-rank P10 over 30–90 days becomes calculate_clean_commitment_baseline. Otherwise the status is insufficient_evidence. purchase_authorized is always false (app/commitment_arbitrage.py).
 - GET /api/v1/analytics is a latest-snapshot summary only. It never sums history.
 
-**Not claimed:** the current scan pipeline does not write commitment_evidence, so a normal scan shows the ceiling as Unknown. “Resolved” does not prove deletion or savings.
+**Not claimed:** `commitment_evidence` is attached at scan completion only when 30 days of USD Usage FOCUS charges cover every hour and open-waste cleanup can be modeled (`app/scan_commitment_evidence.py`, after billing materialization). Partial billing or missing snapshots leave the ceiling Unknown. “Resolved” does not prove deletion or savings.
 
 ---
 
@@ -150,7 +150,7 @@ The ownership write that feeds this page is the outcomes feature (finops_ownersh
 
 The stronger engines exist and are tested but are not API routes: simulate_cascading_topology_savings, analyze_cross_az_and_nat_hairpin_waste, analyze_ephemeral_batch_waste (app/causal_topology_simulator.py), plus compute_clean_before_commit_plan and simulate_topology_blast_radius (app/nextgen_engines.py). evaluate_slo_bounded_rightsizing is wired as a gate for Kubernetes patches and multi-cloud rule materialization, not as a savings number on this page.
 
-No collector currently writes commitment_evidence, verified_dependencies, slo_burn_rate, or the network fields, so a normal scan reports insufficient_evidence for all four engines.
+Scans may carry `commitment_evidence` after billing materialization when FOCUS usage is hour-complete; inventory rows gain `verified_dependencies`, `slo_burn_rate`, and `network_egress_bytes_per_sec` via `app/evidence_derived_facts.py` when telemetry exists. Auto-scenarios still report `insufficient_evidence` when any engine lacks complete signals.
 
 ---
 
@@ -422,4 +422,4 @@ Identity head in the tree is **i0016_workspace_ui_themes**.
 - Sovereign Azure clouds are out of contract; ARM stays on the public profile with continuation-host checks.
 - A 200 from a webhook is not proof a human acted. A model answer is not a control pass. A missing dependency edge is not proof there is no dependency.
 
-**Representative regression entry points:** tests/test_high_impact_improvements.py, tests/test_resource_evidence_contracts.py, tests/test_enterprise_backend_contracts.py, tests/test_platform_outbox_lease.py, tests/test_finops_analysis_integrity.py, tests/test_engineering_zero_downtime.py, tests/test_agent_workflow_routing.py, tests/test_grafana_rightsizing.py, tests/test_grafana_k8s_policy.py, tests/test_kubernetes_slo_evidence.py, tests/test_backend_improvements_doc.py, and platform/tests/test_readme_improvements.py.
+**Representative regression entry points:** tests/test_high_impact_improvements.py, tests/test_resource_evidence_contracts.py, tests/test_enterprise_backend_contracts.py, tests/test_platform_outbox_lease.py, tests/test_finops_analysis_integrity.py, tests/test_engineering_zero_downtime.py, tests/test_agent_workflow_routing.py, tests/test_grafana_rightsizing.py, tests/test_grafana_k8s_policy.py, tests/test_kubernetes_slo_evidence.py, tests/test_scan_commitment_evidence.py, tests/test_optimization_topology_edges.py, tests/test_backend_improvements_doc.py, and platform/tests/test_readme_improvements.py.

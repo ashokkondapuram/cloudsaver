@@ -85,4 +85,11 @@ def materialize_scan_billing(tenant, scan, repository):
         sync_fetch_stages((obs.get('evidence') or {}))
     from app.resource_analysis_service import reanalyze_scan_snapshot
 
-    return reanalyze_scan_snapshot(attached)
+    analyzed = reanalyze_scan_snapshot(attached)
+    try:
+        from app.scan_commitment_evidence import attach_commitment_evidence
+
+        return attach_commitment_evidence(tenant, analyzed, repository.store)
+    except Exception:
+        logger.warning('Scan commitment evidence unavailable scan_id=%s', scan.get('scan_id'), exc_info=True)
+        return analyzed
