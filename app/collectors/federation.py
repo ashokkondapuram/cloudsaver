@@ -19,7 +19,11 @@ def scan(source, binding, *, api_reader=None, metric_reader=None, cost_reader=No
             if metric_reader is None:
                 from app.collectors.prometheus_auth import reader
                 metric_reader=reader(source,binding);owned.append(metric_reader)
-            metrics,metric_sources=collector.telemetry(metric_reader,source['prometheus_url'],source['cluster_id'],now)
+            metrics, metric_sources = collector.telemetry(
+                metric_reader, source['prometheus_url'], source['cluster_id'], now,
+                latency_promql=binding.get('latency_promql'),
+                latency_unit=binding.get('latency_unit') or 'milliseconds',
+            )
             sources.extend(metric_sources)
         except Exception:
             metrics={}

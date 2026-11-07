@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Callable, Deque, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.drift.outbox_store import PlatformOutboxStore, drift_idempotency_key
+from app.drift.outbox_store import OUTBOX_KIND_DRIFT, PlatformOutboxStore, drift_idempotency_key
+
+MAX_BUFFER_DRAIN_EVENTS = 100
+
+
+def drift_ingest_bridge_enabled() -> bool:
+    """True when buffered scaffold events may be handed off to the drift outbox path."""
+    return (os.getenv("CLOUDSAVER_DRIFT_INGEST") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class CloudDriftSignal(BaseModel):
@@ -72,8 +81,64 @@ class InMemoryEventBuffer:
         self._events.clear()
         return items
 
+    def drain_to_drift_outbox(
+        self,
+        *,
+        consumer: EventStreamConsumer,
+        outbox: PlatformOutboxStore,
+        max_events: int = MAX_BUFFER_DRAIN_EVENTS,
+    ) -> dict[str, Any]:
+        """Hand buffered parse events to platform outbox DRIFT intents when bridge env is set."""
+        return drain_buffer_to_drift_outbox(
+            self, consumer=consumer, outbox=outbox, max_events=max_events
+        )
+
     def __len__(self) -> int:
         return len(self._events)
+
+
+def _normalize_buffered_event(consumer: EventStreamConsumer, event: Mapping[str, Any]) -> CloudDriftSignal:
+    raw = event.get("raw")
+    if not isinstance(raw, dict):
+        raise ValueError("Buffered event missing raw envelope for drift handoff")
+    provider = str(event.get("provider") or "")
+    if provider == "azure":
+        return consumer.normalize_eventgrid(raw)
+    if provider == "aws":
+        return consumer.normalize_eventbridge(raw)
+    if provider == "gcp":
+        return consumer.normalize_gcp_audit(raw)
+    raise ValueError(f"Unsupported provider for drift handoff: {provider}")
+
+
+def drain_buffer_to_drift_outbox(
+    buffer: InMemoryEventBuffer,
+    *,
+    consumer: EventStreamConsumer,
+    outbox: PlatformOutboxStore,
+    max_events: int = MAX_BUFFER_DRAIN_EVENTS,
+) -> dict[str, Any]:
+    """Drain the in-memory buffer into platform outbox intents (durable handoff; no cloud writes)."""
+    if not drift_ingest_bridge_enabled():
+        raise ValueError("CLOUDSAVER_DRIFT_INGEST must be set to bridge buffer events to drift outbox")
+    events = buffer.drain()
+    if len(events) > max_events:
+        raise ValueError(f"At most {max_events} buffered events per drain")
+    by_tenant: dict[str, list] = defaultdict(list)
+    skipped: list[dict[str, str]] = []
+    for event in events:
+        try:
+            signal = _normalize_buffered_event(consumer, event)
+        except ValueError as error:
+            skipped.append({"source": str(event.get("source") or ""), "reason": str(error)})
+            continue
+        payload = signal.model_dump()
+        key = drift_idempotency_key(payload)
+        by_tenant[signal.workspace_id].append((OUTBOX_KIND_DRIFT, key, payload))
+    queued: list[tuple[str, str]] = []
+    for tenant_id, rows in by_tenant.items():
+        queued.extend(outbox.enqueue_batch(tenant_id, rows))
+    return dict(drained=len(events), accepted=len(queued), intents=queued, skipped=skipped)
 
 
 class EventStreamConsumer:

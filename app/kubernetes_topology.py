@@ -147,7 +147,7 @@ def project(cluster, objects, metrics, sources, now):
                     memory_request=quantity(container.get('resources',{}).get('requests',{}).get('memory')),
                     memory_limit=quantity(container.get('resources',{}).get('limits',{}).get('memory')),
                     fixed_heap_configured=any('-Xmx' in str(a) or 'GOMEMLIMIT' in str(a) for a in container.get('command',[])+container.get('args',[])) or any(e.get('name') in ('GOMEMLIMIT','JAVA_TOOL_OPTIONS','JAVA_OPTS') for e in container.get('env',[])),
-                    hpa_present=associated_hpa, metrics={name:metrics.get(name,{}).get(key) for name in ('cpu','memory','throttling','cpu_request','memory_request','oom','restarts')})
+                    hpa_present=associated_hpa, metrics={name:metrics.get(name,{}).get(key) for name in ('cpu','memory','throttling','cpu_request','memory_request','oom','restarts','latency')})
                 details['metrics']['network']=metrics.get('network',{}).get((namespace,meta['name']))
                 row=make('Container',meta,details)
                 row['evidence']['production']=any(row['evidence']['labels'].get(k) in ('prod','production') for k in ('environment','env'))

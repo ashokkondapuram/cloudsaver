@@ -127,7 +127,7 @@ Route classes come from [app/route_inventory.py](../../app/route_inventory.py) a
 - Reservation slack does not prove that a node can be terminated, that pods can be repacked, or that PDBs allow it.
 - A `partial_telemetry` reconciliation status is the default. Having several sources available does not prove they agree.
 - Metrics-only discovery cannot prove that the cluster inventory is complete.
-- Federated scans attach `slo_evidence` on containers when CPU and throttling Prometheus matrices are sufficient (`app/kubernetes_slo_evidence.py`). Latency in that packet uses a decoupled proxy until optional latency metrics are wired. `pdb_blocked`, `scale_down_disabled` and `scheduling_constraints_verified` are still not populated; patch preview returns `409` when any replica lacks SLO evidence or fails the gate.
+- Federated scans attach `slo_evidence` on containers when CPU and throttling Prometheus matrices are sufficient (`app/kubernetes_slo_evidence.py`). When the Kubernetes binding includes `latency_promql`, or container `metrics.latency` is sufficient for the scan window, `latency_p99_series` uses observability latency (`basis` on the packet). Without a configured query, latency stays a decoupled proxy (`decoupled_low_latency_proxy`) and does not inflate savings. Grafana Mimir connectors may optionally set `latency_query` / `latency_datasource_uid` for live rightsizing latency (`app/kubernetes_latency_evidence.py`). `pdb_blocked`, `scale_down_disabled` and `scheduling_constraints_verified` are still not populated; patch preview returns `409` when any replica lacks SLO evidence or fails the gate.
 
 ## Permissions
 

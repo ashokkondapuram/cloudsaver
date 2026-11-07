@@ -101,7 +101,7 @@ The ownership write that feeds this page is the outcomes feature (finops_ownersh
 - Conflicting source digests mark resources source_conflict and clear cost attribution (app/collectors/provenance.py).
 - Patch preview (POST .../kubernetes/patch-preview) returns 409 unless every replica independently passes the rule, the controller identity matches, desired replicas equal observed pods, the digest matches, and evaluate_slo_bounded_rightsizing is review_eligible. Response is a strategic merge patch plus kubectl dry-run commands. No cluster write.
 
-**Saved-scan SLO packet:** when Prometheus CPU and throttling matrices are sufficient, `app/kubernetes_slo_evidence.py` attaches `slo_evidence` on each container (CPU series from the scan window; latency uses a decoupled low-latency proxy series until an optional latency query is wired). Patch preview still requires every replica to pass `evaluate_slo_bounded_rightsizing`. Cluster P95 is never summed from container percentiles; modeled node consolidation stays Unknown without node-pool evidence.
+**Saved-scan SLO packet:** when Prometheus CPU and throttling matrices are sufficient, `app/kubernetes_slo_evidence.py` attaches `slo_evidence` on each container (CPU series from the scan window). Optional `latency_promql` on the Kubernetes binding or `metrics.latency` from Prometheus fills `latency_p99_series` via `app/kubernetes_latency_evidence.py`; otherwise latency uses a decoupled proxy (`decoupled_low_latency_proxy`, `latency_basis` on the packet). Patch preview still requires every replica to pass `evaluate_slo_bounded_rightsizing`. Cluster P95 is never summed from container percentiles; modeled node consolidation stays Unknown without node-pool evidence.
 
 ### 5b. Grafana / Mimir live rightsizing (advisory, separate route)
 
@@ -109,8 +109,8 @@ The ownership write that feeds this page is the outcomes feature (finops_ownersh
 
 - API: GET/POST /api/v1/kubernetes/grafana/* (app/kubernetes_grafana_api.py); registered on gateway and route inventory.
 - Connectors: kind grafana_mimir in observability_connectors (migration 0025); validated in app/collectors/observability.py; create via /api/v1/observability/connectors or kubernetes mirror routes.
-- Query path: Grafana HTTP API → Mimir; tokens via CLOUDSAVER_OBSERVABILITY_SECRET_* on the scanner only (browser never holds tokens).
-- Policy: grafana-k8s-rightsizing-v2 (app/collectors/grafana_k8s_policy.py, app/collectors/grafana_rightsizing.py): workload ownership from kube-state metrics, HPA/throttle/OOM safety blocks aligned with app/kubernetes_rules.py, P95×1.5 CPU and P99×1.35 memory gates, safety_blocks[], patch_eligible (advisory).
+- Query path: Grafana HTTP API → Mimir; tokens via CLOUDSAVER_OBSERVABILITY_SECRET_* on the scanner only (browser never holds tokens). Optional `latency_query` + `latency_datasource_uid` on the connector pull real p99 latency (`app/kubernetes_latency_evidence.py`); without them federation SLO uses a decoupled proxy with `latency_basis` recorded.
+- Policy: grafana-k8s-rightsizing-v2 (app/collectors/grafana_k8s_policy.py, app/collectors/grafana_rightsizing.py): workload ownership from kube-state metrics, HPA/throttle/OOM safety blocks aligned with app/kubernetes_rules.py, P95×1.5 CPU and P99×1.35 memory gates, safety_blocks[], patch_eligible (advisory). Connectors may set optional `latency_query` (PromQL with `{cluster_matcher}`) and `latency_datasource_uid`; when configured, items include `latency_p99_ms` and bounded `latency_p99_series` (`observability_latency_query`); when unset, no latency-based savings are implied.
 - app/observability_store.py excludes grafana_mimir from the generic sync worker; rightsizing is on-demand only.
 - UI: Settings → Observability (Grafana Mimir); Kubernetes → Live rightsizing (Grafana). Spec: specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md.
 
@@ -351,7 +351,7 @@ These are implemented modules, with the limits the code itself states.
 
 **Drift ingress**
 
-app/drift/: cloud-event webhook with a shared secret (public relative to workspace auth, not open), max 100 events or 422, fenced platform_outbox_intents (0033: lease_owner, lease_fence, lease_until). Workers refuse to start if the table exists without those columns. Redis contention releases the database claim. Subscription ensure (POST /api/v1/drift/cloud-events/subscriptions/ensure) is behind CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING. The in-memory buffer in app/collectors/event_stream.py is still a scaffold; durable dispatch is the outbox path.
+app/drift/: cloud-event webhook with a shared secret (public relative to workspace auth, not open), max 100 events or 422, fenced platform_outbox_intents (0033: lease_owner, lease_fence, lease_until). Workers refuse to start if the table exists without those columns. Redis contention releases the database claim. Subscription ensure (POST /api/v1/drift/cloud-events/subscriptions/ensure) is behind CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING. `InMemoryEventBuffer` can bridge to platform outbox via `drain_buffer_to_drift_outbox` when `CLOUDSAVER_DRIFT_INGEST` is set (durable handoff; ingress webhook remains the primary path).
 
 **Code Mode**
 
