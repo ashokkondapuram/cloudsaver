@@ -148,7 +148,7 @@ for _rid, _title, _pillar in _PLATFORM_POLICY_RULES:
 
 
 def display_name(rule_id: str) -> str:
-    from app.rule_id_canonical import canonical_rule_id
+    from identity.analysis.rule_id_canonical import canonical_rule_id
 
     rid = canonical_rule_id(rule_id)
     return RULE_DISPLAY_NAMES.get(rid, rule_id)
@@ -187,9 +187,9 @@ def definitions():
             if rid not in RULE_DISPLAY_NAMES:
                 raise KeyError(f'Missing RULE_DISPLAY_NAMES entry for {rid}')
             rows.append((rid,provider,category,kinds[0],RULE_DISPLAY_NAMES[rid],pillar,bounds))
-    from app.analysis_service.declarative_rules import extend_resource_catalog_definitions
+    from identity.analysis.declarative_catalog import extend_resource_catalog_definitions
 
-    rows.extend(extend_resource_catalog_definitions())
+    rows.extend(extend_resource_catalog_definitions(RULE_DISPLAY_NAMES))
     return tuple(rows)
 
 
