@@ -1,6 +1,6 @@
 # Overview
 
-The Overview page is your workspace landing page. It summarizes the selected scan: a deduplicated retail opportunity for resources that require review, counts of resources that require review and protected resources, a clean hourly commitment ceiling (when verified hourly evidence exists), a 30-day finding trajectory across comparable scans, a multi-cloud distribution of findings, and the top five resources in your review queue. Every figure is derived from saved scan observations; nothing on this page changes a cloud resource. This page reflects the code as of Oct 25, 2026.
+The Overview page is your workspace landing page. It summarizes the selected scan: a deduplicated retail opportunity for resources that require review, counts of resources that require review and protected resources, a clean hourly commitment ceiling (when verified hourly evidence exists), a 30-day finding trajectory across comparable scans, a multi-cloud distribution of findings, and the top five resources in your review queue. Every figure is derived from saved scan observations; nothing on this page changes a cloud resource. This page reflects the code as of Nov 7, 2026.
 
 ## Where to find it
 
@@ -58,7 +58,7 @@ Role and scope classifications come from `require_workspace_role` in [app/auth.p
   - Retail opportunity is an estimate, not realized or verified savings.
   - A finding that's "no longer observed" doesn't prove remediation, deletion or savings.
   - A monthly total can't establish an hourly commitment floor. The commitment ceiling is a planning value with `purchase_authorized: false`.
-  - The current scan pipeline in [app/main.py](../../app/main.py) doesn't write `commitment_evidence`, so the ceiling shows `Unknown` unless a saved scan already carries verified hourly evidence.
+  - `commitment_evidence` is written during scan completion only when imported FOCUS usage is hour-complete and open-waste cleanup can be modeled ([app/scan_commitment_evidence.py](../../app/scan_commitment_evidence.py), invoked from [app/scan_billing.py](../../app/scan_billing.py) after [app/main.py](../../app/main.py) persists the scan). Partial billing or missing snapshots leave the ceiling `Unknown`.
 
 ## Permissions
 

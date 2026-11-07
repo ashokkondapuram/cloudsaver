@@ -355,7 +355,7 @@ app/drift/: cloud-event webhook with a shared secret (public relative to workspa
 
 **Code Mode**
 
-Migration 0038, app/code_mode_*.py, workers/code-mode-bridge. Operator-reviewed JavaScript of the single shape function transform(input) { ... }. Python rejects import, fetch, eval, Function, require, globalThis. Runs are append-only. Off unless CLOUDSAVER_CODE_MODE_ENABLED=true. Human TenantAdmin must send acknowledge_sandbox: true. This is not the agent runCode path.
+Migration 0038, [app/code_mode_api.py](app/code_mode_api.py) and siblings (`app/code_mode_*.py`), [workers/code-mode-bridge](workers/code-mode-bridge). Operator-reviewed JavaScript of the single shape function transform(input) { ... }. Python rejects import, fetch, eval, Function, require, globalThis. Runs are append-only. Off unless `CLOUDSAVER_CODE_MODE_ENABLED=true`. Human TenantAdmin must send acknowledge_sandbox: true. This is not the agent runCode path.
 
 **Semantic embeddings**
 
@@ -363,7 +363,7 @@ Migration 0032, table semantic_resource_embeddings, optional pgvector vector(153
 
 **eBPF flow costs**
 
-Migration 0030, table k8s_ebpf_flow_costs, collector app/collectors_ebpf_flow.py, and the ebpf-flow-exporter directory. Rows are tenant-scoped flow cost observations. They do not replace FOCUS node bills or OpenCost allocations.
+Migration 0030, table `k8s_ebpf_flow_costs`, collector [app/collectors_ebpf_flow.py](app/collectors_ebpf_flow.py), and the reference DaemonSet in [ebpf-flow-exporter/](ebpf-flow-exporter/). Rows are tenant-scoped flow cost observations. They do not replace FOCUS node bills or OpenCost allocations.
 
 **Observability connectors**
 
