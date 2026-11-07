@@ -2,6 +2,7 @@
 import json
 import math
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
@@ -38,7 +39,7 @@ def binding(tenant_id, cluster_id):
             return None
         value = selected[0]
         allowed = {'tenant_id', 'cluster_id', 'api_url', 'api_token_env', 'opencost_url', 'opencost_token_env',
-                   'telemetry_backend', 'region', 'role_arn', 'service_account', 'hosting_provider'}
+                   'telemetry_backend', 'latency_promql', 'latency_unit', 'region', 'role_arn', 'service_account', 'hosting_provider'}
         if set(value) - allowed or value.get('telemetry_backend', 'prometheus_http') not in ('prometheus_http', 'azure_amp', 'aws_amp_sigv4', 'gcp_gmp'):
             raise ValueError()
         for field in ('api_url', 'opencost_url'):
@@ -54,6 +55,13 @@ def binding(tenant_id, cluster_id):
         if not value.get('api_token_env'):
             raise ValueError()
         if value.get('hosting_provider') not in (None, 'azure', 'aws', 'gcp', 'self_hosted'):
+            raise ValueError()
+        if value.get('latency_promql') is not None:
+            promql = value['latency_promql']
+            if not isinstance(promql, str) or not 1 <= len(promql.strip()) <= 2000 or re.search(r'[\n\r;]', promql):
+                raise ValueError()
+            value = dict(value, latency_promql=promql.strip())
+        if value.get('latency_unit') is not None and value['latency_unit'] not in ('seconds', 'milliseconds'):
             raise ValueError()
         return value
     except (ValueError, TypeError, AttributeError):
@@ -102,12 +110,12 @@ def inventory(reader, base):
     return objects, sources
 
 
-def queries(cluster):
+def queries(cluster, *, latency_promql: str | None = None):
     selector = 'cluster=' + json.dumps(cluster) + ',container!="",container!="POD"'
     aggregate = 'sum by (cluster,namespace,pod,container) '
     c = '{' + selector + '}'
     image = '{' + selector + ',image!=""}'
-    return {
+    items = {
         'cpu': (aggregate + '(rate(container_cpu_usage_seconds_total' + image + '[5m]))', 'container', False),
         'memory': ('max by (cluster,namespace,pod,container) (container_memory_working_set_bytes' + image + ')', 'container', False),
         'throttling': (aggregate + '(rate(container_cpu_cfs_throttled_periods_total' + c + '[5m])) / ' + aggregate + '(rate(container_cpu_cfs_periods_total' + c + '[5m]))', 'container', True),
@@ -121,9 +129,12 @@ def queries(cluster):
         'pvc_mounts': ('count by (cluster,namespace,persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info{cluster=' + json.dumps(cluster) + '})', 'pvc', False),
         'service_endpoints': ('sum by (cluster,namespace,service) (kube_endpoint_address_available{cluster=' + json.dumps(cluster) + '})', 'service', False),
     }
+    if latency_promql:
+        items['latency'] = (latency_promql, 'container', False)
+    return items
 
 
-def matrix(payload, cluster, metric, kind, ratio, start, end, now):
+def matrix(payload, cluster, metric, kind, ratio, start, end, now, *, latency_unit: str = 'milliseconds'):
     if payload.get('status') != 'success' or payload.get('warnings') or payload.get('infos'):
         raise ScanError('Partial Prometheus response')
     data = payload.get('data', {})
@@ -142,10 +153,17 @@ def matrix(payload, cluster, metric, kind, ratio, start, end, now):
             value = float(raw)
             if not math.isfinite(value) or value < 0 or ratio and value > 1:
                 raise ScanError('Invalid metric sample')
+            if metric == 'latency' and latency_unit == 'seconds':
+                value *= 1000
             points.append({'at': datetime.fromtimestamp(float(stamp), timezone.utc).isoformat(), 'value': value})
         values = dict(window_start=start.isoformat(), window_end=end.isoformat(), points=points)
         # Validate timestamps and coverage once, then derive all peaks from the same valid sample set.
-        check=evaluate_series(values,TimeSeriesEvidenceContract(metric,'P95'),now=now,require_resource_age=False)
+        if metric == 'latency':
+            from app.kubernetes_latency_evidence import PROMETHEUS_LATENCY_BASIS
+            check = evaluate_series(values, TimeSeriesEvidenceContract('interval_p99_latency_ms', 'MAX'), now=now, require_resource_age=False)
+            values['basis'] = PROMETHEUS_LATENCY_BASIS
+        else:
+            check = evaluate_series(values, TimeSeriesEvidenceContract(metric, 'P95'), now=now, require_resource_age=False)
         ordered=sorted(p['value'] for p in points)
         stats={'p95':check.observed_value,'p99':ordered[math.ceil(.99*len(ordered))-1] if check.is_sufficient else None,
                'maximum':ordered[-1] if check.is_sufficient else None}
@@ -154,26 +172,31 @@ def matrix(payload, cluster, metric, kind, ratio, start, end, now):
                      coverage_ratio=check.coverage_ratio, valid_samples=check.valid_samples, expected_samples=check.expected_samples,
                      max_gap_minutes=check.max_observed_gap_minutes, gap_reason=check.gap_reason,
                      evidence_digest=digest(points))
-        if kind == 'container' and metric == 'cpu' and check.is_sufficient:
+        if kind == 'container' and metric in ('cpu', 'latency') and check.is_sufficient:
             stats['points'] = points
+        if metric == 'latency':
+            stats['unit'] = latency_unit
         result[key] = stats
     return result
 
 
-def telemetry(reader, base, cluster, now):
+def telemetry(reader, base, cluster, now, *, latency_promql: str | None = None, latency_unit: str = 'milliseconds'):
     end = now.astimezone(timezone.utc).replace(second=0, microsecond=0)
     end -= timedelta(minutes=end.minute % 5)
     start = end-timedelta(days=30)
     metrics, sources = {}, []
     failures=0
-    for name, (query, kind, ratio) in queries(cluster).items():
+    for name, (query, kind, ratio) in queries(cluster, latency_promql=latency_promql).items():
         if failures>=3:
             metrics[name]={}
             sources.append(entry('prometheus:'+name,'prometheus_range_api',status='unavailable',reason='source_circuit_open_for_scan'))
             continue
         try:
             data = reader.get(base.rstrip('/') + '/api/v1/query_range', {'query': query, 'start': int(start.timestamp())+300, 'end': int(end.timestamp()), 'step': 300, 'timeout': '30s'})
-            metrics[name] = matrix(data, cluster, name, kind, ratio, start, end, now)
+            metrics[name] = matrix(
+                data, cluster, name, kind, ratio, start, end, now,
+                latency_unit=latency_unit if name == 'latency' else 'milliseconds',
+            )
             failures=0
             values = list(metrics[name].values())
             sources.append(entry('prometheus:' + name, 'prometheus_range_api', start=start.isoformat(), end=end.isoformat(), now=now,
