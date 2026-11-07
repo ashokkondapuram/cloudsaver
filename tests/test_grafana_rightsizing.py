@@ -37,6 +37,22 @@ def test_grafana_test_and_rightsizing_with_mock_frames(monkeypatch):
             return httpx.Response(200, json=dict(name='Mimir', type='prometheus', uid='mimir-uid-1'))
         if request.url.path.endswith('/api/ds/query'):
             payload = request.read().decode()
+            if 'kube_pod_owner' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', owner_kind='ReplicaSet', owner_name='rs-1'))]),
+                             data=dict(values=[[1], [1]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'kube_replicaset_owner' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', replicaset='rs-1', owner_kind='Deployment', owner_name='app'))]),
+                             data=dict(values=[[1], [1]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'horizontalpodautoscaler' in payload:
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[]))))
+            if 'throttled_periods' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.0]]))
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+            if 'OOMKilled' in payload or 'last_terminated' in payload:
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[]))))
             if 'container_cpu_usage' in payload:
                 frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
                              data=dict(values=[[1700000000000], [0.1, 0.2, 0.15]]))
@@ -65,6 +81,8 @@ def test_grafana_test_and_rightsizing_with_mock_frames(monkeypatch):
     assert result['item_count'] >= 1
     row = result['items'][0]
     assert row['namespace'] == 'ns' and row['suggested_cpu_request'] is not None
+    assert row['workload_kind'] == 'Deployment' and row['workload_name'] == 'app'
+    assert 'safety_blocks' in row
 
 
 def test_api_connectors_and_job(evidence, monkeypatch):

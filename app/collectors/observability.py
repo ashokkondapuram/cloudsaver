@@ -69,6 +69,10 @@ def validate(raw, tenant):
     """Normalize a connector definition; raises ValueError with a user-facing message."""
     if not isinstance(raw, dict):
         raise ValueError('Connector details are required.')
+    kind = raw.get('kind')
+    if kind == 'grafana_mimir':
+        from app.collectors import grafana_rightsizing
+        return grafana_rightsizing.validate_connector(raw, tenant)
     allowed = {'name', 'kind', 'base_url', 'auth_kind', 'secret_ref', 'header_name', 'aws_account_id', 'gcp_project_id',
                'queries', 'services', 'mappings', 'thresholds', 'schedule', 'trace_window_hours'}
     if set(raw) - allowed:
@@ -76,12 +80,8 @@ def validate(raw, tenant):
     name = str(raw.get('name', '')).strip()
     if not 1 <= len(name) <= 80:
         raise ValueError('Enter a connector name of 1–80 characters.')
-    kind = raw.get('kind')
     if kind not in KINDS:
         raise ValueError('Choose Prometheus, REST metrics, Tempo, Jaeger or Grafana Mimir.')
-    if kind == 'grafana_mimir':
-        from app.collectors import grafana_rightsizing
-        return grafana_rightsizing.validate_connector(raw, tenant)
     base = str(raw.get('base_url', '')).strip()
     base = base if base.endswith('/') else base + '/'
     host = check_url(base, resolve=False)

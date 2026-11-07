@@ -113,6 +113,19 @@ def create_router(store, current_tenant):
 def probe(connector, tenant):
     """One bounded read: one query or service over the last hour. Nothing is stored."""
     from app.collectors.observability import SourceError, collect, message
+    if connector.get('kind') == 'grafana_mimir':
+        from app.collectors.grafana_rightsizing import probe as grafana_probe
+        result = grafana_probe(connector)
+        if result.get('ok'):
+            return dict(ok=True, message='Grafana datasource is reachable.', **result)
+        code = result.get('error_code', 'OBSERVABILITY_SOURCE_UNAVAILABLE')
+        text = {
+            'grafana_auth': 'Grafana rejected the credentials.',
+            'datasource_unreachable': 'The datasource could not be loaded.',
+            'datasource_type': 'The datasource type is not supported for Mimir queries.',
+            'query_failed': 'The test query failed.',
+        }.get(code, message(code))
+        return dict(ok=False, error_code=code, message=text)
     try:
         result = collect(connector, tenant, probe=True)
     except SourceError as error:

@@ -43,6 +43,13 @@ def test_url_rejects_private_and_metadata_addresses(monkeypatch,address):
     assert obs.check_url(f'https://{HOST}/')==HOST
 
 
+def test_grafana_mimir_connector_validate():
+    item = obs.validate(dict(name='Grafana', kind='grafana_mimir', base_url=f'https://{HOST}/', auth_kind='bearer_env',
+                             secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', mimir_datasource_uid='mimir-1',
+                             cluster_values=['dev']), workspace())
+    assert item['kind'] == 'grafana_mimir' and item['cluster_values'] == ['dev']
+
+
 def test_validation_requires_mappings_named_secrets_and_relative_paths():
     with pytest.raises(ValueError,match='resource label'):obs.validate(dict(name='x',kind='prometheus',base_url=f'https://{HOST}',queries=[{'id':'a','promql':'up'}]),workspace())
     with pytest.raises(ValueError,match='Secret reference'):prometheus_config(secret_ref='AWS_SECRET_ACCESS_KEY')

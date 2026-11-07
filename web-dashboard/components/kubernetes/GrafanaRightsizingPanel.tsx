@@ -1,15 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import {useEffect, useState} from 'react';
 import {ChartLineUp} from '@phosphor-icons/react';
 import {api} from '../../lib/api';
+import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {Loading, Notice, SectionTitle} from '../ui/shared';
 
-type Connector = {id: string; name: string; enabled: boolean; cluster_values: string[]; mimir_datasource_uid: string};
-type Item = {namespace: string; pod: string; container: string; recommendation_direction: string;
+type Connector = {id: string; name: string; enabled: boolean; cluster_values?: string[]; mimir_datasource_uid?: string; kind: string};
+type Item = {
+  namespace: string; pod: string; container: string; workload_kind: string; workload_name: string;
+  recommendation_direction: string; safety_blocks: string[];
   current_cpu_request: number | null; suggested_cpu_request: number | null;
-  current_memory_request: number | null; suggested_memory_request: number | null; needs_review: boolean};
+  current_memory_request: number | null; suggested_memory_request: number | null;
+  needs_review: boolean; patch_eligible: boolean; coverage_ratio: number; hpa_managed: boolean; oom_observed: boolean;
+};
 type Job = {status: string; payload: {result?: {items: Item[]; policy_version: string; queried_at: string}; error?: string}};
 
 export function GrafanaRightsizingPanel() {
@@ -22,11 +28,12 @@ export function GrafanaRightsizingPanel() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api<{items: Connector[]}>('/kubernetes/grafana/connectors', token).then(r => {
-      setConnectors(r.items.filter(c => c.enabled));
-      if (r.items[0]) {
-        setConnectorId(r.items[0].id);
-        setCluster(r.items[0].cluster_values?.[0] || '');
+    api<{items: Connector[]}>('/observability/connectors', token).then(r => {
+      const grafana = r.items.filter(c => c.kind === 'grafana_mimir' && c.enabled);
+      setConnectors(grafana);
+      if (grafana[0]) {
+        setConnectorId(grafana[0].id);
+        setCluster(grafana[0].cluster_values?.[0] || '');
       }
     }).catch(() => setConnectors([]));
   }, [token]);
@@ -35,10 +42,9 @@ export function GrafanaRightsizingPanel() {
     if (!connectorId) return;
     setBusy(true); setError(''); setJob(null);
     try {
-      const idempotency = crypto.randomUUID();
       const created = await api<Job>('/kubernetes/grafana/rightsizing/run', token, {
         method: 'POST',
-        body: {idempotency_key: idempotency, connector_id: connectorId, cluster: cluster || undefined, window_days: 14},
+        body: {idempotency_key: crypto.randomUUID(), connector_id: connectorId, cluster: cluster || undefined, window_days: 14},
       });
       setJob(created);
     } catch (cause) {
@@ -52,10 +58,10 @@ export function GrafanaRightsizingPanel() {
 
   return <section className="panel">
     <SectionTitle title="Live rightsizing (Grafana)" action={<ChartLineUp size={20} weight="regular"/>}>
-      Advisory CPU and memory request suggestions from Mimir metrics. Does not change your cluster.
+      Advisory CPU and memory suggestions from Mimir, with the same safety blocks as scan-based reviews. Does not change your cluster.
     </SectionTitle>
     {!connectors.length
-      ? <p className="inline-help">{canAdmin ? 'Add a Grafana Mimir connector under Settings → Observability (kind grafana_mimir), or use the Kubernetes Grafana API.' : 'Ask a workspace administrator to connect Grafana.'}</p>
+      ? <p className="inline-help">{canAdmin ? <>Add a <strong>Grafana Mimir (Kubernetes rightsizing)</strong> connector under <Link className="text-link" href="/settings?tab=observability">Settings → Observability</Link>.</> : 'Ask a workspace administrator to connect Grafana.'}</p>
       : <>
         <div className="enterprise-filters">
           <label>Connector<select value={connectorId} onChange={e => { setConnectorId(e.target.value); const c = connectors.find(x => x.id === e.target.value); if (c?.cluster_values?.[0]) setCluster(c.cluster_values[0]); }}>
@@ -72,12 +78,13 @@ export function GrafanaRightsizingPanel() {
         {job?.payload?.error && <Notice tone="error">{job.payload.error}</Notice>}
         {items.length > 0 && <>
           <p className="inline-help">Policy {job?.payload?.result?.policy_version} · Queried {job?.payload?.result?.queried_at}</p>
-          <div className="grid-scroll"><table className="data-table"><thead><tr><th>Workload</th><th>CPU req → suggested</th><th>Memory req → suggested</th><th>Direction</th></tr></thead>
+          <div className="grid-scroll"><table className="data-table"><thead><tr><th>Workload</th><th>CPU req → suggested</th><th>Memory req → suggested</th><th>Safety</th><th>Direction</th></tr></thead>
             <tbody>{items.slice(0, 50).map(row => <tr key={`${row.namespace}/${row.pod}/${row.container}`}>
-              <td>{row.namespace}/{row.pod}<small>{row.container}</small></td>
+              <td>{row.workload_kind}/{row.workload_name}<small>{row.namespace} · {row.container}</small></td>
               <td>{row.current_cpu_request ?? '—'} → {row.suggested_cpu_request ?? '—'}</td>
               <td>{row.current_memory_request ?? '—'} → {row.suggested_memory_request ?? '—'}</td>
-              <td>{row.needs_review ? 'Needs review' : row.recommendation_direction}</td>
+              <td>{row.safety_blocks.length ? row.safety_blocks.map(s => sentence(s)).join(' · ') : row.patch_eligible ? 'Clear' : row.needs_review ? 'Needs review' : '—'}</td>
+              <td>{row.recommendation_direction}</td>
             </tr>)}</tbody></table></div>
         </>}
       </>}

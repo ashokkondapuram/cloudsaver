@@ -4,14 +4,18 @@ from __future__ import annotations
 import math
 import os
 import re
-import statistics
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from app.collectors.grafana_k8s_policy import (
+    COVERAGE_MIN, coverage_blocks, cpu_overrequest_detected, cpu_safety_blocks, memory_overrequest_detected,
+    memory_safety_blocks, scan_aligned_cpu_target, scan_aligned_memory_target,
+)
 from app.collectors.observability import AUTH_KINDS, FORBIDDEN_HEADERS, HEADER, SECRET_REF, SourceError, check_url, _match
 
-POLICY_VERSION = 'grafana-k8s-rightsizing-v1'
+POLICY_VERSION = 'grafana-k8s-rightsizing-v2'
 DEFAULT_WINDOW_DAYS = 14
 STEP_SECONDS = 300
 MAX_CLUSTERS = 20
@@ -106,13 +110,23 @@ def _cluster_matcher(config, cluster: str | None):
     return f'{label}=~"{joined}"'
 
 
-def _p95(values: list[float]) -> float | None:
+def _percentile(values: list[float], pct: float) -> float | None:
     finite = [float(v) for v in values if isinstance(v, (int, float)) and math.isfinite(v)]
-    if len(finite) < 2:
-        return max(finite) if finite else None
+    if not finite:
+        return None
+    if len(finite) == 1:
+        return finite[0]
     finite.sort()
-    index = max(0, min(len(finite) - 1, math.ceil(0.95 * len(finite)) - 1))
+    index = max(0, min(len(finite) - 1, math.ceil(pct * len(finite)) - 1))
     return finite[index]
+
+
+def _p95(values: list[float]) -> float | None:
+    return _percentile(values, 0.95)
+
+
+def _p99(values: list[float]) -> float | None:
+    return _percentile(values, 0.99)
 
 
 def _ceil_cpu_cores(cores: float) -> float:
@@ -184,6 +198,65 @@ def _series_from_frames(payload) -> dict[tuple, list[float]]:
     return series
 
 
+def _instant_label_rows(payload) -> list[dict]:
+    rows = []
+    for block in ((payload or {}).get('results') or {}).values():
+        for frame in (block or {}).get('frames') or []:
+            schema = (frame.get('schema') or {}).get('fields') or []
+            values = (frame.get('data') or {}).get('values') or []
+            if not values:
+                continue
+            label_field = schema[-1] if schema else {}
+            labels = label_field.get('labels') or {}
+            val = values[-1][-1] if values[-1] else None
+            rows.append(dict(labels, value=val))
+    return rows
+
+
+def _build_workload_owners(config, client: GrafanaClient, matcher: str) -> dict[tuple, tuple[str, str]]:
+    """Map (namespace, pod) -> (workload_kind, workload_name)."""
+    owners: dict[tuple, tuple[str, str]] = {}
+    rs_to_deploy: dict[tuple, str] = {}
+    pod_owner = client.query_range(f'kube_pod_owner{{{matcher}}}', datetime.now(timezone.utc), datetime.now(timezone.utc))
+    rs_owner = client.query_range(f'kube_replicaset_owner{{{matcher},owner_kind="Deployment"}}', datetime.now(timezone.utc), datetime.now(timezone.utc))
+    for row in _instant_label_rows(rs_owner):
+        ns, rs = row.get('namespace', ''), row.get('replicaset', row.get('owner_name', ''))
+        deploy = row.get('owner_name', '')
+        if ns and rs and deploy:
+            rs_to_deploy[(ns, rs)] = deploy
+    for row in _instant_label_rows(pod_owner):
+        ns, pod = row.get('namespace', ''), row.get('pod', '')
+        kind, name = row.get('owner_kind', ''), row.get('owner_name', '')
+        if not ns or not pod:
+            continue
+        if kind == 'ReplicaSet' and (ns, name) in rs_to_deploy:
+            owners[(ns, pod)] = ('Deployment', rs_to_deploy[(ns, name)])
+        elif kind in ('StatefulSet', 'DaemonSet', 'Job', 'CronJob') and name:
+            owners[(ns, pod)] = (kind, name)
+        elif kind and name:
+            owners[(ns, pod)] = (kind, name)
+        else:
+            owners[(ns, pod)] = ('Pod', pod)
+    return owners
+
+
+def _hpa_workloads(config, client: GrafanaClient, matcher: str) -> set[tuple]:
+    """Set of (namespace, workload_kind, workload_name) with an HPA scale target."""
+    targets: set[tuple] = set()
+    expr = f'kube_horizontalpodautoscaler_info{{{matcher}}}'
+    try:
+        payload = client.query_range(expr, datetime.now(timezone.utc), datetime.now(timezone.utc))
+    except SourceError:
+        return targets
+    for row in _instant_label_rows(payload):
+        ns = row.get('namespace', '')
+        kind = row.get('scaletargetref_kind', row.get('target_kind', 'Deployment'))
+        name = row.get('scaletargetref_name', row.get('target_name', ''))
+        if ns and name:
+            targets.add((ns, kind or 'Deployment', name))
+    return targets
+
+
 def _requests_from_frames(payload, resource: str) -> dict[tuple, float]:
     out: dict[tuple, float] = {}
     results = (payload or {}).get('results') or {}
@@ -216,34 +289,68 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
     mem_expr = f'sum by (namespace, pod, container) (container_memory_working_set_bytes{{{matcher},container!="",container!="POD"}})'
     cpu_requests = f'kube_pod_container_resource_requests{{{matcher},resource="cpu",container!="",container!="POD"}}'
     mem_requests = f'kube_pod_container_resource_requests{{{matcher},resource="memory",container!="",container!="POD"}}'
+    throttle_expr = f'sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{{{matcher},container!="",container!="POD"}}[5m])) / sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total{{{matcher},container!="",container!="POD"}}[5m]))'
+    oom_expr = f'max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{{{matcher},reason="OOMKilled",container!="",container!="POD"}})'
     client = GrafanaClient(config)
     client.test()
+    owners = _build_workload_owners(config, client, matcher)
+    hpa_targets = _hpa_workloads(config, client, matcher)
     cpu_usage = _series_from_frames(client.query_range(cpu_expr, start, end))
     mem_usage = _series_from_frames(client.query_range(mem_expr, start, end))
+    throttle_usage = _series_from_frames(client.query_range(throttle_expr, start, end))
+    oom_usage = _series_from_frames(client.query_range(oom_expr, start, end))
     cpu_req = _requests_from_frames(client.query_range(cpu_requests, end, end, step=STEP_SECONDS), 'cpu')
     mem_req = _requests_from_frames(client.query_range(mem_requests, end, end, step=STEP_SECONDS), 'memory')
+    expected_samples = window_days * 24 * 12
     keys = sorted(set(cpu_usage) | set(mem_usage) | set(cpu_req) | set(mem_req))[:MAX_ITEMS]
     items = []
     for ns, pod, container in keys:
-        cpu_p95 = _p95(cpu_usage.get((ns, pod, container), []))
-        mem_p95 = _p95(mem_usage.get((ns, pod, container), []))
+        wl_kind, wl_name = owners.get((ns, pod), ('Pod', pod))
+        hpa_managed = (ns, wl_kind, wl_name) in hpa_targets or (ns, 'Deployment', wl_name) in hpa_targets
+        cpu_samples = cpu_usage.get((ns, pod, container), [])
+        mem_samples = mem_usage.get((ns, pod, container), [])
+        throttle_samples = throttle_usage.get((ns, pod, container), [])
+        cpu_p95 = _p95(cpu_samples)
+        mem_p95 = _p95(mem_samples)
+        mem_p99 = _p99(mem_samples)
+        throttle_p95 = _p95(throttle_samples)
+        oom_observed = any(v and v > 0 for v in oom_usage.get((ns, pod, container), []))
         current_cpu = cpu_req.get((ns, pod, container))
         current_mem = mem_req.get((ns, pod, container))
-        suggested_cpu = _ceil_cpu_cores(cpu_p95 * 1.2) if cpu_p95 is not None else None
-        suggested_mem = _ceil_memory_bytes(mem_p95 * 1.2) if mem_p95 is not None else None
+        coverage = min(1.0, len(cpu_samples) / max(1, expected_samples))
+        suggested_cpu = _ceil_cpu_cores(scan_aligned_cpu_target(cpu_p95)) if cpu_p95 is not None else None
+        suggested_mem = _ceil_memory_bytes(scan_aligned_memory_target(mem_p99)) if mem_p99 is not None else None
+        safety = (
+            coverage_blocks(coverage)
+            + cpu_safety_blocks(throttle_p95=throttle_p95, hpa_managed=hpa_managed)
+            + memory_safety_blocks(oom_observed=oom_observed, restart_spread=False)
+        )
+        cpu_detected = cpu_overrequest_detected(current_cpu, cpu_p95)
+        mem_detected = memory_overrequest_detected(current_mem, mem_p99)
         direction = 'unchanged'
         if suggested_cpu and current_cpu and current_cpu > 0:
             ratio = abs(suggested_cpu - current_cpu) / current_cpu
             if ratio >= 0.10:
                 direction = 'decrease' if suggested_cpu < current_cpu else 'increase'
-        items.append(dict(namespace=ns, pod=pod, container=container, cluster=cluster or ','.join(config['cluster_values']),
-                          current_cpu_request=current_cpu, current_memory_request=current_mem,
-                          suggested_cpu_request=suggested_cpu, suggested_memory_request=suggested_mem,
-                          cpu_p95=cpu_p95, memory_p95=mem_p95, memory_p99=_p95(mem_usage.get((ns, pod, container), [])),
-                          recommendation_direction=direction, confidence='advisory',
-                          coverage_ratio=min(1.0, len(cpu_usage.get((ns, pod, container), [])) / max(1, window_days * 24 * 12)),
-                          needs_review=direction == 'decrease' and (cpu_p95 or 0) <= 0,
-                          rationale='Based on p95 usage with 20% headroom (policy ' + POLICY_VERSION + ').'))
+        needs_review = bool(safety) or coverage < COVERAGE_MIN or (direction == 'decrease' and not (cpu_detected or mem_detected))
+        eligible_cpu = cpu_detected and not safety and direction == 'decrease'
+        eligible_mem = mem_detected and not safety and suggested_mem and current_mem and suggested_mem < current_mem
+        items.append(dict(
+            namespace=ns, pod=pod, container=container, workload_kind=wl_kind, workload_name=wl_name,
+            cluster=cluster or ','.join(config['cluster_values']),
+            current_cpu_request=current_cpu, current_memory_request=current_mem,
+            suggested_cpu_request=suggested_cpu, suggested_memory_request=suggested_mem,
+            scan_aligned_cpu_request=scan_aligned_cpu_target(cpu_p95),
+            scan_aligned_memory_request=scan_aligned_memory_target(mem_p99),
+            cpu_p95=cpu_p95, memory_p95=mem_p95, memory_p99=mem_p99, cpu_throttle_p95=throttle_p95,
+            hpa_managed=hpa_managed, oom_observed=oom_observed,
+            cpu_overrequest_detected=cpu_detected, memory_overrequest_detected=mem_detected,
+            recommendation_direction=direction, confidence='advisory' if not safety else 'needs_review',
+            coverage_ratio=coverage, safety_blocks=sorted(set(safety)),
+            needs_review=needs_review, patch_eligible=eligible_cpu or eligible_mem,
+            rationale='Advisory sizing uses scan-aligned headroom (CPU P95×1.5, memory P99×1.35). '
+                      + f'Policy {POLICY_VERSION}.',
+        ))
     return dict(policy_version=POLICY_VERSION, queried_at=end.isoformat(), window_days=window_days,
                 window_start=start.isoformat(), window_end=end.isoformat(), cluster=cluster, items=items,
                 item_count=len(items), truncated=len(keys) >= MAX_ITEMS)

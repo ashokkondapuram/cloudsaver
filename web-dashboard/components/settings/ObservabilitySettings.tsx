@@ -7,16 +7,17 @@ import {sentence} from '../../lib/resources';
 import {useWorkspace} from '../WorkspaceProvider';
 import {EmptyState, Loading, Notice, SectionTitle} from '../ui/shared';
 
-type Kind = 'prometheus' | 'rest_metrics' | 'tempo' | 'jaeger';
+type Kind = 'prometheus' | 'rest_metrics' | 'tempo' | 'jaeger' | 'grafana_mimir';
 type Connector = {id: string; name: string; kind: Kind; base_url: string; auth_kind: string; secret_ref: string | null; header_name: string | null;
   aws_account_id: string | null; gcp_project_id: string | null; queries: unknown[]; services: string[]; schedule: string; trace_window_hours: number;
+  mimir_datasource_uid?: string; cluster_label?: string; cluster_values?: string[]; org_id?: number | null;
   mappings: {resource_label?: string; service_resources?: Record<string, string>}; thresholds: {latency_p95_ms: number; error_rate_pct: number};
   enabled: boolean; version: number; updated_at: string};
 type SummaryItem = {id: string; status: string; observed_at: string | null; error?: string; warnings?: string[];
   mapping_coverage?: {series: number; labeled: number; services: number; mapped_services: number}};
 type Probe = {ok: boolean; message: string; warnings?: string[]};
 
-const kinds: {id: Kind; label: string}[] = [{id: 'prometheus', label: 'Prometheus'}, {id: 'rest_metrics', label: 'REST metrics'}, {id: 'tempo', label: 'Grafana Tempo'}, {id: 'jaeger', label: 'Jaeger'}];
+const kinds: {id: Kind; label: string}[] = [{id: 'prometheus', label: 'Prometheus'}, {id: 'rest_metrics', label: 'REST metrics'}, {id: 'tempo', label: 'Grafana Tempo'}, {id: 'jaeger', label: 'Jaeger'}, {id: 'grafana_mimir', label: 'Grafana Mimir (Kubernetes rightsizing)'}];
 const auths = [['none', 'None'], ['bearer_env', 'Bearer token (secret reference)'], ['basic_env', 'Basic authentication (secret reference)'], ['header_env', 'Custom header (secret reference)'],
   ['azure_managed', 'Azure managed identity'], ['aws_sigv4', 'AWS SigV4 (workspace account)'], ['gcp_managed', 'Google Cloud managed identity']] as const;
 const templates: Record<'prometheus' | 'rest_metrics', unknown[]> = {
@@ -28,7 +29,8 @@ const templates: Record<'prometheus' | 'rest_metrics', unknown[]> = {
 const kindLabel = (kind: string) => kinds.find(k => k.id === kind)?.label || sentence(kind);
 const blank = () => ({id: '', version: 0, name: '', kind: 'prometheus' as Kind, base_url: '', auth_kind: 'bearer_env', secret_ref: 'CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY',
   header_name: '', aws_account_id: '', gcp_project_id: '', schedule: 'hourly', trace_window_hours: 1, resource_label: 'instance',
-  queries: JSON.stringify(templates.prometheus, null, 2), services: '', latency: 500, errors: 1});
+  queries: JSON.stringify(templates.prometheus, null, 2), services: '', latency: 500, errors: 1,
+  mimir_datasource_uid: '', cluster_label: 'cluster', cluster_values: '', org_id: ''});
 type Draft = ReturnType<typeof blank>;
 
 function toDraft(c: Connector): Draft {
@@ -36,10 +38,23 @@ function toDraft(c: Connector): Draft {
   return {id: c.id, version: c.version, name: c.name, kind: c.kind, base_url: c.base_url, auth_kind: c.auth_kind, secret_ref: c.secret_ref || '', header_name: c.header_name || '',
     aws_account_id: c.aws_account_id || '', gcp_project_id: c.gcp_project_id || '', schedule: c.schedule, trace_window_hours: c.trace_window_hours,
     resource_label: c.mappings.resource_label || '', queries: JSON.stringify(c.queries, null, 2),
-    services: c.services.map(s => mapping[s] ? `${s} = ${mapping[s]}` : s).join('\n'), latency: c.thresholds.latency_p95_ms, errors: c.thresholds.error_rate_pct};
+    services: c.services.map(s => mapping[s] ? `${s} = ${mapping[s]}` : s).join('\n'), latency: c.thresholds.latency_p95_ms, errors: c.thresholds.error_rate_pct,
+    mimir_datasource_uid: c.mimir_datasource_uid || '', cluster_label: c.cluster_label || 'cluster',
+    cluster_values: (c.cluster_values || []).join('\n'), org_id: c.org_id != null ? String(c.org_id) : ''};
 }
 
 function toConnector(d: Draft) {
+  if (d.kind === 'grafana_mimir') {
+    const clusters = d.cluster_values.split('\n').map(l => l.trim()).filter(Boolean);
+    const body: Record<string, unknown> = {
+      name: d.name, kind: 'grafana_mimir', base_url: d.base_url, auth_kind: d.auth_kind, schedule: 'manual',
+      mimir_datasource_uid: d.mimir_datasource_uid.trim(), cluster_label: d.cluster_label.trim() || 'cluster', cluster_values: clusters,
+    };
+    if (['bearer_env', 'header_env'].includes(d.auth_kind)) body.secret_ref = d.secret_ref;
+    if (d.auth_kind === 'header_env') body.header_name = d.header_name;
+    if (d.org_id.trim()) body.org_id = Number(d.org_id);
+    return body;
+  }
   const metrics = d.kind === 'prometheus' || d.kind === 'rest_metrics';
   let queries: unknown[] = [];
   if (metrics) {
@@ -118,33 +133,44 @@ export function ObservabilitySettings() {
     }
   });
 
+  const grafana = draft?.kind === 'grafana_mimir';
   const metrics = draft && (draft.kind === 'prometheus' || draft.kind === 'rest_metrics');
   const secret = draft && ['bearer_env', 'basic_env', 'header_env'].includes(draft.auth_kind);
+  const grafanaAuths = auths.filter(([id]) => ['none', 'bearer_env', 'header_env'].includes(id));
   return <section className="panel">
     <SectionTitle title="Observability connectors" eyebrow="METRICS · TRACES · CORRELATION" action={canAdmin && !draft ? <div className="button-row">
       <button type="button" className="button secondary" disabled={busy || !items?.some(i => i.enabled)} onClick={sync}><ArrowsClockwise size={15} weight="regular"/>Sync now</button>
       <button type="button" className="button primary" disabled={busy} onClick={() => {setDraft(blank()); setProbe(null);}}><Plus size={15} weight="regular"/>Add connector</button></div> : undefined}>
       Read-only metrics and traces, linked to resources through mappings you define
     </SectionTitle>
-    <p className="inline-help">Connectors only read data. Secrets are never stored in CloudSaver: enter the name of an environment variable that your operator sets, such as <code>CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY</code>.</p>
+    <p className="inline-help">Connectors only read data. Secrets are never stored in CloudSaver: enter the name of an environment variable that your operator sets, such as <code>CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY</code>. Grafana Mimir connectors power live Kubernetes rightsizing on the <strong>Kubernetes</strong> page; they are not included in scheduled observability sync.</p>
     {error && <Notice tone="error">{error}</Notice>}{notice && <Notice tone="success">{notice}</Notice>}
     {draft && <form className="drawer-section" onSubmit={event => {event.preventDefault(); save();}}>
       <h3>{draft.id ? `Edit ${draft.name}` : 'Add connector'}</h3>
       <div className="enterprise-filters">
-        <label>Connector type<select value={draft.kind} onChange={e => {const kind = e.target.value as Kind; setDraft({...draft, kind, queries: kind === 'prometheus' || kind === 'rest_metrics' ? JSON.stringify(templates[kind], null, 2) : draft.queries});}}>{kinds.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}</select></label>
+        <label>Connector type<select value={draft.kind} onChange={e => {const kind = e.target.value as Kind; setDraft({...blank(), ...draft, kind, schedule: kind === 'grafana_mimir' ? 'manual' : draft.schedule, queries: kind === 'prometheus' || kind === 'rest_metrics' ? JSON.stringify(templates[kind], null, 2) : draft.queries});}}>{kinds.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}</select></label>
         <label>Name<input required maxLength={80} value={draft.name} onChange={e => setDraft({...draft, name: e.target.value})}/></label>
-        <label>Base URL<input required type="url" placeholder="https://prometheus.example.com" value={draft.base_url} onChange={e => setDraft({...draft, base_url: e.target.value})}/></label>
-        <label>Authentication<select value={draft.auth_kind} onChange={e => setDraft({...draft, auth_kind: e.target.value})}>{auths.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <label>{grafana ? 'Grafana URL' : 'Base URL'}<input required type="url" placeholder={grafana ? 'https://grafana.example.com' : 'https://prometheus.example.com'} value={draft.base_url} onChange={e => setDraft({...draft, base_url: e.target.value})}/></label>
+        <label>Authentication<select value={draft.auth_kind} onChange={e => setDraft({...draft, auth_kind: e.target.value})}>{(grafana ? grafanaAuths : auths).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         {secret && <label>Secret reference<input required pattern="CLOUDSAVER_OBSERVABILITY_SECRET_[A-Z0-9_]{1,80}" value={draft.secret_ref} onChange={e => setDraft({...draft, secret_ref: e.target.value.toUpperCase()})}/></label>}
         {draft.auth_kind === 'header_env' && <label>Header name<input required value={draft.header_name} placeholder="X-API-Key" onChange={e => setDraft({...draft, header_name: e.target.value})}/></label>}
         {draft.auth_kind === 'aws_sigv4' && <label>AWS account ID<input required pattern="\d{12}" value={draft.aws_account_id} onChange={e => setDraft({...draft, aws_account_id: e.target.value})}/></label>}
         {draft.auth_kind === 'gcp_managed' && <label>Google Cloud project ID<input required value={draft.gcp_project_id} onChange={e => setDraft({...draft, gcp_project_id: e.target.value})}/></label>}
-        <label>Schedule<select value={draft.schedule} onChange={e => setDraft({...draft, schedule: e.target.value})}><option value="hourly">Hourly (last 7 days, 5-minute steps)</option><option value="daily">Daily (last 30 days, 1-hour steps)</option><option value="manual">Manual only</option></select></label>
+        {!grafana && <label>Schedule<select value={draft.schedule} onChange={e => setDraft({...draft, schedule: e.target.value})}><option value="hourly">Hourly (last 7 days, 5-minute steps)</option><option value="daily">Daily (last 30 days, 1-hour steps)</option><option value="manual">Manual only</option></select></label>}
+        {grafana && <>
+          <label>Mimir datasource UID<input required pattern="[A-Za-z0-9_-]{3,64}" value={draft.mimir_datasource_uid} onChange={e => setDraft({...draft, mimir_datasource_uid: e.target.value})}/></label>
+          <label>Cluster label<input required value={draft.cluster_label} onChange={e => setDraft({...draft, cluster_label: e.target.value})}/></label>
+          <label>Grafana org ID (optional)<input pattern="[0-9]+" value={draft.org_id} onChange={e => setDraft({...draft, org_id: e.target.value})}/></label>
+        </>}
         {metrics ? <label>Resource label<input required value={draft.resource_label} placeholder="instance or azure_resource_id" onChange={e => setDraft({...draft, resource_label: e.target.value})}/></label>
-          : <label>Trace window (hours)<input type="number" min={1} max={24} value={draft.trace_window_hours} onChange={e => setDraft({...draft, trace_window_hours: Number(e.target.value)})}/></label>}
-        <label>Latency threshold (P95, ms)<input type="number" min={1} value={draft.latency} onChange={e => setDraft({...draft, latency: Number(e.target.value)})}/></label>
-        <label>Error rate threshold (%)<input type="number" min={0.01} step={0.01} max={100} value={draft.errors} onChange={e => setDraft({...draft, errors: Number(e.target.value)})}/></label>
+          : !grafana ? <label>Trace window (hours)<input type="number" min={1} max={24} value={draft.trace_window_hours} onChange={e => setDraft({...draft, trace_window_hours: Number(e.target.value)})}/></label> : null}
+        {!grafana && <>
+          <label>Latency threshold (P95, ms)<input type="number" min={1} value={draft.latency} onChange={e => setDraft({...draft, latency: Number(e.target.value)})}/></label>
+          <label>Error rate threshold (%)<input type="number" min={0.01} step={0.01} max={100} value={draft.errors} onChange={e => setDraft({...draft, errors: Number(e.target.value)})}/></label>
+        </>}
       </div>
+      {grafana && <label className="stacked-field">Cluster values (one per line)<textarea required rows={4} spellCheck={false} value={draft.cluster_values} placeholder="aks-prod" onChange={e => setDraft({...draft, cluster_values: e.target.value})}/>
+        <span className="inline-help">Prometheus label values that identify each cluster in Mimir.</span></label>}
       {metrics ? <label className="stacked-field">Queries (JSON, up to 20)<textarea rows={8} spellCheck={false} value={draft.queries} onChange={e => setDraft({...draft, queries: e.target.value})}/>
         <span className="inline-help">The resource label value must match the resource ID exactly, for example the full Azure resource ID. Metric types: cpu_percent, memory_percent, requests_per_second, error_rate_pct, latency_p95_ms or custom.</span></label>
         : <label className="stacked-field">Services (one per line, optionally <code>service = resource ID</code>)<textarea rows={5} spellCheck={false} value={draft.services} placeholder="checkout = /subscriptions/…/providers/Microsoft.Web/sites/checkout" onChange={e => setDraft({...draft, services: e.target.value})}/>
@@ -160,9 +186,9 @@ export function ObservabilitySettings() {
       <tbody>{items.map(c => {const s = summary[c.id]; const coverage = s?.mapping_coverage; return <tr key={c.id}>
         <td>{c.name}{!c.enabled && <small> · Disabled</small>}</td><td>{kindLabel(c.kind)}</td><td>{sentence(c.schedule)}</td>
         <td>{!s || s.status === 'not_collected' ? 'Not collected yet' : s.status === 'completed' ? (s.observed_at ? dateTime(s.observed_at) : 'Completed') : <span title={s.error}>Failed{s.observed_at ? ` · ${dateTime(s.observed_at)}` : ''}</span>}{s?.error && <small className="inline-help"> {s.error}</small>}</td>
-        <td>{coverage ? (c.kind === 'prometheus' || c.kind === 'rest_metrics' ? `${coverage.labeled.toLocaleString('en-US')} of ${coverage.series.toLocaleString('en-US')} series labeled` : `${coverage.mapped_services.toLocaleString('en-US')} of ${coverage.services.toLocaleString('en-US')} services linked`) : '—'}</td>
+        <td>{c.kind === 'grafana_mimir' ? 'Rightsizing via Kubernetes page' : coverage ? (c.kind === 'prometheus' || c.kind === 'rest_metrics' ? `${coverage.labeled.toLocaleString('en-US')} of ${coverage.series.toLocaleString('en-US')} series labeled` : `${coverage.mapped_services.toLocaleString('en-US')} of ${coverage.services.toLocaleString('en-US')} services linked`) : '—'}</td>
         {canAdmin && <td><div className="button-row"><button type="button" className="button secondary small" disabled={busy} onClick={() => {setDraft(toDraft(c)); setProbe(null);}}>Edit</button><button type="button" className="button secondary small" disabled={busy} onClick={() => testSaved(c)}>Test</button><button type="button" className="button secondary small" disabled={busy} onClick={() => toggle(c)}>{c.enabled ? 'Disable' : 'Enable'}</button></div></td>}
       </tr>;})}</tbody></table></div>
-      : <EmptyState icon={Pulse} title="No observability connectors">{canAdmin ? 'Add a Prometheus, REST metrics, Tempo or Jaeger connector to link metrics and traces to your resources.' : 'Ask a workspace admin to add a Prometheus, REST metrics, Tempo or Jaeger connector.'}</EmptyState>)}
+      : <EmptyState icon={Pulse} title="No observability connectors">{canAdmin ? 'Add a Prometheus, REST metrics, Tempo, Jaeger or Grafana Mimir connector.' : 'Ask a workspace admin to add an observability connector.'}</EmptyState>)}
   </section>;
 }
