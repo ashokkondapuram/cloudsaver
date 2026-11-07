@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,6 +20,8 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Verify disposable-service Docker access
+        run: docker --host=unix:///var/run/docker.sock info
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
@@ -29,7 +32,17 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pip check
       - name: Unit and disposable PostgreSQL/Redis fault tests
-        run: python scripts/test_postgres.py tests --cov=app.auth --cov=app.control_plane --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov=app.governance_store --cov=app.governance_evidence --cov=app.governance_api --cov-report=term-missing --cov-fail-under=85
+        run: |
+          mkdir -p test-results
+          python scripts/test_postgres.py tests --junitxml=test-results/backend.xml --cov=app.auth --cov=app.control_plane --cov=app.agent_contract --cov=app.agent_store --cov=app.provider_access --cov=app.billing_jobs --cov=app.finops_api --cov=app.outcome_evidence --cov=app.outcome_store --cov=app.outcome_api --cov=app.outcome_anomalies --cov=app.governance_store --cov=app.governance_evidence --cov=app.governance_api --cov-report=term-missing --cov-report=xml:test-results/backend-coverage.xml --cov-fail-under=85
+      - name: Upload backend test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-test-results
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14
 
   dashboard:
     runs-on: ubuntu-latest
@@ -84,13 +97,25 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      - name: Verify disposable-service Docker access
+        run: docker --host=unix:///var/run/docker.sock info
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements-dev.txt -r platform/requirements.txt
       - run: python -m pip check
       - name: Collect and execute the independent platform suite
-        run: python scripts/test_postgres.py platform/tests
+        run: |
+          mkdir -p test-results
+          python scripts/test_postgres.py platform/tests --junitxml=test-results/platform.xml
+      - name: Upload platform test reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: platform-test-results
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14
 
   agent-worker:
     runs-on: ubuntu-latest
