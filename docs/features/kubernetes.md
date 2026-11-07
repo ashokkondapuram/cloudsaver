@@ -166,6 +166,7 @@ Store secrets only in your deployment's secret store. The variables below hold r
 | `CLOUDSAVER_KUBERNETES_BINDINGS` | JSON list (up to 100) of tenant- and cluster-bound bindings with `tenant_id`, `cluster_id`, `api_url`, `api_token_env` and the optional `opencost_url`, `opencost_token_env`, `telemetry_backend`, `latency_promql`, `latency_unit`, `region`, `role_arn`, `service_account`, `hosting_provider`. URLs must be HTTPS with no credentials, query or fragment. | `[]` (metrics-only mode) |
 
 `latency_promql` is an optional single-line PromQL expression (1–2000 characters, no line breaks) evaluated during federation telemetry. It fills container `metrics.latency` for the scan window so `slo_evidence.latency_p99_series` uses observability latency instead of the decoupled proxy ([app/kubernetes_latency_evidence.py](../../app/kubernetes_latency_evidence.py)). Set `latency_unit` to `seconds` or `milliseconds` when query results are not in milliseconds; when omitted, milliseconds is assumed.
+
 | `CLOUDSAVER_PROMETHEUS_TOKEN_*` | Prometheus bearer token, named by the cluster's `bearer_token_env`. Used by the metrics-only scanner and the `prometheus_http` backend. | None |
 | `CLOUDSAVER_K8S_*` | Kubernetes API and OpenCost tokens, named by `api_token_env` and `opencost_token_env`. | None |
 | `CLOUDSAVER_OBSERVABILITY_SECRET_*` | Grafana/Mimir bearer or header tokens for observability connectors (scanner only). | None |

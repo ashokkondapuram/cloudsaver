@@ -12,6 +12,13 @@ DOC_EXTRA_PATHS = (
     "workers/code-mode-bridge",
 )
 
+GRAFANA_DOC_MODULES = (
+    "app/collectors/grafana_telemetry.py",
+    "app/kubernetes_grafana_schemas.py",
+    "workers/grafana_k8s_rightsizing.py",
+    "app/grafana_k8s_store.py",
+)
+
 ENV_FLAGS = (
     "CLOUDSAVER_KUBERNETES_BINDINGS",
     "CLOUDSAVER_GRAFANA_",
@@ -34,6 +41,11 @@ REGRESSION_TESTS = re.findall(
 def test_backend_improvements_doc_exists():
     assert "CloudSaver backend improvements" in DOC
     assert "§5b" in DOC or "5b" in DOC
+
+
+def test_grafana_backend_doc_modules_referenced():
+    missing = [path for path in GRAFANA_DOC_MODULES if path not in DOC]
+    assert not missing, missing
 
 
 def test_doc_module_paths_exist():
