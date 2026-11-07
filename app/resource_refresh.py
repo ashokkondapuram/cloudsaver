@@ -9,7 +9,7 @@ from app.resource_timestamps import evidence_needs_refresh
 
 logger = logging.getLogger('cloudsaver.resource_refresh')
 
-AUTO_REFRESH = os.getenv('CLOUDSAVER_RESOURCE_AUTO_REFRESH', 'true').lower() == 'true'
+AUTO_REFRESH = os.getenv('CLOUDSAVER_RESOURCE_AUTO_REFRESH', 'false').lower() == 'true'
 
 
 def _arg_findings_for_scan(scan: dict, resource_id: str) -> list[dict]:
@@ -46,7 +46,7 @@ def refresh_resource_observation(
 
     resource = dict(observation)
     arg_findings = _arg_findings_for_scan(scan, resource['resource_id'])
-    stamp = scan.get('timestamp')
+    stamp = datetime.now(timezone.utc).isoformat()
     now = datetime.now(timezone.utc)
     tenant_id = tenant['tenant_id']
     scan_id = scan['scan_id']
@@ -133,7 +133,7 @@ def maybe_refresh_observation(
     store,
     policies: dict | None = None,
 ) -> dict | None:
-    if not observation or not AUTO_REFRESH:
+    if not observation or not AUTO_REFRESH or observation.get('cloud_provider', 'azure') != 'azure':
         return observation
     from app.resources_redis import apply_scan_resource, get_scan_resource
 
@@ -162,10 +162,19 @@ def maybe_refresh_observation(
         )
         return refreshed
     except Exception:
+        from copy import deepcopy
+        from app.resource_fetch_stages import set_stage
+        from app.resources_redis import put_scan_resource
+        failed = deepcopy(observation)
+        set_stage(failed.setdefault('evidence', {}), 'analysis', 'failed')
+        try:
+            put_scan_resource(tenant['tenant_id'], scan['scan_id'], failed, refresh_in_progress=False)
+        except Exception:
+            logger.warning('Could not persist failed refresh state scan_id=%s', scan.get('scan_id'))
         logger.warning(
             'Resource refresh failed resource_id=%s scan_id=%s',
             observation.get('resource_id'),
             scan.get('scan_id'),
             exc_info=True,
         )
-        return observation
+        return failed

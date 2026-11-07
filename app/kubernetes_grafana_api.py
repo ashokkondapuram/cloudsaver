@@ -73,9 +73,11 @@ def create_router(store, current_tenant):
             await run_in_threadpool(check_url, config['base_url'])
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
+        if repo.connector(tenant['tenant_id'], str(connector_id)) is None:
+            raise HTTPException(404, 'Connector not found')
         version = envelope.version
         try:
-            item = await run_in_threadpool(repo.connectors.update, tenant, str(connector_id), config, version)
+            item = await run_in_threadpool(repo.connectors.update, tenant, str(connector_id), config, version, expected_kind='grafana_mimir')
         except WorkflowConflict as error:
             raise HTTPException(409, str(error)) from None
         if item is None or item.get('kind') != 'grafana_mimir':

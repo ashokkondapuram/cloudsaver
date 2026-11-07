@@ -41,7 +41,7 @@ def analysis_is_stale(evidence: dict | None, *, now: datetime | None = None) -> 
     if analyzed is None:
         return True
     age_minutes = (now - analyzed).total_seconds() / 60
-    return age_minutes > STALE_ANALYSIS_MINUTES
+    return age_minutes < 0 or age_minutes > STALE_ANALYSIS_MINUTES
 
 
 def evidence_needs_refresh(evidence: dict | None) -> bool:
@@ -68,7 +68,7 @@ def observation_row_fields(observation: dict | None) -> dict:
     ev = (observation or {}).get('evidence') or {}
     stages = ev.get('fetch_stages') or {}
     refresh_in_progress = stages.get('analysis') == 'running'
-    stale = evidence_needs_refresh(ev) and not refresh_in_progress
+    stale = evidence_needs_refresh(ev)
     return {
         'last_analyzed_at': ev.get('last_analyzed_at'),
         'azure_status_fetched_at': ev.get('azure_status_fetched_at'),

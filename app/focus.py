@@ -121,6 +121,23 @@ def authorized(provider,account,tenant):
     return account in {p['project_id'] for p in tenant.get('gcp_projects',[])}
 
 
+def summary_scope_sql(tenant):
+    """Apply the same grants as authorized() before aggregation and query caps."""
+    clauses, args = [], []
+    for provider, accounts in (
+        ('azure', tenant.get('subscription_ids', [])),
+        ('aws', [a['account_id'] for a in tenant.get('aws_accounts', [])]),
+        ('gcp', [a['project_id'] for a in tenant.get('gcp_projects', [])]),
+    ):
+        limits = (tenant.get('scope_restrictions') or {}).get(provider)
+        accounts = limits if limits is not None else accounts
+        accounts = sorted({str(a) for a in accounts if authorized(provider, str(a), tenant)})
+        if accounts:
+            clauses.append('(provider=%s AND sub_account IN (' + ','.join('%s' for _ in accounts) + '))')
+            args.extend([provider, *accounts])
+    return '(' + ' OR '.join(clauses) + ')' if clauses else '1=0', tuple(args)
+
+
 def validate_scope(payload,tenant):
     if not authorized(payload.provider,payload.sub_account_id,tenant):
         raise FocusError('Billing import is outside the current workspace cloud scope',403)
@@ -379,11 +396,12 @@ class FocusRepository:
         begin = datetime.combine(start, time.min, tzinfo=timezone.utc)
         finish = datetime.combine(end, time.min, tzinfo=timezone.utc)
         begin_iso, finish_iso = begin.isoformat(), finish.isoformat()
+        fence, scope_args = summary_scope_sql(tenant)
         with self.store.transaction(tenant['tenant_id']) as db:
             row = db.execute(
                 'SELECT currency, COUNT(*) AS n FROM focus_charges WHERE tenant_id=%s AND period_start<%s AND period_end>%s '
-                'GROUP BY currency ORDER BY n DESC LIMIT 1',
-                (tenant['tenant_id'], finish_iso, begin_iso),
+                'AND ' + fence + ' GROUP BY currency ORDER BY n DESC,currency LIMIT 1',
+                (tenant['tenant_id'], finish_iso, begin_iso, *scope_args),
             ).fetchone()
         if row and row[0] and re.fullmatch(r'[A-Z]{3}', str(row[0])):
             return str(row[0]), 'billing_data'
@@ -400,12 +418,13 @@ class FocusRepository:
 
     def _summary(self,tenant,start,end,currency,budget=None):
         begin=datetime.combine(start,time.min,tzinfo=timezone.utc);finish=datetime.combine(end,time.min,tzinfo=timezone.utc)
+        fence, scope_args = summary_scope_sql(tenant)
         with self.store.transaction(tenant['tenant_id']) as db:
             rows=db.execute('''SELECT provider,sub_account,period_start,period_end,billed_cost,effective_cost,list_cost,charge_category
                 FROM focus_charges WHERE tenant_id=%s AND currency=%s AND period_start<%s AND period_end>%s
-                ORDER BY period_start,id LIMIT 50001''',(tenant['tenant_id'],currency,finish.isoformat(),begin.isoformat())).fetchall()
-            coverage=db.execute('SELECT provider,sub_account,period_start,period_end,complete FROM focus_imports WHERE tenant_id=%s AND currency=%s AND period_start<%s AND period_end>%s ORDER BY created_at,id LIMIT 50001',
-                (tenant['tenant_id'],currency,end.isoformat(),start.isoformat())).fetchall()
+                AND ''' + fence + ' ORDER BY period_start,id LIMIT 50001',(tenant['tenant_id'],currency,finish.isoformat(),begin.isoformat(),*scope_args)).fetchall()
+            coverage=db.execute('SELECT provider,sub_account,period_start,period_end,complete FROM focus_imports WHERE tenant_id=%s AND currency=%s AND period_start<%s AND period_end>%s AND '+fence+' ORDER BY created_at,id LIMIT 50001',
+                (tenant['tenant_id'],currency,end.isoformat(),start.isoformat(),*scope_args)).fetchall()
         if len(coverage)>50000: raise FocusError('Billing coverage exceeds 50000 imports; narrow the period')
         if len(rows)>50000: raise FocusError('Billing window exceeds 50000 records; narrow the period')
         scopes={(r[0],r[1]) for r in rows if authorized(r[0],r[1],tenant)}

@@ -53,7 +53,7 @@ def is_idle_load_balancer(ctx: UnifiedResourceContext) -> bool:
     targets = ctx.metrics.backend_target_count
     requests = ctx.metrics.request_count_14d
     if targets is not None and targets == 0:
-        return requests is None or requests <= 0
+        return requests is not None and requests <= 0
     return False
 
 
@@ -61,7 +61,9 @@ def is_idle_compute(ctx: UnifiedResourceContext) -> bool:
     m = ctx.metrics
     if m.cpu_max_pct is None:
         return False
-    net = (m.network_in_total_gb or 0.0) + (m.network_out_total_gb or 0.0)
+    if m.network_in_total_gb is None or m.network_out_total_gb is None:
+        return False
+    net = m.network_in_total_gb + m.network_out_total_gb
     return m.cpu_max_pct < 5.0 and net < 0.1
 
 

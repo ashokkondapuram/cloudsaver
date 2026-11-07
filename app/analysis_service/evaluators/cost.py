@@ -109,8 +109,6 @@ def evaluate(ctx: UnifiedResourceContext) -> list[PillarFinding]:
         if monthly is not None and target is not None:
             projected = target * (1.0 - rate)
             savings = monthly - projected
-        elif monthly is not None:
-            savings = monthly * 0.35 * (1.0 - rate)
         findings.append(
             PillarFinding(
                 finding_id=deterministic_finding_id(

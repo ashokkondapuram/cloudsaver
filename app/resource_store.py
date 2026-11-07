@@ -235,9 +235,14 @@ class ResourceStore:
         return [self._decision(r) for r in rows]
 
     def latest_decisions(self, tenant_id, keys=None, limit=20000):
+        if keys is not None:
+            keys = sorted(set(keys))
+            if not keys:
+                return {}
+        predicate = ' AND resource_key IN (' + ','.join('%s' for _ in keys) + ')' if keys is not None else ''
         with self.store.transaction(tenant_id) as db:
-            rows = db.execute(f'SELECT {self.DECISION} FROM resource_decisions WHERE tenant_id=%s ORDER BY created_at DESC,id DESC LIMIT %s',
-                              (tenant_id, limit)).fetchall()
+            rows = db.execute(f'SELECT {self.DECISION} FROM (SELECT resource_decisions.*, ROW_NUMBER() OVER (PARTITION BY resource_key ORDER BY created_at DESC,id DESC) AS rn FROM resource_decisions WHERE tenant_id=%s' + predicate + ') ranked WHERE rn=1 ORDER BY created_at DESC,id DESC LIMIT %s',
+                              (tenant_id, *(keys or []), limit)).fetchall()
         latest = {}
         for row in rows:
             decision = self._decision(row)

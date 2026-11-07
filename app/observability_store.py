@@ -60,14 +60,14 @@ class ObservabilityStore:
                        'VALUES(%s,%s,%s,%s,%s,%s,1,%s,%s,%s)', (id, tid, config['name'], config['kind'], db.json(config), True, actor(tenant), now, now))
         return self.connector(tid, id)
 
-    def update(self, tenant, id, config, version):
+    def update(self, tenant, id, config, version, *, expected_kind=None):
         tid = tenant['tenant_id']
         with self.store.transaction(tid, write=True) as db:
             if db.execute('SELECT 1 FROM observability_connectors WHERE tenant_id=%s AND name=%s AND id<>%s', (tid, config['name'], id)).fetchone():
                 raise WorkflowConflict('Another connector already uses this name.')
             changed = db.execute('UPDATE observability_connectors SET name=%s,kind=%s,config=%s,version=version+1,updated_at=%s '
-                                 'WHERE tenant_id=%s AND id=%s AND version=%s',
-                                 (config['name'], config['kind'], db.json(config), _now().isoformat(), tid, id, version)).rowcount
+                                 'WHERE tenant_id=%s AND id=%s AND version=%s' + (' AND kind=%s' if expected_kind else ''),
+                                 (config['name'], config['kind'], db.json(config), _now().isoformat(), tid, id, version) + ((expected_kind,) if expected_kind else ())).rowcount
         if not changed:
             if self.connector(tid, id) is None:
                 return None
@@ -188,8 +188,8 @@ class ObservabilityStore:
 
     def latest_snapshots(self, tid, *, completed_only=False):
         with self.store.transaction(tid) as db:
-            rows = db.execute('SELECT connector_id,status,payload,observed_at FROM observability_snapshots WHERE tenant_id=%s '
-                              + ("AND status='completed' " if completed_only else '') + 'ORDER BY observed_at DESC LIMIT 500', (tid,)).fetchall()
+            rows = db.execute('SELECT connector_id,status,payload,observed_at FROM (SELECT connector_id,status,payload,observed_at, ROW_NUMBER() OVER (PARTITION BY connector_id ORDER BY observed_at DESC,id DESC) AS rn FROM observability_snapshots WHERE tenant_id=%s '
+                              + ("AND status='completed' " if completed_only else '') + ') ranked WHERE rn=1 ORDER BY observed_at DESC', (tid,)).fetchall()
         latest = {}
         for connector_id, status, payload, observed_at in rows:
             latest.setdefault(str(connector_id), dict(status=status, observed_at=str(observed_at), **decode(payload)))

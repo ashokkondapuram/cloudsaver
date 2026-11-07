@@ -94,8 +94,6 @@ def retail_monthly_from_scan(scan_store, tenant, scan_id, provider, resource_id)
             if key != normalize:
                 continue
             candidate = row.get('retail_estimate_usd')
-            if candidate is None:
-                candidate = row.get('estimated_monthly_waste_usd')
             if candidate is not None:
                 retail = candidate
     basis = 'azure_retail_meters_from_scan' if retail is not None else None
@@ -120,40 +118,35 @@ def finance_reconciled_benefit(
 ):
     if store is None:
         return None
+    # Only explicitly comparable financial evidence may populate a USD response.
+    if store is None or observation_start is None or observation_end is None:
+        return None
     rid = resource_id.lower() if provider == 'azure' else resource_id
-    query = (
-        "SELECT verification FROM savings_cases WHERE tenant_id=%s AND provider=%s AND resource_id=%s "
-        "AND state='financially_reconciled' ORDER BY updated_at DESC LIMIT 1"
-    )
+    query = ("SELECT verification FROM savings_cases WHERE tenant_id=%s AND provider=%s "
+             "AND resource_id=%s AND state='financially_reconciled' ORDER BY updated_at DESC,id DESC")
     params = (tenant_id, provider, rid)
     if hasattr(store, 'execute'):
-        row = store.execute(query, params).fetchone()
+        rows = store.execute(query, params).fetchall()
     elif hasattr(store, 'transaction'):
         with store.transaction(tenant_id) as db:
-            row = db.execute(query, params).fetchone()
+            rows = db.execute(query, params).fetchall()
     else:
         return None
-    if not row or not row[0]:
-        return None
-    try:
-        payload = row[0] if isinstance(row[0], dict) else __import__('json').loads(row[0])
-    except (TypeError, ValueError):
-        return None
-    verification = payload or {}
-    if observation_start is not None and observation_end is not None:
-        period_start = verification.get('period_start')
-        period_end = verification.get('period_end')
-        if period_start and period_start != observation_start.isoformat():
-            return None
-        if period_end and period_end != observation_end.isoformat():
-            return None
-    benefit = verification.get('reconciled_financial_benefit')
-    if benefit is None:
-        return None
-    try:
-        return float(Decimal(str(benefit)).quantize(Decimal('0.01')))
-    except Exception:
-        return None
+    for row in rows:
+        try:
+            value = row[0] if isinstance(row[0], dict) else __import__('json').loads(row[0])
+            if not isinstance(value, dict):
+                continue
+            if (value.get('period_start') != observation_start.isoformat()
+                    or value.get('period_end') != observation_end.isoformat()
+                    or value.get('currency') != 'USD'):
+                continue
+            amount = Decimal(str(value['reconciled_financial_benefit']))
+            if amount.is_finite():
+                return float(amount.quantize(Decimal('0.01')))
+        except (ValueError, TypeError, KeyError, ArithmeticError):
+            continue
+    return None
 
 
 def build_financial_snapshot(
@@ -220,8 +213,8 @@ def build_financial_snapshot(
     window_retail = scale_retail_monthly(monthly_retail, obs_days)
     opportunity = opportunity_totals(findings or [])
     balance = resource_financial_balance(
-        billed_cost_usd=observation.get('billed_cost_usd'),
-        effective_cost_usd=observation.get('effective_cost_usd'),
+        billed_cost_usd=observation.get('billed_cost_usd') if observation.get('currency') == 'USD' else None,
+        effective_cost_usd=observation.get('effective_cost_usd') if observation.get('currency') == 'USD' else None,
         retail_run_rate_usd=window_retail,
         opportunity=opportunity,
     )

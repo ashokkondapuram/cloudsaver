@@ -89,7 +89,7 @@ class GrafanaK8sStore:
     def job(self, tid, job_id):
         from app.enterprise_store import decode
         with self.store.transaction(tid) as db:
-            row = db.execute('SELECT id,state,payload,created_at,updated_at FROM observability_jobs WHERE tenant_id=%s AND id=%s', (tid, job_id)).fetchone()
+            row = db.execute('SELECT id,state,payload,created_at,updated_at FROM observability_jobs WHERE tenant_id=%s AND id=%s AND '+self._filters(db), (tid, job_id)).fetchone()
         return self._job((row[0], row[1], decode(row[2]), row[3], row[4])) if row else None
 
     @staticmethod
