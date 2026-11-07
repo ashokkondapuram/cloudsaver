@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
       recordFailure(client);
       return problem(status === 403 ? 403 : 401, detail || "The identity service didn't accept this key.");
     }
-    deleteSession(request);
-    const session = createSession({credential: key, refresh_token: null, credential_expires_at: null, profile, signed_in_at: Date.now()});
+    await deleteSession(request);
+    const session = await createSession({credential: key, refresh_token: null, credential_expires_at: null, profile, signed_in_at: Date.now()});
     const response = json({signed_in: true, ...profile});
     setSessionCookie(response, request, session);
     return response;

@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import Field, field_validator
 
 from app.agent_contract import Strict
-from app.code_mode_executor import execute_snippet, snippet_digest
+from app.code_mode_executor import execute_snippet, snippet_digest, ExecutionUnavailable
 from app.enterprise_store import decode
 from app.principals import actor
 
@@ -27,7 +27,7 @@ class RunRequest(Strict):
     @field_validator('input')
     @classmethod
     def bounded_input(cls, value):
-        encoded = json.dumps(value, sort_keys=True, separators=(',', ':')).encode('utf-8')
+        encoded = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode('utf-8')
         if len(encoded) > 8192:
             raise ValueError('Input JSON exceeds 8 KB.')
         return value
@@ -89,6 +89,8 @@ class CodeModeRepository:
     def create_and_execute(self, tenant, body: RunRequest):
         if not body.acknowledge_sandbox:
             raise ValueError('Confirm isolated sandbox execution before running Code Mode.')
+        from app.code_mode_validate import validate_snippet
+        validate_snippet(body.snippet)
         tid = tenant['tenant_id']
         now = self.clock().isoformat()
         digest = snippet_digest(body.snippet)
@@ -114,31 +116,42 @@ class CodeModeRepository:
                 'snippet_chars': len(body.snippet),
                 'snippet_stored': False,
             }
-            db.execute(
+            inserted = db.execute(
                 '''INSERT INTO code_mode_runs(id,tenant_id,state,version,snippet_digest,payload,result,actor,request_key,fingerprint,created_at,updated_at)
-                   VALUES(%s,%s,'running',1,%s,%s,NULL,%s,%s,%s,%s,%s)''',
+                   VALUES(%s,%s,'reconciliation_required',1,%s,%s,NULL,%s,%s,%s,%s,%s) ON CONFLICT(tenant_id,request_key) DO NOTHING''',
                 (run_id, tid, digest, db.json(payload), actor(tenant), body.request_key, fingerprint, now, now),
             )
+            if not inserted.rowcount:
+                prior = db.execute('SELECT id,fingerprint FROM code_mode_runs WHERE tenant_id=%s AND request_key=%s', (tid, body.request_key)).fetchone()
+                if prior[1] != fingerprint:
+                    raise CodeModeConflict('Idempotency key belongs to another snippet.')
+                return self._row(db, tid, str(prior[0]))
             run = self._row(db, tid, run_id)
             self._event(db, run, 'run_requested', actor(tenant), {'snippet_digest': digest})
-            try:
-                result = execute_snippet(
-                    run_id=run_id,
-                    tenant_id=tid,
-                    snippet=body.snippet,
-                    input_value=body.input,
-                )
-                state = 'succeeded' if result.get('status') == 'succeeded' else 'failed'
-            except Exception as error:
-                result = {'status': 'failed', 'error': str(error)}
-                state = 'failed'
-            updated = self.clock().isoformat()
-            db.execute(
-                'UPDATE code_mode_runs SET state=%s,version=2,result=%s,updated_at=%s WHERE tenant_id=%s AND id=%s',
+        # Intent is committed before invoking any adapter. A replay of an
+        # interrupted run returns its existing record and never dispatches again.
+        try:
+            result = execute_snippet(run_id=run_id, tenant_id=tid, snippet=body.snippet, input_value=body.input)
+            if (not isinstance(result, dict) or result.get('status') not in ('succeeded', 'failed')
+                    or result.get('snippet_digest') != digest or result.get('run_id') != run_id
+                    or result.get('tenant_id') != tid):
+                raise ValueError('Invalid execution response')
+            state = 'succeeded' if result['status'] == 'succeeded' else 'failed'
+        except ExecutionUnavailable:
+            result = {'status': 'failed', 'error': 'Execution is unavailable', 'snippet_digest': digest}
+            state = 'failed'
+        except Exception:
+            result = {'status': 'unknown', 'error': 'Execution outcome requires reconciliation', 'snippet_digest': digest}
+            state = 'reconciliation_required'
+        updated = self.clock().isoformat()
+        with self.store.transaction(tid, write=True) as db:
+            changed = db.execute(
+                'UPDATE code_mode_runs SET state=%s,version=2,result=%s,updated_at=%s WHERE tenant_id=%s AND id=%s AND version=1',
                 (state, db.json(result), updated, tid, run_id),
-            )
+            ).rowcount
             run = self._row(db, tid, run_id)
-            self._event(db, run, 'run_completed', actor(tenant), {'state': state, 'worker_ref': result.get('worker_ref')})
+            if changed:
+                self._event(db, run, 'run_reconciliation_required' if state == 'reconciliation_required' else 'run_completed', actor(tenant), {'state': state, 'worker_ref': result.get('worker_ref')})
             return run
 
     def events(self, tenant, run_id):

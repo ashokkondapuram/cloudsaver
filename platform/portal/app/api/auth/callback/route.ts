@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   const cookieState = request.cookies.get(OAUTH_STATE_COOKIE)?.value || '';
   if (params.get('error')) return fail(request, params.get('error') === 'access_denied' ? 'access_denied' : 'sign_in_failed');
   if (!state || !code || state !== cookieState) return fail(request, 'sign_in_expired');
-  const pending = takePending(state);
+  const pending = await takePending(state);
   if (!pending) return fail(request, 'sign_in_expired');
 
   let tokens;
@@ -47,8 +47,8 @@ export async function GET(request: NextRequest) {
     const {profile, status} = await fetchOperatorProfile(tokens.access_token as string);
     if (!profile) return fail(request, status === 403 ? 'not_authorized' : 'sign_in_failed');
     const authTime = typeof claims.auth_time === 'number' ? claims.auth_time * 1000 : Date.now();
-    deleteSession(request);
-    const session = createSession({
+    await deleteSession(request);
+    const session = await createSession({
       credential: tokens.access_token as string,
       refresh_token: tokens.refresh_token || null,
       credential_expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,

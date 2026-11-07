@@ -4,10 +4,10 @@ import {clearSessionCookie, deleteSession} from '../../../../lib/server/session'
 
 export const dynamic = 'force-dynamic';
 
-export function POST(request: NextRequest) {
+export async function POST(request: NextRequest) {
   const rejected = checkOrigin(request);
   if (rejected) return rejected;
-  deleteSession(request);
+  await deleteSession(request);
   const response = json({signed_in: false});
   clearSessionCookie(response, request);
   return response;

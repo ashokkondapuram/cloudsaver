@@ -75,7 +75,8 @@ async function forward(request: NextRequest, context: {params: Promise<{path: st
   const path = segments.join('/');
   if (!allowed(path, method)) return problem(404, "This page doesn't exist.");
 
-  const session = readSession(request);
+  let session;
+  try {session=await readSession(request);} catch {return identityUnavailable();}
   if (!session) return sessionEnded();
   if (STEP_UP.some(([pattern, m]) => m === method && pattern.test(path)) && !hasRecentSignIn(session)) return stepUpRequired();
   if (method !== 'GET' && !session.profile.roles.includes('PlatformOperator')) {
@@ -84,7 +85,7 @@ async function forward(request: NextRequest, context: {params: Promise<{path: st
   let fresh: boolean;
   try {fresh=await ensureFreshCredential(session);} catch {return identityUnavailable();}
   if (!fresh) {
-    deleteSession(request);
+    await deleteSession(request);
     const response = sessionEnded();
     clearSessionCookie(response, request);
     return response;
@@ -115,7 +116,7 @@ async function forward(request: NextRequest, context: {params: Promise<{path: st
   }
 
   if (upstream.status === 401) {
-    deleteSession(request);
+    await deleteSession(request);
     const response = sessionEnded();
     clearSessionCookie(response, request);
     return response;

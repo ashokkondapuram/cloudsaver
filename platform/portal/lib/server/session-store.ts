@@ -51,5 +51,6 @@ export class SessionStore {
   finishRefresh(id: string, fence: number, value: unknown, now: number) {
     return !!this.db.prepare('UPDATE sessions SET payload=?,refresh_until=0 WHERE id=? AND refresh_fence=? AND refresh_until>? AND expires>? AND idle>?').run(this.encode(id,value),id,fence,now,now,now).changes;
   }
+  ping(){this.db.prepare('SELECT 1').get();}
   close(){this.db.close();}
 }

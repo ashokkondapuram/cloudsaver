@@ -21,12 +21,12 @@ function scope() {
   return `openid profile offline_access ${serverConfig().entra.apiScope}`;
 }
 
-export function beginLogin(options: {returnTo: string; stepUp: boolean}) {
+export async function beginLogin(options: {returnTo: string; stepUp: boolean}) {
   const now = Date.now();
   const state = randomBytes(32).toString('base64url');
   const verifier = randomBytes(48).toString('base64url');
   const nonce = randomBytes(32).toString('base64url');
-  savePending(state, {verifier, nonce, return_to: options.returnTo, created_at: now}, PENDING_TTL_MS);
+  await savePending(state, {verifier, nonce, return_to: options.returnTo, created_at: now}, PENDING_TTL_MS);
   const {clientId, redirectUri} = serverConfig().entra;
   const params = new URLSearchParams({
     client_id: clientId,
@@ -46,7 +46,7 @@ export function beginLogin(options: {returnTo: string; stepUp: boolean}) {
   return {state, url: `${authority()}/authorize?${params.toString()}`};
 }
 
-export function takePending(state: string): Pending | null {
+export async function takePending(state: string): Promise<Pending|null> {
   return takePendingValue<Pending>(state);
 }
 
@@ -87,19 +87,19 @@ export async function ensureFreshCredential(session: PortalSession): Promise<boo
   if (session.profile.auth_mode !== 'entra' || !session.credential_expires_at) return true;
   if (session.credential_expires_at - Date.now() > 120_000) return true;
   if (!session.refresh_token) return false;
-  const fence=claimSessionRefresh(session.id);
+  const fence=await claimSessionRefresh(session.id);
   if(fence===null)throw new Error('Session refresh is already in progress'); // Another request is rotating this credential; never reuse its refresh token.
-  const current=reloadSession(session.id);
+  const current=await reloadSession(session.id);
   if(!current)return false;
   Object.assign(session,current);
-  if(session.credential_expires_at && session.credential_expires_at-Date.now()>120_000)return finishSessionRefresh(session,fence);
+  if(session.credential_expires_at && session.credential_expires_at-Date.now()>120_000){if(!await finishSessionRefresh(session,fence))throw new Error('Session refresh lease lost');return true;}
   try {
     const tokens = await tokenRequest({grant_type: 'refresh_token', refresh_token: session.refresh_token, scope: scope()});
     session.credential = tokens.access_token as string;
     session.refresh_token = tokens.refresh_token || session.refresh_token;
     session.credential_expires_at = Date.now() + (tokens.expires_in ?? 3600) * 1000;
-    return finishSessionRefresh(session,fence);
+    {if(!await finishSessionRefresh(session,fence))throw new Error('Session refresh lease lost');return true;}
   } catch {
-    return false;
+    throw new Error('Session refresh is unavailable; retry or sign in again');
   }
 }

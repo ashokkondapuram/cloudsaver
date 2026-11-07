@@ -175,3 +175,36 @@ External acceptance remains necessary for provider credentials/API behavior, rea
 - Supported Node 24.22.1: portal typecheck and **15 unit tests**, agent typecheck and **26 tests**, dashboard typecheck and **34 unit tests** passed. Both Next.js production builds completed successfully on that runtime.
 - No coverage percentage is inferred from these invocations. Temporary log paths are local evidence and must be replaced by retained CI artifacts for release approval.
 - No real-service skip, browser unit test, or successful build is represented as live-provider, full-browser, RLS, disaster recovery, or deployment acceptance. Full generated route/response schema parity, distributed multi-host session storage, and re-enabling isolated Code Mode remain separate implementation items.
+
+
+## Shared-session and durable-execution follow-up
+
+The portal now supports shared Redis sessions across hosts using an official,
+locked Redis client. Compose provisions a dedicated persistent session service
+with `noeviction`, independent of identity throttling. Local SQLite remains an
+optional local adapter. Session/OAuth operations are asynchronous and atomic;
+refresh ownership is fenced and expired state cannot be renewed by a client
+clock. Readiness checks the configured shared store, and an outage never causes
+fallback to local sessions. Switching adapters requires reauthentication.
+
+Real-Redis acceptance passed with **19 portal tests and no skips**, covering
+shared reads, concurrent claims, stale fences, one-use state, cross-client
+revocation, encrypted payloads and server-time idle expiry. Portal typechecking
+and the Node 24.22.1 production build passed. CI now provides its own Redis to
+run these cases. Tests used isolated UUID keys in an existing Redis; the newly
+configured persistent Compose service was not deployed or restore-tested here.
+
+Code Mode now commits intent before adapter invocation, handles concurrent
+idempotency-key insertion, validates returned run/tenant/snippet bindings, and
+records interrupted/ambiguous outcomes as reconciliation-required without
+re-executing them on retry. Known pre-dispatch refusal remains failed. Remote
+execution remains disabled until an isolated runtime is independently accepted.
+
+The broader backend snapshot passed **1,522 tests, 101 skipped**, one warning,
+in 95.07 seconds; the final outcome-classification changes passed the focused
+suite (**16 tests**). Temporary logs: `/tmp/shared-session-backend-final.log`,
+`/tmp/shared-final-focused.log`, `/tmp/shared-redis-acceptance-final.log`. These runs
+supersede earlier counts for their respective checks, but not missing cloud,
+RLS, full-browser, restore, schema-generation or artifact-provenance acceptance.
+
+The final Compose/setup/identity contract selection passed **54 tests**; the portal dependency audit reported **0 vulnerabilities** at this check. Redis does not replace the remaining isolated execution, generated-schema parity or authorized cloud/restore acceptance.

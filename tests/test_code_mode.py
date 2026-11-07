@@ -79,3 +79,55 @@ def test_code_mode_requires_acknowledgment(setup):
         },
     )
     assert run.status_code == 422
+
+
+from tests.test_enterprise import evidence, workspace
+
+
+def test_intent_is_committed_before_execution(evidence, monkeypatch):
+    from app.code_mode_store import CodeModeRepository, RunRequest
+    _, store, _ = evidence
+    tenant=workspace()
+    repo=CodeModeRepository(store)
+    def execute(**args):
+        durable=repo.get(tenant,args['run_id'])
+        assert durable['state']=='reconciliation_required'
+        assert len(repo.events(tenant,args['run_id']))==1
+        return dict(status='succeeded',snippet_digest=durable['snippet_digest'],run_id=args['run_id'],tenant_id=tenant['tenant_id'])
+    monkeypatch.setattr('app.code_mode_store.execute_snippet',execute)
+    body=RunRequest(request_key=str(uuid4()),snippet='function transform(input) { return input; }',input={},acknowledge_sandbox=True)
+    result=repo.create_and_execute(tenant,body)
+    assert result['state']=='succeeded'
+    assert repo.create_and_execute(tenant,body)['id']==result['id']
+    assert len(repo.events(tenant,result['id']))==2
+
+
+def test_interrupted_execution_is_not_replayed(evidence, monkeypatch):
+    from app.code_mode_store import CodeModeRepository, RunRequest
+    _, store, _ = evidence
+    tenant=workspace();repo=CodeModeRepository(store);calls=[]
+    def interrupted(**args):
+        calls.append(args['run_id'])
+        raise SystemExit('synthetic termination')
+    monkeypatch.setattr('app.code_mode_store.execute_snippet',interrupted)
+    body=RunRequest(request_key=str(uuid4()),snippet='function transform(input) { return input; }',input={},acknowledge_sandbox=True)
+    with pytest.raises(SystemExit):repo.create_and_execute(tenant,body)
+    result=repo.create_and_execute(tenant,body)
+    assert result['state']=='reconciliation_required'
+    assert len(calls)==1
+
+
+def test_ambiguous_execution_does_not_report_failure_or_retry(evidence, monkeypatch):
+    from app.code_mode_store import CodeModeRepository, RunRequest
+    _, store, _=evidence
+    tenant=workspace();repo=CodeModeRepository(store);calls=[]
+    def ambiguous(**args):
+        calls.append(args['run_id'])
+        raise TimeoutError('synthetic ambiguous outcome')
+    monkeypatch.setattr('app.code_mode_store.execute_snippet',ambiguous)
+    body=RunRequest(request_key=str(uuid4()),snippet='function transform(input) { return input; }',input={},acknowledge_sandbox=True)
+    result=repo.create_and_execute(tenant,body)
+    assert result['state']=='reconciliation_required'
+    assert result['result']['status']=='unknown'
+    assert repo.create_and_execute(tenant,body)['id']==result['id']
+    assert len(calls)==1
