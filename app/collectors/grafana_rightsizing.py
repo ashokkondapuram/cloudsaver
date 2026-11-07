@@ -28,6 +28,10 @@ STEP_SECONDS = 300
 MAX_CLUSTERS = 20
 MAX_ITEMS = 500
 MAX_QUERY_LENGTH = 2000
+
+
+class JobDeadlineExceeded(Exception):
+    """Raised when a rightsizing job exceeds its configured wall-clock deadline."""
 DS_UID = r'[A-Za-z0-9_-]{3,64}'
 LABEL = r'[A-Za-z_][A-Za-z0-9_.]{0,79}'
 CLUSTER_VALUE = r'[A-Za-z0-9_.:/-]{1,120}'
@@ -148,6 +152,8 @@ def map_rightsizing_error(error: Exception, *, correlation_id: str) -> dict:
         code, retryable = PUBLIC_ERROR_CODES.get(error.code, ('GRAFANA_QUERY_FAILED', True))
     elif isinstance(error, GrafanaSeriesError):
         code, retryable = error.code, error.code in ('GRAFANA_QUERY_FAILED', 'GRAFANA_DATASOURCE_UNREACHABLE')
+    elif isinstance(error, JobDeadlineExceeded):
+        code, retryable = 'GRAFANA_JOB_DEADLINE_EXCEEDED', True
     elif isinstance(error, ValueError):
         code, retryable = 'GRAFANA_POLICY_VALIDATION_FAILED', False
     else:
@@ -184,15 +190,31 @@ def _ceil_memory_bytes(value: float) -> float:
     return math.ceil(value / mib / 16) * 16 * mib
 
 
+def _enforce_job_deadline(deadline_at: datetime | None):
+    if deadline_at is not None and datetime.now(timezone.utc) >= deadline_at:
+        raise JobDeadlineExceeded()
+
+
+def _request_timeout(deadline_at: datetime | None, *, default: int = 60) -> int:
+    if deadline_at is None:
+        return default
+    remaining = (deadline_at - datetime.now(timezone.utc)).total_seconds()
+    if remaining <= 0:
+        raise JobDeadlineExceeded()
+    return max(5, min(default, int(remaining)))
+
+
 class GrafanaClient:
-    def __init__(self, config, *, timeout=60):
+    def __init__(self, config, *, timeout=60, deadline_at: datetime | None = None):
         self.config = config
         self.base = config['base_url'].rstrip('/') + '/'
         self.uid = config['mimir_datasource_uid']
         self.timeout = timeout
+        self.deadline_at = deadline_at
 
     def _client(self):
-        return httpx.Client(base_url=self.base, headers=_headers(self.config), timeout=self.timeout, follow_redirects=False)
+        timeout = _request_timeout(self.deadline_at, default=self.timeout)
+        return httpx.Client(base_url=self.base, headers=_headers(self.config), timeout=timeout, follow_redirects=False)
 
     def test(self):
         with self._client() as client:
@@ -207,6 +229,7 @@ class GrafanaClient:
             return dict(ok=True, name=body.get('name'), type=body.get('type'), uid=self.uid)
 
     def query_range(self, expr: str, start: datetime, end: datetime, *, step=STEP_SECONDS, datasource_uid: str | None = None):
+        _enforce_job_deadline(self.deadline_at)
         if len(expr) > MAX_QUERY_LENGTH:
             raise SourceError('query_too_long')
         uid = datasource_uid or self.uid
@@ -290,7 +313,7 @@ def _hpa_workloads(config, client: GrafanaClient, matcher: str, *, cluster: str)
     return dict(status='observed', targets=targets, reason_code=None)
 
 
-def _run_rightsizing_for_cluster(config, *, cluster: str, window_days: int):
+def _run_rightsizing_for_cluster(config, *, cluster: str, window_days: int, deadline_at: datetime | None = None):
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=window_days)
     matcher = _cluster_matcher(config, cluster)
@@ -301,7 +324,8 @@ def _run_rightsizing_for_cluster(config, *, cluster: str, window_days: int):
     mem_requests = f'kube_pod_container_resource_requests{{{matcher},resource="memory",container!="",container!="POD"}}'
     throttle_expr = f'sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{{{matcher},container!="",container!="POD"}}[5m])) / sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total{{{matcher},container!="",container!="POD"}}[5m]))'
     oom_expr = f'max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{{{matcher},reason="OOMKilled",container!="",container!="POD"}})'
-    client = GrafanaClient(config)
+    _enforce_job_deadline(deadline_at)
+    client = GrafanaClient(config, deadline_at=deadline_at)
     client.test()
     owners = _build_workload_owners(config, client, matcher, cluster=cluster)
     hpa_state = _hpa_workloads(config, client, matcher, cluster=cluster)
@@ -436,14 +460,15 @@ def _run_rightsizing_for_cluster(config, *, cluster: str, window_days: int):
     )
 
 
-def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DEFAULT_WINDOW_DAYS):
+def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DEFAULT_WINDOW_DAYS, deadline_at: datetime | None = None):
     if cluster and cluster not in config['cluster_values']:
         raise ValueError('Choose a cluster value configured on the connector.')
     clusters = [cluster] if cluster else list(config['cluster_values'])
     combined: list[dict] = []
     meta: dict | None = None
     for cl in clusters:
-        chunk = _run_rightsizing_for_cluster(config, cluster=cl, window_days=window_days)
+        _enforce_job_deadline(deadline_at)
+        chunk = _run_rightsizing_for_cluster(config, cluster=cl, window_days=window_days, deadline_at=deadline_at)
         combined.extend(chunk['items'])
         meta = chunk
     total_item_count = len(combined)

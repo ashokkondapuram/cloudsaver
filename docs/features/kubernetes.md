@@ -4,7 +4,7 @@ The Kubernetes workspace shows what CloudSaver observed in your authorized clust
 
 Last reviewed: Nov 7, 2026.
 
-**Live Grafana rightsizing:** implemented (advisory Mimir path; separate from scan ledger) — [BACKEND_IMPROVEMENTS.md §5b](../BACKEND_IMPROVEMENTS.md), [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md). Runs are **async**: `POST .../rightsizing/run` returns 202 and a poll URL; a scanner-side worker process must run [workers/grafana_k8s_rightsizing.py](../../workers/grafana_k8s_rightsizing.py) (or set `CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE=true` in tests only).
+**Live Grafana rightsizing:** implemented (advisory Mimir path; separate from scan ledger) — [BACKEND_IMPROVEMENTS.md §5b](../BACKEND_IMPROVEMENTS.md), [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md). Runs are **async**: `POST .../rightsizing/run` returns 202 and a poll URL; run [workers/grafana_k8s_rightsizing.py](../../workers/grafana_k8s_rightsizing.py) via the `grafana-rightsizing-worker` service in compose (or set `CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE=true` in tests only). Scanner env: `CLOUDSAVER_GRAFANA_RIGHTSIZING_WORKER`, `CLOUDSAVER_GRAFANA_JOB_LEASE_MINUTES`, `CLOUDSAVER_GRAFANA_JOB_MAX_ATTEMPTS`, `CLOUDSAVER_GRAFANA_JOB_DEADLINE_MINUTES`, `CLOUDSAVER_GRAFANA_MAX_CONCURRENT_JOBS`.
 
 ## Where to find it
 
@@ -163,7 +163,9 @@ Store secrets only in your deployment's secret store. The variables below hold r
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `CLOUDSAVER_KUBERNETES_BINDINGS` | JSON list (up to 100) of tenant- and cluster-bound bindings with `tenant_id`, `cluster_id`, `api_url`, `api_token_env` and the optional `opencost_url`, `opencost_token_env`, `telemetry_backend`, `region`, `role_arn`, `service_account`, `hosting_provider`. URLs must be HTTPS with no credentials, query or fragment. | `[]` (metrics-only mode) |
+| `CLOUDSAVER_KUBERNETES_BINDINGS` | JSON list (up to 100) of tenant- and cluster-bound bindings with `tenant_id`, `cluster_id`, `api_url`, `api_token_env` and the optional `opencost_url`, `opencost_token_env`, `telemetry_backend`, `latency_promql`, `latency_unit`, `region`, `role_arn`, `service_account`, `hosting_provider`. URLs must be HTTPS with no credentials, query or fragment. | `[]` (metrics-only mode) |
+
+`latency_promql` is an optional single-line PromQL expression (1–2000 characters, no line breaks) evaluated during federation telemetry. It fills container `metrics.latency` for the scan window so `slo_evidence.latency_p99_series` uses observability latency instead of the decoupled proxy ([app/kubernetes_latency_evidence.py](../../app/kubernetes_latency_evidence.py)). Set `latency_unit` to `seconds` or `milliseconds` when query results are not in milliseconds; when omitted, milliseconds is assumed.
 | `CLOUDSAVER_PROMETHEUS_TOKEN_*` | Prometheus bearer token, named by the cluster's `bearer_token_env`. Used by the metrics-only scanner and the `prometheus_http` backend. | None |
 | `CLOUDSAVER_K8S_*` | Kubernetes API and OpenCost tokens, named by `api_token_env` and `opencost_token_env`. | None |
 | `CLOUDSAVER_OBSERVABILITY_SECRET_*` | Grafana/Mimir bearer or header tokens for observability connectors (scanner only). | None |

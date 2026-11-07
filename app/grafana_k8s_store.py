@@ -15,7 +15,49 @@ TERMINAL = {'completed', 'failed', 'partial', 'expired'}
 LEASE_MINUTES = int(os.getenv('CLOUDSAVER_GRAFANA_JOB_LEASE_MINUTES', '15'))
 MAX_ATTEMPTS = int(os.getenv('CLOUDSAVER_GRAFANA_JOB_MAX_ATTEMPTS', '3'))
 JOB_DEADLINE_MINUTES = int(os.getenv('CLOUDSAVER_GRAFANA_JOB_DEADLINE_MINUTES', '60'))
+MAX_CONCURRENT_JOBS = int(os.getenv('CLOUDSAVER_GRAFANA_MAX_CONCURRENT_JOBS', '1'))
 LOG = logging.getLogger('cloudsaver.grafana_rightsizing')
+
+
+def _job_deadline_at(created_at: str):
+    start = datetime_or_none(created_at)
+    if start is None:
+        return None
+    return start + timedelta(minutes=JOB_DEADLINE_MINUTES)
+
+
+def _finalize_attempt(payload: dict, *, state: str, finished_at: str, error: dict | None = None) -> None:
+    attempt = dict(payload.get('active_attempt') or {})
+    attempt['finished_at'] = finished_at
+    attempt['state'] = state
+    if error:
+        attempt['error_code'] = error.get('error_code')
+    attempts = list(payload.get('attempts') or [])
+    if attempts and attempts[-1].get('token') == attempt.get('token'):
+        attempts[-1] = {**attempts[-1], **attempt}
+    else:
+        attempts.append(attempt)
+    payload['attempts'] = attempts
+    payload.pop('active_attempt', None)
+
+
+def _expire_job(db, tid, job_id, payload, *, now, created_at: str | None = None):
+    deadline = payload.get('deadline_at')
+    if not deadline and created_at:
+        end = _job_deadline_at(created_at)
+        deadline = end.isoformat() if end else None
+    finished = now.isoformat()
+    payload = {
+        **payload,
+        'deadline_at': deadline,
+        'error': dict(error_code='GRAFANA_JOB_DEADLINE_EXCEEDED', retryable=True, correlation_id=job_id),
+    }
+    _finalize_attempt(payload, state='expired', finished_at=finished, error=payload['error'])
+    db.execute(
+        "UPDATE observability_jobs SET state='expired',payload=%s,updated_at=%s,lease_until=NULL,lease_token=NULL "
+        'WHERE tenant_id=%s AND id=%s',
+        (db.json(payload), finished, tid, job_id),
+    )
 
 
 def _request_hash(*, connector_id: str, cluster: str | None, window_days: int) -> str:
@@ -91,10 +133,21 @@ class GrafanaK8sStore:
             ).fetchone()
             if running:
                 raise WorkflowConflict('Another rightsizing job is already running for this connector.')
+            active = db.execute(
+                f"SELECT COUNT(*) FROM observability_jobs WHERE tenant_id=%s AND state IN ('queued','running') "
+                f"AND {kind_filter}",
+                (tid,),
+            ).fetchone()[0]
+            if int(active) >= MAX_CONCURRENT_JOBS:
+                raise WorkflowConflict(
+                    f'At most {MAX_CONCURRENT_JOBS} Grafana rightsizing job(s) may be active for this workspace.'
+                )
             job_id = str(uuid4())
+            deadline = (_now() + timedelta(minutes=JOB_DEADLINE_MINUTES)).isoformat()
             payload = dict(
                 kind='grafana_rightsizing', connector_id=str(connector_id), cluster=cluster, window_days=window_days,
                 request_hash=req_hash, connector=connector, result=None, error=None, attempts=[],
+                deadline_at=deadline,
             )
             db.execute(
                 "INSERT INTO observability_jobs(id,tenant_id,request_key,state,payload,created_at,updated_at) "
@@ -116,7 +169,7 @@ class GrafanaK8sStore:
         with self.store.transaction(tid, write=True) as db:
             suffix = ' FOR UPDATE' if db.postgres else ''
             row = db.execute(
-                'SELECT state,payload,lease_token,lease_until FROM observability_jobs WHERE tenant_id=%s AND id=%s' + suffix,
+                'SELECT state,payload,lease_token,lease_until,created_at FROM observability_jobs WHERE tenant_id=%s AND id=%s' + suffix,
                 (tid, job_id),
             ).fetchone()
             if not row:
@@ -124,13 +177,17 @@ class GrafanaK8sStore:
             state = row[0]
             if state in TERMINAL:
                 return None
+            from app.enterprise_store import decode
+            payload = decode(row[1])
+            deadline = datetime_or_none(payload.get('deadline_at')) or _job_deadline_at(str(row[4]))
+            if deadline and now.replace(tzinfo=timezone.utc) >= deadline:
+                _expire_job(db, tid, job_id, payload, now=now, created_at=str(row[4]))
+                return None
             if state == 'running':
                 lease_until_raw = row[3]
                 lease_end = datetime_or_none(lease_until_raw)
                 if lease_end and lease_end > now.replace(tzinfo=timezone.utc):
                     return None
-            from app.enterprise_store import decode
-            payload = decode(row[1])
             attempts = payload.get('attempts') or []
             if len(attempts) >= MAX_ATTEMPTS:
                 db.execute(
@@ -171,8 +228,14 @@ class GrafanaK8sStore:
         else:
             payload['connector'] = connector
             correlation = job_id
+            deadline = datetime_or_none(payload.get('deadline_at'))
             try:
-                result = run_rightsizing(connector, cluster=payload.get('cluster'), window_days=int(payload.get('window_days') or 14))
+                result = run_rightsizing(
+                    connector,
+                    cluster=payload.get('cluster'),
+                    window_days=int(payload.get('window_days') or 14),
+                    deadline_at=deadline,
+                )
                 payload['result'] = result
                 payload['error'] = None
                 state = 'completed'
@@ -180,7 +243,8 @@ class GrafanaK8sStore:
                 LOG.warning('grafana rightsizing job failed', exc_info=error)
                 payload['error'] = map_rightsizing_error(error, correlation_id=correlation)
                 payload.pop('result', None)
-                state = 'failed'
+                from app.collectors.grafana_rightsizing import JobDeadlineExceeded
+                state = 'expired' if isinstance(error, JobDeadlineExceeded) else 'failed'
         now = _now().isoformat()
         with self.store.transaction(tid, write=True) as db:
             suffix = ' FOR UPDATE' if db.postgres else ''
@@ -190,11 +254,8 @@ class GrafanaK8sStore:
             ).fetchone()
             if not current or str(current[1]) != claim['token']:
                 raise WorkflowConflict('Grafana job lease was lost; result was not committed.')
-            attempt = (payload.get('active_attempt') or {})
-            attempt['finished_at'] = now
-            attempt['state'] = state
-            payload['active_attempt'] = attempt
-            payload['completed_at'] = now if state in ('completed', 'failed') else payload.get('completed_at')
+            _finalize_attempt(payload, state=state, finished_at=now, error=payload.get('error'))
+            payload['completed_at'] = now if state in ('completed', 'failed', 'expired') else payload.get('completed_at')
             updated = db.execute(
                 'UPDATE observability_jobs SET state=%s,payload=%s,updated_at=%s,lease_until=NULL,lease_token=NULL '
                 'WHERE tenant_id=%s AND id=%s AND lease_token=%s',
