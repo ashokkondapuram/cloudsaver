@@ -4,7 +4,7 @@ The Kubernetes workspace shows what CloudSaver observed in your authorized clust
 
 Last reviewed: Nov 7, 2026.
 
-**Planned:** Live workload CPU/memory rightsizing via Grafana and Mimir (advisory, no cluster writes) — see [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md).
+**Live Grafana rightsizing:** implemented (advisory Mimir path; separate from scan ledger) — [BACKEND_IMPROVEMENTS.md §5b](../BACKEND_IMPROVEMENTS.md), [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md).
 
 ## Where to find it
 

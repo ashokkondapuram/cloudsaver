@@ -2,6 +2,8 @@
 
 Each guide explains one feature end to end: where you find it in the dashboard, what you can do, how the backend produces the data, the API endpoints, permissions, configuration, guardrails and tests. Start with the [main README](../../README.md) for installation and architecture.
 
+For a **backend-only** map of what improved in code (not UI), see [BACKEND_IMPROVEMENTS.md](../BACKEND_IMPROVEMENTS.md).
+
 **Current baseline:** `main` at `39def45` (Nov 2026) — resource evidence persistence, scoped coverage recompute, inventory-only history, and the [billable resource catalog](../../app/billable_resources.py) (`GET /api/v1/resources/billable-catalog`, default `cost_scope=billable` on resource lists).
 
 ## Analyze
