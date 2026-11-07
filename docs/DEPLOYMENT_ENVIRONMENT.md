@@ -32,6 +32,9 @@ Use this with [ENVIRONMENT.md](ENVIRONMENT.md) (local `.env` generation) and the
 | `PLATFORM_KEY_PEPPER` | ≥32 byte hex | `PLATFORM_DB_PASSWORD` pepper | `workspaceKeyPepper` | `key-pepper` |
 | `PLATFORM_IDENTITY_CALLERS` | JSON SHA-256 digests of caller tokens | `PLATFORM_IDENTITY_CALLERS` | `identityCallerDigests` | `caller-digests` |
 | `PLATFORM_PORTAL_TOKEN` | Portal caller token | `PLATFORM_PORTAL_TOKEN` | `portalCallerToken` | `caller-token` |
+| `PLATFORM_OPERATOR_ACCESS_KEY` | Plaintext operator key (non-prod; prefer file on K8s) | `platform/.env` / `operator-access.key` | Optional `extraSecrets` (discouraged) | Prefer Secret volume `operator-access.key` — see [kubernetes/PLATFORM_OPERATOR_SECRET.md](kubernetes/PLATFORM_OPERATOR_SECRET.md) |
+| `PLATFORM_OPERATOR_KEY_SHA256` | Operator key digest | `platform/.env` | Optional env | Optional if `PLATFORM_OPERATOR_ACCESS_KEY_FILE` is mounted |
+| `PLATFORM_OPERATOR_ACCESS_KEY_FILE` | Path to mounted plaintext key | — | — | e.g. `/run/platform-secrets/operator-access.key` on portal + identity |
 | `PORTAL_ENTRA_CLIENT_SECRET` | Entra app secret | `platform/.env` | `portalEntraClientSecret` | `entra-client-secret` |
 
 Platform migration DSN: `PLATFORM_IDENTITY_MIGRATION_URL` / KV `identityMigrationUrl` / `platform-migration` secret.

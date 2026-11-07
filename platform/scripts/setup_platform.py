@@ -160,6 +160,7 @@ def create():
     print('then: docker compose up --build -d, and sign in to the portal at http://127.0.0.1:3100.')
     print('Operator access key (plaintext): platform/.env PLATFORM_OPERATOR_ACCESS_KEY and')
     print(f'  {operator_key_path} (mode 0600). Use either to sign in; do not commit.')
+    print('Kubernetes: mount operator-access.key via a Secret; see docs/kubernetes/PLATFORM_OPERATOR_SECRET.md')
 
 
 def migrate(source):

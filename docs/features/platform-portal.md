@@ -48,7 +48,7 @@ The `platform-db` and `platform-internal` networks are marked `internal: true`, 
   - Key verification: `gateway`, `tenant`, `scanner`, `analytics`, `notification`, `agent`.
   - Directory routes: `scanner`, `tenant`.
   - Admin routes: `portal`.
-- **Operators** authenticate through the portal. `PLATFORM_PORTAL_AUTH` is `entra` (tokens for `PLATFORM_IDENTITY_AUDIENCE` from `PLATFORM_OPERATOR_TENANT_ID`) or `operator_key` (compared with `PLATFORM_OPERATOR_KEY_SHA256`). On local installs, `setup_platform.py` writes the plaintext key to `platform/operator-access.key` (never commit). `operator_key` is rejected in production.
+- **Operators** authenticate through the portal. `PLATFORM_PORTAL_AUTH` is `entra` (tokens for `PLATFORM_IDENTITY_AUDIENCE` from `PLATFORM_OPERATOR_TENANT_ID`) or `operator_key` (compared with `PLATFORM_OPERATOR_KEY_SHA256`, or a digest derived from `PLATFORM_OPERATOR_ACCESS_KEY` / `PLATFORM_OPERATOR_ACCESS_KEY_FILE`). On local installs, `setup_platform.py` writes the plaintext key to `platform/operator-access.key` (never commit). On Kubernetes, mount that file from a Secret — see [PLATFORM_OPERATOR_SECRET.md](../kubernetes/PLATFORM_OPERATOR_SECRET.md). `operator_key` is rejected in production.
 - **Operator roles**: `PlatformOperator`, `PlatformAuditor`, `KnowledgeReviewer`, `PrivacyReviewer`. Any non-GET request needs `PlatformOperator`, except knowledge review posts by reviewers. Knowledge-only roles can reach only knowledge routes and the session endpoint.
 - [platform/identity/config.py](../../platform/identity/config.py) `env()` reads `PLATFORM_<NAME>` and falls back to the deprecated `CLOUDSAVER_<NAME>`.
 

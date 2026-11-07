@@ -8,7 +8,7 @@ from uuid import UUID
 import jwt
 from fastapi import Header, HTTPException, Request
 
-from identity.config import env
+from identity.config import env, operator_key_sha256
 
 VERIFY_CALLERS = frozenset({'gateway', 'tenant', 'scanner', 'analytics', 'notification', 'agent'})
 # The consolidated core now owns directory projection; tenant remains an upgrade alias.
@@ -72,7 +72,7 @@ class OperatorAuth:
         if not token or len(token) > 16384:
             raise HTTPException(401, 'Operator authentication required', headers={'WWW-Authenticate': 'Bearer'})
         if self.mode == 'operator_key':
-            expected = (env('OPERATOR_KEY_SHA256') or '').lower()
+            expected = operator_key_sha256()
             if len(expected) != 64:
                 raise HTTPException(503, 'Operator sign-in isn\'t configured')
             if not hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), expected):

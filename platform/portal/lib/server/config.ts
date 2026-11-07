@@ -1,3 +1,6 @@
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+
 export type AuthMode = 'entra' | 'operator_key';
 
 const warned = new Set<string>();
@@ -17,6 +20,30 @@ function readEnv(name: string, legacy: string[]): string {
   return '';
 }
 
+function digestOfOperatorKey(plain: string): string {
+  const key = plain.trim().split(/\r?\n/)[0]?.trim() || '';
+  if (!key) return '';
+  return createHash('sha256').update(key, 'utf8').digest('hex');
+}
+
+function resolveOperatorKeyDigest(): string {
+  const fromEnv = readEnv('PLATFORM_OPERATOR_KEY_SHA256', ['CLOUDSAVER_OPERATOR_KEY_SHA256']).trim().toLowerCase();
+  if (/^[0-9a-f]{64}$/.test(fromEnv)) return fromEnv;
+  const filePath = readEnv('PLATFORM_OPERATOR_ACCESS_KEY_FILE', ['CLOUDSAVER_OPERATOR_ACCESS_KEY_FILE']).trim();
+  if (filePath) {
+    try {
+      const fromFile = digestOfOperatorKey(readFileSync(filePath, 'utf8')).toLowerCase();
+      if (/^[0-9a-f]{64}$/.test(fromFile)) return fromFile;
+    } catch {
+      /* missing or unreadable mount */
+    }
+  }
+  const plain = readEnv('PLATFORM_OPERATOR_ACCESS_KEY', ['CLOUDSAVER_OPERATOR_ACCESS_KEY']);
+  const fromPlain = digestOfOperatorKey(plain).toLowerCase();
+  if (/^[0-9a-f]{64}$/.test(fromPlain)) return fromPlain;
+  return fromEnv;
+}
+
 export function serverConfig() {
   const env = process.env;
   const publicUrl = (env.PORTAL_PUBLIC_URL || 'http://127.0.0.1:3100').replace(/\/+$/, '');
@@ -24,7 +51,7 @@ export function serverConfig() {
     identityUrl: (env.IDENTITY_SERVICE_URL || 'http://identity-service:8005').replace(/\/+$/, ''),
     identityToken: readEnv('PLATFORM_PORTAL_TOKEN', ['CLOUDSAVER_IDENTITY_TOKEN_PORTAL', 'CLOUDSAVER_IDENTITY_TOKEN']),
     authMode: (readEnv('PLATFORM_PORTAL_AUTH', ['CLOUDSAVER_PORTAL_AUTH']) === 'operator_key' ? 'operator_key' : 'entra') as AuthMode,
-    operatorKeyDigest: readEnv('PLATFORM_OPERATOR_KEY_SHA256', ['CLOUDSAVER_OPERATOR_KEY_SHA256']).trim().toLowerCase(),
+    operatorKeyDigest: resolveOperatorKeyDigest(),
     environment: (readEnv('PLATFORM_ENVIRONMENT', ['CLOUDSAVER_ENVIRONMENT']) || 'development').trim().toLowerCase(),
     publicUrl,
     publicOrigin: new URL(publicUrl).origin,
