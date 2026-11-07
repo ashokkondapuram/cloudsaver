@@ -14,6 +14,7 @@ HOST = 'grafana.example.com'
 def allow(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS', HOST)
     monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', 'test-grafana-token')
+    monkeypatch.setenv('CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE', 'true')
 
 
 def connector_config(**extra):
@@ -209,6 +210,77 @@ def test_rightsizing_blocks_patch_when_latency_near_slo_target(monkeypatch):
     assert 'BLOCKED_BY_TAIL_LATENCY_PROXIMITY' in row['safety_blocks']
     assert row['patch_eligible'] is False
     assert result['latency_query_status'] == 'observed'
+
+
+def test_two_clusters_with_same_workload_identity_stay_isolated(monkeypatch):
+    def handler(request):
+        if request.url.path.endswith('/api/datasources/uid/mimir-uid-1'):
+            return httpx.Response(200, json=dict(name='Mimir', type='prometheus', uid='mimir-uid-1'))
+        if request.url.path.endswith('/api/ds/query'):
+            payload = request.read().decode()
+            cluster = 'cluster-a' if 'cluster-a' in payload else 'cluster-b'
+            if 'kube_pod_owner' in payload or 'kube_replicaset_owner' in payload or 'horizontalpodautoscaler' in payload:
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[]))))
+            cpu = 0.4 if cluster == 'cluster-a' else 0.05
+            req = 0.8 if cluster == 'cluster-a' else 0.2
+            if 'container_cpu_usage' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(cluster=cluster, namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [cpu]]))
+            elif 'resource_requests' in payload and 'resource=\\"cpu\\"' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(cluster=cluster, namespace='ns', pod='p1', container='app', resource='cpu'))]),
+                             data=dict(values=[[1700000000000], [req]]))
+            else:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(cluster=cluster, namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.0]]))
+            return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+        return httpx.Response(404)
+
+    real_client = httpx.Client
+
+    def client_factory(**kwargs):
+        kwargs['transport'] = httpx.MockTransport(handler)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr(gk.httpx, 'Client', client_factory)
+    config = connector_config(cluster_values=['cluster-a', 'cluster-b'])
+    result = gk.run_rightsizing(config, window_days=7)
+    by_cluster = {row['cluster']: row for row in result['items']}
+    assert by_cluster['cluster-a']['suggested_cpu_request'] != by_cluster['cluster-b']['suggested_cpu_request']
+
+
+def test_hpa_query_failure_blocks_cpu_downsize(monkeypatch):
+    def handler(request):
+        if request.url.path.endswith('/api/datasources/uid/mimir-uid-1'):
+            return httpx.Response(200, json=dict(name='Mimir', type='prometheus', uid='mimir-uid-1'))
+        if request.url.path.endswith('/api/ds/query'):
+            payload = request.read().decode()
+            if 'horizontalpodautoscaler' in payload:
+                return httpx.Response(503)
+            if 'kube_pod_owner' in payload or 'kube_replicaset_owner' in payload:
+                return httpx.Response(200, json=dict(results=dict(A=dict(frames=[]))))
+            if 'container_cpu_usage' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.05]]))
+            elif 'resource_requests' in payload and 'resource=\\"cpu\\"' in payload:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app', resource='cpu'))]),
+                             data=dict(values=[[1700000000000], [0.5]]))
+            else:
+                frame = dict(schema=dict(fields=[{}, dict(name='Value', labels=dict(namespace='ns', pod='p1', container='app'))]),
+                             data=dict(values=[[1700000000000], [0.0]]))
+            return httpx.Response(200, json=dict(results=dict(A=dict(frames=[frame]))))
+        return httpx.Response(404)
+
+    real_client = httpx.Client
+
+    def client_factory(**kwargs):
+        kwargs['transport'] = httpx.MockTransport(handler)
+        return real_client(**kwargs)
+
+    monkeypatch.setattr(gk.httpx, 'Client', client_factory)
+    row = gk.run_rightsizing(connector_config(), cluster='dev-cluster', window_days=7)['items'][0]
+    assert row['hpa_managed'] is None
+    assert 'HPA_STATUS_NOT_OBSERVED' in row['safety_blocks']
+    assert row['patch_eligible'] is False
 
 
 def test_api_connectors_and_job(evidence, monkeypatch):

@@ -99,8 +99,13 @@ def resolve_latency_p99_series(cpu_series: dict, evidence: dict, *, slo_target_m
     return proxy_latency_series(cpu_series, target_ms=min(10.0, slo_target_ms * 0.1))
 
 
-def latency_points_from_grafana_frames(payload, *, unit: str = 'milliseconds') -> dict[tuple, list[dict]]:
-    """Map (namespace, pod, container) -> [{at, value}] from Grafana range frames."""
+def latency_points_from_grafana_frames(
+    payload, *, unit: str = 'milliseconds', cluster: str = '', cluster_label: str = 'cluster',
+) -> dict[tuple, list[dict]]:
+    """Map (cluster, namespace, pod, container) or legacy 3-tuple -> [{at, value}] from Grafana frames."""
+    from app.collectors.grafana_telemetry import _cluster_from_labels, validate_query_payload
+
+    validate_query_payload(payload)
     out: dict[tuple, list[dict]] = {}
     for block in ((payload or {}).get('results') or {}).values():
         for frame in (block or {}).get('frames') or []:
@@ -112,7 +117,8 @@ def latency_points_from_grafana_frames(payload, *, unit: str = 'milliseconds') -
             ns, pod, container = labels.get('namespace', ''), labels.get('pod', ''), labels.get('container', '')
             if not container or container == 'POD':
                 continue
-            key = (ns, pod, container)
+            cl = _cluster_from_labels(labels, cluster_label, cluster) if cluster else labels.get(cluster_label, '') or cluster
+            key = (cl, ns, pod, container) if cluster else (ns, pod, container)
             times, samples = values[0], values[1]
             series = []
             for stamp, raw in zip(times, samples):

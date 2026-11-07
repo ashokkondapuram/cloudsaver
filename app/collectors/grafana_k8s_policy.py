@@ -9,11 +9,13 @@ THROTTLE_P95_LIMIT = 0.02
 COVERAGE_MIN = 0.90
 
 
-def cpu_safety_blocks(*, throttle_p95: float | None, hpa_managed: bool) -> list[str]:
+def cpu_safety_blocks(*, throttle_p95: float | None, hpa_managed: bool | None) -> list[str]:
     blocks = []
     if throttle_p95 is not None and throttle_p95 > THROTTLE_P95_LIMIT:
         blocks.append('CPU_THROTTLING_ABOVE_2_PERCENT')
-    if hpa_managed:
+    if hpa_managed is None:
+        blocks.append('HPA_STATUS_NOT_OBSERVED')
+    elif hpa_managed:
         blocks.append('COORDINATED_HPA_REVIEW_REQUIRED')
     return blocks
 
