@@ -37,14 +37,22 @@ def objects():
     return result
 
 
-def stat(value,**changes):
-    return dict(sufficient=True,p95=value,p99=value,minimum=value,maximum=value,window_start=(NOW-timedelta(days=30)).isoformat(),
+def series_points(value,n=8640):
+    start=NOW-timedelta(days=30)
+    return [{'at':(start+timedelta(minutes=5*(i+1))).isoformat(),'value':value*(1+.01*(i%7))} for i in range(n)]
+
+
+def stat(value,*,include_cpu_points=False,**changes):
+    row=dict(sufficient=True,p95=value,p99=value,minimum=value,maximum=value,window_start=(NOW-timedelta(days=30)).isoformat(),
         window_end=NOW.isoformat(),window_days=30,coverage_ratio=1.,valid_samples=8640,expected_samples=8640,max_gap_minutes=5,gap_reason=None,**changes)
+    if include_cpu_points:
+        row['points']=series_points(value)
+    return row
 
 
 def rows():
     key=('production','checkout-pod','api')
-    metrics={name:{key:stat(value)} for name,value in {'cpu':.2,'memory':100*1024**2,'throttling':.001,'cpu_request':2.,'memory_request':2*1024**3,'oom':0.,'restarts':0.}.items()}
+    metrics={name:{key:stat(value,include_cpu_points=(name=='cpu'))} for name,value in {'cpu':.2,'memory':100*1024**2,'throttling':.001,'cpu_request':2.,'memory_request':2*1024**3,'oom':0.,'restarts':0.}.items()}
     metrics['network']={('production','checkout-pod'):stat(1.)}
     return project(CLUSTER,objects(),metrics,[],NOW)
 
@@ -195,7 +203,8 @@ def test_matrix_validates_30_day_five_minute_coverage_and_never_fills_missing_po
     values=[[int((start+timedelta(minutes=5*i)).timestamp()),'.2'] for i in range(1,8641)]
     def payload(points,cluster=CLUSTER):return {'status':'success','data':{'resultType':'matrix','result':[{'metric':{'cluster':cluster,'namespace':'production','pod':'checkout-pod','container':'api'},'values':points}]}}
     result=matrix(payload(values),CLUSTER,'cpu','container',False,start,NOW,NOW)
-    assert next(iter(result.values()))['sufficient'] is True
+    row=next(iter(result.values()))
+    assert row['sufficient'] is True and isinstance(row.get('points'),list)
     assert next(iter(matrix(payload(values[1000:]),CLUSTER,'cpu','container',False,start,NOW,NOW).values()))['sufficient'] is False
     with pytest.raises(ScanError):matrix(payload(values,'foreign-cluster'),CLUSTER,'cpu','container',False,start,NOW,NOW)
     duplicate=matrix(payload(values[:-1]+[values[0]]),CLUSTER,'cpu','container',False,start,NOW,NOW)
@@ -268,7 +277,8 @@ def test_workspace_and_patch_preview_use_saved_evidence_and_no_live_cluster_muta
     assert len(view['rule_matrix'])==10 and row['costs']['billed_node_cost_usd'] is None
     body=dict(resource_id=row['resource_id'],rule_id='K8S_CONTAINER_CPU_OVERREQUEST',evidence_digest=row['evidence_digest'])
     preview=api.post(path+'/patch-preview',headers=headers,json=body)
-    assert preview.status_code==409 and 'SLO' in preview.json()['detail']
+    assert preview.status_code==200
+    assert preview.json()['automatic_execution'] is False
     assert api.post(path+'/patch-preview',headers=headers,json=dict(body,evidence_digest='0'*64)).status_code==409
     assert api.get(f'/api/v1/scans/{uuid4()}/kubernetes',headers=headers).status_code==404
 

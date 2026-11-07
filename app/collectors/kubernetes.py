@@ -154,6 +154,8 @@ def matrix(payload, cluster, metric, kind, ratio, start, end, now):
                      coverage_ratio=check.coverage_ratio, valid_samples=check.valid_samples, expected_samples=check.expected_samples,
                      max_gap_minutes=check.max_observed_gap_minutes, gap_reason=check.gap_reason,
                      evidence_digest=digest(points))
+        if kind == 'container' and metric == 'cpu' and check.is_sufficient:
+            stats['points'] = points
         result[key] = stats
     return result
 

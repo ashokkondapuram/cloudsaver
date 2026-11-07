@@ -29,12 +29,26 @@ def mig_partition_advisory(*, peak_vram_gb: str, slo_latency_p99_ms: str) -> dic
 
 
 def idle_gpu_candidates(samples: list[dict], min_idle_hours: float = 24.0) -> list[dict]:
-    """Heuristic: sustained low utilization over the supplied hourly samples."""
+    """Heuristic: sustained low utilization over trailing hourly samples."""
+    import math
+
     if min_idle_hours <= 0:
         raise ValueError("min_idle_hours must be positive")
+    required = max(1, math.ceil(min_idle_hours))
+    streak = 0
+    for sample in reversed(samples):
+        if validate_dcgm_sample(sample)["idle"]:
+            streak += 1
+        else:
+            break
+    if streak < required:
+        return []
     out = []
-    for sample in samples:
-        checked = validate_dcgm_sample(sample)
-        if checked["idle"]:
-            out.append({**sample, "recommendation": "review_hibernation"})
+    for sample in reversed(samples):
+        if not validate_dcgm_sample(sample)["idle"]:
+            break
+        out.append({**sample, "recommendation": "review_hibernation", "idle_hours_observed": streak})
+        if len(out) >= streak:
+            break
+    out.reverse()
     return out

@@ -2,7 +2,7 @@
 
 CloudSaver contains several v2 scaffolds: small, tested modules that define a contract or a calculation for a future capability but aren't connected to live collection, scans, the dashboard or any cloud write API. Two scaffolds are exposed as read-only API endpoints, and one placeholder endpoint (`GET /api/v1/auth/consent-url`) always returns 501. This page describes each scaffold's purpose, current state, inputs and outputs, and what you need to build before it's production-ready.
 
-Last reviewed: Oct 25, 2026.
+Last reviewed: Nov 7, 2026.
 
 ## Where to find it
 
@@ -35,7 +35,7 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Current state**: contract validation only; there's no GPU metric collector.
 - **Inputs**: `validate_dcgm_sample(sample)` requires `gpu_utilization`, `memory_used_mb` and `memory_total_mb`. Utilization must be between 0 and 100.
 - **Outputs**: `{valid, idle, utilization}`, where `idle` is utilization below 5. `idle_gpu_candidates(samples, min_idle_hours=24.0)` returns idle samples with `recommendation: review_hibernation`.
-- **Limitation**: `min_idle_hours` must be positive but isn't otherwise used, so a single idle sample qualifies. Memory fields aren't validated beyond being present.
+- **Limitation**: `min_idle_hours` requires that many consecutive trailing hourly idle samples; a brief dip resets the streak. Memory fields aren't validated beyond being present.
 - **To make it production-ready**: a tenant-bound DCGM or Prometheus collector, a duration check that honors `min_idle_hours`, inventory and source-ledger integration, a rule in the catalog, and pricing evidence.
 
 ### Commitment ladder
@@ -43,9 +43,8 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Purpose**: plan staged, human-approved savings plan or reservation purchases.
 - **Current state**: scenario only; no purchase APIs.
 - **Inputs**: `commitment_ladder(raw_p10_hr, waste_hr, existing_hr, steps=("25", "50", "75"))`, as decimal strings passed to `calculate_clean_commitment_baseline` in [app/commitment_arbitrage.py](../../app/commitment_arbitrage.py).
-- **Outputs**: one row per step with `step_pct`, `recommended_new_commitment_hr`, `purchase_authorized: False` and `status: scenario_only`.
-- **Limitation**: every step returns the same full ceiling; `step_pct` isn't applied to the amount.
-- **To make it production-ready**: apply the step percentage, source hourly baselines from billing data, add an API and approval workflow, and keep purchases outside CloudSaver or behind explicit human approval.
+- **Outputs**: one row per step with `step_pct`, `recommended_new_commitment_hr` (ceiling × step_pct), `purchase_authorized: False` and `status: scenario_only`.
+- **To make it production-ready**: source hourly baselines from billing data, add an API and approval workflow, and keep purchases outside CloudSaver or behind explicit human approval.
 
 ### Karpenter NodePool drafts
 
@@ -131,7 +130,7 @@ A malformed index returns 422 from the resource-mapping endpoint.
 ## Guardrails and limitations
 
 - No scaffold calls a cloud write API, purchases commitments or applies manifests.
-- `idle_gpu_candidates` ignores `min_idle_hours`, and `commitment_ladder` ignores the step percentage.
+- GPU idle still has no collector; Karpenter drafts are not delivered through GitOps automatically.
 - Event subscriptions raise `NotImplementedError`.
 - Patch preview is a placeholder for Terraform and OpenTofu and raises `NotImplementedError` for other kinds.
 - The GitOps index isn't tenant-scoped.

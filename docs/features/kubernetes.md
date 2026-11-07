@@ -127,7 +127,7 @@ Route classes come from [app/route_inventory.py](../../app/route_inventory.py) a
 - Reservation slack does not prove that a node can be terminated, that pods can be repacked, or that PDBs allow it.
 - A `partial_telemetry` reconciliation status is the default. Having several sources available does not prove they agree.
 - Metrics-only discovery cannot prove that the cluster inventory is complete.
-- No current collector in this repository populates `slo_evidence`, `pdb_blocked`, `scale_down_disabled` or `scheduling_constraints_verified`. As a result, patch previews return `409` at the SLO gate, and modeled node savings show Unknown unless that evidence is added to the saved inventory.
+- Federated scans attach `slo_evidence` on containers when CPU and throttling Prometheus matrices are sufficient (`app/kubernetes_slo_evidence.py`). Latency in that packet uses a decoupled proxy until optional latency metrics are wired. `pdb_blocked`, `scale_down_disabled` and `scheduling_constraints_verified` are still not populated; patch preview returns `409` when any replica lacks SLO evidence or fails the gate.
 
 ## Permissions
 

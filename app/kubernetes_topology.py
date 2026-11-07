@@ -151,6 +151,8 @@ def project(cluster, objects, metrics, sources, now):
                 details['metrics']['network']=metrics.get('network',{}).get((namespace,meta['name']))
                 row=make('Container',meta,details)
                 row['evidence']['production']=any(row['evidence']['labels'].get(k) in ('prod','production') for k in ('environment','env'))
+                from app.kubernetes_slo_evidence import attach_container_slo_evidence
+                attach_container_slo_evidence(row['evidence'], observed_at=stamp)
                 row.update(resource_id=f'k8s://{cluster}/namespaces/{namespace}/pods/{meta["name"]}/containers/{name}',resource_name=name)
                 rows.append(row)
     pools=defaultdict(list)

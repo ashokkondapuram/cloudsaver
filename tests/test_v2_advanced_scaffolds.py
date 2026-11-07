@@ -27,7 +27,21 @@ def test_idle_gpu_candidates_filters_active_gpus():
         {"gpu_utilization": 1.0, "memory_used_mb": 1, "memory_total_mb": 10},
         {"gpu_utilization": 40.0, "memory_used_mb": 1, "memory_total_mb": 10},
     ]
-    assert len(idle_gpu_candidates(samples)) == 1
+    assert idle_gpu_candidates(samples, min_idle_hours=1) == []
+    assert len(idle_gpu_candidates([samples[0]], min_idle_hours=1)) == 1
+
+
+def test_idle_gpu_candidates_honors_min_idle_hours():
+    idle = {"gpu_utilization": 1.0, "memory_used_mb": 1, "memory_total_mb": 10}
+    assert idle_gpu_candidates([idle] * 23, min_idle_hours=24) == []
+    assert len(idle_gpu_candidates([idle] * 24, min_idle_hours=24)) == 24
+
+
+def test_commitment_ladder_applies_step_percent():
+    steps = commitment_ladder("10.0000", "2.0000", "1.0000")
+    assert steps[0]["recommended_new_commitment_hr"] == "1.7500"
+    assert steps[1]["recommended_new_commitment_hr"] == "3.5000"
+    assert steps[2]["recommended_new_commitment_hr"] == "5.2500"
 
 
 def test_commitment_ladder_never_authorizes_purchase():

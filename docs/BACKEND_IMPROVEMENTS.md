@@ -101,7 +101,7 @@ The ownership write that feeds this page is the outcomes feature (finops_ownersh
 - Conflicting source digests mark resources source_conflict and clear cost attribution (app/collectors/provenance.py).
 - Patch preview (POST .../kubernetes/patch-preview) returns 409 unless every replica independently passes the rule, the controller identity matches, desired replicas equal observed pods, the digest matches, and evaluate_slo_bounded_rightsizing is review_eligible. Response is a strategic merge patch plus kubectl dry-run commands. No cluster write.
 
-**Not claimed (saved-scan path):** no collector in this tree fills slo_evidence, so patch preview currently stops at the SLO gate, and modeled node consolidation stays Unknown unless that evidence is supplied. Cluster P95 is never summed from container percentiles.
+**Saved-scan SLO packet:** when Prometheus CPU and throttling matrices are sufficient, `app/kubernetes_slo_evidence.py` attaches `slo_evidence` on each container (CPU series from the scan window; latency uses a decoupled low-latency proxy series until an optional latency query is wired). Patch preview still requires every replica to pass `evaluate_slo_bounded_rightsizing`. Cluster P95 is never summed from container percentiles; modeled node consolidation stays Unknown without node-pool evidence.
 
 ### 5b. Grafana / Mimir live rightsizing (advisory, separate route)
 
@@ -359,7 +359,7 @@ Migration 0038, app/code_mode_*.py, workers/code-mode-bridge. Operator-reviewed 
 
 **Semantic embeddings**
 
-Migration 0032, table semantic_resource_embeddings, optional pgvector vector(1536) HNSW index. Routes under /api/v1/semantic (app/drift/drift_ops_api.py, app/semantic_embeddings_*.py). Embeddings are a retrieval index, not an authorization or a savings proof.
+Migration 0032, table semantic_resource_embeddings, optional pgvector vector(1536) HNSW index. Routes under /api/v1/semantic (app/drift/drift_ops_api.py, app/semantic_embeddings_pipeline.py, app/semantic_embeddings_store.py). Embeddings are a retrieval index, not an authorization or a savings proof.
 
 **eBPF flow costs**
 
@@ -377,14 +377,14 @@ Tested, not production-wired (docs/features/v2-scaffolds.md):
 
 | Module | What it does today | Gap |
 | --- | --- | --- |
-| app/scanner_ai_gpu.py | Validates a DCGM-style sample; idle if utilization < 5 | min_idle_hours is not applied; no collector |
-| app/autopilot_commitments.py | Ladder rows with purchase_authorized: false | Step percent is not applied to the amount; no purchase API |
+| app/scanner_ai_gpu.py | DCGM contract; trailing idle streak must meet min_idle_hours | No collector |
+| app/autopilot_commitments.py | Ladder tranches apply step_pct to the ceiling; purchase_authorized: false | No purchase API |
 | app/k8s_karpenter_sync.py | Returns a NodePool dict | Nothing is applied |
 | app/ai_workload_optimizer.py | Decimal routing-savings estimate, advisory_only | No measured volume or quality gate |
 | app/collectors/event_stream.py | Parses EventBridge, Event Grid, and Pub/Sub into a memory buffer | Not the durable ingress path |
 | GET /api/v1/auth/consent-url | Always 501 | Operators add accounts in the portal |
 
-app/realized_savings_verifier.py is the closed-loop idea (compare a remediation to later FOCUS evidence and reopen on regression). The outcome workflow above is the enforced version of that idea; do not treat the verifier module as a second billing system.
+The enforced closed-loop path is `app/outcome_store.py` and `app/outcome_evidence.py` (compare remediations to later FOCUS evidence and reopen on regression). Do not treat that workflow as a second billing system.
 
 ---
 
@@ -422,4 +422,4 @@ Identity head in the tree is **i0016_workspace_ui_themes**.
 - Sovereign Azure clouds are out of contract; ARM stays on the public profile with continuation-host checks.
 - A 200 from a webhook is not proof a human acted. A model answer is not a control pass. A missing dependency edge is not proof there is no dependency.
 
-**Representative regression entry points:** tests/test_high_impact_improvements.py, tests/test_resource_evidence_contracts.py, tests/test_enterprise_backend_contracts.py, tests/test_platform_outbox_lease.py, tests/test_finops_analysis_integrity.py, tests/test_engineering_zero_downtime.py, tests/test_agent_workflow_routing.py, tests/test_grafana_rightsizing.py, tests/test_grafana_k8s_policy.py, and platform/tests/test_readme_improvements.py.
+**Representative regression entry points:** tests/test_high_impact_improvements.py, tests/test_resource_evidence_contracts.py, tests/test_enterprise_backend_contracts.py, tests/test_platform_outbox_lease.py, tests/test_finops_analysis_integrity.py, tests/test_engineering_zero_downtime.py, tests/test_agent_workflow_routing.py, tests/test_grafana_rightsizing.py, tests/test_grafana_k8s_policy.py, tests/test_kubernetes_slo_evidence.py, tests/test_backend_improvements_doc.py, and platform/tests/test_readme_improvements.py.
