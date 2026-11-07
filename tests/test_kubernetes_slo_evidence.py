@@ -32,7 +32,9 @@ def test_attach_slo_when_cpu_and_throttling_are_sufficient():
     assert "slo_evidence" in evidence
     assert "points" not in evidence["metrics"]["cpu"]
     gate = evaluate_slo_bounded_rightsizing(evidence["slo_evidence"], now=NOW)
-    assert gate["status"] == "review_eligible"
+    assert gate["status"] == "insufficient_evidence"
+    assert "SLO_BURN_RATE_MISSING" in gate["evidence_gaps"]
+    assert "LATENCY_PROXY_NOT_OBSERVED" in gate["evidence_gaps"]
     assert evidence["latency_basis"] == PROXY_BASIS
 
 
@@ -58,11 +60,36 @@ def test_attach_uses_observability_latency_when_configured():
         "fixed_heap_configured": False,
         "hpa_present": False,
     }
+    evidence["slo_burn_rate"] = 0.5
     attach_container_slo_evidence(evidence, observed_at=NOW.isoformat())
     assert evidence["latency_basis"] == OBSERVABILITY_LATENCY_BASIS
     assert evidence["slo_evidence"]["latency_p99_series"]["basis"] == OBSERVABILITY_LATENCY_BASIS
+    assert evidence["slo_evidence"]["error_budget_burn_rate_30d"] == 0.5
     gate = evaluate_slo_bounded_rightsizing(evidence["slo_evidence"], now=NOW)
     assert gate["status"] == "review_eligible"
+
+
+def test_proxy_latency_with_supplied_burn_rate_stays_ineligible():
+    evidence = {
+        "slo_burn_rate": 0.5,
+        "metrics": {
+            "cpu": {
+                "sufficient": True,
+                "p95": 0.2,
+                "window_start": (NOW - timedelta(days=30)).isoformat(),
+                "window_end": NOW.isoformat(),
+                "points": _points(0.2),
+            },
+            "throttling": {"sufficient": True, "p95": 0.001},
+            "oom": {"sufficient": True, "maximum": 0.0},
+        },
+        "fixed_heap_configured": False,
+        "hpa_present": False,
+    }
+    attach_container_slo_evidence(evidence, observed_at=NOW.isoformat())
+    gate = evaluate_slo_bounded_rightsizing(evidence["slo_evidence"], now=NOW)
+    assert gate["status"] == "insufficient_evidence"
+    assert "LATENCY_PROXY_NOT_OBSERVED" in gate["evidence_gaps"]
 
 
 def test_attach_skips_incomplete_telemetry():

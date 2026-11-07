@@ -36,7 +36,7 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Inputs**: `validate_dcgm_sample(sample)` requires `gpu_utilization`, `memory_used_mb` and `memory_total_mb`. Utilization must be between 0 and 100. Optional `gpu_id` tags samples from different devices; when any sample includes `gpu_id`, `idle_gpu_candidates` evaluates trailing idle streaks per GPU instead of across interleaved series.
 - **Outputs**: `{valid, idle, utilization}`, where `idle` is utilization below 5. `idle_gpu_candidates(samples, min_idle_hours=24.0)` returns idle samples with `recommendation: review_hibernation` and `idle_hours_observed`.
 - **Limitation**: `min_idle_hours` requires that many consecutive trailing hourly idle samples per streak; a brief dip resets the streak. Memory fields aren't validated beyond being present.
-- **To make it production-ready**: a tenant-bound DCGM or Prometheus collector, a duration check that honors `min_idle_hours`, inventory and source-ledger integration, a rule in the catalog, and pricing evidence.
+- **To make it production-ready**: a tenant-bound DCGM or Prometheus collector, inventory and source-ledger integration, a rule in the catalog, and pricing evidence.
 
 ### Commitment ladder
 

@@ -110,6 +110,8 @@ class SLOEvidence(Strict):
 
 
 def evaluate_slo_bounded_rightsizing(value,*,now=None):
+    from app.kubernetes_latency_evidence import PROXY_BASIS
+
     evidence=value if isinstance(value,SLOEvidence) else SLOEvidence.model_validate(value)
     now=now or datetime.now(timezone.utc)
     reasons=[];unknown=[]
@@ -130,6 +132,11 @@ def evaluate_slo_bounded_rightsizing(value,*,now=None):
     correlation=None;paired_count=0;paired_ratio=None
     if not cpu.is_sufficient:unknown.append('CPU_'+str(cpu.gap_reason).upper())
     if not latency.is_sufficient:unknown.append('LATENCY_'+str(latency.gap_reason).upper())
+    latency_basis=None
+    if isinstance(evidence.latency_p99_series,dict):
+        latency_basis=evidence.latency_p99_series.get('basis')
+    if latency_basis==PROXY_BASIS:
+        unknown.append('LATENCY_PROXY_NOT_OBSERVED')
     if evidence.slo_latency_target_ms is None:unknown.append('SLO_LATENCY_TARGET_MISSING')
     elif latency.is_sufficient and latency.observed_value>=evidence.slo_latency_target_ms*.9:reasons.append('BLOCKED_BY_TAIL_LATENCY_PROXIMITY')
     if cpu.is_sufficient and latency.is_sufficient:

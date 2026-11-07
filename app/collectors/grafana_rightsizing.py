@@ -323,6 +323,7 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
     cpu_req = _requests_from_frames(client.query_range(cpu_requests, end, end, step=STEP_SECONDS), 'cpu')
     mem_req = _requests_from_frames(client.query_range(mem_requests, end, end, step=STEP_SECONDS), 'memory')
     latency_by_key: dict[tuple, list[dict]] = {}
+    latency_query_failed = False
     if config.get('latency_query'):
         try:
             latency_expr = render_latency_query(config['latency_query'], cluster_matcher=matcher)
@@ -335,6 +336,8 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
             latency_by_key = latency_points_from_grafana_frames(latency_payload, unit=config.get('latency_unit', 'milliseconds'))
         except SourceError:
             latency_by_key = {}
+            latency_query_failed = True
+    slo_latency_target_ms = float(config.get('slo_latency_target_ms') or 100.0)
     expected_samples = window_days * 24 * 12
     keys = sorted(set(cpu_usage) | set(mem_usage) | set(cpu_req) | set(mem_req))[:MAX_ITEMS]
     items = []
@@ -354,10 +357,16 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
         coverage = min(1.0, len(cpu_samples) / max(1, expected_samples))
         suggested_cpu = _ceil_cpu_cores(scan_aligned_cpu_target(cpu_p95)) if cpu_p95 is not None else None
         suggested_mem = _ceil_memory_bytes(scan_aligned_memory_target(mem_p99)) if mem_p99 is not None else None
+        latency_points = latency_by_key.get((ns, pod, container), [])
+        latency_blocks: list[str] = []
+        if config.get('latency_query'):
+            if latency_query_failed or not latency_points:
+                latency_blocks.append('LATENCY_NOT_OBSERVED')
         safety = (
             coverage_blocks(coverage)
             + cpu_safety_blocks(throttle_p95=throttle_p95, hpa_managed=hpa_managed)
             + memory_safety_blocks(oom_observed=oom_observed, restart_spread=False)
+            + latency_blocks
         )
         cpu_detected = cpu_overrequest_detected(current_cpu, cpu_p95)
         mem_detected = memory_overrequest_detected(current_mem, mem_p99)
@@ -366,11 +375,12 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
             ratio = abs(suggested_cpu - current_cpu) / current_cpu
             if ratio >= 0.10:
                 direction = 'decrease' if suggested_cpu < current_cpu else 'increase'
+        latency_p99 = _p99([p['value'] for p in latency_points]) if latency_points else None
+        if latency_p99 is not None and config.get('latency_query') and latency_p99 >= slo_latency_target_ms * 0.9:
+            safety = sorted(set(safety + ['BLOCKED_BY_TAIL_LATENCY_PROXIMITY']))
         needs_review = bool(safety) or coverage < COVERAGE_MIN or (direction == 'decrease' and not (cpu_detected or mem_detected))
         eligible_cpu = cpu_detected and not safety and direction == 'decrease'
         eligible_mem = mem_detected and not safety and suggested_mem and current_mem and suggested_mem < current_mem
-        latency_points = latency_by_key.get((ns, pod, container), [])
-        latency_p99 = _p99([p['value'] for p in latency_points]) if latency_points else None
         latency_series = None
         row_latency_basis = None
         if latency_points:
@@ -404,9 +414,12 @@ def run_rightsizing(config, *, cluster: str | None = None, window_days: int = DE
         if latency_series is not None:
             item['latency_p99_series'] = latency_series
         items.append(item)
+    latency_query_status = None
+    if config.get('latency_query'):
+        latency_query_status = 'unavailable' if latency_query_failed or not latency_by_key else 'observed'
     return dict(policy_version=POLICY_VERSION, queried_at=end.isoformat(), window_days=window_days,
                 window_start=start.isoformat(), window_end=end.isoformat(), cluster=cluster, items=items,
-                item_count=len(items), truncated=len(keys) >= MAX_ITEMS)
+                item_count=len(items), truncated=len(keys) >= MAX_ITEMS, latency_query_status=latency_query_status)
 
 
 def probe(config):

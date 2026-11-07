@@ -63,7 +63,7 @@ def create_router(store, current_tenant, finance):
                                          inventory_complete=False))
             if isinstance(evidence.get('slo_burn_rate'),(int,float)):
                 slo.append(dict(resource_id=resource['resource_id'],burn_rate=evidence['slo_burn_rate']))
-            observed={k:evidence[k] for k in ('cross_az_traffic_gb','network_egress_gb','nat_bytes') if k in evidence}
+            observed={k:evidence[k] for k in ('cross_az_traffic_gb','network_egress_gb','nat_bytes','network_egress_bytes_per_sec') if k in evidence}
             if observed:network.append(dict(resource_id=resource['resource_id'],observations=observed))
         return dict(scan_id=str(scan_id),automatic_execution=False,purchase_authorized=False,
             engines={'topology':dict(status='observed_edges' if dependencies else 'insufficient_evidence',items=dependencies[:1000],

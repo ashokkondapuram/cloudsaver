@@ -85,7 +85,7 @@ Every outcome is one of `condition_detected`, `condition_not_detected`, `insuffi
 4. The controller is a Deployment, StatefulSet or DaemonSet with a valid identity.
 5. The controller's desired replica count equals the number of observed pods.
 6. Every replica independently passes the same rule.
-7. Every replica has saved `slo_evidence` that `evaluate_slo_bounded_rightsizing()` ([app/causal_topology_simulator.py](../../app/causal_topology_simulator.py)) rates `review_eligible`.
+7. Every replica has saved `slo_evidence` that `evaluate_slo_bounded_rightsizing()` ([app/causal_topology_simulator.py](../../app/causal_topology_simulator.py)) rates `review_eligible` (measured burn rate and non-proxy latency; proxy-only packets stay `insufficient_evidence`).
 8. The rounded target is lower than the smallest current request across replicas.
 
 The response contains the filename (`<controller>.requests-review.patch.yaml`), a `strategic-merge-patch`, a unified diff, `replicas_reviewed`, `automatic_execution: false` and two review commands (`kubectl patch ... --dry-run=server` and `kubectl diff`).

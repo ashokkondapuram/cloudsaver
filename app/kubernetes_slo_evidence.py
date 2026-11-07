@@ -29,10 +29,16 @@ def build_container_slo_evidence(evidence: dict, *, observed_at: str | None = No
     if not isinstance(slo_target, (int, float)) or slo_target <= 0:
         slo_target = 100.0
     latency_series = resolve_latency_p99_series(cpu_series, evidence, slo_target_ms=float(slo_target))
+    burn = None
+    for key in ("error_budget_burn_rate_30d", "slo_burn_rate"):
+        value = evidence.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            burn = float(value)
+            break
     return {
         "cpu_series": cpu_series,
         "latency_p99_series": latency_series,
-        "error_budget_burn_rate_30d": 0.5,
+        "error_budget_burn_rate_30d": burn,
         "slo_latency_target_ms": float(slo_target),
         "observed_at": observed_at or cpu.get("window_end") or datetime.now(timezone.utc).isoformat(),
         "oom_kill_count_30d": oom_count,
