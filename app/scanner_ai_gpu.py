@@ -1,7 +1,9 @@
 """DCGM-style GPU metric contract validation (v2; no zero-fill on missing samples)."""
 
 REQUIRED_FIELDS = frozenset({"gpu_utilization", "memory_used_mb", "memory_total_mb"})
-OPTIONAL_FIELDS = frozenset({"tensor_core_active_pct", "sm_occupancy_pct", "nvlink_bandwidth_gbps", "thermal_throttle"})
+OPTIONAL_FIELDS = frozenset(
+    {"tensor_core_active_pct", "sm_occupancy_pct", "nvlink_bandwidth_gbps", "thermal_throttle", "gpu_id"}
+)
 
 
 def validate_dcgm_sample(sample: dict) -> dict:
@@ -28,12 +30,9 @@ def mig_partition_advisory(*, peak_vram_gb: str, slo_latency_p99_ms: str) -> dic
     return dict(mig_partition_recommended=eligible, advisory_only=True, purchase_authorized=False)
 
 
-def idle_gpu_candidates(samples: list[dict], min_idle_hours: float = 24.0) -> list[dict]:
-    """Heuristic: sustained low utilization over trailing hourly samples."""
+def _idle_gpu_streak(samples: list[dict], min_idle_hours: float) -> list[dict]:
     import math
 
-    if min_idle_hours <= 0:
-        raise ValueError("min_idle_hours must be positive")
     required = max(1, math.ceil(min_idle_hours))
     streak = 0
     for sample in reversed(samples):
@@ -52,3 +51,22 @@ def idle_gpu_candidates(samples: list[dict], min_idle_hours: float = 24.0) -> li
             break
     out.reverse()
     return out
+
+
+def idle_gpu_candidates(samples: list[dict], min_idle_hours: float = 24.0) -> list[dict]:
+    """Heuristic: sustained low utilization over trailing hourly samples per gpu_id when present."""
+    if min_idle_hours <= 0:
+        raise ValueError("min_idle_hours must be positive")
+    if not samples:
+        return []
+    if any("gpu_id" in sample for sample in samples):
+        from collections import defaultdict
+
+        by_gpu: dict[str, list[dict]] = defaultdict(list)
+        for sample in samples:
+            by_gpu[str(sample.get("gpu_id", ""))].append(sample)
+        merged: list[dict] = []
+        for gpu_id in sorted(by_gpu.keys(), key=lambda k: (k == "", k)):
+            merged.extend(_idle_gpu_streak(by_gpu[gpu_id], min_idle_hours))
+        return merged
+    return _idle_gpu_streak(samples, min_idle_hours)

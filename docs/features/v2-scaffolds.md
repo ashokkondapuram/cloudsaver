@@ -33,9 +33,9 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 
 - **Purpose**: detect idle GPUs from DCGM-style metric samples.
 - **Current state**: contract validation only; there's no GPU metric collector.
-- **Inputs**: `validate_dcgm_sample(sample)` requires `gpu_utilization`, `memory_used_mb` and `memory_total_mb`. Utilization must be between 0 and 100.
-- **Outputs**: `{valid, idle, utilization}`, where `idle` is utilization below 5. `idle_gpu_candidates(samples, min_idle_hours=24.0)` returns idle samples with `recommendation: review_hibernation`.
-- **Limitation**: `min_idle_hours` requires that many consecutive trailing hourly idle samples; a brief dip resets the streak. Memory fields aren't validated beyond being present.
+- **Inputs**: `validate_dcgm_sample(sample)` requires `gpu_utilization`, `memory_used_mb` and `memory_total_mb`. Utilization must be between 0 and 100. Optional `gpu_id` tags samples from different devices; when any sample includes `gpu_id`, `idle_gpu_candidates` evaluates trailing idle streaks per GPU instead of across interleaved series.
+- **Outputs**: `{valid, idle, utilization}`, where `idle` is utilization below 5. `idle_gpu_candidates(samples, min_idle_hours=24.0)` returns idle samples with `recommendation: review_hibernation` and `idle_hours_observed`.
+- **Limitation**: `min_idle_hours` requires that many consecutive trailing hourly idle samples per streak; a brief dip resets the streak. Memory fields aren't validated beyond being present.
 - **To make it production-ready**: a tenant-bound DCGM or Prometheus collector, a duration check that honors `min_idle_hours`, inventory and source-ledger integration, a rule in the catalog, and pricing evidence.
 
 ### Commitment ladder
@@ -50,9 +50,9 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 
 - **Purpose**: draft Karpenter NodePool manifests from sizing inputs.
 - **Current state**: returns a dictionary; nothing is applied to a cluster.
-- **Inputs**: `draft_node_pool(name, instance_types, cpu_limit, consolidation="WhenEmpty")`. `name` and `instance_types` are required.
+- **Inputs**: `draft_node_pool(name, instance_types, cpu_limit, consolidation="WhenEmpty")`. `name` and `instance_types` are required. `consolidation` must be `WhenEmpty`, `WhenUnderutilized`, or `WhenEmptyOrUnderutilized`. `cpu_limit` must be a positive Kubernetes quantity (for example `100` or `4000m`).
 - **Outputs**: a `karpenter.sh/v1` `NodePool` with on-demand and spot capacity types, the instance-type requirement, a CPU limit and the consolidation policy.
-- **To make it production-ready**: derive inputs from Kubernetes rule evidence and SLOs, validate `consolidation` and `cpu_limit`, and deliver drafts through the GitOps review flow rather than cluster writes.
+- **To make it production-ready**: derive inputs from Kubernetes rule evidence and SLOs, expose a reviewed preview API when route inventory includes a scaffold pattern, and deliver drafts through the GitOps review flow rather than cluster writes. No `GET` preview route is registered yet (module-only).
 
 ### Model routing savings
 
@@ -67,11 +67,11 @@ You can't run GPU, commitment, Karpenter, model routing or event-stream features
 - **Purpose**: react to cloud change events instead of waiting for the next scan.
 - **Current state**: parsing and buffering only.
 - **Inputs and outputs**:
-  - `InMemoryEventBuffer(capacity=1000)`: `push(event)` requires a mapping with `source` and adds `received_at`; `drain()` returns and clears events. Capacity must be positive; the oldest events are dropped when full.
+  - `InMemoryEventBuffer(capacity=1000)`: `push(event)` requires a mapping with `source` and adds `received_at`; `drain()` returns and clears events. When `CLOUDSAVER_DRIFT_INGEST=true`, `drain_to_drift_outbox(consumer=..., outbox=...)` (or `drain_buffer_to_drift_outbox`) normalizes buffered envelopes with `raw` + `provider` and enqueues `DRIFT_INSPECT_RESOURCE` rows on the platform outbox — the same durable path as `POST /api/v1/drift/cloud-events/ingest`, with no cloud writes. At most 100 events per drain; un-normalizable events are reported in `skipped`.
   - `EventStreamConsumer.parse_eventbridge`, `parse_eventgrid` and `parse_pubsub` normalize envelopes to `{source, provider, action, resource_id, raw}`.
   - `EventStreamConsumer.subscribe_eventbridge` / `subscribe_eventgrid` / `subscribe_pubsub` provision webhooks when `CLOUDSAVER_DRIFT_INGEST_URL` and related env are set (`app/drift/cloud_event_subscriptions.py`); GCP uses Pub/Sub push + Logging sink.
   - `POST /api/v1/drift/cloud-events/subscriptions/ensure` (tenant admin, `CLOUDSAVER_DRIFT_SUBSCRIPTION_WIRING=true`) wires AWS EventBridge and Azure Event Grid to the ingest URL.
-- **Remaining**: durable queue instead of in-memory buffer only in tests.
+- **Remaining**: collectors still push into the in-memory buffer in tests; production traffic should use the webhook ingest path directly.
 
 ### GitOps resource index
 
@@ -124,6 +124,7 @@ All three are forwarded by [services/gateway.py](../../services/gateway.py). The
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `CLOUDSAVER_GITOPS_AST_INDEX` | JSON object mapping resource IDs to `repository`, `file_path` and `iac_kind` | `{}` |
+| `CLOUDSAVER_DRIFT_INGEST` | When true, allows bridging `InMemoryEventBuffer` drains into the platform drift outbox | unset (buffer drain stays test-only) |
 
 A malformed index returns 422 from the resource-mapping endpoint.
 
@@ -131,7 +132,7 @@ A malformed index returns 422 from the resource-mapping endpoint.
 
 - No scaffold calls a cloud write API, purchases commitments or applies manifests.
 - GPU idle still has no collector; Karpenter drafts are not delivered through GitOps automatically.
-- Event subscriptions raise `NotImplementedError`.
+- Buffered event drain to outbox requires `CLOUDSAVER_DRIFT_INGEST` and a workspace resolver; it does not replace signed webhook ingest.
 - Patch preview is a placeholder for Terraform and OpenTofu and raises `NotImplementedError` for other kinds.
 - The GitOps index isn't tenant-scoped.
 - Two of the endpoints aren't reachable through the dashboard proxy.

@@ -379,9 +379,9 @@ Tested, not production-wired (docs/features/v2-scaffolds.md):
 | --- | --- | --- |
 | app/scanner_ai_gpu.py | DCGM contract; trailing idle streak must meet min_idle_hours | No collector |
 | app/autopilot_commitments.py | Ladder tranches apply step_pct to the ceiling; purchase_authorized: false | No purchase API |
-| app/k8s_karpenter_sync.py | Returns a NodePool dict | Nothing is applied |
+| app/k8s_karpenter_sync.py | Returns a NodePool dict; validates consolidation and cpu_limit | Nothing is applied; no preview API |
 | app/ai_workload_optimizer.py | Decimal routing-savings estimate, advisory_only | No measured volume or quality gate |
-| app/collectors/event_stream.py | Parses EventBridge, Event Grid, and Pub/Sub into a memory buffer | Not the durable ingress path |
+| app/collectors/event_stream.py | Parses envelopes; optional buffer drain to platform outbox when `CLOUDSAVER_DRIFT_INGEST` | Webhook ingest remains the production path |
 | GET /api/v1/auth/consent-url | Always 501 | Operators add accounts in the portal |
 
 The enforced closed-loop path is `app/outcome_store.py` and `app/outcome_evidence.py` (compare remediations to later FOCUS evidence and reopen on regression). Do not treat that workflow as a second billing system.

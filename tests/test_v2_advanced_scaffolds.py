@@ -1,7 +1,16 @@
 from app.ai_workload_optimizer import routing_savings_usd
 from app.autopilot_commitments import commitment_ladder
+from app.collectors.event_stream import (
+    EventStreamConsumer,
+    InMemoryEventBuffer,
+    drain_buffer_to_drift_outbox,
+    drift_ingest_bridge_enabled,
+)
+from app.drift.outbox_store import PlatformOutboxStore
 from app.k8s_karpenter_sync import draft_node_pool
 from app.scanner_ai_gpu import idle_gpu_candidates, validate_dcgm_sample
+from tests.test_drift_event_pipeline import AWS_EVENT, TENANT
+from tests.test_platform_outbox_lease import _store
 
 
 def test_validate_dcgm_sample_accepts_idle_gpu():
@@ -62,6 +71,64 @@ def test_draft_node_pool_rejects_empty_name():
     except ValueError:
         return
     raise AssertionError("expected ValueError")
+
+
+def test_draft_node_pool_rejects_invalid_consolidation():
+    try:
+        draft_node_pool("batch", ["m6i.large"], "10", consolidation="Always")
+    except ValueError as error:
+        assert "consolidation" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_draft_node_pool_rejects_non_positive_cpu_limit():
+    try:
+        draft_node_pool("batch", ["m6i.large"], "0")
+    except ValueError as error:
+        assert "cpu_limit" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_idle_gpu_candidates_tracks_per_gpu_id():
+    idle = {"gpu_utilization": 1.0, "memory_used_mb": 1, "memory_total_mb": 10, "gpu_id": "0"}
+    busy = {**idle, "gpu_utilization": 50.0, "gpu_id": "1"}
+    mixed = [idle, busy, idle]
+    assert len(idle_gpu_candidates(mixed, min_idle_hours=2)) == 2
+    interleaved = [
+        {"gpu_utilization": 1.0, "memory_used_mb": 1, "memory_total_mb": 10},
+        {"gpu_utilization": 50.0, "memory_used_mb": 1, "memory_total_mb": 10},
+        {"gpu_utilization": 1.0, "memory_used_mb": 1, "memory_total_mb": 10},
+    ]
+    assert idle_gpu_candidates(interleaved, min_idle_hours=2) == []
+
+
+def test_drain_buffer_to_outbox_requires_env(monkeypatch, tmp_path):
+    monkeypatch.delenv("CLOUDSAVER_DRIFT_INGEST", raising=False)
+    buffer = InMemoryEventBuffer()
+    consumer = EventStreamConsumer(resolve_workspace=lambda _p, _a: TENANT)
+    outbox = PlatformOutboxStore(_store(tmp_path))
+    try:
+        drain_buffer_to_drift_outbox(buffer, consumer=consumer, outbox=outbox)
+    except ValueError as error:
+        assert "CLOUDSAVER_DRIFT_INGEST" in str(error)
+    else:
+        raise AssertionError("expected ValueError")
+
+
+def test_drain_buffer_to_outbox_enqueues_when_enabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_INGEST", "true")
+    assert drift_ingest_bridge_enabled()
+    consumer = EventStreamConsumer(resolve_workspace=lambda _p, acct: TENANT if acct == "123456789012" else None)
+    parsed = consumer.parse_eventbridge(AWS_EVENT)
+    buffer = InMemoryEventBuffer()
+    buffer.push(parsed)
+    outbox = PlatformOutboxStore(_store(tmp_path))
+    result = drain_buffer_to_drift_outbox(buffer, consumer=consumer, outbox=outbox)
+    assert result["accepted"] == 1
+    assert len(buffer) == 0
+    assert result["intents"][0][1] == "pending"
 
 
 def test_routing_savings_is_nonnegative():
