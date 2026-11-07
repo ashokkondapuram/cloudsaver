@@ -232,6 +232,11 @@ def prepare_settings(env_file, home):
 
 
 def operator_access_key(home):
+    platform_env = ROOT / 'platform' / '.env'
+    if platform_env.is_file():
+        plain = env_values(platform_env).get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
+        if plain:
+            return plain
     key_file = ROOT / 'platform' / 'operator-access.key'
     if key_file.is_file():
         text = key_file.read_text().strip()

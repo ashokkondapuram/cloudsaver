@@ -228,8 +228,9 @@ An existing platform volume keeps its stored role passwords when containers are 
 | `PLATFORM_ENVIRONMENT` | No | `development` or `production` |
 | `PLATFORM_PROVIDER_SCOPED_KEYS` | No | Enables provider-limited workspace keys |
 | `PLATFORM_PORTAL_AUTH` | Yes | `entra` or `operator_key` (local only) |
-| `PLATFORM_OPERATOR_KEY_SHA256` | operator_key | SHA-256 of operator access key |
-| `platform/operator-access.key` | operator_key | Plaintext operator key for portal sign-in (written by `setup_platform.py`; mode 0600, gitignored) |
+| `PLATFORM_OPERATOR_ACCESS_KEY` | operator_key | Plaintext operator key (local dev only; in `platform/.env`, never commit) |
+| `PLATFORM_OPERATOR_KEY_SHA256` | operator_key | SHA-256 of the same key (passed to platform-portal) |
+| `platform/operator-access.key` | operator_key | Copy of the plaintext key (written by `setup_platform.py`; mode 0600, gitignored) |
 | `PLATFORM_OPERATOR_TENANT_ID` | Entra ops | Optional operator tenant binding |
 | `PORTAL_ENTRA_TENANT_ID` | Entra | Directory tenant |
 | `PORTAL_ENTRA_CLIENT_ID` | Entra | App registration |

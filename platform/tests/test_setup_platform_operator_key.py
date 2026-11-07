@@ -28,6 +28,22 @@ def test_create_writes_operator_key_file(tmp_path, monkeypatch):
     key = mod.read_operator_access_key()
     assert key and len(key) >= 32
     env = mod.parse(mod.path)
+    assert env['PLATFORM_OPERATOR_ACCESS_KEY'] == key
     assert env['PLATFORM_OPERATOR_KEY_SHA256'] == hashlib.sha256(key.encode()).hexdigest()
     assert mod.operator_key_path.stat().st_mode & 0o777 == 0o600
     assert mod.path.stat().st_mode & 0o777 == 0o600
+
+
+def test_ensure_and_rotate_operator_key(tmp_path, monkeypatch):
+    mod = load_setup(tmp_path, monkeypatch)
+    mod.create()
+    first = mod.read_operator_access_key()
+    mod.operator_key_path.unlink()
+    mod.sync_operator_key_file_from_env()
+    assert mod.read_operator_access_key() == first
+    mod.rotate_operator_key()
+    second = mod.read_operator_access_key()
+    assert second and second != first
+    env = mod.parse(mod.path)
+    assert env['PLATFORM_OPERATOR_ACCESS_KEY'] == second
+    assert env['PLATFORM_OPERATOR_KEY_SHA256'] == hashlib.sha256(second.encode()).hexdigest()

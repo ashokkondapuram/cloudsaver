@@ -30,6 +30,11 @@ def resolve_operator_key(env):
     operator = (env.get('PLATFORM_OPERATOR_ACCESS_KEY') or os.getenv('PLATFORM_OPERATOR_ACCESS_KEY') or '').strip()
     if operator:
         return operator
+    platform_env = ROOT / 'platform' / '.env'
+    if platform_env.is_file():
+        operator = load_env(platform_env).get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
+        if operator:
+            return operator
     key_file = ROOT / 'platform' / 'operator-access.key'
     if key_file.is_file():
         text = key_file.read_text().strip()

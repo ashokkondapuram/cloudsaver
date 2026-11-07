@@ -50,13 +50,56 @@ def read_operator_access_key():
     return text.splitlines()[0].strip() if text else None
 
 
-def write_operator_access_key(key):
+def write_operator_access_key(key, *, replace=False):
+    flags = os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if replace else os.O_EXCL)
     try:
-        descriptor = os.open(operator_key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        descriptor = os.open(operator_key_path, flags, 0o600)
     except FileExistsError:
-        raise SystemExit(f'{operator_key_path.name} already exists. Remove it only if you are rotating keys.')
+        raise SystemExit(f'{operator_key_path.name} already exists. Use --rotate-operator-key to replace it.')
     with os.fdopen(descriptor, 'w') as stream:
         stream.write(key + '\n')
+
+
+def upsert_operator_access_key_line(lines, key):
+    entry = 'PLATFORM_OPERATOR_ACCESS_KEY=' + key
+    index = next((i for i, line in enumerate(lines) if line.startswith('PLATFORM_OPERATOR_ACCESS_KEY=')), None)
+    if index is None:
+        lines.append(entry)
+    else:
+        lines[index] = entry
+    return lines
+
+
+def sync_operator_key_file_from_env():
+    """Write operator-access.key from PLATFORM_OPERATOR_ACCESS_KEY in platform/.env."""
+    if not path.exists():
+        raise SystemExit('Create platform/.env first. No file was changed.')
+    plain = parse(path).get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
+    if not plain:
+        raise SystemExit(
+            'platform/.env has no PLATFORM_OPERATOR_ACCESS_KEY (only the SHA-256 digest). '
+            'Use --rotate-operator-key to issue a new plaintext key.'
+        )
+    write_operator_access_key(plain, replace=operator_key_path.exists())
+    print(f'Operator access key synced to {operator_key_path} (mode 0600).')
+
+
+def rotate_operator_key():
+    if not path.exists():
+        raise SystemExit('Create platform/.env first. No file was changed.')
+    operator_key = secrets.token_urlsafe(32)
+    lines = path.read_text().splitlines()
+    digest_line = 'PLATFORM_OPERATOR_KEY_SHA256=' + digest(operator_key)
+    index = next((i for i, line in enumerate(lines) if line.startswith('PLATFORM_OPERATOR_KEY_SHA256=')), None)
+    if index is None:
+        lines.append(digest_line)
+    else:
+        lines[index] = digest_line
+    upsert_operator_access_key_line(lines, operator_key)
+    replace(lines)
+    write_operator_access_key(operator_key, replace=True)
+    print('Rotated operator access key. Updated platform/.env, digest, and operator-access.key.')
+    print('Restart platform-portal (docker compose up -d platform-portal).')
 
 
 def parse(file):
@@ -103,6 +146,8 @@ def create():
         'PLATFORM_ENVIRONMENT=development',
         'PLATFORM_PORTAL_AUTH=operator_key',
         'PLATFORM_OPERATOR_KEY_SHA256=' + digest(operator_key),
+        '# Plaintext operator key for local sign-in (portal verifies the digest above).',
+        'PLATFORM_OPERATOR_ACCESS_KEY=' + operator_key,
         'PLATFORM_PORTAL_TOKEN=' + portal,
         '# SHA-256 digests only. Add CloudSaver callers with --add-callers.',
         'PLATFORM_IDENTITY_CALLERS=' + json.dumps({'portal': digest(portal)}, separators=(',', ':')),
@@ -113,7 +158,8 @@ def create():
     print('Created platform/.env.')
     print('Next: python3 scripts/setup_platform.py --add-callers ../.env (after CloudSaver has its service tokens),')
     print('then: docker compose up --build -d, and sign in to the portal at http://127.0.0.1:3100.')
-    print(f'Operator access key: {operator_key_path} (mode 0600). Use this file to sign in; do not commit it.')
+    print('Operator access key (plaintext): platform/.env PLATFORM_OPERATOR_ACCESS_KEY and')
+    print(f'  {operator_key_path} (mode 0600). Use either to sign in; do not commit.')
 
 
 def migrate(source):
@@ -127,15 +173,18 @@ def migrate(source):
     missing = [name for name in REQUIRED if name not in moved]
     if missing:
         raise SystemExit('The source .env is missing values for: ' + ', '.join(missing) + '. No file was changed.')
-    write_new(lines + defaults())
     migrated_plain = (old.get('PLATFORM_OPERATOR_ACCESS_KEY') or old.get('CLOUDSAVER_OPERATOR_ACCESS_KEY') or '').strip()
+    if migrated_plain:
+        upsert_operator_access_key_line(lines, migrated_plain)
+    write_new(lines + defaults())
     if migrated_plain and not operator_key_path.exists():
         write_operator_access_key(migrated_plain)
         print(f'Operator access key copied to {operator_key_path} (mode 0600).')
     print('Created platform/.env with: ' + ', '.join(moved))
     print('The key pepper and operator key are unchanged, so existing keys and portal sign-in keep working.')
     if not operator_key_path.exists():
-        print('No operator-access.key was written (no plaintext key in the source .env). Use your existing key or rotate.')
+        print('No operator-access.key was written (no plaintext key in the source .env).')
+        print('Run: python3 scripts/setup_platform.py --rotate-operator-key')
 
 
 def add_callers(source):
@@ -168,10 +217,18 @@ if __name__ == '__main__':
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--migrate-from', metavar='ENV_FILE')
     group.add_argument('--add-callers', metavar='ENV_FILE')
+    group.add_argument('--ensure-operator-key-file', action='store_true',
+                       help='write operator-access.key from PLATFORM_OPERATOR_ACCESS_KEY in platform/.env')
+    group.add_argument('--rotate-operator-key', action='store_true',
+                       help='generate a new plaintext operator key and update digest + files')
     args = parser.parse_args()
     if args.migrate_from:
         migrate(args.migrate_from)
     elif args.add_callers:
         add_callers(args.add_callers)
+    elif args.ensure_operator_key_file:
+        sync_operator_key_file_from_env()
+    elif args.rotate_operator_key:
+        rotate_operator_key()
     else:
         create()

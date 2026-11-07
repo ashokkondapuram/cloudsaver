@@ -91,6 +91,10 @@ def resolve_operator_key(env: dict[str, str]) -> str:
     operator = env.get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
     if operator:
         return operator
+    platform_env = load_env(ROOT / 'platform' / '.env')
+    operator = platform_env.get('PLATFORM_OPERATOR_ACCESS_KEY', '').strip()
+    if operator:
+        return operator
     key_file = ROOT / 'platform' / 'operator-access.key'
     if key_file.is_file():
         text = key_file.read_text().strip()
