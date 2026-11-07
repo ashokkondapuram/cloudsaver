@@ -2,7 +2,9 @@
 
 The Kubernetes workspace shows what CloudSaver observed in your authorized clusters during a completed scan: cluster and source health, node capacity reservations, a namespace and workload explorer, the outcome of each Kubernetes review rule, and allocation estimates kept separate from billed node cost. Everything on this page is read from a saved scan. CloudSaver never writes to a cluster. A workspace administrator can generate a review-only request patch for a container, but only when the saved evidence for every replica passes all safety gates.
 
-Last reviewed: Oct 25, 2026.
+Last reviewed: Nov 7, 2026.
+
+**Planned:** Live workload CPU/memory rightsizing via Grafana and Mimir (advisory, no cluster writes) — see [spec draft](../../specs/drafts/2026-11-07-kubernetes-grafana-rightsizing.md).
 
 ## Where to find it
 
