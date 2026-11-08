@@ -127,6 +127,15 @@ export function checkAssignment(a: Assignment, local: Connector[]): void {
       throw new Error('Connector is outside the worker deployment grant');
     }
     validateStepData(step,own);
+    if(readOperations.has(step.operation)){
+      // The inspect step's declared baseline must be exactly the baseline the server
+      // captured at task creation (task.payload.expected_state), not one the planner
+      // fabricated or left empty — otherwise a live-state comparison downstream
+      // (stateMatches) checks against a baseline that was never actually verified.
+      const serverExpected=t.payload.expected_state;
+      if(!serverExpected||typeof serverExpected!=='object'||Array.isArray(serverExpected)||Object.keys(serverExpected).length===0)throw new Error('LIVE_RESOURCE_STATE_DRIFTED: no server-captured baseline for this resource');
+      if(canonical(step.arguments.expected_state)!==canonical(serverExpected))throw new Error('LIVE_RESOURCE_STATE_DRIFTED: inspect step baseline does not match the server-captured expected state');
+    }
     if(step.operation==='gitops.terraform.sync'){
       if(++syncs>1||writes!==1||step!==t.payload.plan.steps.at(-1))throw new Error('Repository review must exactly match the prior cloud write');
       const mode=step.arguments.patch_mode;

@@ -24,7 +24,7 @@ def reader(source, binding):
         region=binding.get('region')
         if not matches(REGION,region) or not matches(ROLE_ARN,binding.get('role_arn')) or host!='aps-workspaces.'+region+'.amazonaws.com':
             raise ScanError('AWS Prometheus endpoint or reader role is invalid')
-        session=aws_session(dict(region=region,role_arn=binding['role_arn'],external_id=binding['tenant_id']))
+        session=aws_session(dict(region=region,role_arn=binding['role_arn']),tenant={'tenant_id':binding['tenant_id']})
         from botocore.auth import SigV4Auth
         from botocore.awsrequest import AWSRequest
         def sign(url):

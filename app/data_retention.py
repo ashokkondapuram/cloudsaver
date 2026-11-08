@@ -1,9 +1,28 @@
 """Erase model content while retaining usage, idempotency fences and audit evidence."""
 from datetime import datetime,timedelta,timezone
 from uuid import uuid4
+import logging
 import re
 from app.enterprise_store import decode
 from app.principals import actor
+
+logger=logging.getLogger(__name__)
+
+
+def _guarded(db,tenant_id,row_id,fn,*args):
+    """Run fn under a SAVEPOINT so one poison row can't abort the whole purge batch or
+    block every other row/tenant behind it; the failure is logged with enough to find it."""
+    db.execute('SAVEPOINT sp_retention_row')
+    try:
+        result=fn(*args)
+    except Exception as exc:
+        db.execute('ROLLBACK TO SAVEPOINT sp_retention_row')
+        db.execute('RELEASE SAVEPOINT sp_retention_row')
+        logger.error('Data retention row failed; quarantined. tenant_id=%s row_id=%s exc_class=%s',tenant_id,row_id,type(exc).__name__)
+        return False
+    else:
+        db.execute('RELEASE SAVEPOINT sp_retention_row')
+        return result
 
 
 class RetentionConflict(ValueError):pass
@@ -58,14 +77,14 @@ class DataRetention:
                 WHERE r.tenant_id=%s AND r.erased_at IS NULL AND r.expires_at<=%s AND a.status<>'pending'
                 AND NOT EXISTS(SELECT 1 FROM ai_data_holds h WHERE h.tenant_id=r.tenant_id AND h.attempt_id=r.attempt_id AND h.released_at IS NULL AND h.hold_until>%s)
                 ORDER BY r.expires_at,r.attempt_id LIMIT %s''',(tenant_id,now,now,limit)).fetchall()
-            count=sum(bool(self._erase(db,tenant_id,str(row[0]),'0'*64)) for row in rows)
+            count=sum(bool(_guarded(db,tenant_id,str(row[0]),self._erase,db,tenant_id,str(row[0]),'0'*64)) for row in rows)
             tasks=db.execute('''SELECT t.id FROM agent_tasks t WHERE t.tenant_id=%s AND t.payload->>'data_erased' IS NULL
                 AND ((t.payload->>'data_retention_expires_at' IS NOT NULL AND t.payload->>'data_retention_expires_at'<=%s)
                     OR (t.payload->>'data_retention_expires_at' IS NULL AND t.created_at<=%s))
                 AND NOT EXISTS(SELECT 1 FROM ai_inference_attempts a JOIN ai_data_holds h ON h.tenant_id=a.tenant_id AND h.attempt_id=a.id
                     WHERE a.tenant_id=t.tenant_id AND CAST(a.request_key AS TEXT)=t.payload->>'draft_key' AND h.released_at IS NULL AND h.hold_until>%s)
                 ORDER BY t.created_at LIMIT %s''',(tenant_id,now,(self.clock()-timedelta(days=7)).isoformat(),now,limit)).fetchall()
-            return count+sum(bool(self._erase_agent(db,tenant_id,str(row[0]),'0'*64)) for row in tasks)
+            return count+sum(bool(_guarded(db,tenant_id,str(row[0]),self._erase_agent,db,tenant_id,str(row[0]),'0'*64)) for row in tasks)
 
     def erase(self,tenant,attempt_id,reference):
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{2,119}',reference):raise RetentionConflict('Use an internal privacy-request reference.')

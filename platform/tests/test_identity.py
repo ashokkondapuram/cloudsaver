@@ -511,6 +511,28 @@ def test_customer_admin_cannot_escalate_or_act_on_other_customers(service, clock
     assert denied.value.status == 403
 
 
+def test_customer_admin_cannot_issue_or_rotate_a_key_for_the_owner(service, clock):
+    """BE-PLAT-04: an admin must not be able to mint or rotate the owner's key for itself."""
+    customer, owner, owner_secret = claimed_owner(service)
+    admin = invite_member(service, owner, 'grace', roles=('Viewer',))
+    grace_key = service.issue_customer_workspace_key(TID, {'name': 'Grace', 'roles': ['Viewer'], 'all_providers': True,
+                                                           'subject_user_id': admin['user_id'],
+                                                           'expires_at': (clock() + timedelta(days=10)).isoformat()}, owner)
+    grace = service.verify(grace_key['secret'], IP, 'gateway')
+    with pytest.raises(IdentityError) as denied:
+        service.issue_customer_workspace_key(TID, {'name': 'For owner', 'roles': ['Viewer'], 'all_providers': True,
+                                                   'subject_user_id': owner['subject_id'],
+                                                   'expires_at': (clock() + timedelta(days=10)).isoformat()}, grace)
+    assert denied.value.status == 403
+    owner_grant = service.verify(owner_secret, IP, 'gateway')
+    with pytest.raises(IdentityError) as denied:
+        service.rotate_customer_key(owner_grant['key_id'], {'overlap_hours': 0}, grace)
+    assert denied.value.status == 403
+    # The owner may still act on itself and on the admin it created.
+    service.rotate_customer_key(owner_grant['key_id'], {'overlap_hours': 0}, owner)
+    service.rotate_customer_key(grace_key['key']['key_id'], {'overlap_hours': 0}, owner)
+
+
 def test_suspending_a_user_revokes_keys_and_verify_rejects_them(service, clock):
     customer, owner, _ = claimed_owner(service)
     member = invite_member(service, owner, 'lin')

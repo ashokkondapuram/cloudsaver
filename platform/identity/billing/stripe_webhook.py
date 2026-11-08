@@ -47,6 +47,15 @@ def complete_plan_change_from_checkout(service, tx, session, actor, now):
     req = tx.get_plan_change_request(request_id, lock=True)
     if not req or req['status'] != 'pending_payment':
         return None
+    if req.get('stripe_checkout_session_id') and req['stripe_checkout_session_id'] != session.get('id'):
+        logger.warning('Checkout session %s does not match request %s session %s; ignoring.',
+                       session.get('id'), request_id, req['stripe_checkout_session_id'])
+        return None
+    # ponytail: amount/currency are not stored locally against the plan (only Stripe price refs);
+    # a positive amount_total is a sanity floor. Add a stored plan price to compare exactly if abuse appears.
+    if not isinstance(session.get('amount_total'), int) or session['amount_total'] <= 0:
+        logger.warning('Checkout session %s has no positive amount_total; ignoring.', session.get('id'))
+        return None
     workspace = tx.get_workspace(req['tenant_id'], lock=True)
     if not workspace or workspace['status'] == 'deleted':
         raise NotFound('Workspace not found.')
@@ -81,18 +90,27 @@ def handle_stripe_webhook(service, body, headers, request_id=None):
     except BillingEventError as exc:
         raise IdentityError(str(exc), 400) from None
     now = service.now()
-    actor = {'actor': 'stripe', 'actor_type': 'provider'}
-    if event.type == 'checkout.session.completed':
+    actor = {'actor': 'stripe', 'actor_type': 'system'}
+    if event.type in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+        # Checkout sessions are a different object shape than the subscription/invoice events below
+        # (no subscription items, no 'in_'/'sub_' id) and are never passed to provider.apply/transition.
         with service.store.transaction() as tx:
             if tx.provider_event('stripe', event.id):
                 return {'received': True, 'duplicate': True}
             session = event.object
-            if session.get('metadata', {}).get('plan_change_request_id'):
-                complete_plan_change_from_checkout(service, tx, session, actor, now)
-                tx.insert_provider_event({'provider': 'stripe', 'event_id': event.id, 'event_type': event.type,
-                                          'event_created': event.created, 'customer_id': None, 'outcome': 'plan_change_paid'})
-                service._publish([{'directory': True, 'event': 'directory_changed'}], tx)
-                return {'received': True, 'outcome': 'plan_change_paid'}
+            if session.get('metadata', {}).get('plan_change_request_id') and session.get('payment_status') == 'paid':
+                result = complete_plan_change_from_checkout(service, tx, session, actor, now)
+                outcome = 'plan_change_paid' if result else 'plan_change_paid_but_not_applied'
+                if not result:
+                    logger.error('Stripe checkout %s was paid but the plan change could not be applied: '
+                                 'request %s is no longer pending payment or the workspace changed concurrently.',
+                                 session.get('id'), session.get('metadata', {}).get('plan_change_request_id'))
+            else:
+                outcome = 'ignored_checkout_session'
+            tx.insert_provider_event({'provider': 'stripe', 'event_id': event.id, 'event_type': event.type,
+                                      'event_created': event.created, 'customer_id': None, 'outcome': outcome})
+            service._publish([{'directory': True, 'event': 'directory_changed'}], tx)
+            return {'received': True, 'outcome': outcome}
     with service.store.transaction() as tx:
         if tx.provider_event('stripe', event.id):
             return {'received': True, 'duplicate': True}
@@ -112,7 +130,16 @@ def handle_stripe_webhook(service, body, headers, request_id=None):
             refs = plan.get('external_price_refs') or {}
             for price in refs.get('stripe') or []:
                 prices[price] = plan['code']
-        sub = tx.latest_provider_subscription(customer['id'], 'stripe') or tx.current_subscription(customer['id'])
+        sub = tx.latest_provider_subscription(customer['id'], 'stripe')
+        local_current = tx.current_subscription(customer['id'])
+        if local_current and local_current.get('provider') == 'manual' and not sub:
+            # A manual subscription is authoritative until an operator replaces it; Stripe does not overwrite it.
+            logger.warning('Ignoring Stripe event %s for customer %s: a manual subscription is active.',
+                           event.id, customer['id'])
+            tx.insert_provider_event({'provider': 'stripe', 'event_id': event.id, 'event_type': event.type,
+                                      'event_created': event.created, 'customer_id': customer['id'],
+                                      'outcome': 'ignored_manual_subscription'})
+            return {'received': True, 'outcome': 'ignored_manual_subscription'}
         state = {}
         if sub:
             state = {
@@ -131,8 +158,21 @@ def handle_stripe_webhook(service, body, headers, request_id=None):
             return {'received': True, 'outcome': outcome}
         if sub:
             fields = {k: v for k, v in update.items() if k in ('plan_code', 'status', 'external_subscription_ref')}
-            if fields:
-                tx.update_subscription(sub['id'], sub['version'], dict(fields, updated_at=now, updated_by='stripe'))
+            if fields and tx.update_subscription(sub['id'], sub['version'], dict(fields, updated_at=now, updated_by='stripe')) is None:
+                raise Conflict('Subscription changed while applying the Stripe event. Retry the webhook.')
+        else:
+            from datetime import timedelta
+            from uuid import uuid4
+            # Stripe's subscription events don't carry the current period in the fields transition() extracts;
+            # a placeholder 30-day period keeps billing_state() well-defined until the next invoice event updates it.
+            tx.insert_subscription({
+                'id': str(uuid4()), 'customer_id': customer['id'], 'plan_code': update.get('plan_code', settings['default_plan_code']),
+                'status': update.get('status', 'active'), 'provider': 'stripe',
+                'external_subscription_ref': update.get('external_subscription_ref'),
+                'current_period_start': now, 'current_period_end': now + timedelta(days=30), 'cancel_at_period_end': False,
+                'canceled_at': None, 'amount_minor': None, 'currency': None, 'interval': None,
+                'grace_days': int(settings['default_grace_days']), 'entitlement_overrides': None, 'notes': '',
+                'created_at': now, 'created_by': 'stripe', 'updated_at': now, 'updated_by': 'stripe', 'version': 1})
         service._refresh_customer_billing(tx, customer['id'], now)
         service._sync_customer_entitlements(tx, customer['id'], actor, now)
         service._event(tx, actor, 'provider_event_applied', details={'event_id': event.id, 'outcome': outcome}, request_id=request_id)

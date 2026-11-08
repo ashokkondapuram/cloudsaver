@@ -15,7 +15,8 @@ from identity.domain import IdentityError
 
 logger = logging.getLogger('platform.identity')
 HANDLED = {'customer.subscription.created', 'customer.subscription.updated',
-           'customer.subscription.deleted', 'invoice.payment_succeeded'}
+           'customer.subscription.deleted', 'invoice.payment_succeeded',
+           'checkout.session.completed', 'checkout.session.async_payment_succeeded'}
 SECRET_NAMES = {'STRIPE_SECRET_KEY': 'platform-stripe-secret-key',
                 'STRIPE_WEBHOOK_SECRET': 'platform-stripe-webhook-secret'}
 TOLERANCE_SECONDS = 300
@@ -214,6 +215,15 @@ class StripeProvider:
             raise BillingEventError('Invalid billing event type')
         if kind not in HANDLED:
             return ProviderEvent(str(event.get('id', ''))[:255], kind[:64], 0, None, {}, handled=False)
+        if kind.startswith('checkout.session.'):
+            data = event.get('data')
+            obj = data.get('object') if isinstance(data, Mapping) else None
+            if not isinstance(obj, Mapping):
+                raise BillingEventError('Invalid billing event object')
+            event_id = identifier(event.get('id'), 'evt_')
+            created = integer(event.get('created'))
+            identifier(obj.get('id'), 'cs_')
+            return ProviderEvent(event_id, kind, created, None, dict(obj))
         customer = validate_event(event)
         return ProviderEvent(event['id'], kind, event['created'], customer, dict(event['data']['object']))
 

@@ -10,6 +10,7 @@ from app.observability_store import ObservabilityStore,attach_signals,_derive
 from app.v150_store import WorkflowConflict
 from tests.test_enterprise import evidence,workspace,TID,AUTH
 
+SECRET_REF=obs.tenant_secret_prefix({'tenant_id':TID})+'PRIMARY'
 NOW=datetime(2026,10,25,12,0,tzinfo=timezone.utc)
 HOST='metrics.example.com'
 RID='/subscriptions/22222222-2222-4222-8222-222222222222/resourcegroups/rg/providers/microsoft.web/sites/checkout'
@@ -18,12 +19,12 @@ RID='/subscriptions/22222222-2222-4222-8222-222222222222/resourcegroups/rg/provi
 @pytest.fixture(autouse=True)
 def allow(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS',HOST)
-    monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY','placeholder-token-value')
+    monkeypatch.setenv(SECRET_REF,'placeholder-token-value')
 
 
 def prometheus_config(**extra):
     return obs.validate(dict(dict(name='Primary Prometheus',kind='prometheus',base_url=f'https://{HOST}',auth_kind='bearer_env',
-        secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY',mappings={'resource_label':'azure_resource_id'},
+        secret_ref=SECRET_REF,mappings={'resource_label':'azure_resource_id'},
         queries=[{'id':'requests','metric':'requests_per_second','unit':'req/s','promql':'sum by (azure_resource_id) (rate(http_requests_total[5m]))'}]),**extra),workspace())
 
 
@@ -45,7 +46,7 @@ def test_url_rejects_private_and_metadata_addresses(monkeypatch,address):
 
 def test_grafana_mimir_connector_validate():
     item = obs.validate(dict(name='Grafana', kind='grafana_mimir', base_url=f'https://{HOST}/', auth_kind='bearer_env',
-                             secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', mimir_datasource_uid='mimir-1',
+                             secret_ref=SECRET_REF, mimir_datasource_uid='mimir-1',
                              cluster_values=['dev']), workspace())
     assert item['kind'] == 'grafana_mimir' and item['cluster_values'] == ['dev']
 
@@ -84,7 +85,7 @@ def test_redirects_and_rejections_map_to_fixed_codes(status,code):
 
 
 def test_missing_secret_reference_fails_before_any_request(monkeypatch):
-    monkeypatch.delenv('CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY')
+    monkeypatch.delenv(SECRET_REF)
     with pytest.raises(obs.SourceError) as error:obs.collect(prometheus_config(),workspace(),now=NOW,transport=transport(lambda r:pytest.fail('No request expected')))
     assert error.value.code=='OBSERVABILITY_SECRET_UNAVAILABLE'
 
@@ -184,7 +185,7 @@ def test_latency_sensitivity_blocks_unreviewed_capacity_reduction():
 
 def connector_body():
     return dict(name='Primary Prometheus',kind='prometheus',base_url=f'https://{HOST}',auth_kind='bearer_env',
-                secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY',mappings={'resource_label':'azure_resource_id'},
+                secret_ref=SECRET_REF,mappings={'resource_label':'azure_resource_id'},
                 queries=[{'id':'cpu','metric':'cpu_percent','promql':'avg by (azure_resource_id) (cpu)'}])
 
 
@@ -192,7 +193,7 @@ def test_api_manages_connectors_without_exposing_secret_values(evidence,monkeypa
     settings,_,_=evidence
     api=TestClient(create_app(settings))
     created=api.post('/api/v1/observability/connectors',headers=AUTH,json=connector_body())
-    assert created.status_code==201 and created.json()['secret_ref']=='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY'
+    assert created.status_code==201 and created.json()['secret_ref']==SECRET_REF
     listed=api.get('/api/v1/observability/connectors',headers=AUTH)
     assert 'placeholder-token-value' not in listed.text and len(listed.json()['items'])==1
     id,version=created.json()['id'],created.json()['version']

@@ -1,10 +1,22 @@
 """Dispatch platform outbox intents (GitOps PR creation)."""
 from __future__ import annotations
 
+import json
 import os
 import secrets
 
 from app.drift.outbox_store import OutboxConflict, PlatformOutboxStore
+
+try:
+    from pydantic import ValidationError
+except ImportError:  # pragma: no cover
+    class ValidationError(Exception):
+        pass
+
+# Transient errors from a flaky upstream (e.g. a VCS 502 returning an HTML body instead of
+# JSON, or a response that fails schema validation) must be retried, not treated as the
+# terminal "package_invalid" outcome.
+TRANSIENT_VALUE_ERRORS = (json.JSONDecodeError, ValidationError)
 from app.gitops_remediation_flow import GitOpsPullRequestExecutor, build_remediation_package
 from app.gitops_ast_mapper import GitOpsAstMapper
 from workers.named_lease import NamedRedisLease, gitops_pr_lease_key
@@ -55,23 +67,36 @@ def process_gitops_pr_intent(
         file_sha = payload["base_file_sha"]
         outbox.require_lease(workspace_id, intent["id"], intent["lease_owner"], intent["lease_fence"])
         result = github_executor.execute(target, package, file_sha=file_sha)
-        outbox.complete(
+        with remediation_store.store.transaction(workspace_id, write=True) as db:
+            outbox.complete_in_txn(
+                db, workspace_id, intent["id"],
+                lease_owner=intent["lease_owner"], lease_fence=intent["lease_fence"],
+            )
+            remediation_store.update_status_in_txn(db, workspace_id, request_id, "OPEN", result=result)
+        return result
+    except OutboxConflict:
+        raise
+    except TRANSIENT_VALUE_ERRORS:
+        outbox.fail(
             workspace_id,
             intent["id"],
+            "vcs_uncertain",
             lease_owner=intent["lease_owner"],
             lease_fence=intent["lease_fence"],
+            recoverable=True,
         )
-        remediation_store.update_status(workspace_id, request_id, "OPEN", result=result)
-        return result
+        remediation_store.update_status(workspace_id, request_id, "UNCERTAIN")
+        raise
     except ValueError as exc:
         if str(exc) == "REPO_DRIFT_REINDEX_REQUIRED":
-            outbox.complete(
-                workspace_id,
-                intent["id"],
-                lease_owner=intent["lease_owner"],
-                lease_fence=intent["lease_fence"],
-            )
-            remediation_store.update_status(workspace_id, request_id, "REPO_DRIFT_REINDEX_REQUIRED")
+            with remediation_store.store.transaction(workspace_id, write=True) as db:
+                outbox.complete_in_txn(
+                    db, workspace_id, intent["id"],
+                    lease_owner=intent["lease_owner"], lease_fence=intent["lease_fence"],
+                )
+                remediation_store.update_status_in_txn(
+                    db, workspace_id, request_id, "REPO_DRIFT_REINDEX_REQUIRED"
+                )
             return dict(status="REPO_DRIFT_REINDEX_REQUIRED")
         outbox.fail(
             workspace_id,
@@ -81,8 +106,7 @@ def process_gitops_pr_intent(
             lease_fence=intent["lease_fence"],
             recoverable=False,
         )
-        raise
-    except OutboxConflict:
+        remediation_store.update_status(workspace_id, request_id, "FAILED")
         raise
     except Exception:
         outbox.fail(

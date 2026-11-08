@@ -39,8 +39,6 @@ def is_orphan_disk(ctx: UnifiedResourceContext) -> bool:
 
 
 def is_orphan_public_ip(ctx: UnifiedResourceContext) -> bool:
-    if ctx.config.ip_associated is False:
-        return True
     rtype = ctx.resource_type.lower()
     if 'publicip' in rtype or 'elastic-ip' in rtype or '/addresses' in rtype:
         return ctx.config.ip_associated is False

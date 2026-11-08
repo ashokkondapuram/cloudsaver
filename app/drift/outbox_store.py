@@ -73,11 +73,21 @@ class PlatformOutboxStore:
         return results
 
     def _reclaim_expired(self, db, tenant_id, kind, now_iso):
+        # ponytail: backoff is the lease window itself (lease_seconds), not a separate
+        # next_attempt_at column — add one if poison messages need longer spacing than that.
         db.execute(
-            """UPDATE platform_outbox_intents SET status='pending',lease_owner=NULL,lease_until=NULL,updated_at=%s
+            """UPDATE platform_outbox_intents SET status='failed',lease_owner=NULL,lease_until=NULL,
+               last_error='lease_expired_max_attempts',updated_at=%s
                WHERE tenant_id=%s AND kind=%s AND status='leased'
-               AND (lease_until IS NULL OR lease_until<%s)""",
-            (now_iso, tenant_id, kind, now_iso),
+               AND (lease_until IS NULL OR lease_until<%s) AND attempts>=%s""",
+            (now_iso, tenant_id, kind, now_iso, MAX_OUTBOX_ATTEMPTS),
+        )
+        db.execute(
+            """UPDATE platform_outbox_intents SET status='pending',lease_owner=NULL,lease_until=NULL,
+               attempts=attempts+1,updated_at=%s
+               WHERE tenant_id=%s AND kind=%s AND status='leased'
+               AND (lease_until IS NULL OR lease_until<%s) AND attempts<%s""",
+            (now_iso, tenant_id, kind, now_iso, MAX_OUTBOX_ATTEMPTS),
         )
 
     def claim_pending(self, tenant_id, kind, limit=10, *, owner=None, lease_seconds=DEFAULT_LEASE_SECONDS):
@@ -97,11 +107,12 @@ class PlatformOutboxStore:
                 now_iso = now.isoformat()
                 until_iso = (now + timedelta(seconds=lease_seconds)).isoformat()
                 next_fence = int(row[5]) + 1
+                next_attempts = int(row[4]) + 1
                 changed = db.execute(
                     """UPDATE platform_outbox_intents SET status='leased',lease_owner=%s,lease_fence=%s,
-                       lease_until=%s,updated_at=%s
+                       lease_until=%s,attempts=%s,updated_at=%s
                        WHERE tenant_id=%s AND id=%s AND status='pending'""",
-                    (owner, next_fence, until_iso, now_iso, tenant_id, str(row[0])),
+                    (owner, next_fence, until_iso, next_attempts, now_iso, tenant_id, str(row[0])),
                 ).rowcount
                 if changed == 1:
                     claimed.append(
@@ -110,7 +121,7 @@ class PlatformOutboxStore:
                             kind=row[1],
                             idempotency_key=row[2],
                             payload=decode(row[3]),
-                            attempts=row[4],
+                            attempts=next_attempts,
                             lease_owner=owner,
                             lease_fence=next_fence,
                         )
@@ -181,21 +192,26 @@ class PlatformOutboxStore:
         if changed != 1:
             raise OutboxConflict("Outbox lease no longer valid")
 
-    def complete(self, tenant_id, intent_id, *, lease_owner, lease_fence, result_payload=None):
+    def complete_in_txn(self, db, tenant_id, intent_id, *, lease_owner, lease_fence):
+        """Same as complete(), but runs against a caller-supplied transaction so it can be
+        combined atomically with other writes (e.g. the remediation request status update)."""
         now = datetime.now(timezone.utc).isoformat()
-        with self.store.transaction(tenant_id, write=True) as db:
-            changed = self._leased_update(
-                db,
-                tenant_id,
-                intent_id,
-                lease_owner=lease_owner,
-                lease_fence=lease_fence,
-                set_clause="status='completed',lease_owner=NULL,lease_until=NULL,updated_at=%s",
-                params=(now,),
-                now_iso=now,
-            )
+        changed = self._leased_update(
+            db,
+            tenant_id,
+            intent_id,
+            lease_owner=lease_owner,
+            lease_fence=lease_fence,
+            set_clause="status='completed',lease_owner=NULL,lease_until=NULL,updated_at=%s",
+            params=(now,),
+            now_iso=now,
+        )
         if changed != 1:
             raise OutboxConflict("Outbox lease no longer valid")
+
+    def complete(self, tenant_id, intent_id, *, lease_owner, lease_fence, result_payload=None):
+        with self.store.transaction(tenant_id, write=True) as db:
+            self.complete_in_txn(db, tenant_id, intent_id, lease_owner=lease_owner, lease_fence=lease_fence)
 
     def fail(self, tenant_id, intent_id, error_code, *, lease_owner, lease_fence, recoverable=False):
         now = datetime.now(timezone.utc).isoformat()
@@ -208,7 +224,8 @@ class PlatformOutboxStore:
             ).fetchone()
             if not row:
                 raise OutboxConflict("Outbox lease no longer valid")
-            attempts = int(row[0]) + 1
+            # attempts is already bumped by claim_pending/_reclaim_expired; just read it back.
+            attempts = int(row[0])
             if recoverable and attempts < MAX_OUTBOX_ATTEMPTS:
                 changed = db.execute(
                     """UPDATE platform_outbox_intents SET status='pending',last_error=%s,attempts=%s,
@@ -299,14 +316,18 @@ class GitOpsRemediationStore:
             )
         return dict(id=request_id, status="QUEUED", idempotent=False)
 
-    def update_status(self, tenant_id, request_id, status, *, result=None):
+    def update_status_in_txn(self, db, tenant_id, request_id, status, *, result=None):
+        """Same as update_status(), but runs against a caller-supplied transaction."""
         now = datetime.now(timezone.utc).isoformat()
+        db.execute(
+            """UPDATE gitops_remediation_requests SET status=%s,result=%s,updated_at=%s
+               WHERE tenant_id=%s AND id=%s""",
+            (status, db.json(result) if result is not None else None, now, tenant_id, request_id),
+        )
+
+    def update_status(self, tenant_id, request_id, status, *, result=None):
         with self.store.transaction(tenant_id, write=True) as db:
-            db.execute(
-                """UPDATE gitops_remediation_requests SET status=%s,result=%s,updated_at=%s
-                   WHERE tenant_id=%s AND id=%s""",
-                (status, db.json(result) if result is not None else None, now, tenant_id, request_id),
-            )
+            self.update_status_in_txn(db, tenant_id, request_id, status, result=result)
 
     def get(self, tenant_id, request_id):
         with self.store.transaction(tenant_id) as db:

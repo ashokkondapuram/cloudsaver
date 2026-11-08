@@ -274,43 +274,52 @@ class BillingOps:
             raise IdentityError('Choose a valid billing status.')
         renews_cutoff = day(renews_before, 'Renews before') if renews_before else None
         with self.store.transaction() as tx:
-            customers = tx.list_customers(None, None, offset, limit + 50)
             subs = tx.latest_subscriptions()
             payments = tx.last_payments()
             plans = {p['code']: p for p in tx.list_plans()}
-        items = []
-        for customer in customers:
-            if customer['status'] == 'deleted':
-                continue
-            sub = subs.get(str(customer['id']))
-            state = customer.get('billing_state') or 'none'
-            plan_code = sub['plan_code'] if sub else SEED_SETTINGS['default_plan_code']
-            plan_row = plans.get(plan_code, {})
-            if billing_state and state != billing_state:
-                continue
-            if plan and plan_code != plan:
-                continue
-            period_end = sub['current_period_end'] if sub else None
-            if renews_cutoff and (not period_end or (period_end.date() if hasattr(period_end, 'date') else period_end) > renews_cutoff):
-                continue
-            pay = payments.get(str(customer['id']))
-            items.append({
-                'customer_id': str(customer['id']), 'customer_name': customer['name'],
-                'billing_state': state, 'plan_code': plan_code,
-                'plan_name': plan_row.get('name') or plan_code,
-                'subscription_id': str(sub['id']) if sub else None,
-                'subscription_status': sub['status'] if sub else None,
-                'current_period_end': iso(period_end) if period_end else None,
-                'amount_minor': int(sub['amount_minor']) if sub else None,
-                'currency': sub['currency'] if sub else None,
-                'interval': sub['interval'] if sub else None,
-                'last_payment': None if not pay else {
-                    'paid_at': iso(pay.get('paid_at')), 'amount_minor': int(pay['amount_minor']),
-                    'currency': pay['currency'], 'reference': pay['reference'],
-                },
-            })
-        page = items[:limit]
-        return {'items': page, 'next_cursor': str(offset + limit) if len(items) > limit else None}
+            # Filters below need the subscription/payment join, which isn't in directory.customers, so this
+            # walks pages of the unfiltered customer list, row by row, until it has limit+1 matches or runs
+            # out of rows, instead of returning however many of one fixed-size batch happen to pass the filter.
+            # The cursor it hands back is the raw row position right after the last row it looked at, so a
+            # later page resumes the scan exactly where this one stopped, whether or not that row matched.
+            items, position, next_cursor = [], offset, None
+            while len(items) <= limit:
+                batch = tx.list_customers(None, None, position, 200)
+                if not batch:
+                    break
+                for customer in batch:
+                    position += 1
+                    if customer['status'] != 'deleted':
+                        sub = subs.get(str(customer['id']))
+                        state = customer.get('billing_state') or 'none'
+                        plan_code = sub['plan_code'] if sub else SEED_SETTINGS['default_plan_code']
+                        period_end = sub['current_period_end'] if sub else None
+                        matches = (not billing_state or state == billing_state) and (not plan or plan_code == plan) and \
+                            (not renews_cutoff or (period_end and (period_end.date() if hasattr(period_end, 'date') else period_end) <= renews_cutoff))
+                        if matches:
+                            plan_row = plans.get(plan_code, {})
+                            pay = payments.get(str(customer['id']))
+                            items.append({
+                                'customer_id': str(customer['id']), 'customer_name': customer['name'],
+                                'billing_state': state, 'plan_code': plan_code,
+                                'plan_name': plan_row.get('name') or plan_code,
+                                'subscription_id': str(sub['id']) if sub else None,
+                                'subscription_status': sub['status'] if sub else None,
+                                'current_period_end': iso(period_end) if period_end else None,
+                                'amount_minor': int(sub['amount_minor']) if sub else None,
+                                'currency': sub['currency'] if sub else None,
+                                'interval': sub['interval'] if sub else None,
+                                'last_payment': None if not pay else {
+                                    'paid_at': iso(pay.get('paid_at')), 'amount_minor': int(pay['amount_minor']),
+                                    'currency': pay['currency'], 'reference': pay['reference'],
+                                },
+                            })
+                    if len(items) > limit:
+                        next_cursor = str(position)
+                        break
+                if next_cursor or len(batch) < 200:
+                    break
+        return {'items': items[:limit], 'next_cursor': next_cursor}
 
     def list_customer_subscriptions(self, customer_id):
         customer_id = uuid_text(customer_id)

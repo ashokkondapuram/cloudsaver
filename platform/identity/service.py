@@ -25,9 +25,16 @@ _THEME_UNSET = object()
 GRANT_KEYS = ('roles', 'all_providers', 'allowed_providers', 'scope_restrictions')
 
 
-def scope_limit(tier):
-    from identity.billing.catalog import SEED_PLANS
-    plan = next(p for p in SEED_PLANS if p['code'] == tier)
+def scope_limit(tier, tx=None):
+    from identity.billing.catalog import SEED_PLANS, merged as merged_entitlements
+    if tx is not None:
+        plan = tx.get_plan(tier)
+        if plan:
+            entitlements, _ = merged_entitlements(plan['entitlements'])
+            return entitlements['max_subscriptions'], plan['name']
+    plan = next((p for p in SEED_PLANS if p['code'] == tier), None)
+    if not plan:
+        raise IdentityError('Choose a valid plan.')
     return plan['entitlements']['max_subscriptions'], plan['name']
 
 
@@ -376,22 +383,29 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             raise IdentityError("Enter the customer's Microsoft Entra tenant ID. The empty ID isn't valid.")
         customer_id = uuid_text(payload.get('customer_id'), 'Choose a customer.')
         tier = payload.get('plan_tier', 'STARTER')
-        if tier not in TIERS:
-            raise IdentityError('Choose a valid plan.')
         now = self.now()
         row = {'tenant_id': tenant_id, 'customer_id': customer_id, 'name': text(payload.get('name'), 'Workspace name', 120),
                'plan_tier': tier, 'status': status, 'identity': normalize_identity_bindings(payload.get('identity')),
                'version': 1, 'created_at': now, 'created_by': actor['actor'][:120], 'updated_at': now,
                'updated_by': actor['actor'][:120], 'suspended_at': now if status == 'suspended' else None,
                'deleted_at': None, **empty_scopes()}
-        for provider, key in SCOPE_KEYS.items():
-            row[key] = normalize_scope_items(provider, (scopes or {}).get(key, []), *scope_limit(tier))
         with self.store.transaction() as tx:
             customer = tx.get_customer(customer_id, lock=True)
             if not customer or customer['status'] == 'deleted':
                 raise IdentityError('Choose an existing customer.')
+            plan = tx.get_plan(tier)
+            if not plan:
+                raise IdentityError('Choose a valid plan.')
             if tx.get_workspace(tenant_id):
                 raise Conflict('A workspace with this ID already exists.')
+            from identity.billing.catalog import merged as merged_entitlements
+            entitlements, _ = merged_entitlements(plan['entitlements'])
+            limit = entitlements['max_workspaces']
+            if len(tx.list_workspaces(None, None, customer_id, 0, limit)) >= limit:
+                raise Conflict(f'This customer already has the maximum of {limit} workspaces for its plan.')
+            for provider, key in SCOPE_KEYS.items():
+                row[key] = normalize_scope_items(provider, (scopes or {}).get(key, []),
+                                                 entitlements['max_subscriptions'], plan['name'])
             tx.insert_workspace(row)
             self._changed(tx, row, customer)
             self._event(tx, actor, source_action, tenant_id, details={'name': row['name'], 'customer_id': customer_id},
@@ -406,7 +420,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         if payload.get('name') is not None:
             fields['name'] = text(payload['name'], 'Workspace name', 120)
         if payload.get('plan_tier') is not None:
-            if payload['plan_tier'] not in TIERS:
+            from identity.billing.domain import PLAN_CODE
+            if not PLAN_CODE.match(payload['plan_tier']):
                 raise IdentityError('Choose a valid plan.')
             fields['plan_tier'] = payload['plan_tier']
         if payload.get('customer_id') is not None:
@@ -449,6 +464,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 raise NotFound('Workspace not found.')
             if current['version'] != version:
                 raise StaleVersion()
+            if 'plan_tier' in fields and not tx.get_plan(fields['plan_tier']):
+                raise IdentityError('Choose a valid plan.')
             if ui_theme_preset is not _THEME_UNSET:
                 from identity.ui_theme import merge_workspace_ui_themes
                 platform = tx.get_platform()
@@ -468,9 +485,9 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                     raise IdentityError('Choose an existing customer.')
             tier = fields.get('plan_tier', current['plan_tier'])
             if 'plan_tier' in fields:
-                normalize_scope_items('azure', current['subscription_ids'], *scope_limit(tier))
+                normalize_scope_items('azure', current['subscription_ids'], *scope_limit(tier, tx))
             if scopes:
-                items = normalize_scope_items(scopes[0], scopes[1], *scope_limit(tier))
+                items = normalize_scope_items(scopes[0], scopes[1], *scope_limit(tier, tx))
                 tx.replace_scopes(tenant_id, scopes[0], items, actor['actor'][:120], now)
             if fields or scopes:
                 row = tx.update_workspace(tenant_id, version, dict(fields, updated_at=now, updated_by=actor['actor'][:120]))
@@ -658,7 +675,23 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         return {'roles': roles, 'all_providers': all_providers, 'allowed_providers': allowed,
                 'scope_restrictions': restrictions}
 
-    def _expiry(self, value, *, default=None):
+    def _key_entitlements(self, tx, workspace):
+        """Merged plan+override entitlements for a workspace's key limits (max_active_keys_per_workspace,
+        max_key_lifetime_days). These are platform-only keys (billing/catalog.py PLATFORM_KEYS) that never
+        appear in workspace['entitlements'], which only carries the CloudSaver-facing subset, so this reads
+        the plan (and, when billing is on, the customer's subscription overrides) directly."""
+        from identity.billing.catalog import merged as merged_entitlements
+        plan = tx.get_plan(workspace['plan_tier'])
+        if not plan:
+            return {'max_active_keys_per_workspace': MAX_ACTIVE_KEYS, 'max_key_lifetime_days': MAX_EXPIRY_DAYS}
+        overrides = None
+        if flag('BILLING_ENABLED'):
+            sub = tx.latest_subscription(workspace['customer_id'])
+            overrides = (sub or {}).get('entitlement_overrides') or None
+        entitlements, _ = merged_entitlements(plan['entitlements'], overrides)
+        return entitlements
+
+    def _expiry(self, value, *, default=None, max_days=MAX_EXPIRY_DAYS):
         now = self.now()
         if value is None:
             if default is None:
@@ -667,8 +700,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
         expires = parse_time(value, 'Expiry date')
         if expires <= now:
             raise IdentityError('Choose an expiry date in the future.')
-        if expires > now + timedelta(days=MAX_EXPIRY_DAYS, hours=1):
-            raise IdentityError(f'Keys can expire at most {MAX_EXPIRY_DAYS} days from today.')
+        if expires > now + timedelta(days=max_days, hours=1):
+            raise IdentityError(f'Keys can expire at most {max_days} days from today.')
         return expires
 
     def _new_key_row(self, workspace, name, grant, expires, actor, rotated_from=None):
@@ -707,10 +740,12 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             if not workspace or workspace['status'] == 'deleted':
                 raise NotFound('Workspace not found.')
             self._assert_key_issuance_allowed(tx, workspace)
+            entitlements = self._key_entitlements(tx, workspace)
+            max_keys = entitlements['max_active_keys_per_workspace']
             grant = self._grant_fields(payload, workspace)
-            expires = self._expiry(payload.get('expires_at'))
-            if len(self._open_keys(tx, tenant_id)) >= MAX_ACTIVE_KEYS:
-                raise Conflict(f'A workspace can have at most {MAX_ACTIVE_KEYS} active keys. Revoke a key first.')
+            expires = self._expiry(payload.get('expires_at'), max_days=entitlements['max_key_lifetime_days'])
+            if len(self._open_keys(tx, tenant_id)) >= max_keys:
+                raise Conflict(f'A workspace can have at most {max_keys} active keys. Revoke a key first.')
             row, secret = self._new_key_row(workspace, name, grant, expires, actor)
             tx.insert_key(row)
             self._event(tx, actor, 'issued', tenant_id, row['key_id'],
@@ -736,11 +771,13 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
             if not workspace or workspace['status'] == 'deleted':
                 raise NotFound('Workspace not found.')
             self._assert_key_issuance_allowed(tx, workspace)
+            entitlements = self._key_entitlements(tx, workspace)
+            max_lifetime_days = entitlements['max_key_lifetime_days']
             grant = self._grant_fields(payload, workspace, defaults={k: old.get(k) for k in GRANT_KEYS})
             grant |= {k: old.get(k) for k in ('subject_type', 'subject_user_id', 'service_account_id')}
             duration = (old['expires_at'] - old['created_at']) if old['expires_at'] else timedelta(days=DEFAULT_EXPIRY_DAYS)
-            duration = min(max(duration, timedelta(days=1)), timedelta(days=MAX_EXPIRY_DAYS))
-            expires = self._expiry(payload.get('expires_at'), default=now + duration)
+            duration = min(max(duration, timedelta(days=1)), timedelta(days=max_lifetime_days))
+            expires = self._expiry(payload.get('expires_at'), default=now + duration, max_days=max_lifetime_days)
             row, secret = self._new_key_row(workspace, old['name'], grant, expires, actor, rotated_from=old['id'])
             tx.insert_key(row)
             previous = tx.update_key(old['key_id'], {'rotates_out_at': now + timedelta(hours=overlap)})
@@ -1053,7 +1090,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
     def create_plan_change_request(self, tenant_id, payload, caller, correlation_id=None):
         tenant_id = uuid_text(tenant_id)
         requested = payload.get('requested_plan_code') or payload.get('plan_tier')
-        if requested not in TIERS:
+        from identity.billing.domain import PLAN_CODE
+        if not isinstance(requested, str) or not PLAN_CODE.match(requested):
             raise IdentityError('Choose a valid plan.')
         requested_by = text(payload.get('requested_by'), 'Requested by', 120)
         note = payload.get('review_note')
@@ -1068,6 +1106,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 raise Conflict('A plan change request is already pending for this workspace.')
             if requested == workspace['plan_tier']:
                 raise IdentityError('Choose a different plan than the current one.')
+            if not tx.get_plan(requested):
+                raise IdentityError('Choose a valid plan.')
             customer = tx.get_customer(workspace['customer_id'])
             if not customer or customer['status'] == 'deleted':
                 raise IdentityError('This workspace is not linked to an active customer.')
@@ -1177,8 +1217,8 @@ class IdentityService(CustomerOps, AnalysisOps, KnowledgeOps, BillingOps, AIPoli
                 raise NotFound('Plan change request not found.')
             if req['version'] != expected:
                 raise StaleVersion()
-            if req['status'] not in ('pending_approval', 'pending_payment'):
-                raise Conflict('This request can no longer be rejected.')
+            if req['status'] != 'pending_approval':
+                raise Conflict('This request can no longer be rejected: a Stripe checkout is pending payment.')
             updated = tx.update_plan_change_request(request_id, req['version'], {
                 'status': 'rejected', 'reviewed_by': actor['actor'][:120], 'updated_at': now, 'review_note': note})
             self._event(tx, actor, 'plan_change_rejected', req['tenant_id'],

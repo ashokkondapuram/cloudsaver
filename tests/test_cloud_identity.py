@@ -70,22 +70,30 @@ def fake_boto3(monkeypatch):
 
 def test_aws_chains_managed_identity_through_hub_with_tenant_external_id(monkeypatch):
     fake_boto3(monkeypatch)
-    source = {'region': 'us-east-1', 'role_arn': ROLE, 'external_id': TID}
+    # ExternalId always comes from the authenticated tenant, never from caller-supplied source
+    # config (confused-deputy hardening); a source-supplied external_id is ignored.
+    source = {'region': 'us-east-1', 'role_arn': ROLE, 'external_id': 'attacker-supplied'}
     with pytest.raises(CredentialError):
-        cloud_identity.aws_session(source)
+        cloud_identity.aws_session(source, tenant={'tenant_id': TID})
     monkeypatch.setenv('CLOUDSAVER_AWS_HUB_ROLE_ARN', HUB)
-    session = cloud_identity.aws_session(source)
+    session = cloud_identity.aws_session(source, tenant={'tenant_id': TID})
     assert session.options['aws_access_key_id'] == 'reader'
     web, assume = Sts.calls
     assert web[2]['RoleArn'] == HUB and web[2]['WebIdentityToken'].startswith('mi-token-for-')
     assert assume[1] == 'hub' and assume[2]['RoleArn'] == ROLE and assume[2]['ExternalId'] == TID
 
 
+def test_aws_rejects_missing_tenant_id():
+    with pytest.raises(CredentialError):
+        cloud_identity.aws_session({'region': 'us-east-1', 'role_arn': ROLE})
+
+
 def test_aws_developer_mode_uses_default_chain_then_role(monkeypatch):
     fake_boto3(monkeypatch)
     monkeypatch.setenv('CLOUDSAVER_CLOUD_IDENTITY', 'developer')
-    cloud_identity.aws_session({'region': 'us-east-1', 'role_arn': ROLE, 'external_id': TID})
+    cloud_identity.aws_session({'region': 'us-east-1', 'role_arn': ROLE}, tenant={'tenant_id': TID})
     assert [c[0] for c in Sts.calls] == ['assume'] and Sts.calls[0][1] is None
+    assert Sts.calls[0][2]['ExternalId'] == TID
 
 
 def test_gcp_uses_workload_identity_federation(monkeypatch):

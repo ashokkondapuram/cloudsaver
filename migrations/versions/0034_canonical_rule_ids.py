@@ -42,6 +42,9 @@ _LEGACY = (
 )
 
 
+_BATCH_SIZE = 500
+
+
 def _migrate_scan_payloads(connection):
     import json
     import sys
@@ -51,28 +54,56 @@ def _migrate_scan_payloads(connection):
     sys.path.insert(0, str(root))
     from app.rule_id_canonical import normalize_scan
 
-    rows = connection.execute(sa.text("SELECT id, payload FROM public.scans")).fetchall()
-    for scan_id, payload in rows:
-        if not isinstance(payload, dict):
-            continue
-        normalized = normalize_scan(payload)
-        if normalized != payload:
-            connection.execute(
-                sa.text("UPDATE public.scans SET payload = CAST(:payload AS jsonb) WHERE id = :id"),
-                {"id": scan_id, "payload": json.dumps(normalized)},
-            )
+    last_id = None
+    while True:
+        if last_id is None:
+            rows = connection.execute(
+                sa.text("SELECT id, payload FROM public.scans ORDER BY id LIMIT :limit"),
+                {"limit": _BATCH_SIZE},
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                sa.text(
+                    "SELECT id, payload FROM public.scans WHERE id > :last_id ORDER BY id LIMIT :limit"
+                ),
+                {"last_id": last_id, "limit": _BATCH_SIZE},
+            ).fetchall()
+        if not rows:
+            break
+        for scan_id, payload in rows:
+            if isinstance(payload, dict):
+                normalized = normalize_scan(payload)
+                if normalized != payload:
+                    connection.execute(
+                        sa.text("UPDATE public.scans SET payload = CAST(:payload AS jsonb) WHERE id = :id"),
+                        {"id": scan_id, "payload": json.dumps(normalized)},
+                    )
+        last_id = rows[-1][0]
+        if len(rows) < _BATCH_SIZE:
+            break
 
 
 def upgrade():
     bind = op.get_bind()
     in_list = ", ".join(f"'{value}'" for value in _LEGACY)
-    for table in ("public.waste_findings", "public.cloud_findings"):
-        bind.execute(
-            sa.text(
-                f"UPDATE {table} SET rule_id = {_CASE} WHERE rule_id IN ({in_list})"
+    tables = ("public.waste_findings", "public.cloud_findings", "public.scans")
+    # RLS tables are FORCE-protected with no tenant set during a migration, so a
+    # non-superuser migration owner (as managed Postgres providers require) would
+    # match zero rows here. Lift FORCE for the statements below, inside this
+    # migration's own transaction, and restore it immediately after.
+    for table in tables:
+        bind.execute(sa.text(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
+    try:
+        for table in ("public.waste_findings", "public.cloud_findings"):
+            bind.execute(
+                sa.text(
+                    f"UPDATE {table} SET rule_id = {_CASE} WHERE rule_id IN ({in_list})"
+                )
             )
-        )
-    _migrate_scan_payloads(bind)
+        _migrate_scan_payloads(bind)
+    finally:
+        for table in tables:
+            bind.execute(sa.text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
 
 
 def downgrade():
@@ -88,9 +119,16 @@ def downgrade():
         "K8S_CONTAINER_MEMORY_OVERREQUEST": "K8S_MEMORY_OVERSIZED",
     }
     bind = op.get_bind()
-    for catalog, legacy in reverse.items():
-        for table in ("public.waste_findings", "public.cloud_findings"):
-            bind.execute(
-                sa.text(f"UPDATE {table} SET rule_id = :legacy WHERE rule_id = :catalog"),
-                {"legacy": legacy, "catalog": catalog},
-            )
+    tables = ("public.waste_findings", "public.cloud_findings")
+    for table in tables:
+        bind.execute(sa.text(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
+    try:
+        for catalog, legacy in reverse.items():
+            for table in tables:
+                bind.execute(
+                    sa.text(f"UPDATE {table} SET rule_id = :legacy WHERE rule_id = :catalog"),
+                    {"legacy": legacy, "catalog": catalog},
+                )
+    finally:
+        for table in tables:
+            bind.execute(sa.text(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))

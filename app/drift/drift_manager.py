@@ -69,23 +69,26 @@ def inspect_resource(
 
 
 def abort_agent_permits_for_drift(agent_repo, tenant_id: str, resource_id: str) -> int:
-    """Mark in-flight approved agent tasks as drift-aborted (ABORTED_STATE_DRIFT)."""
-    from app.enterprise_store import decode
+    """Mark in-flight agent tasks as drift-aborted (ABORTED_STATE_DRIFT), routed through
+    AgentRepository._save so version is bumped, an event is recorded, and unreconciled
+    in-flight work lands in needs_reconciliation instead of a plain cancel."""
+    from app.agent_store import unreconciled
 
     aborted = 0
     with agent_repo.store.transaction(tenant_id, write=True) as db:
         rows = db.execute(
-            """SELECT id,payload,state FROM agent_tasks
-               WHERE tenant_id=%s AND lower(resource_id)=lower(%s) AND state IN ('approved','running')""",
+            """SELECT id FROM agent_tasks
+               WHERE tenant_id=%s AND lower(resource_id)=lower(%s)
+               AND state IN ('drafting','approved','running','cancel_requested')""",
             (tenant_id, resource_id),
         ).fetchall()
-        for task_id, payload, state in rows:
-            body = decode(payload)
-            body["permit_status"] = "ABORTED_STATE_DRIFT"
-            db.execute(
-                "UPDATE agent_tasks SET state='cancelled',payload=%s WHERE tenant_id=%s AND id=%s",
-                (db.json(body), tenant_id, str(task_id)),
-            )
+        for (task_id,) in rows:
+            task = agent_repo._row(db, tenant_id, str(task_id))
+            if not task:
+                continue
+            task["payload"]["permit_status"] = "ABORTED_STATE_DRIFT"
+            state = "needs_reconciliation" if unreconciled(task["payload"]) else "cancelled"
+            agent_repo._save(db, task, state, "drift_abort", "gateway", dict(resource_id=resource_id))
             aborted += 1
     return aborted
 

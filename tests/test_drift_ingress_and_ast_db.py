@@ -81,9 +81,19 @@ def test_gitops_ast_db_roundtrip(tmp_path, monkeypatch):
     assert "/subscriptions/x/providers/Microsoft.Compute/virtualMachines/vm" in index
 
 
-def test_drift_webhook_ingress(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret")
-    settings = Settings(
+def _signed(tenant_id, body_bytes):
+    import hmac
+    import time
+
+    from app.drift.event_ingress_api import tenant_ingest_secret
+
+    timestamp = int(time.time())
+    signature = hmac.new(tenant_ingest_secret(tenant_id).encode(), f"{timestamp}.".encode() + body_bytes, "sha256").hexdigest()
+    return {"X-CloudSaver-Drift-Signature": f"t={timestamp},v1={signature}"}
+
+
+def _drift_settings(tmp_path):
+    return Settings(
         "azure",
         str(tmp_path / "drift.sqlite3"),
         (
@@ -95,58 +105,67 @@ def test_drift_webhook_ingress(tmp_path, monkeypatch):
             ),
         ),
     )
+
+
+def test_drift_webhook_ingress(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret-of-at-least-16-chars")
+    settings = _drift_settings(tmp_path)
     client = TestClient(create_app(settings, scanner=lambda _: []))
+    body = json.dumps([AZURE_EVENT]).encode()
     response = client.post(
-        "/api/v1/drift/cloud-events/ingest",
-        headers={"X-CloudSaver-Drift-Webhook-Secret": "test-secret"},
-        json={"provider": "azure", "events": [AZURE_EVENT]},
+        f"/api/v1/drift/cloud-events/ingest/{TENANT}/azure",
+        headers=_signed(TENANT, body),
+        content=body,
     )
     assert response.status_code == 202
     assert response.json()["accepted"] == 1
 
 
-def test_drift_webhook_rejects_oversized_event_batch(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret")
-    settings = Settings(
-        "azure",
-        str(tmp_path / "drift.sqlite3"),
-        (
-            dict(
-                tenant_id=TENANT,
-                name="t",
-                subscription_ids=[SUB],
-                api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
-            ),
-        ),
-    )
+def test_drift_webhook_rejects_wrong_tenant_credential(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret-of-at-least-16-chars")
+    settings = _drift_settings(tmp_path)
     client = TestClient(create_app(settings, scanner=lambda _: []))
+    body = json.dumps([AZURE_EVENT]).encode()
+    other_tenant = "00000000-1111-2222-3333-444444444444"
     response = client.post(
-        "/api/v1/drift/cloud-events/ingest",
-        headers={"X-CloudSaver-Drift-Webhook-Secret": "test-secret"},
-        json={"provider": "azure", "events": [AZURE_EVENT] * 101},
+        f"/api/v1/drift/cloud-events/ingest/{TENANT}/azure",
+        headers=_signed(other_tenant, body),
+        content=body,
+    )
+    assert response.status_code == 403
+
+
+def test_drift_webhook_ignores_secret_in_body(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret-of-at-least-16-chars")
+    settings = _drift_settings(tmp_path)
+    client = TestClient(create_app(settings, scanner=lambda _: []))
+    body = json.dumps([dict(AZURE_EVENT, webhook_secret="test-secret-of-at-least-16-chars")]).encode()
+    response = client.post(f"/api/v1/drift/cloud-events/ingest/{TENANT}/azure", content=body)
+    assert response.status_code == 403
+
+
+def test_drift_webhook_rejects_oversized_event_batch(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret-of-at-least-16-chars")
+    settings = _drift_settings(tmp_path)
+    client = TestClient(create_app(settings, scanner=lambda _: []))
+    body = json.dumps([AZURE_EVENT] * 101).encode()
+    response = client.post(
+        f"/api/v1/drift/cloud-events/ingest/{TENANT}/azure",
+        headers=_signed(TENANT, body),
+        content=body,
     )
     assert response.status_code == 422
 
 
 def test_drift_webhook_rejects_invalid_event_without_enqueueing_valid(tmp_path, monkeypatch):
-    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret")
-    settings = Settings(
-        "azure",
-        str(tmp_path / "drift.sqlite3"),
-        (
-            dict(
-                tenant_id=TENANT,
-                name="t",
-                subscription_ids=[SUB],
-                api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
-            ),
-        ),
-    )
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "test-secret-of-at-least-16-chars")
+    settings = _drift_settings(tmp_path)
     client = TestClient(create_app(settings, scanner=lambda _: []))
+    body = json.dumps([AZURE_EVENT, 42]).encode()
     response = client.post(
-        "/api/v1/drift/cloud-events/ingest",
-        headers={"X-CloudSaver-Drift-Webhook-Secret": "test-secret"},
-        json={"provider": "azure", "events": [AZURE_EVENT, 42]},
+        f"/api/v1/drift/cloud-events/ingest/{TENANT}/azure",
+        headers=_signed(TENANT, body),
+        content=body,
     )
     assert response.status_code == 422
     from app.enterprise_store import EnterpriseStore

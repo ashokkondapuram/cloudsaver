@@ -16,7 +16,9 @@ from app.collectors.grafana_telemetry import (
     CONTAINER_KEY, OWNER_KEY, GrafanaSeriesError, coverage_ratio, instant_label_rows, requests_from_frames,
     series_from_frames, validate_query_payload, values_for_percentile,
 )
-from app.collectors.observability import AUTH_KINDS, FORBIDDEN_HEADERS, HEADER, SECRET_REF, SourceError, check_url, _match
+from app.collectors.observability import (
+    AUTH_KINDS, FORBIDDEN_HEADERS, HEADER, SourceError, check_secret_ref, check_url, _match,
+)
 from app.kubernetes_latency_evidence import (
     OBSERVABILITY_LATENCY_BASIS, latency_points_from_grafana_frames, render_latency_query, validate_latency_query,
     validate_latency_unit,
@@ -96,9 +98,7 @@ def validate_connector(raw, tenant):
                 org_id=org_id, schedule='manual', queries=[], services=[], mappings={}, thresholds={},
                 trace_window_hours=1, aws_account_id=None, gcp_project_id=None)
     if auth in ('bearer_env', 'header_env'):
-        if not _match(SECRET_REF, raw.get('secret_ref')):
-            raise ValueError('Secret reference must name CLOUDSAVER_OBSERVABILITY_SECRET_.')
-        item['secret_ref'] = raw['secret_ref']
+        item['secret_ref'] = check_secret_ref(raw.get('secret_ref'), tenant)
     if auth == 'header_env':
         if not _match(HEADER, raw.get('header_name')) or raw['header_name'].lower() in FORBIDDEN_HEADERS:
             raise ValueError('Enter a valid header name for the secret.')
@@ -213,6 +213,14 @@ class GrafanaClient:
         self.deadline_at = deadline_at
 
     def _client(self):
+        # Re-checked on every call (not just at connector-save time) so a DNS record that was
+        # public at validation time and now resolves privately can't be used as a host/port oracle.
+        # ponytail: re-resolves rather than pinning the checked IP into the connection; add IP
+        # pinning (shared transport with ObservabilityClient) if DNS-rebinding risk needs closing too.
+        try:
+            check_url(self.base, resolve=True)
+        except ValueError:
+            raise SourceError('OBSERVABILITY_DESTINATION_BLOCKED') from None
         timeout = _request_timeout(self.deadline_at, default=self.timeout)
         return httpx.Client(base_url=self.base, headers=_headers(self.config), timeout=timeout, follow_redirects=False)
 

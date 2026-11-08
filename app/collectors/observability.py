@@ -19,6 +19,19 @@ AUTH_KINDS = ('none', 'bearer_env', 'basic_env', 'header_env', 'azure_managed', 
 METRICS = ('cpu_percent', 'memory_percent', 'requests_per_second', 'error_rate_pct', 'latency_p95_ms', 'custom')
 SCHEDULES = ('hourly', 'daily', 'manual')
 SECRET_REF = r'CLOUDSAVER_OBSERVABILITY_SECRET_[A-Z0-9_]{1,80}'
+
+
+def tenant_secret_prefix(tenant):
+    """Every observability secret_ref must be namespaced to the authenticated tenant, so one
+    tenant can never point a connector at another tenant's (or the platform's) env var."""
+    return 'CLOUDSAVER_OBSERVABILITY_SECRET_' + tenant['tenant_id'].replace('-', '').upper() + '_'
+
+
+def check_secret_ref(secret_ref, tenant):
+    if not _match(SECRET_REF, secret_ref) or not secret_ref.startswith(tenant_secret_prefix(tenant)):
+        raise ValueError('Secret reference must name an environment variable that starts with '
+                          'CLOUDSAVER_OBSERVABILITY_SECRET_<this workspace\'s ID>_.')
+    return secret_ref
 HEADER = r'[A-Za-z][A-Za-z0-9-]{0,63}'
 ID = r'[a-z0-9_-]{1,40}'
 LABEL = r'[A-Za-z_][A-Za-z0-9_.]{0,79}'
@@ -96,9 +109,7 @@ def validate(raw, tenant):
     if type(item['trace_window_hours']) is not int or not 1 <= item['trace_window_hours'] <= 24:
         raise ValueError('Trace window must be 1–24 hours.')
     if auth in ('bearer_env', 'basic_env', 'header_env'):
-        if not _match(SECRET_REF, raw.get('secret_ref')):
-            raise ValueError('Secret reference must name an environment variable that starts with CLOUDSAVER_OBSERVABILITY_SECRET_.')
-        item['secret_ref'] = raw['secret_ref']
+        item['secret_ref'] = check_secret_ref(raw.get('secret_ref'), tenant)
     if auth == 'header_env':
         if not _match(HEADER, raw.get('header_name')) or raw['header_name'].lower() in FORBIDDEN_HEADERS:
             raise ValueError('Enter a valid header name for the secret.')

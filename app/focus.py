@@ -239,8 +239,11 @@ class FocusRepository:
             def ingest_rows(rows):
                 for provider,account,rid,billed,effective,list_cost,category,currency in rows:
                     key=(provider,rid.lower() if provider=='azure' else rid)
-                    value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account,currency=currency))
+                    value=totals.setdefault(key,dict(billed=Decimal(0),effective=Decimal(0),list=Decimal(0),list_complete=True,locked=False,scope=account,currency=currency,mixed_currency=False))
                     if value['currency']!=currency:
+                        # A resource billed in more than one currency has no single honest total;
+                        # flag it rather than silently keeping whichever currency arrived first.
+                        value['mixed_currency']=True
                         continue
                     value['billed']+=Decimal(billed);value['effective']+=Decimal(effective)
                     if list_cost is None:value['list_complete']=False
@@ -265,8 +268,14 @@ class FocusRepository:
                     [tenant['tenant_id'],*args,*batch,finish.isoformat(),begin.isoformat()]).fetchall()
                 if len(rows)>50000:raise FocusError('Narrow the resource billing charge window')
                 ingest_rows(rows)
-        return {key:dict(billed_cost_usd=float(v['billed']),effective_cost_usd=float(v['effective']),list_cost_usd=float(v['list']) if v['list_complete'] else None,
-            commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency=v['currency'],billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
+        # *_usd fields are USD amounts, not "whatever currency the row happened to be in": a
+        # mixed-currency or non-USD resource reports unknown (None) cost rather than a wrongly
+        # labeled number, so USD-denominated thresholds downstream never compare EUR to USD.
+        return {key:dict(billed_cost_usd=float(v['billed']) if v['currency']=='USD' and not v['mixed_currency'] else None,
+            effective_cost_usd=float(v['effective']) if v['currency']=='USD' and not v['mixed_currency'] else None,
+            list_cost_usd=float(v['list']) if v['list_complete'] and v['currency']=='USD' and not v['mixed_currency'] else None,
+            commitment_locked=v['locked'],commitment_lock_conflict=v['locked'],currency=None if v['mixed_currency'] else v['currency'],
+            mixed_currency=v['mixed_currency'],billing_coverage=all(days.get((key[0],v['scope']),{}).get((begin+timedelta(days=i)).date(),False) for i in range(window_days)),
             billing_window_start=begin.isoformat(),billing_window_end=finish.isoformat(),billing_basis='imported_FOCUS_not_provider_reconciled') for key,v in totals.items()}
 
     def _supplement_resource_costs(self, tenant, scan, resource_ids, costs, *, as_of=None):

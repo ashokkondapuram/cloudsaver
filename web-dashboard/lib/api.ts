@@ -18,9 +18,10 @@ const unknownOutcome='The request outcome could not be confirmed. Check its stat
 /** Validate critical route envelopes before components consume their fields. */
 export function validateApiPayload(path: string, value: unknown) {
   const object=(v:unknown):v is Record<string,unknown> => !!v && typeof v==='object' && !Array.isArray(v);
-  const pending:unknown[]=[value];let nodes=0;
+  // Node count is bounded by the byte budget already enforced on the response body
+  // (see api()), so no separate flat node cap is needed here.
+  const pending:unknown[]=[value];
   while(pending.length){
-    if(++nodes>250_000)throw new Error('Response exceeds structural budget');
     const next=pending.pop();
     if(typeof next==='number'&&!Number.isFinite(next))throw new Error('Invalid numeric evidence');
     if(Array.isArray(next)){if(next.length>100_000)throw new Error('Response exceeds collection budget');for(const item of next)pending.push(item);}

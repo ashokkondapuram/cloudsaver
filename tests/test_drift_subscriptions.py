@@ -4,6 +4,8 @@ import pytest
 
 from app.drift.cloud_event_subscriptions import ensure_aws_eventbridge_subscription, ensure_azure_eventgrid_subscription
 
+TENANT_ID = "11111111-1111-4111-8111-111111111111"
+
 
 def test_ensure_aws_eventbridge_subscription(monkeypatch):
     monkeypatch.setenv("CLOUDSAVER_DRIFT_INGEST_URL", "https://cloudsaver.example/api/v1/drift/cloud-events/ingest")
@@ -29,9 +31,13 @@ def test_ensure_aws_eventbridge_subscription(monkeypatch):
             calls.append(("put_targets", kwargs))
             return {}
 
-    result = ensure_aws_eventbridge_subscription(account_id="123456789012", events_client=FakeEvents())
+    result = ensure_aws_eventbridge_subscription(tenant_id=TENANT_ID, account_id="123456789012", events_client=FakeEvents())
     assert result["provider"] == "aws"
+    assert result["ingest_url"].endswith(f"/{TENANT_ID}/aws")
     assert any(name == "put_targets" for name, _ in calls)
+    # The per-tenant credential, not the removed global secret, is what's handed to AWS.
+    create_connection_kwargs = next(kwargs for name, kwargs in calls if name == "create_connection")
+    assert create_connection_kwargs["AuthParameters"]["ApiKeyAuthParameters"]["ApiKeyValue"] != "x" * 32
 
 
 def test_ensure_azure_eventgrid_subscription(monkeypatch):
@@ -43,6 +49,8 @@ def test_ensure_azure_eventgrid_subscription(monkeypatch):
         assert "Microsoft.EventGrid/eventSubscriptions" in url
         body = json.loads(content)
         assert body["properties"]["destination"]["endpointType"] == "WebHook"
+        mappings = body["properties"]["destination"]["properties"]["deliveryAttributeMappings"]
+        assert mappings[0]["name"] == "aeg-sas-key"
         return type(
             "R",
             (),
@@ -54,20 +62,22 @@ def test_ensure_azure_eventgrid_subscription(monkeypatch):
 
     result = ensure_azure_eventgrid_subscription(
         subscription_id="00000000-0000-4000-8000-000000000001",
-        tenant_id="11111111-1111-4111-8111-111111111111",
+        tenant_id=TENANT_ID,
         token_provider=lambda: "token",
         requester=fake_request,
     )
     assert result["provisioning_state"] == "Succeeded"
+    assert result["ingest_url"].endswith(f"/{TENANT_ID}/azure")
 
 
 def test_ensure_gcp_pubsub_subscription(monkeypatch):
     monkeypatch.setenv("CLOUDSAVER_DRIFT_INGEST_URL", "https://cloudsaver.example/api/v1/drift/cloud-events/ingest")
     monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "x" * 32)
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_PUBSUB_INVOKER_SA", "drift-invoker@cloudsaver.iam.gserviceaccount.com")
     calls = []
 
     def fake_request(method, url, headers, content="", timeout=30.0):
-        calls.append((method, url))
+        calls.append((method, url, content))
         if "logging.googleapis.com" in url:
             return type(
                 "R",
@@ -79,13 +89,19 @@ def test_ensure_gcp_pubsub_subscription(monkeypatch):
     result = __import__(
         "app.drift.cloud_event_subscriptions", fromlist=["ensure_gcp_pubsub_subscription"]
     ).ensure_gcp_pubsub_subscription(
+        tenant_id=TENANT_ID,
         project_id="example-project",
         token_provider=lambda: "token",
         requester=fake_request,
     )
     assert result["provider"] == "gcp"
-    assert any("pubsub.googleapis.com" in url for _, url in calls)
-    assert any("logging.googleapis.com" in url for _, url in calls)
+    assert any("pubsub.googleapis.com" in url for _, url, _ in calls)
+    assert any("logging.googleapis.com" in url for _, url, _ in calls)
+    sub_call = next(content for _, url, content in calls if "subscriptions" in url)
+    sub_body = json.loads(sub_call)
+    # OIDC push auth, never a static secret written into customer project config.
+    assert "oidcToken" in sub_body["pushConfig"]
+    assert "attributes" not in sub_body["pushConfig"]
 
 
 def test_pubsub_push_ingress(tmp_path, monkeypatch):
@@ -96,9 +112,11 @@ def test_pubsub_push_ingress(tmp_path, monkeypatch):
 
     from app.config import Settings
     from app.main import create_app
+    import app.drift.event_ingress_api as ingress
 
-    secret = "y" * 32
-    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", secret)
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "y" * 32)
+    # OIDC verification itself is Google's library; this test exercises ingress plumbing only.
+    monkeypatch.setattr(ingress, "_verify_gcp_oidc", lambda request, ingest_url: True)
     audit = dict(
         protoPayload=dict(methodName="v1.compute.instances.insert", resourceName="//compute.googleapis.com/zones/us-central1-a/instances/vm1"),
         resource=dict(labels=dict(project_id="example-project")),
@@ -108,7 +126,7 @@ def test_pubsub_push_ingress(tmp_path, monkeypatch):
     envelope = dict(
         message=dict(
             data=base64.b64encode(json.dumps(audit).encode()).decode(),
-            attributes=dict(webhook_secret=secret, provider="gcp"),
+            attributes=dict(provider="gcp"),
         )
     )
     settings = Settings(
@@ -116,7 +134,7 @@ def test_pubsub_push_ingress(tmp_path, monkeypatch):
         str(tmp_path / "pubsub.sqlite3"),
         (
             dict(
-                tenant_id="11111111-1111-4111-8111-111111111111",
+                tenant_id=TENANT_ID,
                 name="t",
                 gcp_projects=[dict(project_id="example-project", regions=["us-central1"])],
                 api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
@@ -124,6 +142,32 @@ def test_pubsub_push_ingress(tmp_path, monkeypatch):
         ),
     )
     client = TestClient(create_app(settings, scanner=lambda _: []))
-    response = client.post("/api/v1/drift/cloud-events/ingest", json=envelope)
+    response = client.post(f"/api/v1/drift/cloud-events/ingest/{TENANT_ID}/gcp", json=envelope)
     assert response.status_code == 202
     assert response.json()["accepted"] == 1
+
+
+def test_pubsub_push_ingress_rejects_unauthenticated(tmp_path, monkeypatch):
+    import hashlib
+
+    from fastapi.testclient import TestClient
+
+    from app.config import Settings
+    from app.main import create_app
+
+    monkeypatch.setenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET", "y" * 32)
+    settings = Settings(
+        "azure",
+        str(tmp_path / "pubsub2.sqlite3"),
+        (
+            dict(
+                tenant_id=TENANT_ID,
+                name="t",
+                gcp_projects=[dict(project_id="example-project", regions=["us-central1"])],
+                api_key_sha256=hashlib.sha256(b"k" * 40).hexdigest(),
+            ),
+        ),
+    )
+    client = TestClient(create_app(settings, scanner=lambda _: []))
+    response = client.post(f"/api/v1/drift/cloud-events/ingest/{TENANT_ID}/gcp", json=dict(message=dict(data="")))
+    assert response.status_code == 403

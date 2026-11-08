@@ -9,10 +9,10 @@ import {boundedRequest} from '../src/http.ts';
 const tid='11111111-1111-4111-8111-111111111111',sid='22222222-2222-4222-8222-222222222222';
 const connector:Connector={id:'azure-tags',tenant_id:tid,provider:'azure',scope_id:sid,kind:'azure_arm',operations:['resource.inspect','tags.merge'],endpoint:null,token_env:null};
 function assignment():Assignment{
-  const plan={summary:'Inspect and tag',steps:[{connector_id:connector.id,operation:'resource.inspect' as const,arguments:{},purpose:'Read',verification:'Read',rollback:'Read-only'},
+  const plan={summary:'Inspect and tag',steps:[{connector_id:connector.id,operation:'resource.inspect' as const,arguments:{expected_state:{diskState:'Unattached'}},purpose:'Read',verification:'Read',rollback:'Read-only'},
     {connector_id:connector.id,operation:'tags.merge' as const,arguments:{tags:{CostCenter:'FINOPS-42'}},purpose:'Tag',verification:'Readback',rollback:'Separate review'}]};
   return {phase:'execute',lease_token:'synthetic-lease',code:renderCode(plan),connectors:[connector],task:{id:'33333333-3333-4333-8333-333333333333',tenant_id:tid,provider:'azure',scope_id:sid,
-    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/disks/qa`,state:'running',payload:{plan,plan_hash:'a'.repeat(64),connector_ids:[connector.id],expected_state:{},approval:{plan_hash:'a'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}};
+    resource_id:`/subscriptions/${sid}/resourceGroups/rg/providers/Microsoft.Compute/disks/qa`,state:'running',payload:{plan,plan_hash:'a'.repeat(64),connector_ids:[connector.id],expected_state:{diskState:'Unattached'},approval:{plan_hash:'a'.repeat(64),expires_at:new Date(Date.now()+60000).toISOString()}}}};
 }
 
 test('runCode executes the exact TypeScript artifact with ordered one-time gateway permits',async()=>{
@@ -125,6 +125,23 @@ test('paired repository action uses the gateway result and never calls a cloud a
   assert.deepEqual(calls,[0,1]);
   a.task.payload.plan.steps[2].arguments.attributes={tags:{CostCenter:'DIFFERENT'}};a.code=renderCode(a.task.payload.plan);
   assert.throws(()=>checkAssignment(a,[connector,c]));
+});
+
+test('an inspect step with an empty or fabricated expected_state is rejected before any mutation (BE-OPS-07)',()=>{
+  for(const alter of [
+    // Live state drifted since task creation: planner left/typed an empty baseline on the
+    // inspect step instead of the server-captured one, so no mutation may proceed.
+    (a:Assignment)=>{a.task.payload.plan.steps[0].arguments={expected_state:{}};},
+    // Planner fabricated a baseline that does not match what the server captured at task
+    // creation (task.payload.expected_state) — must also be rejected.
+    (a:Assignment)=>{a.task.payload.plan.steps[0].arguments={expected_state:{diskState:'Attached'}};},
+  ]){
+    const a=assignment();alter(a);a.code=renderCode(a.task.payload.plan);
+    assert.throws(()=>checkAssignment(a,[connector]));
+  }
+  // And when the server itself never captured a baseline, the step cannot invent one either.
+  const a=assignment();a.task.payload.expected_state={};
+  assert.throws(()=>checkAssignment(a,[connector]));
 });
 
 test('paired rightsize repository action must match the approved resize target',()=>{

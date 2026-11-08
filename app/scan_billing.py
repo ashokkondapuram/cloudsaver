@@ -20,25 +20,29 @@ def billing_window_dates(scan, *, window_days=30):
 
 
 def refresh_azure_billing_for_scan(tenant, repository, scan):
-    """Pull subscription resource-level Azure Cost Management rows for the scan window."""
+    """Pull subscription resource-level Azure Cost Management rows for the scan window.
+
+    Returns 'ok' when every configured, in-scope binding's observed currencies imported cleanly,
+    'failed' otherwise, so the scan can mark its cost evidence as degraded rather than silently
+    completing on stale/partial data.
+    """
     if os.getenv('CLOUDSAVER_SCAN_BILLING_REFRESH', 'true').lower() != 'true':
-        return
+        return 'skipped'
     try:
         from app.collectors.billing_sync import _import_snapshot, azure_rows, bindings
     except ImportError:
-        return
+        return 'skipped'
     try:
         selected = [b for b in bindings(tenant) if b['provider'] == 'azure']
     except FocusError:
-        return
+        return 'skipped'
     if not selected:
-        return
+        return 'skipped'
     start, end = billing_window_dates(scan)
-    from app.typed_resources.costs import reporting_currency
-
-    preferred = reporting_currency(tenant, scan)
+    in_scope = {str(s) for s in tenant.get('subscription_ids', [])}
+    failed = False
     for binding in selected:
-        if binding['scope_id'] not in {str(s) for s in tenant.get('subscription_ids', [])}:
+        if binding['scope_id'] not in in_scope:
             continue
         try:
             observations, _, _ = azure_rows(binding, tenant, start, end)
@@ -49,15 +53,13 @@ def refresh_azure_billing_for_scan(tenant, repository, scan):
                 scan.get('scan_id'),
                 exc_info=True,
             )
+            failed = True
             continue
         if not observations:
             continue
-        currencies = sorted({row['currency'] for row in observations})
-        targets = [preferred] if preferred in currencies else currencies
-        for currency in targets:
+        # Every observed currency is imported; no secondary-currency spend is dropped.
+        for currency in sorted({row['currency'] for row in observations}):
             rows = [row for row in observations if row['currency'] == currency]
-            if not rows:
-                continue
             try:
                 _import_snapshot(repository, tenant, binding, rows, start, end, currency)
             except Exception:
@@ -68,6 +70,8 @@ def refresh_azure_billing_for_scan(tenant, repository, scan):
                     scan.get('scan_id'),
                     exc_info=True,
                 )
+                failed = True
+    return 'failed' if failed else 'ok'
 
 
 def _attach_commitment_evidence(tenant, scan, store):
@@ -85,17 +89,20 @@ def materialize_scan_billing(tenant, scan, repository):
     if scan.get('status') != 'completed':
         return scan
     if os.getenv('CLOUDSAVER_SCAN_BILLING_REFRESH', 'true').lower() == 'true':
-        refresh_azure_billing_for_scan(tenant, repository, scan)
-    elif logger.isEnabledFor(logging.DEBUG):
-        logger.debug(
-            'Scan billing CM refresh skipped; using saved FOCUS charges scan_id=%s',
-            scan.get('scan_id'),
-        )
+        refresh_status = refresh_azure_billing_for_scan(tenant, repository, scan)
+    else:
+        refresh_status = 'skipped'
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                'Scan billing CM refresh skipped; using saved FOCUS charges scan_id=%s',
+                scan.get('scan_id'),
+            )
     attached = repository.attach(tenant, scan)
     start, end = billing_window_dates(scan)
     attached['billing_materialized'] = True
     attached['billing_window_start'] = start.isoformat()
     attached['billing_window_end'] = end.isoformat()
+    attached['billing_refresh'] = dict(status=refresh_status)
     from app.resource_fetch_stages import sync_fetch_stages
     for obs in attached.get('inventory') or []:
         sync_fetch_stages((obs.get('evidence') or {}))

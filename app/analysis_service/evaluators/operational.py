@@ -44,7 +44,7 @@ def evaluate(ctx: UnifiedResourceContext) -> list[PillarFinding]:
         )
 
     missing = [tag for tag in _MANDATORY_TAGS if not ctx.tag(tag)]
-    if missing and monthly:
+    if missing and monthly and ctx.config.tags_collected:
         findings.append(
             PillarFinding(
                 finding_id=deterministic_finding_id(
@@ -59,7 +59,7 @@ def evaluate(ctx: UnifiedResourceContext) -> list[PillarFinding]:
                 resource_type=ctx.resource_type,
                 current_sku=ctx.current_sku,
                 evidence={'missing_tags': missing, 'tags': ctx.tags},
-                financial_impact=h.financial(monthly, savings=monthly),
+                financial_impact=h.financial(monthly),
                 remediation_action='APPLY_TAGS',
             )
         )

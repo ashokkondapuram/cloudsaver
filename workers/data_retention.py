@@ -12,7 +12,9 @@ def run_once(settings=None):
     erased=failed=0
     for tenant in tenants:
         try:erased+=repository.purge(tenant['tenant_id'])
-        except Exception:failed+=1
+        except Exception as exc:
+            failed+=1
+            logging.error('Data retention purge failed for tenant_id=%s exc_class=%s',tenant['tenant_id'],type(exc).__name__)
     return dict(erased=erased,failed_workspaces=failed)
 
 

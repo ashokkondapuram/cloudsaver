@@ -180,8 +180,10 @@ def resource_daily_cost_rows(db, tenant, resource_ids, *, begin, finish, scopes_
         key = (provider, rid.lower() if provider == 'azure' else rid)
         day = datetime.fromisoformat(str(period_start)).date()
         bucket = grouped.setdefault(key, {})
-        entry = bucket.setdefault(day, dict(billed=Decimal(0), effective=Decimal(0), currency=currency))
+        entry = bucket.setdefault(day, dict(billed=Decimal(0), effective=Decimal(0), currency=currency, mixed_currency=False))
         if entry['currency'] != currency:
+            # Flag rather than drop: a day billed in two currencies has no single honest total.
+            entry['mixed_currency'] = True
             return
         entry['billed'] += Decimal(billed)
         entry['effective'] += Decimal(effective)
@@ -223,9 +225,10 @@ def resource_daily_cost_rows(db, tenant, resource_ids, *, begin, finish, scopes_
         result[key] = [
             dict(
                 day=day.isoformat(),
-                billed_cost_usd=float(values['billed']),
-                effective_cost_usd=float(values['effective']),
-                currency=values['currency'],
+                billed_cost_usd=float(values['billed']) if values['currency'] == 'USD' and not values['mixed_currency'] else None,
+                effective_cost_usd=float(values['effective']) if values['currency'] == 'USD' and not values['mixed_currency'] else None,
+                currency=None if values['mixed_currency'] else values['currency'],
+                mixed_currency=values['mixed_currency'],
                 cost_source=COST_SOURCE_ACTUAL_BILLED,
             )
             for day, values in sorted(days.items())

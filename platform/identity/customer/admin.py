@@ -9,6 +9,7 @@ from identity.domain import (CUSTOMER_ADMIN_ROLES, DEFAULT_BOOTSTRAP_HOURS, DEFA
                              IdentityError, NotFound, StaleVersion, iso, normalize_roles, text, uuid_text)
 
 FORBIDDEN = "You don't have permission to make this change."
+_ROLE_RANK = {'CustomerAuditor': 0, 'CustomerAdmin': 1, 'CustomerOwner': 2}
 
 
 def _actor(grant):
@@ -56,6 +57,17 @@ class CustomerOps:
             raise NotFound('Workspace not found.')
         self._customer_scope(tx, grant, admin=admin)
         return workspace
+
+    def _assert_may_act_for_subject(self, tx, grant, customer_id, caller_roles, subject_user_id):
+        """An admin may issue or rotate a key for an auditor or for itself. Only an owner may act for
+        another admin or for the owner, so an admin can never escalate by handing itself an owner key."""
+        if grant.get('key_admin') or not subject_user_id or subject_user_id == grant['subject_id']:
+            return
+        caller_rank = max((_ROLE_RANK.get(r, -1) for r in (caller_roles or [])), default=-1)
+        subject_roles = self._membership_roles(tx, subject_user_id, customer_id)
+        subject_rank = _ROLE_RANK.get(subject_roles[0], -1) if subject_roles else -1
+        if subject_rank >= _ROLE_RANK['CustomerAdmin'] and caller_rank < _ROLE_RANK['CustomerOwner']:
+            raise IdentityError(FORBIDDEN, status=403)
 
     def _issuer_roles(self, tx, tenant_id, grant):
         if grant.get('key_admin'):
@@ -459,6 +471,8 @@ class CustomerOps:
         with self.store.transaction() as tx:
             workspace = self._customer_workspace(tx, grant, tenant_id, lock=True)
             tenant_id = workspace['tenant_id']
+            _, caller_roles = self._customer_scope(tx, grant, workspace['customer_id'], admin=False)
+            self._assert_may_act_for_subject(tx, grant, workspace['customer_id'], caller_roles, subject_user_id)
             if service_account_id:
                 account = tx.get_service_account(service_account_id)
                 if not account or str(account['customer_id']) != workspace['customer_id'] or account['status'] != 'active':
@@ -474,9 +488,11 @@ class CustomerOps:
             self._roles_subset(issued['roles'], self._issuer_roles(tx, tenant_id, grant))
             if subject_user_id:
                 self._roles_subset(issued['roles'], tx.get_workspace_membership(tenant_id, subject_user_id)['roles'])
-            expires = self._expiry(payload.get('expires_at'))
-            if len(self._open_keys(tx, tenant_id)) >= MAX_ACTIVE_KEYS:
-                raise Conflict(f'A workspace can have at most {MAX_ACTIVE_KEYS} active keys. Revoke a key first.')
+            entitlements = self._key_entitlements(tx, workspace)
+            max_keys = entitlements['max_active_keys_per_workspace']
+            expires = self._expiry(payload.get('expires_at'), max_days=entitlements['max_key_lifetime_days'])
+            if len(self._open_keys(tx, tenant_id)) >= max_keys:
+                raise Conflict(f'A workspace can have at most {max_keys} active keys. Revoke a key first.')
             issued |= ({'subject_type': 'service_account', 'service_account_id': service_account_id}
                        if service_account_id else {'subject_type': 'user', 'subject_user_id': subject_user_id})
             row, secret = self._new_key_row(workspace, name, issued, expires, _actor(grant))
@@ -506,6 +522,9 @@ class CustomerOps:
             row, workspace = self._customer_key(tx, key_id, grant)
             self._roles_subset(row['roles'], self._issuer_roles(tx, workspace['tenant_id'], grant))
             self._assert_delegated_envelope(row, grant, workspace)
+            _, caller_roles = self._customer_scope(tx, grant, workspace['customer_id'], admin=False)
+            subject_user_id = str(row['subject_user_id']) if row.get('subject_user_id') else None
+            self._assert_may_act_for_subject(tx, grant, workspace['customer_id'], caller_roles, subject_user_id)
         allowed = {k: payload[k] for k in ('overlap_hours', 'expires_at') if k in payload}
         return self.rotate_key(key_id, allowed, _actor(grant), request_id)
 

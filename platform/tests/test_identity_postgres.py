@@ -172,3 +172,78 @@ def test_revoked_keys_stay_revoked(service, token_db):
     with psycopg.connect(token_db[1]) as db:
         with pytest.raises(errors.InsufficientPrivilege):
             db.execute('UPDATE identity.api_keys SET revoked_at=NULL WHERE revoked_at IS NOT NULL')
+
+
+def test_stripe_webhook_commits_a_subscription_update(service, token_db, monkeypatch):
+    """BE-PLAT-01: identity.key_events has CHECK (actor_type IN ('operator','service','system','customer')).
+    The webhook's actor used to be actor_type='provider', so every handled event's provider_event_applied
+    key event raised CheckViolation and rolled back the whole transaction, including the dedupe row -- the
+    handler returned 500 and Stripe retried forever. actor_type='system' must commit cleanly."""
+    import hashlib
+    import hmac
+    import json
+    import time
+
+    from identity.billing.providers import StripeProvider
+    from identity.billing.stripe_webhook import handle_stripe_webhook
+
+    monkeypatch.setenv('PLATFORM_BILLING_ENABLED', 'true')
+    monkeypatch.setenv('PLATFORM_BILLING_PROVIDER', 'stripe')
+    secret = 'whsec_test_identity_postgres_only'
+    provider = StripeProvider('sk_test_offline', secret)
+    monkeypatch.setattr('identity.billing.stripe_webhook.load_provider', lambda: provider)
+
+    customer = service.create_customer({'name': 'Stripe webhook customer'}, OPERATOR)
+    tid = str(uuid4())
+    service.create_workspace({'tenant_id': tid, 'customer_id': customer['id'], 'name': 'Stripe ws',
+                              'plan_tier': 'STARTER'}, OPERATOR)
+    with service.store.transaction() as tx:
+        row = tx.get_customer(customer['id'])
+        tx.update_customer(customer['id'], row['version'], {
+            'external_customer_refs': {'stripe': 'cus_pg_test'}, 'updated_at': service.now(), 'updated_by': 'test'})
+
+    stamp = int(time.time())
+    event = {'id': 'evt_pg_subscription_updated', 'object': 'event', 'type': 'customer.subscription.updated',
+             'created': stamp, 'data': {'object': {
+                 'id': 'sub_pg_test', 'object': 'subscription', 'created': stamp - 10, 'customer': 'cus_pg_test',
+                 'status': 'active', 'items': {'data': [{'price': {'id': 'price_unused'}, 'quantity': 1}], 'has_more': False}}}}
+    body = json.dumps(event).encode()
+    signature = hmac.new(secret.encode(), str(stamp).encode() + b'.' + body, hashlib.sha256).hexdigest()
+    headers = {'Stripe-Signature': f't={stamp},v1={signature}'}
+
+    result = handle_stripe_webhook(service, body, headers)
+    assert result['received'] is True and result['outcome'] != 'ignored'
+
+    with psycopg.connect(token_db[1]) as db:
+        subscription = db.execute('SELECT external_subscription_ref, status FROM billing.subscriptions WHERE customer_id=%s',
+                                  (customer['id'],)).fetchone()
+        assert subscription == ('sub_pg_test', 'active')
+        applied = db.execute("SELECT actor_type FROM identity.key_events WHERE action='provider_event_applied' "
+                             'ORDER BY occurred_at DESC LIMIT 1').fetchone()
+        assert applied == ('system',)
+        dedupe = db.execute("SELECT 1 FROM identity.key_events WHERE action='provider_event_applied'").fetchall()
+        assert dedupe, 'the dedupe/event row must have committed, not rolled back with a CheckViolation'
+
+
+def test_custom_plan_can_be_subscribed_and_synced(service, token_db):
+    """BE-PLAT-07: directory.workspaces.plan_tier used to CHECK (plan_tier IN ('STARTER','GROWTH','ENTERPRISE')),
+    but an operator can create any plan code matching billing/domain.py PLAN_CODE. Subscribing a workspace to
+    a custom plan must not raise a CheckViolation."""
+    plan = service.create_plan({'code': 'PRO', 'name': 'Pro', 'entitlements': {
+        'max_subscriptions': 5, 'max_resources_per_scan': 500, 'allowed_scan_frequencies': ['manual', 'daily'],
+        'can_export_terraform': True, 'can_use_keyvault': False, 'can_dispatch_automated_alerts': True,
+        'can_use_ai_advisory': False, 'retention_days': 30, 'allowed_providers': ['azure', 'aws', 'gcp', 'kubernetes'],
+        'max_workspaces': 5, 'max_active_keys_per_workspace': 5, 'max_key_lifetime_days': 180}}, OPERATOR)
+    assert plan['code'] == 'PRO'
+    customer = service.create_customer({'name': 'Custom plan customer'}, OPERATOR)
+    tid = str(uuid4())
+    service.create_workspace({'tenant_id': tid, 'customer_id': customer['id'], 'name': 'Custom plan ws',
+                              'plan_tier': 'PRO'}, OPERATOR)
+    assert service.get_workspace(tid)['plan_tier'] == 'PRO'
+    sub = service.create_customer_subscription(customer['id'], {
+        'plan_code': 'PRO', 'status': 'active', 'current_period_start': service.now().isoformat(),
+        'current_period_end': (service.now() + timedelta(days=30)).isoformat(), 'grace_days': 14,
+        'amount_minor': 9900, 'currency': 'USD', 'interval': 'month'}, OPERATOR)
+    assert sub['plan_code'] == 'PRO'
+    with psycopg.connect(token_db[1]) as db:
+        assert db.execute('SELECT plan_tier FROM directory.workspaces WHERE tenant_id=%s', (tid,)).fetchone() == ('PRO',)

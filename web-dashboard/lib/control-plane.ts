@@ -136,30 +136,39 @@ export function actionEvidenceFromResource(detail: {
     effective_cost_usd?: number | null;
     billed_cost_usd?: number | null;
   } | null;
-  observation?: {evidence?: {metrics?: Record<string, unknown>}} | null;
+  observation?: {evidence?: {
+    metrics?: Record<string, {window_start?: string | null; window_end?: string | null}>;
+    metric_summaries?: Record<string, {coverage_ratio?: number | null}>;
+  }} | null;
 }): Record<string, unknown> {
   const protectedReasons = detail.assessment.protected_reasons.map(r => r.toLowerCase());
   const standby = protectedReasons.some(r => r.includes('standby') || r.includes('replica') || r.includes('dr_'));
   const hold = protectedReasons.some(r => r.includes('hold') || r.includes('retention') || r.includes('legal'));
   const metrics = detail.observation?.evidence?.metrics || {};
-  const memoryDays = Object.keys(metrics).some(k => k.toLowerCase().includes('memory')) ? 14 : 0;
+  const summaries = detail.observation?.evidence?.metric_summaries || {};
+  const memoryKey = Object.keys(metrics).find(k => k.toLowerCase().includes('memory'));
+  const memoryWindow = memoryKey ? metrics[memoryKey] : undefined;
+  const memoryDays = memoryWindow?.window_start && memoryWindow?.window_end
+    ? Math.round((Date.parse(memoryWindow.window_end) - Date.parse(memoryWindow.window_start)) / 86_400_000)
+    : null;
+  const memoryRatio = memoryKey ? summaries[memoryKey]?.coverage_ratio ?? null : null;
   return {
     claims_positive_benefit: detail.costs?.opportunity_usd != null && detail.costs.opportunity_usd > 0,
-    absorption_proven: false,
+    absorption_proven: null,
     fees_remain: detail.costs?.effective_cost_usd != null && detail.costs?.billed_cost_usd != null
       ? detail.costs.effective_cost_usd < detail.costs.billed_cost_usd
       : null,
-    ip_dependency_confirmed: false,
+    ip_dependency_confirmed: null,
     external_owner_known: null,
-    removes_quorum_member: false,
-    violates_capacity_floor: false,
-    is_standby_or_replica: standby ? true : detail.assessment.disposition === 'protected' ? null : false,
+    removes_quorum_member: null,
+    violates_capacity_floor: null,
+    is_standby_or_replica: standby ? true : null,
     active_hold: hold ? true : null,
     destructive: null,
     restore_verified: null,
     capacity_reduction: detail.costs?.opportunity_usd != null ? detail.costs.opportunity_usd > 0 : null,
-    memory_history_days: memoryDays || null,
-    valid_sample_ratio: memoryDays ? 0.95 : null,
+    memory_history_days: memoryDays,
+    valid_sample_ratio: memoryRatio,
     insufficient_headroom: null,
     owner: null,
     responder_reachable: null,

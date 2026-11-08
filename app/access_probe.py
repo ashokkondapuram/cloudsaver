@@ -104,8 +104,7 @@ def probe_aws(tenant, settings):
 
     def run():
         from app.cloud_identity import aws_session
-        source = dict(account, external_id=tenant['tenant_id'])
-        session = aws_session(source, settings=settings)
+        session = aws_session(account, settings=settings, tenant=tenant)
         session.client('sts').get_caller_identity()
         return _row('aws', 'ok', target)
 

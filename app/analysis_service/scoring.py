@@ -11,8 +11,14 @@ _SEVERITY_WEIGHT = {
 }
 
 
-def score_pillar(findings: list[PillarFinding], *, pillar: Pillar) -> float:
-    """Lower score means more risk. Start at 100 and deduct weighted findings."""
+def score_pillar(findings: list[PillarFinding], *, pillar: Pillar, assessed: bool = True) -> float | None:
+    """Lower score means more risk. Start at 100 and deduct weighted findings.
+
+    None (not a numeric 100) when the resource was never assessed: no findings because nothing
+    was evaluated reads as "healthy" otherwise, which is worse than reporting unknown.
+    """
+    if not assessed:
+        return None
     relevant = [f for f in findings if f.pillar == pillar]
     if not relevant:
         return 100.0

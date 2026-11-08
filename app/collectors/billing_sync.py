@@ -505,10 +505,23 @@ def _import_snapshot(repository, tenant, binding, observations, start, end, curr
             ChargePeriodEnd=datetime.combine(day+timedelta(days=1),datetime.min.time(),timezone.utc),ResourceId=resource,
             ChargeCategory='Adjustment' if prior else category,BilledCost=str(amounts[0]),EffectiveCost=str(amounts[1])))
     source='auto-sync:'+digest([binding,str(start),str(end),currency,[c.model_dump(mode='json') for c in charges]])[:64]
-    result=(repository.import_records(tenant,ImportRequest(source_id=source,provider=binding['provider'],sub_account_id=binding['scope_id'],
-        billing_currency=currency,period_start=start,period_end=end,complete=False,records=charges),_db=_db)
-        if charges else dict(inserted=0,records=0,cached=True))
-    return dict(result,unresolved_absent_groups=0 if authoritative else len(absent),
+    # ImportRequest.records is capped at 5000; a month of a few hundred billed resources can exceed
+    # that easily, so split into chunks (each its own source_id) and commit them as one transaction
+    # so an import is never partially applied.
+    CHARGE_CHUNK = 5000
+    chunks = [charges[i:i + CHARGE_CHUNK] for i in range(0, len(charges), CHARGE_CHUNK)]
+    from contextlib import nullcontext
+    with (nullcontext(_db) if _db is not None else repository.store.transaction(tenant['tenant_id'])) as db:
+        totals = dict(inserted=0, records=0, cached=True)
+        for index, chunk in enumerate(chunks):
+            chunk_source = source if len(chunks) <= 1 else f'{source}:chunk-{index}'
+            outcome = repository.import_records(tenant, ImportRequest(source_id=chunk_source, provider=binding['provider'],
+                sub_account_id=binding['scope_id'], billing_currency=currency, period_start=start, period_end=end,
+                complete=False, records=chunk), _db=db)
+            totals['inserted'] += outcome['inserted']
+            totals['records'] += outcome['records']
+            totals['cached'] = totals['cached'] and outcome.get('cached', False)
+    return dict(totals, unresolved_absent_groups=0 if authoritative else len(absent),
                 reconciliation_status='source_snapshot_reconciled' if authoritative else 'unverified',source_watermark=watermark)
 
 
@@ -526,13 +539,14 @@ def sync_workspace_billing(tenant, repository, *, currency='USD', readers=None):
         try:
             observations,granularity,warnings=(readers or READERS)[binding['provider']](binding,tenant,start,end)
             if len(observations)>MAX_ROWS: raise ValueError('Billing row limit exceeded')
-            currencies=sorted({r['currency'] for r in observations}) if currency is None else [currency]
+            # Every observed currency is imported; `currency` only selects which one is the run's
+            # display total below, so a secondary currency's spend is never silently dropped.
+            currencies=sorted({r['currency'] for r in observations})
             if any(not re.fullmatch(r'[A-Z]{3}',c) for c in currencies):raise ValueError('Invalid billing currency')
-            if observations and currency is not None and not any(r['currency']==currency for r in observations):raise ValueError('Requested billing currency is unavailable')
             imports=[_import_snapshot(repository,tenant,binding,observations,start,end,c) for c in currencies]
             imported=dict(inserted=sum(x['inserted'] for x in imports),records=sum(x['records'] for x in imports),cached=all(x.get('cached',False) for x in imports))
             results.append(dict(provider=binding['provider'],scope_id=binding['scope_id'],status='completed',
-                                granularity=granularity,coverage_verified=False,warnings=warnings,**imported))
+                                granularity=granularity,coverage_verified=False,warnings=warnings,imported_currencies=currencies,**imported))
         except ProviderDeferred as deferred:
             results.append(dict(
                 provider=binding['provider'], scope_id=binding['scope_id'], status='failed',

@@ -186,6 +186,7 @@ def _existing_commitments_hr(store, tenant_id: str, tenant: dict) -> tuple[str, 
     hourly = Decimal(0)
     scopes = set(_authorized_scopes(tenant))
     verified = False
+    seen_commitment_ids: set = set()
     for snap in snapshots:
         if (snap.get("provider"), snap.get("scope_id")) not in scopes or snap.get("status") != "ok":
             continue
@@ -194,10 +195,35 @@ def _existing_commitments_hr(store, tenant_id: str, tenant: dict) -> tuple[str, 
             amount = item.get("commitment_amount")
             if amount is None:
                 continue
+            currency = item.get("currency") or "USD"
+            if currency != "USD":
+                # No conversion rate is carried in evidence; skip rather than mis-sum as USD.
+                continue
+            commitment_id = item.get("commitment_id")
+            if commitment_id is not None:
+                if commitment_id in seen_commitment_ids:
+                    continue
+                seen_commitment_ids.add(commitment_id)
             try:
-                hourly += _imported_billed_amount(amount) / Decimal(730)
+                amount_decimal = _imported_billed_amount(amount)
             except ValueError:
                 return "0", False
+            grain = str(item.get("commitment_grain") or "").lower()
+            if grain == "hourly":
+                item_hourly = amount_decimal
+            elif grain == "monthly":
+                item_hourly = amount_decimal / Decimal(730)
+            elif grain == "period":
+                window_days = item.get("utilization_window_days")
+                if not window_days or window_days <= 0:
+                    verified = False
+                    continue
+                item_hourly = amount_decimal / (Decimal(window_days) * Decimal(24))
+            else:
+                # Unknown grain: cannot normalise to an hourly rate, so coverage is unverified.
+                verified = False
+                continue
+            hourly += item_hourly
     return decimal_text(hourly), verified
 
 

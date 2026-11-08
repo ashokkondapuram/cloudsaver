@@ -212,7 +212,7 @@ def test_multiregion_discovery_is_bounded_parallel_and_keeps_source_identity(mon
     tenant=dict(tenant_id=str(uuid4()),subscription_ids=[],aws_accounts=sources)
     barrier=Barrier(4,timeout=5);guard=Lock();seen=[]
     def scan(source):
-        assert source['external_id']==tenant['tenant_id']
+        assert source['tenant_id']==tenant['tenant_id']
         with guard: seen.append(source['region'])
         barrier.wait()
         return []

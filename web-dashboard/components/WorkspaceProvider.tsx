@@ -204,6 +204,7 @@ export function WorkspaceProvider({children}: {children: ReactNode}) {
       ]);
       if (session.current !== version) return;
       validateWorkspaceEvidence(me,history,plan);
+      stopScanPoll();
       activeCredential.current=nextToken;
       setToken(nextToken); setWorkspace(me); setEntitlements(plan);
       setScans(history); setSelected(history[0]?.scan_id || '');

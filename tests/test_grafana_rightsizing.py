@@ -5,24 +5,33 @@ import httpx
 import pytest
 
 from app.collectors import grafana_rightsizing as gk
+from app.collectors.observability import tenant_secret_prefix
 from tests.test_enterprise import AUTH, TID, evidence, workspace
 
 HOST = 'grafana.example.com'
+SECRET_REF = tenant_secret_prefix({'tenant_id': TID}) + 'PRIMARY'
 
 
 @pytest.fixture(autouse=True)
 def allow(monkeypatch):
     monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS', HOST)
-    monkeypatch.setenv('CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', 'test-grafana-token')
+    monkeypatch.setenv(SECRET_REF, 'test-grafana-token')
     monkeypatch.setenv('CLOUDSAVER_GRAFANA_RIGHTSIZING_INLINE', 'true')
 
 
 def connector_config(**extra):
     base = dict(name='Grafana dev', kind='grafana_mimir', base_url=f'https://{HOST}/', auth_kind='bearer_env',
-                secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', mimir_datasource_uid='mimir-uid-1',
+                secret_ref=SECRET_REF, mimir_datasource_uid='mimir-uid-1',
                 cluster_label='cluster', cluster_values=['dev-cluster'])
     base.update(extra)
     return gk.validate_connector(base, workspace())
+
+
+def test_grafana_client_blocks_private_destination_before_any_request(monkeypatch):
+    config = connector_config(base_url='https://127.0.0.1/', cluster_values=['dev-cluster'])
+    monkeypatch.delenv('CLOUDSAVER_OBSERVABILITY_ALLOWED_HOSTS', raising=False)
+    result = gk.probe(config)
+    assert result == dict(ok=False, error_code='OBSERVABILITY_DESTINATION_BLOCKED')
 
 
 def test_validate_grafana_connector():
@@ -297,7 +306,7 @@ def test_api_connectors_and_job(evidence, monkeypatch):
     monkeypatch.setattr(mod, 'run_rightsizing', stub_rightsizing)
     monkeypatch.setattr(mod, 'probe', stub_probe)
     body = dict(connector=dict(name='Grafana dev', kind='grafana_mimir', base_url=f'https://{HOST}/', auth_kind='bearer_env',
-                               secret_ref='CLOUDSAVER_OBSERVABILITY_SECRET_PRIMARY', mimir_datasource_uid='mimir-uid-1',
+                               secret_ref=SECRET_REF, mimir_datasource_uid='mimir-uid-1',
                                cluster_label='cluster', cluster_values=['dev-cluster']))
     settings, store, _ = evidence
     from fastapi.testclient import TestClient

@@ -24,9 +24,9 @@ class BillingJobs:
         from app.collectors.billing_sync import bindings
         import os
         from app.focus import FocusError
-        if currency is None:
-            from app.typed_resources.costs import reporting_currency
-            currency = reporting_currency(tenant, {})
+        # currency stays None (import every observed currency) unless the caller explicitly asked
+        # to filter to one; resolving it to a display default here would silently drop every other
+        # observed currency's spend (see execute_scope's currency handling below).
         if os.getenv('CLOUDSAVER_AUTO_BILLING_SYNC','true')!='true':raise FocusError('Automatic billing sync is disabled',503)
         selected=bindings(tenant)
         if not selected:raise FocusError('No authorized cloud billing connector is configured',503)

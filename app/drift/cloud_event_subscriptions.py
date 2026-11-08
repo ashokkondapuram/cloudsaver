@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.drift.event_ingress_api import tenant_ingest_secret
+
 RULE_NAME = "cloudsaver-drift-inspect"
 CONNECTION_NAME = "cloudsaver-drift-ingest"
 DESTINATION_NAME = "cloudsaver-drift-webhook"
@@ -28,11 +30,10 @@ def drift_ingest_url() -> str:
     return url.rstrip("/")
 
 
-def drift_webhook_secret() -> str:
-    secret = os.getenv("CLOUDSAVER_DRIFT_WEBHOOK_SECRET") or ""
-    if len(secret) < 16:
-        raise ValueError("CLOUDSAVER_DRIFT_WEBHOOK_SECRET must be at least 16 characters")
-    return secret
+def tenant_ingest_url(tenant_id: str, provider: str) -> str:
+    """Each tenant+provider gets its own ingest path, so one credential can never be replayed
+    to forge events for another tenant (see app.drift.event_ingress_api)."""
+    return f"{drift_ingest_url()}/{tenant_id}/{provider}"
 
 
 def _aws_events_client(region: str, *, factory: Callable[..., Any] | None = None):
@@ -45,14 +46,15 @@ def _aws_events_client(region: str, *, factory: Callable[..., Any] | None = None
 
 def ensure_aws_eventbridge_subscription(
     *,
+    tenant_id: str,
     account_id: str,
     region: str = "us-east-1",
     events_client=None,
 ) -> dict[str, Any]:
     if not re.fullmatch(r"[0-9]{12}", account_id):
         raise ValueError("Invalid AWS account id")
-    ingest = drift_ingest_url()
-    secret = drift_webhook_secret()
+    ingest = tenant_ingest_url(tenant_id, "aws")
+    secret = tenant_ingest_secret(tenant_id)
     client = events_client or _aws_events_client(region)
     rule_arn = client.put_rule(
         Name=RULE_NAME,
@@ -133,8 +135,8 @@ def ensure_azure_eventgrid_subscription(
         subscription_id,
     ):
         raise ValueError("Invalid Azure subscription id")
-    ingest = drift_ingest_url()
-    drift_webhook_secret()
+    ingest = tenant_ingest_url(tenant_id, "azure")
+    secret = tenant_ingest_secret(tenant_id)
     scope = f"/subscriptions/{subscription_id.lower()}"
     api_version = "2022-06-15"
     url = (
@@ -159,6 +161,11 @@ def ensure_azure_eventgrid_subscription(
             "deadLetterDestination": None,
         },
     }
+    # Event Grid sends this header with every delivery, including the subscription validation
+    # handshake, so the ingress endpoint can verify it without reading the body.
+    body["properties"]["destination"]["properties"]["deliveryAttributeMappings"] = [
+        {"name": "aeg-sas-key", "type": "Static", "properties": {"value": secret, "isSecret": True}}
+    ]
     headers = {
         "Authorization": "Bearer " + token_provider(),
         "Content-Type": "application/json",
@@ -179,14 +186,17 @@ def ensure_azure_eventgrid_subscription(
 
 def ensure_gcp_pubsub_subscription(
     *,
+    tenant_id: str,
     project_id: str,
     token_provider: Callable[[], str],
     requester: Callable[..., httpx.Response] | None = None,
 ) -> dict[str, Any]:
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", project_id):
         raise ValueError("Invalid GCP project id")
-    ingest = drift_ingest_url()
-    secret = drift_webhook_secret()
+    ingest = tenant_ingest_url(tenant_id, "gcp")
+    invoker_sa = os.getenv("CLOUDSAVER_DRIFT_PUBSUB_INVOKER_SA") or ""
+    if not invoker_sa:
+        raise ValueError("CLOUDSAVER_DRIFT_PUBSUB_INVOKER_SA is required for authenticated Pub/Sub push")
     token = token_provider()
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
     request = requester or httpx.request
@@ -199,7 +209,9 @@ def ensure_gcp_pubsub_subscription(
         "topic": topic_path,
         "pushConfig": {
             "pushEndpoint": ingest,
-            "attributes": {"webhook_secret": secret, "provider": "gcp"},
+            # OIDC push auth: Pub/Sub mints a short-lived token per delivery, so no static
+            # credential is ever written into project config that other principals can read.
+            "oidcToken": {"serviceAccountEmail": invoker_sa, "audience": ingest},
         },
         "ackDeadlineSeconds": 30,
     }
@@ -249,10 +261,12 @@ def ensure_workspace_subscriptions(
     aws_events_client_factory: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     results = []
+    tenant_id = str(tenant_row["tenant_id"])
     for account in tenant_row.get("aws_accounts") or []:
         region = os.getenv("CLOUDSAVER_DRIFT_AWS_REGION", "us-east-1")
         results.append(
             ensure_aws_eventbridge_subscription(
+                tenant_id=tenant_id,
                 account_id=str(account),
                 region=region,
                 events_client=aws_events_client_factory(region=region) if aws_events_client_factory else None,
@@ -263,7 +277,7 @@ def ensure_workspace_subscriptions(
             results.append(
                 ensure_azure_eventgrid_subscription(
                     subscription_id=str(subscription),
-                    tenant_id=str(tenant_row["tenant_id"]),
+                    tenant_id=tenant_id,
                     token_provider=azure_token,
                 )
             )
@@ -272,6 +286,7 @@ def ensure_workspace_subscriptions(
             project_id = project["project_id"] if isinstance(project, dict) else str(project)
             results.append(
                 ensure_gcp_pubsub_subscription(
+                    tenant_id=tenant_id,
                     project_id=project_id,
                     token_provider=gcp_token,
                 )

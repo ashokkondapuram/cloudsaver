@@ -114,10 +114,11 @@ def platform_credential():
         raise CredentialError('The platform credential could not be initialized.') from None
 
 
-def _assume(sts, source, session_name):
-    options = {'RoleArn': source['role_arn'], 'RoleSessionName': session_name, 'DurationSeconds': 3600}
-    if source.get('external_id'):
-        options['ExternalId'] = source['external_id']
+def _assume(sts, source, session_name, external_id):
+    # ExternalId is always the caller's own tenant ID, never a value read from connector/source
+    # config, so one tenant can never confuse the deputy into assuming another tenant's role.
+    options = {'RoleArn': source['role_arn'], 'RoleSessionName': session_name, 'DurationSeconds': 3600,
+               'ExternalId': external_id}
     return sts.assume_role(**options)['Credentials']
 
 
@@ -128,13 +129,16 @@ def aws_session(source, settings=None, tenant=None):
     region, session_name = source['region'], 'cloudsaver-scan'
     if not source.get('role_arn'):
         raise CredentialError('The AWS account requires a reader role ARN.')
+    external_id = (tenant or {}).get('tenant_id') or source.get('tenant_id')
+    if not external_id:
+        raise CredentialError('The AWS reader role requires a tenant ID to assume with.')
     config = Config(connect_timeout=10, read_timeout=30, retries={'max_attempts': 3, 'mode': 'standard'})
     clients = []
     try:
         if identity_mode() == 'developer':
             sts = boto3.Session(region_name=region).client('sts', config=config)
             clients.append(sts)
-            credentials = _assume(sts, source, session_name)
+            credentials = _assume(sts, source, session_name, external_id)
         else:
             hub = cfg.get('aws_hub_role_arn') or ''
             if not re.fullmatch(r'arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}', hub):
@@ -149,7 +153,7 @@ def aws_session(source, settings=None, tenant=None):
                                     aws_session_token=hub_credentials['SessionToken'],
                                     region_name=region).client('sts', config=config)
             clients.append(chained)
-            credentials = _assume(chained, source, session_name)
+            credentials = _assume(chained, source, session_name, external_id)
         return boto3.Session(aws_access_key_id=credentials['AccessKeyId'],
                              aws_secret_access_key=credentials['SecretAccessKey'],
                              aws_session_token=credentials['SessionToken'], region_name=region)

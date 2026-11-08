@@ -31,7 +31,7 @@ def scan_multi_cloud(tenant, providers, *, enabled_rule_ids=None, progress=None)
         collectors.append(collect_azure)
     if 'aws' in providers:
         for source in tenant.get('aws_accounts',[]):
-            bound=dict(source,external_id=tenant['tenant_id'])
+            bound=dict(source,tenant_id=tenant['tenant_id'])
             collectors.append(lambda bound=bound:scan_account(bound))
     if 'gcp' in providers:
         account=(tenant.get('identity') or {}).get('gcp_service_account')

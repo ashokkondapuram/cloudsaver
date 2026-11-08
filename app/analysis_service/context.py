@@ -64,6 +64,7 @@ class ConfigMetadata(BaseModel):
     zero_traffic_14d: bool | None = None
     ip_associated: bool | None = None
     load_balancer_idle: bool | None = None
+    tags_collected: bool | None = None
 
 
 class UnifiedResourceContext(BaseModel):
