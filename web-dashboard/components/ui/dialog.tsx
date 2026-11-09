@@ -44,7 +44,11 @@ export function Dialog({open, onClose, title, children, drawer = false, classNam
     };
   }, [open]);
   if (!open) return null;
-  return <dialog ref={ref} aria-label={title} aria-modal="true" className={`dialog ${drawer ? 'drawer' : ''} ${className}`} onCancel={e => {e.preventDefault(); close.current();}} onClick={e => {if (e.target === ref.current) close.current();}}>
+  return <dialog ref={ref} aria-label={title} aria-modal="true" className={`dialog ${drawer ? 'drawer' : ''} ${className}`} onCancel={e => {e.preventDefault(); close.current();}} onClick={e => {
+    if (e.target !== ref.current) return;
+    const bounds = e.currentTarget.getBoundingClientRect();
+    if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) close.current();
+  }}>
     <div className="dialog-surface">
       <div className="dialog-heading"><h2>{title}</h2><div className="dialog-heading-actions">{headerExtra}<button type="button" className="icon-button" aria-label={`Close ${title}`} onClick={onClose}><X size={18} weight="regular"/></button></div></div>
       {drawer ? <div className="dialog-drawer-body">{children}</div> : children}

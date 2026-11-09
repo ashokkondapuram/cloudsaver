@@ -14,6 +14,8 @@ import {
   Database,
   FileCode,
   Funnel,
+  Eye,
+  EyeSlash,
   Gear,
   Layout,
   List,
@@ -46,7 +48,6 @@ import {Notice, ProviderBadge} from './ui/shared';
 import {FindingDrawer, ReviewDrawer} from './drawer/FindingDrawer';
 import {ClaimView} from './ClaimView';
 import {AtlasRouteBoundary} from './atlas/AtlasRouteBoundary';
-import {Reveal} from './landing/Reveal';
 
 export const navigation = [
   {href:'/',label:'Overview',icon:Layout,group:'WORKSPACE',shortcut:'G D'},
@@ -141,9 +142,10 @@ function Brand({compact = false}: {compact?: boolean}) {
 function ConnectionForm({switching = false}: {switching?: boolean}) {
   const {connect, busy,error:sessionError} = useWorkspace();
   const [credential, setCredential] = useState('');
+  const [credentialVisible, setCredentialVisible] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setError('');
+    event.preventDefault(); setError(''); setCredentialVisible(false);
     try {await connect(credential); setCredential('');} catch (cause) {setCredential(''); setError((cause as Error).message);}
   }
   return <form onSubmit={submit} className="connection-form">
@@ -151,15 +153,15 @@ function ConnectionForm({switching = false}: {switching?: boolean}) {
     {switching && <p>Paste another authorized credential. Your current session stays open until the new one is verified.</p>}
     {(error||(!switching&&sessionError)) && <Notice tone="error">{error||sessionError}</Notice>}
     <label htmlFor={switching ? 'switch-key' : 'access-key'}>Workspace credential</label>
-    <div className="credential-input"><LockKey size={17} weight="regular"/><input id={switching ? 'switch-key' : 'access-key'} type="password" autoComplete="off" value={credential} onChange={event => setCredential(event.target.value)} placeholder="Paste your key or access token" required disabled={!!busy}/></div>
+    <div className="credential-input"><LockKey size={17} weight="regular"/><input id={switching ? 'switch-key' : 'access-key'} type={credentialVisible ? "text" : "password"} autoComplete="off" autoCapitalize="none" spellCheck={false} value={credential} onChange={event => setCredential(event.target.value)} placeholder="Paste your key or access token" required disabled={!!busy}/><button type="button" className="icon-button credential-visibility" aria-label={credentialVisible ? "Hide credential" : "Show credential"} aria-pressed={credentialVisible} onClick={() => setCredentialVisible(value => !value)} disabled={!!busy}>{credentialVisible ? <EyeSlash size={18}/> : <Eye size={18}/>}</button></div>
     <button className="button primary connection-submit" type="submit" disabled={!!busy || !credential.trim()}>{busy ? <><SpinnerGap className="spin" size={17} weight="regular"/>Verifying…</> : <>Connect workspace<ArrowRight size={17} weight="regular"/></>}</button>
-    <div className="connection-security"><SealCheck size={16} weight="regular"/><span>Signed in for this tab; signs out after 30 minutes of inactivity.</span></div>
+    <div className="connection-security"><SealCheck size={16} weight="regular"/><span>After connecting, your session stays in this tab and signs out after 30 minutes of inactivity.</span></div>
     <details className="connection-help"><summary>Where do I get a credential?</summary><p>Use the key from your workspace administrator, or a delegated token from Microsoft Entra or Keycloak.</p>{!switching && <p>First time? <Link className="text-link" href="/claim">Claim your account</Link> with your onboarding key.</p>}</details>
   </form>;
 }
 
 function Login() {
-  return <div className="login-page"><section className="login-story"><Brand/><div className="login-story-content"><Reveal><span className="login-kicker"><span/>Cloud cost intelligence</span><h2><span className="login-headline-line">Less cloud waste.</span><span className="login-headline-line">More clarity.</span></h2><p>Discover idle resources, read the evidence, and move from finding to review with confidence.</p><div className="login-providers">{['azure','aws','gcp','kubernetes'].map(p => <ProviderBadge key={p} provider={p}/>)}</div></Reveal></div><div className="login-story-footer"><SealCheck size={15} weight="regular"/> Read-only discovery · Workspace-scoped access</div></section><section className="login-connect"><div className="login-theme"><ThemeToggle/></div><div className="mobile-brand"><Brand/></div><ConnectionForm/><div className="login-footer">CloudSaver · Multi-cloud FinOps workspace</div></section></div>;
+  return <main className="login-page"><section className="login-story"><Brand/><div className="login-story-content"><div><span className="login-kicker"><span/>Cloud cost intelligence</span><h2><span className="login-headline-line">Less cloud waste.</span><span className="login-headline-line">More clarity.</span></h2><p>Discover idle resources, read the evidence, and move from finding to review with confidence.</p><div className="login-providers">{['azure','aws','gcp','kubernetes'].map(p => <ProviderBadge key={p} provider={p}/>)}</div></div></div><div className="login-story-footer"><SealCheck size={15} weight="regular"/> Read-only discovery · Workspace-scoped access</div></section><section className="login-connect"><div className="login-theme"><ThemeToggle/></div><div className="mobile-brand"><Brand/></div><ConnectionForm/><div className="login-footer">CloudSaver · Multi-cloud FinOps workspace</div></section></main>;
 }
 
 function CommandPalette() {
@@ -251,6 +253,7 @@ export function AppShell({children}: {children: ReactNode}) {
   useLayoutEffect(() => {
     if (!workspace) return;
     const handler = (e: KeyboardEvent) => {
+      if (document.querySelector('dialog[open]') && overlay !== 'command') return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {e.preventDefault(); if (!overlay || overlay === 'command') setOverlay(overlay ? null : 'command'); return;}
       if (overlay || (e.target as HTMLElement).closest('input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"]')) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -264,9 +267,13 @@ export function AppShell({children}: {children: ReactNode}) {
   useEffect(() => {
     if (!token) {setReliability(null); return;}
     const controller = new AbortController();
-    const load = () => {if (!document.hidden) api<Reliability>('/operations/reliability',token,{signal:controller.signal}).then(setReliability).catch(() => {});};
+    let active = true;
+    setReliability(null);
+    const load = () => {if (!document.hidden) api<Reliability>('/operations/reliability',token,{signal:controller.signal})
+      .then(value => {if (active) setReliability(value);})
+      .catch(() => {if (active && !controller.signal.aborted) setReliability(null);});};
     load(); const timer = setInterval(load,30000);
-    return () => {controller.abort();clearInterval(timer);};
+    return () => {active = false;controller.abort();clearInterval(timer);};
   }, [token]);
   if (!workspace) return pathname === '/claim' ? <ClaimView/> : <Login/>;
   const active = navigation.find(item => isCurrentPage(item.href, pathname)) || navigation[0];
@@ -280,7 +287,7 @@ export function AppShell({children}: {children: ReactNode}) {
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''} ${uiPreset === 'atlas' ? 'ui-preset-atlas' : ''}`}>
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside className="sidebar">{nav}</aside>
-    <div className="app-main"><header className="topbar"><div className="topbar-left"><button type="button" className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><List size={20} weight="regular"/></button><details className="workspace-menu"><summary><span className="workspace-avatar">{workspace.name.slice(0,1).toUpperCase()}</span><span>{workspace.name}<small>{context.planName} plan</small></span><CaretDown size={14} weight="regular"/></summary><div className="menu-surface"><Link href="/settings"><Gear size={16} weight="regular"/>Workspace settings</Link><button type="button" data-discard-policy-draft onClick={() => setOverlay('workspace')}><Cloud size={16} weight="regular"/>Connect another workspace</button><button type="button" onClick={disconnect}><SignOut size={16} weight="regular"/>Disconnect</button></div></details><span className="topbar-divider"/><span className="current-page">{active.label}</span></div><div className="topbar-actions"><span className="session-role" title={sessionTitle}>{sessionLabel}</span><ThemeToggle/><button type="button" className="command-trigger" aria-label="Search pages and findings (Ctrl K or ⌘ K)" title="Search pages and findings" onClick={() => setOverlay('command')} ><MagnifyingGlass size={16} weight="regular"/><span>Search</span><kbd aria-hidden="true">Ctrl/⌘ K</kbd></button><button type="button" className="icon-button notification-trigger" aria-label={`Notifications${failures ? `, ${failures} deliveries need attention` : ''}`} onClick={() => setOverlay('notifications')}><Bell size={19} weight="regular"/>{failures > 0 && <span className="notification-dot"/>}</button></div>    </header>
+    <div className="app-main"><header className="topbar"><div className="topbar-left"><button type="button" className="icon-button mobile-menu" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><List size={20} weight="regular"/></button><details className="workspace-menu"><summary><span className="workspace-avatar">{workspace.name.slice(0,1).toUpperCase()}</span><span>{workspace.name}<small>{context.planName} plan</small></span><CaretDown size={14} weight="regular"/></summary><div className="menu-surface"><Link href="/settings"><Gear size={16} weight="regular"/>Workspace settings</Link><button type="button" data-discard-policy-draft onClick={() => setOverlay('workspace')}><Cloud size={16} weight="regular"/>Connect another workspace</button><button type="button" onClick={disconnect}><SignOut size={16} weight="regular"/>Disconnect</button></div></details><span className="topbar-divider"/><span className="current-page">{active.label}</span></div><div className="topbar-actions"><span className="session-role" title={sessionTitle}>{sessionLabel}</span><ThemeToggle/><button type="button" className="command-trigger" aria-keyshortcuts="Control+k Meta+k" title="Search pages and findings" onClick={() => setOverlay('command')} ><MagnifyingGlass size={16} weight="regular"/><span>Search</span><kbd aria-hidden="true">Ctrl/⌘ K</kbd></button><button type="button" className="icon-button notification-trigger" aria-label={`Notifications${failures ? `, ${failures} deliveries need attention` : ''}`} onClick={() => setOverlay('notifications')}><Bell size={19} weight="regular"/>{failures > 0 && <span className="notification-dot"/>}</button></div>    </header>
       {uiPreset === 'atlas' && (
         <div className="atlas-workspace-strip" role="status">
           <span className="atlas-strip-label">Atlas enterprise</span>

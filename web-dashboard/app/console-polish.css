@@ -172,3 +172,26 @@
   font-size: 1.65rem;
   margin: 0.65rem 0 0.5rem;
 }
+
+/* Keep credential controls usable at narrow widths and increased text zoom. */
+.credential-input input { min-width: 0; flex: 1; }
+.credential-visibility { flex: 0 0 44px; width: 44px; height: 44px; }
+
+/* Flat surfaces retain progress indicators without decorative motion or blur. */
+html[data-ui-surface=flat] { scroll-behavior: auto; }
+html[data-ui-surface=flat] *,
+html[data-ui-surface=flat] *::before,
+html[data-ui-surface=flat] *::after {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-ui-surface=flat] .spin { animation: spin 1s linear infinite !important; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui-surface=flat] .spin { animation: none !important; }
+}
+/* Small table labels need more than muted-text contrast on light header fills. */
+html[data-theme=light] .data-table th,
+html[data-theme=light] .resource-table th { color: var(--slate-700); }

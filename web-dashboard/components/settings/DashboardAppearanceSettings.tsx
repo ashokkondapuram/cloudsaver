@@ -49,7 +49,7 @@ export function DashboardAppearanceSettings() {
           below to preview locally.
         </Notice>
       )}
-      <div className="appearance-grid" role="list">
+      <div className="appearance-grid" role="group" aria-label="Dashboard appearance">
         {UI_THEME_PRESETS.map(preset => {
           const meta = UI_THEME_META[preset];
           const selected = active === preset;
@@ -57,7 +57,6 @@ export function DashboardAppearanceSettings() {
             <button
               key={preset}
               type="button"
-              role="listitem"
               className={`appearance-card ${selected ? 'selected' : ''}`}
               aria-pressed={selected}
               onClick={() => choose(preset)}
