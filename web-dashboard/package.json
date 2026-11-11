@@ -22,7 +22,7 @@
     "@nivo/line": "^0.99.0",
     "@nivo/scales": "^0.99.0",
     "@phosphor-icons/react": "^2.1.10",
-    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-table": "^9.3.1",
     "@tanstack/react-virtual": "^3.13.12",
     "clsx": "^2.1.1",
     "framer-motion": "^12.43.0",
